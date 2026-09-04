@@ -1,0 +1,20 @@
+# Dependency updates arrive as pull requests, through the same CI gate as any
+# other change. Grouped so a week's minor and patch bumps are one review, not ten;
+# a major bump stays its own pull request because it may need a code change.
+#
+# A `docker` entry is added with the first Dockerfile — pointing Dependabot at a
+# directory that holds none only produces a failed update run.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# The only credential this workflow ever holds is GITHUB_TOKEN, which GitHub mints
+# per job and expires when the job ends. This repository is PUBLIC and holds no
+# secret of any kind: an automation receives a run-scoped token at runtime and
+# nothing else (platform invariant 3), so there is nothing for a workflow to
+# reference and nothing for a fork's pull request to reach.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --ignore-scripts: a dependency's install script is arbitrary code running
+      # with the build's privileges. Nothing here has a postinstall to lose.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Format, types, tests, build — the same gate that runs before every commit.
+      # `test/architecture.test.ts` is inside it: no platform package imported, every
+      # manifest valid, no environment file and no recovered client data tracked.
+      - name: Verify formatting, types, tests, and build
+        run: npm run verify
+
+      # Split deliberately into a blocking check and a reporting one, as the
+      # platform does. What ships is what must be clean, so the runtime tree is the
+      # gate; dev tooling is reported but does not fail the build, because a gate
+      # that goes red for things nobody can act on is a gate somebody switches off.
+      # Today there are no runtime dependencies at all, which makes the first pass
+      # trivially clean and is exactly why it must still run — the day one is added
+      # is the day nobody thinks to check.
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit build and test dependencies (report only)
+        continue-on-error: true
+        run: npm audit --audit-level=high

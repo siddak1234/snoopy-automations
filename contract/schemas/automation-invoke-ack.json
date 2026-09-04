@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-invoke-ack.json",
+  "title": "AutomationInvokeAck",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted",
+        "runId"
+      ],
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "runId": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted",
+        "runId",
+        "reason"
+      ],
+      "properties": {
+        "accepted": {
+          "const": false
+        },
+        "runId": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "at-capacity",
+            "draining",
+            "unknown-template",
+            "unsupported-contract-version"
+          ]
+        },
+        "retryAfterSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  ]
+}

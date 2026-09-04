@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-model-request.json",
+  "title": "AutomationModelRequest",
+  "type": "object",
+  "properties": {
+    "capability": {
+      "enum": [
+        "document-extraction",
+        "classification",
+        "screening",
+        "summarization"
+      ]
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input": {
+      "type": "object"
+    },
+    "outputSchema": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "capability",
+    "prompt",
+    "input",
+    "outputSchema"
+  ],
+  "additionalProperties": false
+}
