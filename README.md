@@ -53,6 +53,37 @@ The boundary is the **wire format, not a package.** Nothing here depends on the
 platform's TypeScript packages, because a third-party automation could not either.
 `contract/README.md` says which platform commit the schemas were taken from.
 
+## What an automation looks like
+
+```ts
+import {
+  serve,
+  type AutomationPlatform,
+  type InvokeRequest,
+  type RunResult,
+} from '@autom8x/automation-sdk';
+
+async function execute(request: InvokeRequest, platform: AutomationPlatform): Promise<RunResult> {
+  await platform.reportStep({
+    runId: request.runId,
+    stepId: 'receive',
+    outcome: 'ok',
+    summary: 'Received',
+  });
+  return { outcome: 'success', summary: 'Done' };
+}
+
+await serve({ templateId: 'my-automation', execute });
+```
+
+The shell answers the probe, acknowledges an invoke before working, refuses above
+capacity or while draining, reports the result (or the failure) for you, and logs
+ids and outcomes only — an error's message becomes the run's `failureReason`, so
+never build one from the document. `platform` is the five callbacks, each carrying
+the run token, plus the one fetch that carries nothing: the bytes behind a signed
+link. A test hands `execute()` a `RecordingPlatform` from
+`@autom8x/automation-sdk/testing` instead.
+
 ## Adding an automation
 
 1. Copy an existing directory under `automations/` and rename it. Implement
@@ -73,7 +104,7 @@ called.
 
 ```bash
 npm ci --ignore-scripts
-npm run verify        # format:check → typecheck → test (→ build, from the first workspace on)
+npm run verify        # format:check → build → typecheck → test, root and every workspace
 ```
 
 Node 22 or newer. Agent sessions read `CLAUDE.md` first.

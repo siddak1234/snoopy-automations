@@ -33,10 +33,13 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      # Format, types, tests, build — the same gate that runs before every commit.
-      # `test/architecture.test.ts` is inside it: no platform package imported, every
-      # manifest valid, no environment file and no recovered client data tracked.
-      - name: Verify formatting, types, tests, and build
+      # Format, build, types, tests — the same gate that runs before every commit,
+      # in that order: the SDK's emitted types are what an automation typechecks
+      # against. `test/architecture.test.ts` is inside it: no platform package
+      # imported, every manifest valid, every workspace carrying the gate's
+      # scripts, the SDK consumable through its published entries, no
+      # environment file and no recovered client data tracked.
+      - name: Verify formatting, build, types, and tests
         run: npm run verify
 
       # Split deliberately into a blocking check and a reporting one, as the
