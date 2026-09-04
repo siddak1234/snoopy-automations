@@ -112,6 +112,43 @@ test('no source file imports a platform package', () => {
   assert.deepEqual(offenders, [], 'these files import a platform package');
 });
 
+/** The scripts the root gate fans out to. `--if-present` would skip one silently. */
+const WORKSPACE_SCRIPTS = ['build', 'typecheck', 'test'];
+
+test('every workspace declares the scripts the gate runs', () => {
+  // The root fans out with `--workspaces --if-present` because npm errors on a
+  // missing script otherwise — which means a workspace that forgot `test` would
+  // pass verify without ever being tested. Presence is required here instead.
+  for (const directory of [
+    ...childDirectories(packagesRoot),
+    ...childDirectories(automationsRoot),
+  ]) {
+    const file = join(directory, 'package.json');
+    const manifest = JSON.parse(readFileSync(file, 'utf8')) as { scripts?: Record<string, string> };
+    for (const script of WORKSPACE_SCRIPTS) {
+      assert.ok(
+        typeof manifest.scripts?.[script] === 'string',
+        `${relative(repositoryRoot, file)} declares no "${script}" script, so the gate would skip it`,
+      );
+    }
+  }
+});
+
+test('the SDK is consumable through its published entries', async () => {
+  // Resolved through the package `exports` map to `dist`, exactly as an automation
+  // imports it — which the SDK's own suite never does, since it imports `src`. A
+  // broken entry would otherwise surface only in the first automation's build.
+  // Needs the build to have run: `npm run verify` orders it before this.
+  const sdk = (await import('@autom8x/automation-sdk')) as Record<string, unknown>;
+  for (const name of ['serve', 'PlatformClient', 'CallbackRefusedError', 'CONTRACT_VERSION']) {
+    assert.ok(name in sdk, `@autom8x/automation-sdk exports no ${name} — run npm run build first?`);
+  }
+  const testing = (await import('@autom8x/automation-sdk/testing')) as Record<string, unknown>;
+  for (const name of ['RecordingPlatform', 'invokeFixture', 'declaredSteps']) {
+    assert.ok(name in testing, `@autom8x/automation-sdk/testing exports no ${name}`);
+  }
+});
+
 test('every automation is a complete unit', () => {
   const automations = childDirectories(automationsRoot);
   if (existsSync(automationsRoot)) {
