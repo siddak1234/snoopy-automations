@@ -1,0 +1,7 @@
+node_modules
+dist
+
+# Vendored byte-for-byte from the platform repository's `schemas/` directory (see
+# contract/README.md). Reformatting would make a diff against the source say
+# "changed" about files that did not, and the diff is the drift check.
+contract/schemas

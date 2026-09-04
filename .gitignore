@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.DS_Store
+
+# Local runtime output
+logs/
+tmp/
+
+# There is no environment file in this repository and there must never be one.
+# An automation receives a run-scoped token at runtime and nothing else (platform
+# invariant 3), and this repository is PUBLIC. Ignored anyway so a local
+# experiment cannot be committed by accident — secret-scanning push protection is
+# the second line, not the first.
+.env
+.env.*
+
+# Recovered client data from the retired stack lives in encrypted storage, never
+# in git: history is permanent. CI fails if such a path is ever tracked.
+_salvage/

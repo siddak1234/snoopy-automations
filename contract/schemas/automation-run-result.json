@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-run-result.json",
+  "title": "AutomationRunResult",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome"
+      ],
+      "properties": {
+        "outcome": {
+          "const": "success"
+        },
+        "output": {
+          "type": "object"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "held"
+      ],
+      "properties": {
+        "outcome": {
+          "const": "held"
+        },
+        "held": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stepId",
+            "reason",
+            "state"
+          ],
+          "properties": {
+            "stepId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+              "maxLength": 64
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "state": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "failureReason"
+      ],
+      "properties": {
+        "outcome": {
+          "const": "failed"
+        },
+        "failureReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "retryState": {
+          "type": "object"
+        }
+      }
+    }
+  ]
+}

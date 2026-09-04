@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-invoke-request.json",
+  "title": "AutomationInvokeRequest",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "templateId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+      "maxLength": 64
+    },
+    "templateVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "config": {
+      "type": "object"
+    },
+    "input": {
+      "type": "object"
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ofRunId",
+        "kind",
+        "state"
+      ],
+      "properties": {
+        "ofRunId": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "approval",
+            "retry"
+          ]
+        },
+        "stepId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+          "maxLength": 64
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "state": {
+          "type": "object"
+        }
+      }
+    },
+    "callbackOrigin": {
+      "type": "string",
+      "format": "uri"
+    },
+    "runToken": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "runId",
+    "templateId",
+    "templateVersion",
+    "workspaceId",
+    "config",
+    "input",
+    "callbackOrigin",
+    "runToken",
+    "deadline"
+  ],
+  "additionalProperties": false
+}
