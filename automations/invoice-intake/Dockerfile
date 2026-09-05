@@ -3,7 +3,7 @@
 # The SDK and automation are workspaces during development, so the build uses the
 # root lock. The runtime install below is deliberately different: it consumes the
 # automation's own lockfile and packs the already-built local SDK into node_modules.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /workspace
 
 COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
@@ -16,7 +16,7 @@ COPY automations/invoice-intake/src ./automations/invoice-intake/src
 RUN npm run build --workspace @autom8x/automation-sdk \
   && npm run build --workspace @autom8x/invoice-intake
 
-FROM node:22-alpine AS production-dependencies
+FROM node:26-alpine AS production-dependencies
 WORKDIR /workspace
 
 # `--install-links` packs the local SDK instead of leaving a symlink to a build
@@ -27,7 +27,7 @@ COPY automations/invoice-intake/package.json automations/invoice-intake/package-
 WORKDIR /workspace/automations/invoice-intake
 RUN npm ci --omit=dev --ignore-scripts --workspaces=false --install-links=true
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 RUN apk upgrade --no-cache && apk add --no-cache tini
 ENV NODE_ENV=production
 WORKDIR /app
