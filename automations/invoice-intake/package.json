@@ -1,0 +1,24 @@
+{
+  "name": "@autom8x/invoice-intake",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Receives invoice webhooks, holds invoices above a workspace threshold, and emails the outcome through the workspace's Google connection.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
