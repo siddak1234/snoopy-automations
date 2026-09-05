@@ -17,7 +17,7 @@
     "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.4.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
