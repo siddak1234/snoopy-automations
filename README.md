@@ -84,6 +84,19 @@ the run token, plus the one fetch that carries nothing: the bytes behind a signe
 link. A test hands `execute()` a `RecordingPlatform` from
 `@autom8x/automation-sdk/testing` instead.
 
+## Invoice intake
+
+`invoice-intake` is the first automation in this repository. A verified webhook
+delivery carrying `vendor`, `amount`, and `reference` starts it. The platform wraps
+that JSON in the invoke envelope, deduplicates the delivery, and supplies the
+run-scoped token; the automation implements none of that ingress itself.
+
+The subscription configures an approval threshold and a notification address.
+Invoices above the threshold end their first run held, then resume from returned
+state only after approval. The outcome mail is sent through the workspace's Google
+connection and requires exactly `gmail.send`; there is no model callback. The mail
+builder RFC 2047-encodes its UTF-8 Subject and declares the body charset.
+
 ## Adding an automation
 
 1. Copy an existing directory under `automations/` and rename it. Implement

@@ -1,0 +1,83 @@
+{
+  "templateId": "invoice-intake",
+  "version": 1,
+  "display": {
+    "name": "Invoice intake",
+    "description": "Receives invoice webhooks, holds large invoices for approval, and emails the outcome from your connected Gmail account.",
+    "category": "Finance",
+    "icon": "Receipt"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "webhook"
+  },
+  "requiredConnections": [
+    {
+      "providerId": "google",
+      "displayName": "Google",
+      "purpose": "Sends each invoice intake outcome from your own Gmail account.",
+      "scopes": ["https://www.googleapis.com/auth/gmail.send"]
+    }
+  ],
+  "requiredCapabilities": [],
+  "setup": [
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Hold above",
+      "description": "Invoices above this amount wait for someone to approve them. Editable anytime.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    },
+    {
+      "section": "notifications",
+      "key": "notifyEmail",
+      "title": "Email intake outcomes to",
+      "description": "Where each accepted invoice is reported after any required approval.",
+      "control": "text",
+      "required": true
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Invoice received",
+      "description": "A verified webhook delivery starts a run with the invoice to intake."
+    },
+    {
+      "id": "validate",
+      "kicker": "ACTION",
+      "title": "Check the amount",
+      "description": "Compares the invoice against your threshold and holds it if it is above."
+    },
+    {
+      "id": "notify",
+      "kicker": "ACTION",
+      "title": "Email the outcome",
+      "description": "Sends the intake result from your connected Google account."
+    }
+  ],
+  "service": {
+    "origin": "https://invoice-intake.autom8x.internal",
+    "serviceAccount": "invoice-intake@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 40,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "reference": { "type": "string" },
+      "vendor": { "type": "string" },
+      "amount": { "type": "number" },
+      "decidedBy": { "type": "string" },
+      "notified": { "type": "boolean" }
+    },
+    "required": ["reference", "vendor", "amount", "decidedBy", "notified"]
+  }
+}

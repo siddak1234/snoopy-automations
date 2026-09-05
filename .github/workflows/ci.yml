@@ -20,7 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -46,12 +48,131 @@ jobs:
       # platform does. What ships is what must be clean, so the runtime tree is the
       # gate; dev tooling is reported but does not fail the build, because a gate
       # that goes red for things nobody can act on is a gate somebody switches off.
-      # Today there are no runtime dependencies at all, which makes the first pass
-      # trivially clean and is exactly why it must still run — the day one is added
-      # is the day nobody thinks to check.
+      # Today there are no third-party runtime dependencies: invoice-intake uses
+      # only the local SDK, which itself has none. That makes this pass trivially
+      # clean and is exactly why it must remain — the day one is added is the day
+      # nobody thinks to check.
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
 
       - name: Audit build and test dependencies (report only)
         continue-on-error: true
         run: npm audit --audit-level=high
+
+  # The exact image the backend will later pin. This job never authenticates to a
+  # registry and never pushes, including on pull requests from forks.
+  image:
+    name: Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Build invoice-intake, amd64
+        run: >-
+          docker build --platform linux/amd64
+          --file automations/invoice-intake/Dockerfile
+          --tag autom8x-invoice-intake:${{ github.sha }} .
+
+      # Starts the final stage, which proves the standalone lock installed a real
+      # SDK package rather than leaving a workspace link behind in the image.
+      - name: Smoke-test the packaged service
+        run: |
+          container=invoice-intake-smoke
+          trap 'docker logs "$container" || true; docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name "$container" \
+            --publish 127.0.0.1:18080:8080 \
+            autom8x-invoice-intake:${{ github.sha }} >/dev/null
+          for attempt in {1..20}; do
+            response="$(curl --fail --silent --show-error http://127.0.0.1:18080/health/live)" && break
+            sleep 1
+          done
+          test "${response:-}" = '{"status":"ok","templateId":"invoice-intake","contractVersion":1}'
+
+      # Pinned because this action is itself part of the security boundary. Only
+      # actionable CRITICAL/HIGH findings block; the second pass still reports
+      # upstream findings for which no fixed package exists yet.
+      - name: Scan fixable CRITICAL and HIGH vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: autom8x-invoice-intake:${{ github.sha }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Report vulnerabilities without an upstream fix
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: autom8x-invoice-intake:${{ github.sha }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: '0'
+          format: table
+
+  # A merge to main is the only publishing event. packages:write exists on this
+  # job alone and authenticates with its own short-lived GITHUB_TOKEN.
+  publish:
+    name: Publish
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [verify, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/autom8x-invoice-intake
+    steps:
+      - name: Checkout
+        # This job holds packages:write, so every action it executes is immutable.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR with this job's token
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # The sole tag is the full commit SHA. Deployments consume the digest this
+      # step returns; no latest, main, branch, or other moving tag is created.
+      - name: Build and push invoice-intake by commit
+        id: publish
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: automations/invoice-intake/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # This is the deployable reference. Fail if Buildx did not return it: an
+      # unfindable digest blocks the backend session rather than becoming guesswork.
+      - name: Record the immutable digest
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Buildx returned no valid image digest" >&2
+            exit 1
+          fi
+          reference="$IMAGE_NAME@$DIGEST"
+          {
+            echo "### Image published"
+            echo
+            echo "- \`$reference\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$reference"
