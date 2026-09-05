@@ -2,8 +2,8 @@
 # other change. Grouped so a week's minor and patch bumps are one review, not ten;
 # a major bump stays its own pull request because it may need a code change.
 #
-# A `docker` entry is added with the first Dockerfile — pointing Dependabot at a
-# directory that holds none only produces a failed update run.
+# The Docker entry points at the first shipping automation; pointing Dependabot
+# at a directory that holds no Dockerfile only produces a failed update run.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -13,6 +13,21 @@ updates:
     groups:
       minor-and-patch:
         update-types: ['minor', 'patch']
+
+  # This lock is consumed independently by the image build; the root workspace
+  # lock cannot stand in for it.
+  - package-ecosystem: npm
+    directory: /automations/invoice-intake
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: docker
+    directory: /automations/invoice-intake
+    schedule:
+      interval: weekly
 
   - package-ecosystem: github-actions
     directory: /

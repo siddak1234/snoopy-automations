@@ -157,7 +157,7 @@ test('every automation is a complete unit', () => {
   const manifestNames = existsSync(manifestsRoot) ? readdirSync(manifestsRoot) : [];
   for (const directory of automations) {
     const name = basename(directory);
-    for (const required of ['package.json', 'Dockerfile', 'src/main.ts']) {
+    for (const required of ['package.json', 'package-lock.json', 'Dockerfile', 'src/main.ts']) {
       assert.ok(
         existsSync(join(directory, required)),
         `automations/${name} lacks ${required} — an automation builds and ships on its own`,
@@ -173,30 +173,56 @@ test('every automation is a complete unit', () => {
   }
 });
 
-/**
- * The manifest schema as the platform applies it.
- *
- * The emitted schema admits `https` origins only. The platform's own
- * `validateManifest` also admits plain `http` on a `*.internal` host — ICANN
- * reserved the label in 2024 and it will never be delegated, so the name cannot
- * resolve outside a private network — and every shipped manifest is written that
- * way. Applied here as the platform applies it; the disagreement between the
- * schema and the validator is filed with the platform, not papered over silently.
- */
-function manifestSchemaAsThePlatformAppliesIt(): Record<string, unknown> {
-  const schema = JSON.parse(
-    readFileSync(join(schemasRoot, 'automation-manifest.json'), 'utf8'),
-  ) as { properties: { service: { properties: { origin: { pattern: string } } } } };
-  schema.properties.service.properties.origin.pattern =
-    '^(https://[^/?#@]+|http://[^/?#@:]+\\.internal(:[0-9]{1,5})?)$';
-  return schema as unknown as Record<string, unknown>;
-}
+test('every automation lockfile belongs to that automation and locks the local SDK', () => {
+  for (const directory of childDirectories(automationsRoot)) {
+    const packageManifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as {
+      name?: string;
+      version?: string;
+      dependencies?: Record<string, string>;
+    };
+    const lock = JSON.parse(readFileSync(join(directory, 'package-lock.json'), 'utf8')) as {
+      name?: string;
+      version?: string;
+      lockfileVersion?: number;
+      packages?: Record<string, { resolved?: string }>;
+    };
+
+    assert.equal(
+      lock.name,
+      packageManifest.name,
+      `${basename(directory)} lock names another package`,
+    );
+    assert.equal(
+      lock.version,
+      packageManifest.version,
+      `${basename(directory)} lock has another version`,
+    );
+    assert.equal(
+      lock.lockfileVersion,
+      3,
+      `${basename(directory)} lock is not npm's current format`,
+    );
+    assert.equal(
+      packageManifest.dependencies?.['@autom8x/automation-sdk'],
+      'file:../../packages/automation-sdk',
+      `${basename(directory)} must consume the local SDK as its platform boundary`,
+    );
+    assert.equal(
+      lock.packages?.['node_modules/@autom8x/automation-sdk']?.resolved,
+      'file:../../packages/automation-sdk',
+      `${basename(directory)} lock does not pin the local SDK`,
+    );
+  }
+});
 
 test('every manifest validates against the vendored schema and names an automation here', () => {
   if (!existsSync(manifestsRoot)) return;
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats.default(ajv);
-  const validate = ajv.compile(manifestSchemaAsThePlatformAppliesIt());
+  const schema = JSON.parse(
+    readFileSync(join(schemasRoot, 'automation-manifest.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  const validate = ajv.compile(schema);
   const automationNames = new Set(childDirectories(automationsRoot).map((d) => basename(d)));
 
   const files = readdirSync(manifestsRoot).filter((file) => file.endsWith('.json'));
