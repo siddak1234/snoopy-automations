@@ -17,7 +17,7 @@
     {
       "providerId": "google",
       "displayName": "Google",
-      "purpose": "Sends each invoice intake outcome from your own Gmail account.",
+      "purpose": "Tells the vendor their invoice was received, from your own Gmail account.",
       "scopes": ["https://www.googleapis.com/auth/gmail.send"]
     }
   ],
@@ -35,8 +35,8 @@
     {
       "section": "notifications",
       "key": "notifyEmail",
-      "title": "Email intake outcomes to",
-      "description": "Where each accepted invoice is reported after any required approval.",
+      "title": "Tell the vendor at",
+      "description": "The vendor's accounts-receivable address. They are told their invoice was received once it is accepted, from your Gmail. Your own completion notice comes from Autom8x, not from here.",
       "control": "text",
       "required": true
     }
@@ -57,12 +57,12 @@
     {
       "id": "notify",
       "kicker": "ACTION",
-      "title": "Email the outcome",
-      "description": "Sends the intake result from your connected Google account."
+      "title": "Tell the vendor",
+      "description": "Confirms receipt to the vendor from your connected Google account."
     }
   ],
   "service": {
-    "origin": "https://invoice-intake.autom8x.internal",
+    "origin": "http://invoice-intake.autom8x.internal:8080",
     "serviceAccount": "invoice-intake@autom8x.iam.gserviceaccount.com",
     "contractVersion": 1,
     "maxConcurrentRuns": 40,
@@ -72,11 +72,21 @@
   "outputSchema": {
     "type": "object",
     "properties": {
-      "reference": { "type": "string" },
-      "vendor": { "type": "string" },
-      "amount": { "type": "number" },
-      "decidedBy": { "type": "string" },
-      "notified": { "type": "boolean" }
+      "reference": {
+        "type": "string"
+      },
+      "vendor": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "number"
+      },
+      "decidedBy": {
+        "type": "string"
+      },
+      "notified": {
+        "type": "boolean"
+      }
     },
     "required": ["reference", "vendor", "amount", "decidedBy", "notified"]
   }

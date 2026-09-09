@@ -24,9 +24,9 @@ and `gh api` say what is true; a document says what was true when it was written
 
 ## Round record
 
-| Round  | State                                                                                                                                                                                                                                                                                                                           |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **10** | **OPEN 2026-09-04.** Owner-approved 2026-09-03 (§0.1); opened by its first session in plan mode per §4.1, whose approved order of attack is the round plan: scaffold (this commit) → extract the SDK → build `invoice-intake` → live observation after a backend session deploys it. The §0.1 entry is the backend's to commit. |
+| Round  | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **10** | **OPEN 2026-09-04.** Owner-approved 2026-09-03 (§0.1); opened by its first session in plan mode per §4.1, whose approved order of attack is the round plan: scaffold (this commit) → extract the SDK → build `invoice-intake` → live observation after a backend session deploys it. The §0.1 entry is the backend's to commit. **Session 4a, 2026-09-08**: schemas re-vendored at platform `e85f903` (six findings resolved there — `runId` admitted, `retryState`/`retry` withdrawn, `http` on `.internal` admitted, price and uniqueness rules in the schema); `invoice-intake` v1, still unregistered, takes ADR-0020's origin shape `http://invoice-intake.autom8x.internal:8080` and its `notifyEmail` is relabelled as the VENDOR's address, since the platform now announces completion to the customer itself; five dependabot majors closed on the owner's decision and ignored in `dependabot.yml`, five Actions bumps merged. Session 4b, live observation, follows the platform's deploy. |
 
 ## Non-negotiable rules
 
@@ -47,9 +47,11 @@ and `gh api` say what is true; a document says what was true when it was written
    run token and nothing else, on every callback. An automation that reaches
    anything by another route is where a credential eventually leaks.
 5. **Manifests land in the platform by pull request** — authored and validated
-   here in `manifests/`, then opened as a PR to `snoopy-backend/manifests/` — until
-   the registration route of SYSTEM-MANIFEST §12.2 #31 exists. `service.origin` is
-   where customer documents are sent; its write path is review.
+   here in `manifests/`, then opened as a PR to `snoopy-backend/manifests/`. The
+   platform's ADR-0020 (2026-09-08) made that the standing model: no registration
+   route, because `service.origin` is where customer documents are sent and review
+   is the authorization. The origin is `http://<templateId>.autom8x.internal:8080`,
+   aliased on the automation's own container.
 6. **`npm run verify` green before every commit** — format, build, typecheck,
    test, in that order: the SDK's emitted types are what an automation
    typechecks against, so the build comes first.

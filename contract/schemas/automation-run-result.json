@@ -10,6 +10,9 @@
         "outcome"
       ],
       "properties": {
+        "runId": {
+          "type": "string"
+        },
         "outcome": {
           "const": "success"
         },
@@ -31,6 +34,9 @@
         "held"
       ],
       "properties": {
+        "runId": {
+          "type": "string"
+        },
         "outcome": {
           "const": "held"
         },
@@ -68,6 +74,9 @@
         "failureReason"
       ],
       "properties": {
+        "runId": {
+          "type": "string"
+        },
         "outcome": {
           "const": "failed"
         },
@@ -75,9 +84,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200
-        },
-        "retryState": {
-          "type": "object"
         }
       }
     }

@@ -214,7 +214,9 @@ test('every possible step is declared and the manifest asks only for Gmail send'
     {
       providerId: 'google',
       displayName: 'Google',
-      purpose: 'Sends each invoice intake outcome from your own Gmail account.',
+      // Relabelled 2026-09-08: the VENDOR is the recipient. The customer's own
+      // completion notice comes from the platform (its BUILD-PLAN 12.4.4), not here.
+      purpose: 'Tells the vendor their invoice was received, from your own Gmail account.',
       scopes: ['https://www.googleapis.com/auth/gmail.send'],
     },
   ]);
