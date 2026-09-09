@@ -95,21 +95,29 @@ test('every acknowledgement the shell can return validates', () => {
   for (const ack of acks) assertValid(validate, ack, JSON.stringify(ack));
 });
 
-test('every result variant validates, and the published schema refuses the runId the client adds', () => {
+test('every result variant validates, with the runId the client adds, and retryState is gone', () => {
   const validate = validator('automation-run-result');
   const results: RunResult[] = [
     { outcome: 'success' },
     { outcome: 'success', output: { reference: 'INV-1' }, summary: 'Recorded INV-1' },
     { outcome: 'held', held: { stepId: 'validate', reason: 'Above threshold', state: { n: 1 } } },
     { outcome: 'failed', failureReason: 'input must carry an invoice' },
-    { outcome: 'failed', failureReason: 'transient', retryState: { attempt: 2 } },
   ];
   for (const result of results) assertValid(validate, result, result.outcome);
-  // The client sends `{ runId, ...result }`, as the template did. The platform's
-  // result handler tolerates it (it is the one callback without an allowlist);
-  // the published schema does not. Same disagreement as the step report below,
-  // filed with the platform; this test flips when it is resolved.
-  assert.equal(validate({ runId: 'r', ...results[0] }), false);
+  // FLIPPED 2026-09-08. The client sends `{ runId, ...result }`; the platform's
+  // published schema refused it and its route tolerated it by omission (its
+  // §12.1 #82). Resolved on the platform side: every branch admits `runId`, and
+  // the route binds it to the token's run when sent.
+  for (const result of results)
+    assertValid(validate, { runId: 'r', ...result }, `${result.outcome} with runId`);
+  // WITHDRAWN 2026-09-08 (platform §12.1 #84): `retryState` was surface with no
+  // implementation behind it. The schema no longer carries it, and the platform's
+  // route refuses it as undeclared — so a client that still sends it is told.
+  assert.equal(
+    validate({ outcome: 'failed', failureReason: 'transient', retryState: { attempt: 2 } }),
+    false,
+    'retryState is refused, not silently dropped',
+  );
 });
 
 test('a one-line field is trimmed and cut at the bound, and refused when empty', () => {
@@ -118,11 +126,11 @@ test('a one-line field is trimmed and cut at the bound, and refused when empty',
   assert.throws(() => oneLine('   ', 'summary'), /summary must be a non-empty line/u);
 });
 
-test('a step report validates without runId, and the published schema refuses it WITH one', () => {
-  // The platform's step handler REQUIRES `runId` in the body and refuses a report
-  // without it; the published schema has `additionalProperties: false` and no
-  // `runId`. The SDK follows the handler, because that is what answers. The
-  // disagreement is filed with the platform; this test flips when it is resolved.
+test('a step report validates WITH runId, which the published schema now requires', () => {
+  // FLIPPED 2026-09-08. The platform's step handler always REQUIRED `runId` and
+  // the published schema forbade it — a fake that agreed with itself, filed as
+  // the platform's §12.1 #81 by session 2 here. Resolved on the platform side:
+  // the schema requires what the route requires, and this SDK sent it all along.
   const validate = validator('automation-step-report');
   const report: StepReport = {
     runId: 'r',
@@ -131,9 +139,13 @@ test('a step report validates without runId, and the published schema refuses it
     summary: 'Above the threshold',
     heldReason: 'Someone should approve this',
   };
-  const { runId: _runId, ...wire } = report;
-  assertValid(validate, wire, 'the report without runId');
-  assert.equal(validate(report), false, 'the schema still refuses runId');
+  assertValid(validate, report, 'the report as the SDK sends it');
+  const { runId: _runId, ...withoutRunId } = report;
+  assert.equal(
+    validate(withoutRunId),
+    false,
+    'a report that omits runId is refused, as the route refuses it',
+  );
 });
 
 test('provider and model requests validate', () => {
