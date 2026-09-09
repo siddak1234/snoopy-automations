@@ -13,6 +13,14 @@ updates:
     groups:
       minor-and-patch:
         update-types: ['minor', 'patch']
+    # Owner decision 2026-09-08 (platform §0.1): the TypeScript major is a toolchain
+    # migration made deliberately, and @types/node tracks the runtime major, which
+    # stays on the 22 LTS the platform image and CI pin.
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   # This lock is consumed independently by the image build; the root workspace
   # lock cannot stand in for it.
@@ -23,11 +31,20 @@ updates:
     groups:
       minor-and-patch:
         update-types: ['minor', 'patch']
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker
     directory: /automations/invoice-intake
     schedule:
       interval: weekly
+    # The runtime major is a deliberate move, not a bot bump (owner, 2026-09-08).
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /

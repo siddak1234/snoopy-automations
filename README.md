@@ -106,8 +106,14 @@ builder RFC 2047-encodes its UTF-8 Subject and declares the body charset.
 3. Open a pull request here. CI runs on `GITHUB_TOKEN` alone, builds and scans the
    image, and publishes it to GHCR on merge.
 4. Open a pull request adding the manifest to the platform repository's
-   `manifests/` directory. There is no registration endpoint yet: `service.origin`
-   is where customer documents get sent, so its write path is review.
+   `manifests/` directory. There is no registration endpoint, and the platform's
+   ADR-0020 decided there will not be one: `service.origin` is where customer
+   documents get sent, review is the authorization, and a pull request is the only
+   write path that carries one. The rules a manifest must meet beyond the schema
+   are in `contract/README.md`, in the validator's own words.
+5. Declare the origin as `http://<templateId>.autom8x.internal:8080`. The platform
+   gives your container that name as a network alias, so it is reachable only on
+   the compose network by construction — the shape every automation here uses.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually

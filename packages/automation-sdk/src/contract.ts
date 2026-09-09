@@ -29,8 +29,12 @@ export const CONTRACT_VERSION = 1;
  */
 export interface Continuation {
   ofRunId: string;
-  kind: 'approval' | 'retry';
-  /** The declared step that held. Absent for a plain retry of a failed run. */
+  /**
+   * `'retry'` was published and WITHDRAWN by the platform on 2026-09-08 (its
+   * §12.1 #84): nothing ever minted one. A failed run is re-run as a fresh run.
+   */
+  kind: 'approval';
+  /** The declared step that held. */
   stepId?: string;
   /** Present when `kind` is `approval`. */
   decision?: 'approved' | 'rejected';
@@ -103,7 +107,9 @@ export type RunResult =
   // structured result. The platform publishes the first and never the second.
   | { outcome: 'success'; output?: JsonObject; summary?: string }
   | { outcome: 'held'; held: { stepId: string; reason: string; state: JsonObject } }
-  | { outcome: 'failed'; failureReason: string; retryState?: JsonObject };
+  // `retryState` was published here and withdrawn by the platform on 2026-09-08
+  // (§12.1 #84): nothing read it, and the platform now refuses it as undeclared.
+  | { outcome: 'failed'; failureReason: string };
 
 /** Vendor-neutral capability an automation may request. Must be in the manifest. */
 export type Capability = 'document-extraction' | 'classification' | 'screening' | 'summarization';
@@ -209,7 +215,7 @@ export function isContinuation(value: unknown): value is Continuation {
   if (!isObject(value)) return false;
   return (
     typeof value.ofRunId === 'string' &&
-    (value.kind === 'approval' || value.kind === 'retry') &&
+    value.kind === 'approval' &&
     (value.stepId === undefined || typeof value.stepId === 'string') &&
     (value.decision === undefined ||
       value.decision === 'approved' ||
