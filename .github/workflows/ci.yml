@@ -17,7 +17,7 @@ permissions:
 jobs:
   verify:
     name: Verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,7 +63,7 @@ jobs:
   # registry and never pushes, including on pull requests from forks.
   image:
     name: Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,7 +121,7 @@ jobs:
     name: Publish
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [verify, image]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -176,3 +176,41 @@ jobs:
             echo "- \`$reference\`"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "$reference"
+
+  # The one check for the ruleset to require, once it has reported on a pull
+  # request and on main. Green only when every job above succeeded. Publish is
+  # push-only by its own `if`, so on a pull request its "skipped" is the single
+  # skip allowed; a skip anywhere else, a failure or a cancellation is red. A job
+  # added above must be named in `needs` too, or this check never sees it.
+  all-green:
+    name: all-green
+    if: always()
+    needs: [verify, image, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every needed job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          red=0
+          while IFS=$'\t' read -r job result; do
+            case "$result" in
+              success) verdict=ok ;;
+              skipped)
+                if [ "$job" = publish ] && [ "$EVENT_NAME" = pull_request ]; then
+                  verdict='ok (push-only job, skipped on a pull request)'
+                else
+                  verdict=RED
+                  red=1
+                fi
+                ;;
+              *)
+                verdict=RED
+                red=1
+                ;;
+            esac
+            printf '%-8s %-10s %s\n' "$job" "$result" "$verdict"
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          exit "$red"

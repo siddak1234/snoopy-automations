@@ -84,6 +84,51 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
           "maxLength": 64
+        },
+        "input": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "title",
+              "description",
+              "control",
+              "required"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$",
+                "maxLength": 64
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "control": {
+                "enum": [
+                  "toggle",
+                  "money",
+                  "text",
+                  "email",
+                  "artifact"
+                ]
+              },
+              "defaultValue": {},
+              "required": {
+                "type": "boolean"
+              }
+            }
+          }
         }
       }
     },
@@ -184,6 +229,7 @@
               "toggle",
               "money",
               "text",
+              "email",
               "resource-picker"
             ]
           },
