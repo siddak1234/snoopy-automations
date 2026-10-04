@@ -1,7 +1,7 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `e85f903`, taken 2026-09-08. The platform emits
+(`snoopy-backend`, private) at commit `db66611`, taken 2026-10-03. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -32,6 +32,11 @@ and this copy carries the result:
   is reachable only on the compose network by construction.
 - `pricing.monthlyPriceUsd` carries `multipleOf: 0.01`; `requiredConnections` and
   `requiredCapabilities` carry `uniqueItems` (platform §12.1 #86).
+
+Refreshed 2026-10-03 at `db66611` (the deployed `a82c870` carries the same bytes): since
+`e85f903` only `automation-manifest.json` had moved, additively — `trigger.input[]`, up to
+16 fields a trigger may collect (platform `280b06a`), and `email` among the setup controls
+(platform `d866aa0`). The other six files are byte-identical to the previous pin.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim.
