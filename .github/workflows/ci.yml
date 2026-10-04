@@ -59,8 +59,10 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
-  # The exact image the backend will later pin. This job never authenticates to a
-  # registry and never pushes, including on pull requests from forks.
+  # The pull request's gate: the Dockerfile built, smoke-tested and scanned before
+  # anything may be pushed. This job never authenticates to a registry and never
+  # pushes, including on pull requests from forks. The bytes the backend pins are
+  # built, pushed and proven by Publish, below, from the same Dockerfile.
   image:
     name: Image
     runs-on: ubuntu-24.04
@@ -117,6 +119,14 @@ jobs:
 
   # A merge to main is the only publishing event. packages:write exists on this
   # job alone and authenticates with its own short-lived GITHUB_TOKEN.
+  #
+  # Build once, push by digest, prove that digest, then name it. Until 2026-10-04
+  # this job rebuilt the image the Image job had just smoke-tested and scanned,
+  # so the bytes that reached GHCR were never the bytes that had been checked.
+  # Now the one build is pushed with no tag; the smoke test and both Trivy passes
+  # run against `IMAGE_NAME@sha256:…`, which is exactly what was pushed; and only
+  # when they pass does `imagetools create` give that index its commit tag. A
+  # digest that fails stays untagged: nothing names it, so nothing can pin it.
   publish:
     name: Publish
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -135,7 +145,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR with this job's token
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -144,24 +154,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # The sole tag is the full commit SHA. Deployments consume the digest this
-      # step returns; no latest, main, branch, or other moving tag is created.
-      - name: Build and push invoice-intake by commit
+      # No `tags`: the image is pushed by digest alone, so the registry holds the
+      # bytes but nothing names them yet. The action's default provenance
+      # attestation is kept, so what is pushed is an OCI image index (the amd64
+      # manifest plus its attestation) and the digest returned is the INDEX
+      # digest, the shape the platform's deploy/compose.prod.yml pins.
+      - name: Build and push invoice-intake by digest
         id: publish
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: automations/invoice-intake/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      # This is the deployable reference. Fail if Buildx did not return it: an
-      # unfindable digest blocks the backend session rather than becoming guesswork.
-      - name: Record the immutable digest
+      # Fail if Buildx did not return a digest: an unfindable digest blocks the
+      # backend session rather than becoming guesswork. Every step below is given
+      # this one reference and nothing else.
+      - name: Resolve the pushed digest
+        id: pushed
         env:
           DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
@@ -169,13 +184,71 @@ jobs:
             echo "Buildx returned no valid image digest" >&2
             exit 1
           fi
-          reference="$IMAGE_NAME@$DIGEST"
+          echo "reference=$IMAGE_NAME@$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "pushed by digest: $IMAGE_NAME@$DIGEST"
+
+      # The Image job's smoke test, run against the pushed digest itself.
+      - name: Smoke-test the pushed digest
+        env:
+          REFERENCE: ${{ steps.pushed.outputs.reference }}
+        run: |
+          container=invoice-intake-smoke
+          trap 'docker logs "$container" || true; docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name "$container" \
+            --publish 127.0.0.1:18080:8080 \
+            "$REFERENCE" >/dev/null
+          for attempt in {1..20}; do
+            response="$(curl --fail --silent --show-error http://127.0.0.1:18080/health/live)" && break
+            sleep 1
+          done
+          test "${response:-}" = '{"status":"ok","templateId":"invoice-intake","contractVersion":1}'
+
+      # The Image job's two Trivy passes, run against the pushed digest itself.
+      - name: Scan the pushed digest for fixable CRITICAL and HIGH vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.pushed.outputs.reference }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Report vulnerabilities in the pushed digest without an upstream fix
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.pushed.outputs.reference }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: '0'
+          format: table
+
+      # Only now is the digest named. The sole tag is the full commit SHA; no
+      # latest, main, branch, or other moving tag is created. `imagetools create`
+      # given one index copies that index as it is, so the tag resolves to the
+      # very digest proven above; read back and compared here, because a
+      # promotion may read the digest through this tag.
+      - name: Tag the proven digest with the commit
+        env:
+          REFERENCE: ${{ steps.pushed.outputs.reference }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          TAG: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          docker buildx imagetools create --tag "$TAG" "$REFERENCE"
+          tagged="$(docker buildx imagetools inspect "$TAG" --format '{{println .Manifest.Digest}}' | head -1)"
+          if [ "$tagged" != "$DIGEST" ]; then
+            echo "tag $TAG resolves to $tagged, not to the proven $DIGEST" >&2
+            exit 1
+          fi
           {
             echo "### Image published"
             echo
-            echo "- \`$reference\`"
+            echo "- \`$REFERENCE\`"
+            echo "- \`$TAG\` resolves to the same index digest"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "$reference"
+          echo "tagged: $TAG -> $DIGEST"
 
   # The one check for the ruleset to require, once it has reported on a pull
   # request and on main. Green only when every job above succeeded. Publish is
