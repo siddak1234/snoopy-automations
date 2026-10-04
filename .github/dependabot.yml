@@ -16,6 +16,14 @@ updates:
     groups:
       everything:
         patterns: ['*']
+    # Move the lock only, never a range in package.json. Every red CI run this
+    # repository has had (6 of 47, counted 2026-10-03) was a Dependabot npm pull
+    # request that `npm ci` refused with EUSAGE: a range raised in one package.json
+    # while the OTHER lock — the root workspace lock, or automations/invoice-intake's
+    # standalone lock, which the image build consumes on its own — stayed behind.
+    # A lock moved within its committed ranges stays in sync with every
+    # package.json, so there is nothing for `npm ci` to refuse.
+    versioning-strategy: lockfile-only
     # Owner decision 2026-09-08 (platform §0.1): the TypeScript major is a toolchain
     # migration made deliberately, and @types/node tracks the runtime major, which
     # stays on the 22 LTS the platform image and CI pin.
@@ -25,21 +33,10 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
-  # This lock is consumed independently by the image build; the root workspace
-  # lock cannot stand in for it.
-  - package-ecosystem: npm
-    directory: /automations/invoice-intake
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 1
-    groups:
-      everything:
-        patterns: ['*']
-    ignore:
-      - dependency-name: typescript
-        update-types: ['version-update:semver-major']
-      - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
+  # No npm entry for automations/invoice-intake: its only dependency is the local
+  # SDK (file:), and its dev tooling is never installed in the image (the
+  # Dockerfile's `--omit=dev`). An entry there raised ranges the root lock did
+  # not carry, and the root entry raised ranges this lock did not carry.
 
   - package-ecosystem: docker
     directory: /automations/invoice-intake
