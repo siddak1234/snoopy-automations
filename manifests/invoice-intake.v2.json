@@ -1,0 +1,86 @@
+{
+  "templateId": "invoice-intake",
+  "version": 2,
+  "display": {
+    "name": "Invoice intake",
+    "description": "Receives invoice webhooks, holds large invoices for approval, and emails the outcome from Autom8x.",
+    "category": "Finance",
+    "icon": "Receipt"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "webhook"
+  },
+  "requiredConnections": [],
+  "requiredCapabilities": [],
+  "setup": [
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Hold above",
+      "description": "Invoices above this amount wait for someone to approve them. Editable anytime.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    },
+    {
+      "section": "notifications",
+      "key": "notifyEmail",
+      "title": "Tell the vendor at",
+      "description": "The vendor's accounts-receivable address. They are told their invoice was received once it is accepted. Sent from automations@autom8x.ai, never your own mailbox; replies reach your workspace.",
+      "control": "text",
+      "required": true
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Invoice received",
+      "description": "A verified webhook delivery starts a run with the invoice to intake."
+    },
+    {
+      "id": "validate",
+      "kicker": "ACTION",
+      "title": "Check the amount",
+      "description": "Compares the invoice against your threshold and holds it if it is above."
+    },
+    {
+      "id": "notify",
+      "kicker": "ACTION",
+      "title": "Tell the vendor",
+      "description": "Confirms receipt to the vendor from automations@autom8x.ai."
+    }
+  ],
+  "service": {
+    "origin": "http://invoice-intake-v2.autom8x.internal:8080",
+    "serviceAccount": "invoice-intake-v2@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 40,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "reference": {
+        "type": "string"
+      },
+      "vendor": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "number"
+      },
+      "decidedBy": {
+        "type": "string"
+      },
+      "notified": {
+        "type": "boolean"
+      }
+    },
+    "required": ["reference", "vendor", "amount", "decidedBy", "notified"]
+  }
+}
