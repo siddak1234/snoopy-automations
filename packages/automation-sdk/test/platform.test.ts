@@ -3,7 +3,13 @@ import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 
 import type { ModelRequest, ProviderRequest } from '../src/contract.js';
-import { PlatformClient, isUnanswered } from '../src/platform.js';
+import {
+  DEFAULT_CALLBACK_TIMEOUT_MS,
+  DEFAULT_MAIL_TIMEOUT_MS,
+  DEFAULT_MODEL_TIMEOUT_MS,
+  PlatformClient,
+  isUnanswered,
+} from '../src/platform.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { artifactFixture, problemFixture } from '../src/testing.js';
 import { type StubPlatform, startStubPlatform } from './stub-platform.js';
@@ -337,4 +343,13 @@ test('an answer that never came is marked as such — timed out, refused, cut of
     (error: unknown) => error instanceof TypeError && !isUnanswered(error),
   );
   assert.equal(stub.calls.length, sent, 'the unserialisable input never left');
+});
+
+test('the default bounds outlast the platform answering what they bound (platform BUILD-PLAN 25.2.13)', () => {
+  // Read at snoopy-backend: Runs waits up to 15 s on Connections for a provider
+  // call; the Edge relays a callback for up to 55 s, and the gateway waits 45 s on
+  // the vendor; mail waits on Access (5 s) and then the transport (10 s).
+  assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 15_000, 'the provider callback');
+  assert.ok(DEFAULT_MODEL_TIMEOUT_MS > 55_000, 'the model callback');
+  assert.ok(DEFAULT_MAIL_TIMEOUT_MS > 5_000 + 10_000, 'the mail callback');
 });

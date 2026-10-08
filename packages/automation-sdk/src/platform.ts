@@ -60,23 +60,42 @@ export interface AutomationPlatform {
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
 }
 
+/**
+ * The client's default bounds. Each is longer than the platform takes to answer
+ * the callbacks it bounds, so a step receives the platform's answer — recorded,
+ * refused or failed — rather than this client's own timeout, which says only
+ * "unknown". Read at snoopy-backend (platform BUILD-PLAN 25.2.13): the Edge relays a
+ * callback for up to 55 s (5 s before 25.2.13); Runs waits up to 15 s on
+ * Connections for a provider call, and Connections 10 s on the provider; the
+ * gateway gives up on the model vendor at 45 s; mail waits on Access (5 s) and the
+ * transport (10 s).
+ */
+export const DEFAULT_CALLBACK_TIMEOUT_MS = 20_000;
+export const DEFAULT_MODEL_TIMEOUT_MS = 60_000;
+export const DEFAULT_MAIL_TIMEOUT_MS = 30_000;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
+
 export interface PlatformClientOptions {
-  /** Bound on the step, result, provider and artifact callbacks. Default 10 s. */
+  /**
+   * Bound on the step, result, provider and artifact callbacks. Default 20 s,
+   * longer than Runs waits on Connections for a provider call (15 s).
+   */
   timeoutMs?: number;
   /**
    * Bound on the model callback, which waits on a provider's generation and
-   * cannot be held to the same ten seconds without making the capability
-   * unusable. Default 60 s.
+   * cannot be held to the same bound as the others without making the capability
+   * unusable. Default 60 s, longer than the Edge relays a callback (55 s), which is
+   * longer than the gateway waits on the vendor (45 s).
    */
   modelTimeoutMs?: number;
   /** Bound on fetching an artifact's bytes, which may be a scanned document. Default 60 s. */
   downloadTimeoutMs?: number;
   /**
    * Bound on the mail callback, which reserves the send, resolves the workspace's
-   * members and calls the transport before it answers. Default 30 s. The hop in
-   * front of the platform may give up sooner and answer 502: the platform KEEPS its
-   * reservation on a slow transport and this client never retries, so a timeout
-   * here means "unknown", not "not sent".
+   * members and calls the transport before it answers. Default 30 s. The platform
+   * KEEPS its reservation on a slow transport and this client never retries, so a
+   * timeout here means "unknown", not "not sent" — and so does a 502 from the hop in
+   * front of the platform, which before platform BUILD-PLAN 25.2.13 gave up after 5 s.
    */
   mailTimeoutMs?: number;
 }
@@ -92,10 +111,10 @@ export class PlatformClient implements AutomationPlatform {
     private readonly runToken: string,
     options: PlatformClientOptions = {},
   ) {
-    this.#timeoutMs = options.timeoutMs ?? 10_000;
-    this.#modelTimeoutMs = options.modelTimeoutMs ?? 60_000;
-    this.#downloadTimeoutMs = options.downloadTimeoutMs ?? 60_000;
-    this.#mailTimeoutMs = options.mailTimeoutMs ?? 30_000;
+    this.#timeoutMs = options.timeoutMs ?? DEFAULT_CALLBACK_TIMEOUT_MS;
+    this.#modelTimeoutMs = options.modelTimeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
+    this.#downloadTimeoutMs = options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    this.#mailTimeoutMs = options.mailTimeoutMs ?? DEFAULT_MAIL_TIMEOUT_MS;
   }
 
   public async reportStep(report: StepReport): Promise<void> {

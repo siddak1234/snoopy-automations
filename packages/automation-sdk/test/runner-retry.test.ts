@@ -296,11 +296,11 @@ test('on the wire: an answer that never came and a 503 are re-attempted with the
       calls += 1;
       // The first is held past the client's timeout; the second is a proxy's bare
       // 503; the third is answered.
-      stub.delayMs = calls === 1 ? 500 : 0;
+      stub.delayMs = calls === 1 ? 1_500 : 0;
       if (calls === 2) return { status: 503 };
       return { status: 200, body: { provider: { status: 201, body: { id: 'r-1' } } } };
     };
-    const client = new PlatformClient(stub.origin, 'run-token-under-test', { timeoutMs: 100 });
+    const client = new PlatformClient(stub.origin, 'run-token-under-test', { timeoutMs: 1_000 });
     const request = invoke();
     const result = await retrying({
       post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS },

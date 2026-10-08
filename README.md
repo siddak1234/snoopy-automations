@@ -202,15 +202,18 @@ defineAutomation({
     nothing is recorded yet, and the provider is called again under the same
     `Idempotency-Key` header, which only a vendor that honours it deduplicates; none
     of the platform's registered providers is recorded as doing so. A call can fail
-    in the container while it is still running: the Edge gives up on its hop to Runs
-    after 5 seconds and answers 502, while Connections carries on for up to 10
-    seconds and records the answer only when it comes. The floor starts a repeat
-    after that window, so a first call the provider answered in time is replayed,
-    not sent twice; a first call with no final answer is sent again whatever the
-    wait. So a provider WRITE is safe to retry only at a vendor that deduplicates on
-    the key. The same key with a different request is refused 409, which reaches the
-    container as a 502 today and is retried to the bound, performing nothing (a
-    finding returned to the platform).
+    in the container while it is still running — a reset, a proxy's 502, and before
+    the platform's BUILD-PLAN 25.2.13 the Edge giving up on its hop to Runs after 5
+    seconds — while Connections carries on for up to 10 seconds and records the
+    answer only when it comes. The floor waits out that bound, which in the common
+    case — a slow provider behind a fast platform — replays a first call the
+    provider answered instead of sending it twice. It narrows the window and does
+    not close it: the platform's own work before the provider call does not stop
+    either, so a slow platform can start the first call late. A first call with no
+    final answer is sent again whatever the wait. So a provider WRITE is safe to
+    retry only at a vendor that deduplicates on the key. The same key with a
+    different request is refused 409, which reaches the container as a 502 today and
+    is retried to the bound, performing nothing (a finding returned to the platform).
   - **Mail.** The same key and the same words claim no further allowance — the
     reservation is keyed on the run, the key and the message's digest — and go to the
     transport again under the same vendor idempotency key, which the transport
@@ -220,9 +223,11 @@ defineAutomation({
   - **Model.** No record: a model call repeated after a completion the container
     never received is a second vendor call, a second `runs.model_calls` row and a
     second unit of the plan's monthly allowance. Declare a policy on a step that
-    calls the model only if that cost is acceptable. Today a model call that takes
-    longer than 5 seconds reaches the container as the Edge's 502 while the
-    platform completes and counts it (a finding returned to the platform).
+    calls the model only if that cost is acceptable. The Edge relays a callback for
+    up to 55 seconds and the gateway gives up on the vendor at 45, inside the
+    client's 60 (platform BUILD-PLAN 25.2.13). Before 25.2.13 the Edge gave up
+    after 5 seconds, and a longer model call reached the container as a 502 while
+    the platform completed and counted it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
   it took more than one attempt, `(after N attempts)`; a step that failed every
   attempt is `The <step> step failed (after N attempts)` and the run fails with the

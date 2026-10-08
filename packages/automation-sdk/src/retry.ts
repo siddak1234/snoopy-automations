@@ -60,21 +60,22 @@ export const MAX_STEP_BACKOFF_MS = 30_000;
 
 /**
  * The shortest wait before a repeat, in milliseconds — a platform fact, not a
- * preference. Read at snoopy-backend `886eff5`: the Edge gives up on its hop to
- * Runs after 5 seconds (`compose.yml:1071`, `api`'s
- * `RUNS_SERVICE_REQUEST_TIMEOUT_MS`) and answers 502 `DEPENDENCY_FAILURE` with no
- * reason (`apps/api/src/modules/automations/http-gateway.ts:325-347`), which is
- * transient here. Neither Runs nor Connections stops when its caller goes:
- * Connections starts the provider call after two database reads, bounds it at 10
- * seconds (`apps/connections/src/operations.ts:315`), and records a final answer
- * only AFTER it returns (`apps/connections/src/routes-operations.ts:227-252`),
- * with no reservation while it runs. A repeat that reaches Connections inside
- * that window finds no record and calls the provider a second time. Waiting at
- * least 10 seconds after the 502 starts the repeat some 15 seconds after the
- * first attempt, outside the first call's bound, so a first call the provider
- * answered is replayed from the record (`replayed`). A first call that got no
- * final answer has no record either way, and is sent again. With three attempts
- * the floor is also the ceiling: 10 + 20 seconds is `MAX_STEP_BACKOFF_MS`.
+ * preference. A failure the container sees before the platform has finished — a
+ * reset, a proxy's 502, and before platform BUILD-PLAN 25.2.13 the Edge giving up
+ * on its hop to Runs after 5 seconds — can leave the first provider call running.
+ * Read at snoopy-backend `886eff5`: nothing in Runs or Connections stops when its
+ * caller goes. Runs checks the run token and asks Catalog, Connections makes three
+ * reads, and only then starts the provider call, bounds it at 10 seconds
+ * (`apps/connections/src/operations.ts:315`) and records a final answer AFTER it
+ * returns (`apps/connections/src/routes-operations.ts:227-252`), with no
+ * reservation while it runs. A repeat that reaches Connections inside that window
+ * finds no record and calls the provider a second time. Waiting at least the
+ * call's own bound, 10 seconds, covers the common case — a slow provider behind a
+ * fast platform — so a first call the provider answered is replayed from the
+ * record (`replayed`). It narrows the window and does not close it: a slow
+ * platform can start the first call late. A first call that got no final answer
+ * has no record either way, and is sent again. With three attempts the floor is
+ * also the ceiling: 10 + 20 seconds is `MAX_STEP_BACKOFF_MS`.
  */
 export const MIN_STEP_BACKOFF_MS = 10_000;
 
