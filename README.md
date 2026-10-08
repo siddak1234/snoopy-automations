@@ -66,7 +66,8 @@ An automation is **declared steps, versioned prompts, and a runner** (platform
 ADR-0034). The manifest declares the pipeline; the code supplies one function per
 step; the runner runs the pipeline of the version the run pinned, in order, reports
 each step through the step callback, derives one idempotency key per run and step
-and attaches it to every provider request and every mail, and resumes an approval's
+and attaches it to every provider request and every mail, re-attempts a step that
+declared a retry policy when it fails transiently (below), and resumes an approval's
 continuation at the step after the one that held.
 
 ```ts
@@ -153,6 +154,78 @@ never from the 200-character `detail` it keeps for the message. The mail callbac
 two pre-transport refusals name themselves the same way (`recipient_inside_workspace`
 at 403, `workspace_membership_truncated` at 502), which is what `mailCertainlyNotSent`
 reads.
+
+## Retrying a step
+
+A step is run again after a failure only when its automation declares a policy for
+it; a step without one runs once, as every step did before (platform BUILD-PLAN
+25.5.1, ADR-0034 decision 5). The platform re-attempts an invoke that was refused or
+never answered; a step that fails inside a running automation is the runner's.
+
+```ts
+defineAutomation({
+  templateId,
+  manifests,
+  steps,
+  result,
+  retry: { act: { attempts: 3, backoffMs: 5_000 } },
+});
+```
+
+- **Bounded by the SDK.** At most 3 attempts, the first included; `backoffMs` before
+  the second and twice that before the third, never more than 30 seconds of waiting
+  in all. A policy asking for more is clamped — `automation.retry` shows what is
+  applied — and one that counts no attempt, or names a step with no code, is refused
+  at startup. No attempt starts at or after the invoke's `deadline`: past it the
+  platform refuses every callback (403 `deadline_exceeded`), and a deadline that does
+  not parse allows no retry. The figures are integrator figures, not measurements
+  (`retry.ts` says why).
+- **Only a transient failure.** No answer at all — the request was refused, reset,
+  timed out or cut off, which the client marks where it makes the request — or a
+  callback answered 502, 503 or 504 without deciding: no `details.reason`, and the
+  code `DEPENDENCY_FAILURE` or none (a proxy's page). Never a 4xx (the mail
+  allowance's 429 among them), a `ModelRefusedError`, a 5xx the platform typed
+  (`workspace_membership_truncated`, `pinned_version_unavailable`,
+  `outbound_mail_not_configured`), `NOT_CONFIGURED`, an answer that came malformed, a
+  provider's own status (it arrives inside a 200 and is the step's to judge), a link
+  the store refused, or anything the step's own code threw. A step that wants the
+  retry lets the platform's error through as it came.
+- **The same key on every attempt.** The whole step runs again, with the same `state`
+  (treat it as read-only) and the same idempotency key, so a repeat meets the
+  platform's records for that key:
+  - **Provider.** The same key and the same request, after a final answer (any
+    status below 500 but 401, 403, 408, 425 and 429), is answered from Connections'
+    record of the first — `replayed`, the provider not called. Without one — the
+    provider unreachable, one of those statuses, or a first call still in flight —
+    nothing is recorded yet, and the provider is called again under the same
+    `Idempotency-Key` header, which only a vendor that honours it deduplicates.
+    Connections bounds a provider call at 10 seconds, the client's own timeout, so a
+    retry that waits a few seconds finds the first call over. The same key with a
+    different request is refused 409, which reaches the container as a 502 today and
+    is retried to the bound, performing nothing (a finding returned to the platform).
+  - **Mail.** The same key and the same words claim no further allowance — the
+    reservation is keyed on the run, the key and the message's digest — and go to the
+    transport again under the same vendor idempotency key, which the transport
+    deduplicates. Different words under the same key are a second mail and a second
+    unit of the allowance, so a step that may be retried builds the same message
+    every time.
+  - **Model.** No record: a model call repeated after a completion the container
+    never received is a second vendor call, a second `runs.model_calls` row and a
+    second unit of the plan's monthly allowance. Declare a policy on a step that
+    calls the model only if that cost is acceptable.
+- **Reported once.** The step's one timeline line carries its final outcome and, when
+  it took more than one attempt, `(after N attempts)`; a step that failed every
+  attempt is `The <step> step failed (after N attempts)` and the run fails with the
+  last error. A result the step returns — `ok`, `failed`, `skipped` or `held` — ends
+  the attempts, so a held step is never run twice.
+
+Neither automation here declares a policy. `invoice-intake` calls the platform only
+in `notify`, and `notify` in both automations catches its own failure and reports
+it, so a policy there would never fire; `invoice-check`'s `receive` only reads the
+file its run was given and is the one safe candidate. The template declares one on
+`act`, its provider call. In a suite, `refusalFixture('provider', { status: 502,
+code: 'DEPENDENCY_FAILURE', detail: 'Runs service is unreachable' })` from
+`@autom8x/automation-sdk/testing` is a transient answer to rehearse a retry with.
 
 ## Invoice intake
 

@@ -8,7 +8,12 @@ import {
   readManifests,
   type InvokeRequest,
 } from '@autom8x/automation-sdk';
-import { RecordingPlatform, artifactFixture, invokeFixture } from '@autom8x/automation-sdk/testing';
+import {
+  RecordingPlatform,
+  artifactFixture,
+  invokeFixture,
+  refusalFixture,
+} from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
 
@@ -149,6 +154,7 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
     outcome: 'failed',
     failureReason: 'the provider refused the record with 403',
   });
+  assert.equal(refusing.providerCalls.length, 1, "the provider's own answer is never retried");
 
   const unmailed = platformWith({ vendor: 'Contoso', amount: 10 });
   unmailed.mail = () => Promise.reject(new Error('refused'));
@@ -158,6 +164,36 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
   );
   assert.equal(result.outcome, 'success');
   assert.equal(unmailed.steps.at(-1)?.outcome, 'failed');
+});
+
+test('act is run again after a failure the platform did not decide, with the same key, and reported once', async () => {
+  assert.deepEqual(automation.retry, { act: { attempts: 3, backoffMs: 5_000 } });
+  const platform = platformWith({ vendor: 'Contoso', amount: 120.5 });
+  // The Edge could not reach Runs: a 502 that names no reason. The template waits
+  // its 5 seconds before the second attempt.
+  platform.provider = () =>
+    platform.providerCalls.length === 1
+      ? Promise.reject(
+          refusalFixture('provider', {
+            status: 502,
+            code: 'DEPENDENCY_FAILURE',
+            detail: 'Runs service is unreachable',
+          }),
+        )
+      : Promise.resolve({ status: 201, body: {} });
+  const request = invoke();
+  const result = await automation.execute(request, platform);
+  assert.equal(result.outcome, 'success');
+  const key = idempotencyKeyFor(request.runId, 'act');
+  assert.deepEqual(
+    platform.providerCalls.map((call) => call.idempotencyKey),
+    [key, key],
+  );
+  assert.deepEqual(
+    platform.steps.filter((step) => step.stepId === 'act').map((step) => step.summary),
+    ['Recorded DOC-1 automatically, within threshold (after 2 attempts)'],
+  );
+  assert.equal(platform.modelCalls.length, 1, 'the extraction before it is not repeated');
 });
 
 test('every prompt file in prompts/ is registered, and the manifest declares what they use', () => {

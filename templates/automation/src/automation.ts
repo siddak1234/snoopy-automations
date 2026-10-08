@@ -159,6 +159,13 @@ export function define(manifests: readonly Manifest[]): Automation {
     manifests,
     prompts,
     steps: { receive, extract, review, act, notify },
+    // `act` is run again after a failure the platform did not decide — no answer,
+    // or a 502/503/504 with no reason — with the same idempotency key, so a repeat
+    // meets the platform's record of the first instead of posting twice (README,
+    // "Retrying a step"). Not `extract`: a repeated model call is a second vendor
+    // call and a second ledger row. `receive` only reads and could be; `notify`
+    // catches its own failure, so a policy there would never fire.
+    retry: { act: { attempts: 3, backoffMs: 5_000 } },
     result: (state, request) => ({
       output: {
         reference: state.reference,
