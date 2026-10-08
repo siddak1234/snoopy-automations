@@ -1,0 +1,14 @@
+{
+  "id": "extract-fields",
+  "version": 1,
+  "capability": "document-extraction",
+  "template": "You read business documents. The document below is referenced as {{reference}}. Extract the vendor's name and the total amount as a number in the document's currency, and answer with only the JSON object the schema describes.",
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "vendor": { "type": "string" },
+      "amount": { "type": "number" }
+    },
+    "required": ["vendor", "amount"]
+  }
+}

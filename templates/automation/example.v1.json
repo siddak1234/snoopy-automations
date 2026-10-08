@@ -1,0 +1,111 @@
+{
+  "templateId": "example",
+  "version": 1,
+  "display": {
+    "name": "Example automation",
+    "description": "Reads the document a run was given, extracts its fields with a model, holds large amounts for approval, records the result and emails the outcome.",
+    "category": "Examples",
+    "icon": "Sparkles"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "manual",
+    "input": [
+      {
+        "key": "reference",
+        "title": "Reference",
+        "description": "The document's own reference, as printed on it.",
+        "control": "text",
+        "required": true
+      },
+      {
+        "key": "artifactId",
+        "title": "Document",
+        "description": "A file already uploaded for this run. The model reads it; a run may start without one.",
+        "control": "artifact",
+        "required": false
+      }
+    ]
+  },
+  "requiredConnections": [
+    {
+      "providerId": "example-provider",
+      "displayName": "Example provider",
+      "purpose": "Records each extracted document in your account.",
+      "scopes": ["records.write"]
+    }
+  ],
+  "requiredCapabilities": ["document-extraction"],
+  "setup": [
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Hold above",
+      "description": "Documents whose amount is above this wait for someone to approve them. Editable anytime.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    },
+    {
+      "section": "notifications",
+      "key": "notifyEmail",
+      "title": "Email the outcome to",
+      "description": "Where each decided document is reported. Left empty, no email is sent. Sent from automations@autom8x.ai, never your own mailbox.",
+      "control": "email",
+      "required": false
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Document received",
+      "description": "A run is started with a reference and, optionally, the document to read."
+    },
+    {
+      "id": "extract",
+      "kicker": "AI STEP",
+      "title": "Extract the fields",
+      "description": "Asks the platform's model for the vendor and the amount, held to a schema."
+    },
+    {
+      "id": "review",
+      "kicker": "ACTION",
+      "title": "Check the amount",
+      "description": "Compares the amount against your threshold and holds it if it is above."
+    },
+    {
+      "id": "act",
+      "kicker": "ACTION",
+      "title": "Record the document",
+      "description": "Records the extracted document in your connected account."
+    },
+    {
+      "id": "notify",
+      "kicker": "ACTION",
+      "title": "Email the outcome",
+      "description": "Emails the decision from automations@autom8x.ai, when an address is set."
+    }
+  ],
+  "service": {
+    "origin": "http://example.autom8x.internal:8080",
+    "serviceAccount": "example-automation@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 40,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "reference": { "type": "string" },
+      "vendor": { "type": "string" },
+      "amount": { "type": "number" },
+      "decidedBy": { "type": "string" },
+      "recorded": { "type": "boolean" }
+    },
+    "required": ["reference", "vendor", "amount", "decidedBy", "recorded"]
+  }
+}

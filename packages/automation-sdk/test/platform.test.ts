@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 
-import { CallbackRefusedError, PlatformClient } from '../src/platform.js';
-import { artifactFixture } from '../src/testing.js';
+import { PlatformClient } from '../src/platform.js';
+import { CallbackRefusedError } from '../src/refusals.js';
+import { artifactFixture, problemFixture } from '../src/testing.js';
 import { type StubPlatform, startStubPlatform } from './stub-platform.js';
 
 /**
@@ -140,18 +141,30 @@ test('an artifact is read by id and listed with none', async () => {
   assert.ok(!('downloadUrl' in (listing[0] ?? {})), 'a listing carries no link');
 });
 
-test('a refused callback surfaces the status and the platform detail', async () => {
+test('a refused callback surfaces the status, the platform detail and the reason past the cut', async () => {
+  // What `assertStepDeclared` raises and `createProblem` writes (the platform's
+  // `run-token.ts`): the reason sits in `details`, the last field of the body.
   stub.answers.step = () => ({
     status: 422,
-    body: { error: { code: 'BAD_REQUEST', details: { reason: 'step_not_declared' } } },
+    body: problemFixture({
+      status: 422,
+      code: 'BAD_REQUEST',
+      detail: 'The step is not declared in the manifest pipeline',
+      details: { stepId: 'nope', reason: 'step_not_declared' },
+    }),
   });
   await assert.rejects(
     client.reportStep({ runId: 'r', stepId: 'nope', outcome: 'ok', summary: 's' }),
-    (error: unknown) =>
-      error instanceof CallbackRefusedError &&
-      error.status === 422 &&
-      error.callback === 'step' &&
-      error.detail.includes('step_not_declared'),
+    (error: unknown) => {
+      assert.ok(error instanceof CallbackRefusedError);
+      assert.equal(error.status, 422);
+      assert.equal(error.callback, 'step');
+      assert.equal(error.code, 'BAD_REQUEST');
+      assert.ok(error.detail.startsWith('{"type":"urn:autom8x:problem:bad-request"'));
+      assert.equal(error.reason, 'step_not_declared');
+      assert.ok(!error.detail.includes('step_not_declared'), 'read from the body, not the cut');
+      return true;
+    },
   );
 });
 
@@ -178,5 +191,59 @@ test('a callback that never answers times out instead of hanging the run', async
   await assert.rejects(
     impatient.reportStep({ runId: 'r', stepId: 'receive', outcome: 'ok', summary: 's' }),
     (error: unknown) => error instanceof Error && error.name === 'TimeoutError',
+  );
+});
+
+test('a mail sends exactly the four fields the handler allowlists, with the token, and reads the acceptance', async () => {
+  await client.sendMail({
+    to: 'vendor@example.com',
+    subject: 'Invoice INV-1 received',
+    body: 'We received it.',
+    idempotencyKey: 'notify-0123456789abcdef',
+    // A field the handler would refuse must not travel even if a caller adds one.
+    ...({ from: 'me@customer.example' } as object),
+  });
+  const { path, headers, body } = last();
+  assert.equal(path, '/v1/automations/callbacks/mail');
+  assert.equal(headers.authorization, `Bearer ${TOKEN}`);
+  assert.deepEqual(body, {
+    to: 'vendor@example.com',
+    subject: 'Invoice INV-1 received',
+    body: 'We received it.',
+    idempotencyKey: 'notify-0123456789abcdef',
+  });
+
+  stub.answers.mail = () => ({ status: 200, body: { mail: { queued: true } } });
+  await assert.rejects(
+    client.sendMail({
+      to: 'v@example.com',
+      subject: 's',
+      body: 'b',
+      idempotencyKey: 'k'.repeat(16),
+    }),
+    /did not answer with an acceptance/u,
+  );
+
+  stub.answers.mail = () => ({
+    status: 403,
+    body: problemFixture({
+      status: 403,
+      code: 'FORBIDDEN',
+      detail: 'The recipient is an address inside the requesting workspace',
+      details: { reason: 'recipient_inside_workspace' },
+    }),
+  });
+  await assert.rejects(
+    client.sendMail({
+      to: 'v@example.com',
+      subject: 's',
+      body: 'b',
+      idempotencyKey: 'k'.repeat(16),
+    }),
+    (error: unknown) =>
+      error instanceof CallbackRefusedError &&
+      error.callback === 'mail' &&
+      error.status === 403 &&
+      error.reason === 'recipient_inside_workspace',
   );
 });

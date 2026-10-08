@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
@@ -7,19 +7,27 @@ import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 
 import {
+  CAPABILITIES,
+  MAIL_BODY_MAX_LENGTH,
+  MAIL_SUBJECT_MAX_LENGTH,
   isArtifactListing,
   isArtifactReference,
+  isCapability,
   isContinuation,
   isInvokeRequest,
+  isMailAcceptance,
   isModelCompletion,
   oneLine,
   toArtifactListing,
+  truncateText,
   type InvokeAck,
+  type MailRequest,
   type ModelRequest,
   type ProviderRequest,
   type RunResult,
   type StepReport,
 } from '../src/contract.js';
+import { isManifest, readManifest } from '../src/manifest.js';
 import { artifactFixture, invokeFixture } from '../src/testing.js';
 
 /**
@@ -183,4 +191,61 @@ test('the answers the platform sends back are recognised in their real shapes', 
     }),
   );
   assert.equal(isModelCompletion({ text: '{}', model: 'm', finishReason: 'stop' }), false);
+});
+
+test('a mail request carries exactly what the platform handler allow-lists, since no schema is published for it', () => {
+  // The platform emits no `automation-mail-request.json` (contract/README.md
+  // names the gap), so the shape is held to the handler's allow-list by name:
+  // `rejectUnexpected(body, ['runId', 'to', 'subject', 'body', 'idempotencyKey'])`
+  // in its `handleMail`. `runId` is optional there and the client never sends it.
+  const mail: MailRequest = {
+    to: 'vendor@example.com',
+    subject: 'Invoice received',
+    body: 'Thank you.',
+    idempotencyKey: 'notify-0123456789abcdef',
+  };
+  assert.deepEqual(Object.keys(mail).sort(), ['body', 'idempotencyKey', 'subject', 'to']);
+  assert.ok(isMailAcceptance({ mail: { accepted: true } }));
+  assert.equal(isMailAcceptance({ mail: { accepted: false } }), false);
+  assert.equal(isMailAcceptance({ provider: { status: 200 } }), false);
+  assert.equal(MAIL_SUBJECT_MAX_LENGTH, 200, "the handler's MAXIMUM_SUBJECT_LENGTH");
+  assert.equal(MAIL_BODY_MAX_LENGTH, 10_000, "the handler's MAXIMUM_BODY_LENGTH");
+});
+
+test('the capability list is the model-request schema’s enum, exactly', () => {
+  const schema = JSON.parse(
+    readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
+  ) as { properties: { capability: { enum: string[] } } };
+  assert.deepEqual([...CAPABILITIES], schema.properties.capability.enum);
+  assert.ok(isCapability('screening'));
+  assert.equal(isCapability('mind-reading'), false);
+});
+
+test('every manifest in the repository is readable as the runner reads it', () => {
+  const manifests = resolve(import.meta.dirname, '../../../manifests');
+  const files = readdirSync(manifests).filter((file) => file.endsWith('.json'));
+  assert.ok(files.length > 0);
+  for (const file of files) {
+    const manifest = readManifest(join(manifests, file));
+    assert.ok(manifest.pipeline.length > 0, `${file} declares a pipeline`);
+    assert.ok(file.startsWith(`${manifest.templateId}.v${manifest.version}.json`), file);
+  }
+  assert.equal(
+    isManifest({ templateId: 'x', version: 1, requiredCapabilities: [], pipeline: [] }),
+    false,
+  );
+  assert.equal(
+    isManifest({ templateId: 'x', version: 0, requiredCapabilities: [], pipeline: [{ id: 'a' }] }),
+    false,
+  );
+});
+
+test('a cut never splits a surrogate pair: the last character kept is whole', () => {
+  const emoji = '\u{1F600}';
+  assert.equal(truncateText(`${'x'.repeat(199)}${emoji}`, 200), 'x'.repeat(199));
+  assert.equal(truncateText(`${'x'.repeat(198)}${emoji}`, 200), `${'x'.repeat(198)}${emoji}`);
+  assert.equal(truncateText('short', 200), 'short');
+  const line = oneLine(`${'x'.repeat(199)}${emoji} tail`, 'summary');
+  assert.equal(line, 'x'.repeat(199));
+  assert.doesNotMatch(line, /[\uD800-\uDBFF]$/u, 'no lone surrogate at the cut');
 });

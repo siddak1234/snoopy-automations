@@ -1,0 +1,24 @@
+{
+  "name": "@autom8x/invoice-check",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Checks a submitted invoice against a workspace threshold, holds the large ones for approval, records the decision, and emails the outcome through the platform.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

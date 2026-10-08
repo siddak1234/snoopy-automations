@@ -2,6 +2,7 @@ import type {
   ArtifactListing,
   ArtifactReference,
   InvokeRequest,
+  MailRequest,
   ModelCompletion,
   ModelRequest,
   ProviderAnswer,
@@ -12,10 +13,12 @@ import type {
 import {
   isArtifactListing,
   isArtifactReference,
+  isMailAcceptance,
   isModelCompletion,
   isObject,
   oneLine,
 } from './contract.js';
+import { refusalFrom } from './refusals.js';
 
 /**
  * The automation's only way to reach anything.
@@ -33,9 +36,10 @@ import {
 /**
  * What an automation's `execute()` is handed. A test double implements the same.
  *
- * Five callbacks to the platform, each carrying the run token; one listing that is
- * the artifact callback asked without an id; and one fetch that is NOT a callback
- * and carries nothing — the bytes behind a signed link.
+ * Six callbacks to the platform, each carrying the run token — step, result,
+ * model, provider, artifact and mail; one listing that is the artifact callback
+ * asked without an id; and one fetch that is NOT a callback and carries nothing —
+ * the bytes behind a signed link.
  */
 export interface AutomationPlatform {
   /** Reports progress on one declared step. */
@@ -46,32 +50,14 @@ export interface AutomationPlatform {
   callModel(request: ModelRequest): Promise<ModelCompletion>;
   /** Asks the platform to call a provider operation this run's manifest declared. */
   callProvider(request: ProviderRequest): Promise<ProviderAnswer>;
+  /** Asks the platform to send one mail from its own identity — the only sender there is. */
+  sendMail(mail: MailRequest): Promise<void>;
   /** A file this run was given, by reference and a short-lived link. */
   readArtifact(artifactId: string): Promise<ArtifactReference>;
   /** Every file this run was given, without links. */
   listArtifacts(): Promise<ArtifactListing[]>;
   /** The bytes a reference points at, fetched straight from the store. */
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
-}
-
-/**
- * The platform refused a callback.
- *
- * Distinguished from a transport failure because the two mean different things to
- * the caller: a 422 is this automation reporting a step its manifest never declared
- * (fix the code), a 409 is a run that has already ended (stop), a 404 from the
- * artifact callback is a file this run was not given, and a timeout is the
- * platform being unreachable (the run's own deadline sweep will fail it).
- */
-export class CallbackRefusedError extends Error {
-  public constructor(
-    public readonly callback: string,
-    public readonly status: number,
-    public readonly detail: string,
-  ) {
-    super(`callback ${callback} refused with ${status}: ${detail}`);
-    this.name = 'CallbackRefusedError';
-  }
 }
 
 export interface PlatformClientOptions {
@@ -85,12 +71,21 @@ export interface PlatformClientOptions {
   modelTimeoutMs?: number;
   /** Bound on fetching an artifact's bytes, which may be a scanned document. Default 60 s. */
   downloadTimeoutMs?: number;
+  /**
+   * Bound on the mail callback, which reserves the send, resolves the workspace's
+   * members and calls the transport before it answers. Default 30 s. The hop in
+   * front of the platform may give up sooner and answer 502: the platform KEEPS its
+   * reservation on a slow transport and this client never retries, so a timeout
+   * here means "unknown", not "not sent".
+   */
+  mailTimeoutMs?: number;
 }
 
 export class PlatformClient implements AutomationPlatform {
   readonly #timeoutMs: number;
   readonly #modelTimeoutMs: number;
   readonly #downloadTimeoutMs: number;
+  readonly #mailTimeoutMs: number;
 
   public constructor(
     private readonly callbackOrigin: string,
@@ -100,6 +95,7 @@ export class PlatformClient implements AutomationPlatform {
     this.#timeoutMs = options.timeoutMs ?? 10_000;
     this.#modelTimeoutMs = options.modelTimeoutMs ?? 60_000;
     this.#downloadTimeoutMs = options.downloadTimeoutMs ?? 60_000;
+    this.#mailTimeoutMs = options.mailTimeoutMs ?? 30_000;
   }
 
   public async reportStep(report: StepReport): Promise<void> {
@@ -131,6 +127,12 @@ export class PlatformClient implements AutomationPlatform {
    * platform refuses one that does not before anything is sent to a vendor.
    * `outputSchema` is honoured, not merely counted — pass an empty object for
    * free text.
+   *
+   * A completion the platform will not hand over is a typed refusal, thrown as a
+   * `ModelRefusedError`: 422 `output_schema_mismatch` (with `path` and `rule`),
+   * `content_filtered` or `truncated` (each with the vendor's `finishReason`), and
+   * 403 `over_plan_limit`, `capability_not_in_plan` or `entitlements_not_configured`
+   * (with `used` and, when the plan has one, `limit`). Never the completion's text.
    */
   public async callModel(request: ModelRequest): Promise<ModelCompletion> {
     const answer = await this.#post('model', request, this.#modelTimeoutMs);
@@ -166,6 +168,35 @@ export class PlatformClient implements AutomationPlatform {
       throw new Error('the provider callback did not answer with a status');
     }
     return { status: provider.status, body: provider.body };
+  }
+
+  /**
+   * Asks the PLATFORM to send one mail, from its own identity, to one address.
+   *
+   * The sixth callback (platform ADR-0021: the platform is the only sender). This
+   * process names no mailbox and holds no grant; the platform applies the
+   * self-send refusal, the per-run and per-workspace caps, and the sending
+   * address. Exactly the four fields its handler allow-lists are sent. A refusal
+   * surfaces as a `CallbackRefusedError`, as every other callback's does — its
+   * `reason` is the platform's `details.reason` when the refusal was decided
+   * before the transport (`recipient_inside_workspace`,
+   * `workspace_membership_truncated`), which is how `mailCertainlyNotSent` tells
+   * a certain failure from an answer that never came.
+   */
+  public async sendMail(mail: MailRequest): Promise<void> {
+    const answer = await this.#post(
+      'mail',
+      {
+        to: mail.to,
+        subject: mail.subject,
+        body: mail.body,
+        idempotencyKey: mail.idempotencyKey,
+      },
+      this.#mailTimeoutMs,
+    );
+    if (!isMailAcceptance(answer)) {
+      throw new Error('the mail callback did not answer with an acceptance');
+    }
   }
 
   /**
@@ -229,8 +260,11 @@ export class PlatformClient implements AutomationPlatform {
       // rejected something about this run — an undeclared step, an expired token —
       // and continuing as if it succeeded would produce a run whose timeline
       // disagrees with what actually happened.
-      const detail = await response.text().catch(() => '');
-      throw new CallbackRefusedError(message, response.status, detail.slice(0, 200));
+      const answer = await response.text().catch(() => '');
+      // The platform's problem body, read whole (`refusals.ts`): a model
+      // refusal the platform typed is a `ModelRefusedError`, anything else a
+      // `CallbackRefusedError` with the problem's `code`, `details` and `reason`.
+      throw refusalFrom(message, response.status, answer);
     }
 
     // Parsed once here rather than per message, and an empty body is `undefined`
