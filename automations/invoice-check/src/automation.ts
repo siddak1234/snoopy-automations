@@ -1,4 +1,5 @@
 import {
+  CallbackRefusedError,
   MAIL_SUBJECT_MAX_LENGTH,
   defineAutomation,
   held,
@@ -125,7 +126,7 @@ const notify: Step = async ({ request, state, platform }) => {
   } catch (error) {
     const certain = mailCertainlyNotSent(error);
     const why = certain
-      ? describe(error)
+      ? `the platform refused it (${refusalOf(error)})`
       : 'the platform did not answer; the mail may have been sent — do not re-send by hand';
     const { notified: _unknown, ...rest } = state;
     return {
@@ -213,8 +214,14 @@ function readNotifyEmail(config: JsonObject): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 120) : 'unknown error';
+/**
+ * The platform's own word for a refusal, or its status — never the answer's text:
+ * that is an envelope (`callback mail refused with 400: {"type":"urn:autom8x:…`)
+ * around a sentence that may name the address, and the timeline keeps it for years.
+ */
+function refusalOf(error: unknown): string {
+  if (!(error instanceof CallbackRefusedError)) return 'unknown error';
+  return error.reason ?? `HTTP ${error.status}`;
 }
 
 /**

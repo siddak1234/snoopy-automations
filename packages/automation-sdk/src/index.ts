@@ -37,14 +37,16 @@ export type {
 } from './contract.js';
 export { isManifest, readManifest, readManifests } from './manifest.js';
 export type { Manifest } from './manifest.js';
+export { PlatformClient, boundedResult, clientFor } from './platform.js';
+export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
 export {
   CallbackRefusedError,
-  PlatformClient,
-  boundedResult,
-  clientFor,
+  MODEL_REFUSAL_REASONS,
+  ModelRefusedError,
+  isModelRefusalReason,
   mailCertainlyNotSent,
-} from './platform.js';
-export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
+} from './refusals.js';
+export type { ModelRefusalReason } from './refusals.js';
 export {
   definePrompt,
   loadPrompt,

@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { definePrompt } from '../src/prompt.js';
+import { ModelRefusedError } from '../src/refusals.js';
 import { type Step, held } from '../src/runner.js';
-import { RecordingPlatform } from '../src/testing.js';
+import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';
 
 /**
@@ -275,5 +276,75 @@ test('a prompt whose capability a served manifest does not declare is refused at
         prompts: [extract],
       }),
     /which under-test v1 does not declare/u,
+  );
+});
+
+test('a typed model refusal reaches the step as a ModelRefusedError to branch on, and names its reason in the timeline when uncaught', async () => {
+  const truncated = refusalFixture('model', {
+    status: 422,
+    code: 'BAD_REQUEST',
+    detail: 'The model completion was truncated at the output budget',
+    details: { reason: 'truncated', finishReason: 'length' },
+  });
+  const declaring = [manifest(1, ['receive', 'validate', 'post'], ['document-extraction'])];
+
+  // Uncaught: the run dies at the step, and the timeline says why — a word from
+  // the platform's closed list, never the completion, which the platform never sent.
+  const uncaught = define({
+    manifests: declaring,
+    prompts: [extract],
+    steps: {
+      receive: async (context) => {
+        await context.platform.callModel(extract, { reference: 'INV-7' });
+        return { outcome: 'ok', summary: 'never' };
+      },
+      validate: ok('v'),
+      post: ok('p'),
+    },
+  });
+  const platform = new RecordingPlatform();
+  platform.model = () => Promise.reject(truncated);
+  await assert.rejects(
+    uncaught.execute(invoke(), platform),
+    (error: unknown) => error instanceof ModelRefusedError && error.reason === 'truncated',
+  );
+  assert.deepEqual(
+    platform.steps.map((step) => [step.stepId, step.outcome, step.summary]),
+    [['receive', 'failed', 'The receive step failed: the model call was refused (truncated)']],
+  );
+
+  // Caught: the author branches on the reason and decides what the run does.
+  const branching = define({
+    manifests: declaring,
+    prompts: [extract],
+    steps: {
+      receive: async (context) => {
+        try {
+          await context.platform.callModel(extract, { reference: 'INV-7' });
+        } catch (error) {
+          if (error instanceof ModelRefusedError && error.reason === 'truncated') {
+            return {
+              outcome: 'failed',
+              summary: 'The document was too long for one extraction',
+              failureReason: `the extraction was cut short (${error.finishReason})`,
+            };
+          }
+          throw error;
+        }
+        return { outcome: 'ok', summary: 'never' };
+      },
+      validate: ok('v'),
+      post: ok('p'),
+    },
+  });
+  const branched = new RecordingPlatform();
+  branched.model = () => Promise.reject(truncated);
+  assert.deepEqual(await branching.execute(invoke(), branched), {
+    outcome: 'failed',
+    failureReason: 'the extraction was cut short (length)',
+  });
+  assert.deepEqual(
+    branched.steps.map((step) => [step.stepId, step.outcome, step.summary]),
+    [['receive', 'failed', 'The document was too long for one extraction']],
   );
 });

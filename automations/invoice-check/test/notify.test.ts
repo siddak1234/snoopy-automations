@@ -3,8 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { CallbackRefusedError, idempotencyKeyFor } from '@autom8x/automation-sdk';
-import { RecordingPlatform } from '@autom8x/automation-sdk/testing';
+import { idempotencyKeyFor } from '@autom8x/automation-sdk';
+import {
+  type ProblemInput,
+  RecordingPlatform,
+  refusalFixture,
+} from '@autom8x/automation-sdk/testing';
 
 import { automation, invokeAt, manifestsRoot, output } from './fixtures.js';
 
@@ -57,7 +61,14 @@ for (const version of [2, 3, 4]) {
   test(`a refused v${version} mail is a failed step, not a swallowed one, and not a failed run`, async () => {
     const platform = new RecordingPlatform();
     platform.mail = () =>
-      Promise.reject(new CallbackRefusedError('mail', 400, 'to must be a single mailbox address'));
+      Promise.reject(
+        refusalFixture('mail', {
+          status: 400,
+          code: 'BAD_REQUEST',
+          detail: 'to must be a single mailbox address',
+          details: { field: 'to' },
+        }),
+      );
     const result = await automation.execute(invokeAt(version, { notifyEmail: 'a@b' }), platform);
     assert.equal(
       platform.mails.length,
@@ -110,20 +121,71 @@ test('the subject and body are bounded, and no line is lost to the bounding', as
   assert.doesNotMatch(mail.body, /[\uD800-\uDBFF]$/u, 'no lone surrogate at a cut');
 });
 
+/** The platform's pre-transport refusals, in the problem shape its `createProblem` writes. */
+const CERTAIN_REFUSALS: ProblemInput[] = [
+  {
+    status: 403,
+    code: 'FORBIDDEN',
+    detail: 'The recipient is an address inside the requesting workspace',
+    details: { reason: 'recipient_inside_workspace' },
+  },
+  {
+    status: 502,
+    code: 'DEPENDENCY_FAILURE',
+    detail:
+      'The workspace membership could not be fully resolved, so the recipient cannot be verified',
+    details: { reason: 'workspace_membership_truncated' },
+  },
+  {
+    status: 503,
+    code: 'NOT_CONFIGURED',
+    detail: 'outbound_mail is not configured',
+    details: { component: 'outbound_mail' },
+  },
+];
+
 test('a refusal the platform decided before sending is reported as certain', async () => {
-  for (const [status, reason] of [
-    [403, 'recipient_inside_workspace'],
-    [502, 'workspace_membership_truncated'],
-    [503, undefined],
-  ] as const) {
+  for (const problem of CERTAIN_REFUSALS) {
+    const label = `${problem.status} ${String(problem.details?.reason ?? '')}`;
     const platform = new RecordingPlatform();
-    const answer = reason ? JSON.stringify({ error: { details: { reason } } }) : '';
-    platform.mail = () => Promise.reject(new CallbackRefusedError('mail', status, answer));
+    platform.mail = () => Promise.reject(refusalFixture('mail', problem));
     const result = await automation.execute(invokeAt(3), platform);
     const notify = platform.steps.find((step) => step.stepId === 'notify');
-    assert.equal(notify?.outcome, 'failed', `${status} ${reason ?? ''}`);
-    assert.doesNotMatch(notify?.summary ?? '', /may have been sent/u, `${status} ${reason ?? ''}`);
-    assert.equal(output(result).notified, false, `${status} ${reason ?? ''} is a certain failure`);
+    assert.equal(notify?.outcome, 'failed', label);
+    assert.doesNotMatch(notify?.summary ?? '', /may have been sent/u, label);
+    assert.equal(output(result).notified, false, `${label} is a certain failure`);
+  }
+});
+
+test("a refused notify's summary names the platform's reason or status, never the envelope or the address", async () => {
+  const address = 'private.person@example.com';
+  const cases: [ProblemInput, RegExp][] = [
+    [
+      {
+        status: 400,
+        code: 'BAD_REQUEST',
+        detail: `to must be a single mailbox address, not ${address}`,
+        details: { field: 'to' },
+      },
+      /could not be emailed: the platform refused it \(HTTP 400\)$/u,
+    ],
+    [
+      CERTAIN_REFUSALS[0]!,
+      /could not be emailed: the platform refused it \(recipient_inside_workspace\)$/u,
+    ],
+  ];
+  for (const [problem, expected] of cases) {
+    const platform = new RecordingPlatform();
+    platform.mail = () => Promise.reject(refusalFixture('mail', problem));
+    await automation.execute(invokeAt(3, { notifyEmail: address }), platform);
+    const notify = platform.steps.find((step) => step.stepId === 'notify');
+    assert.ok(notify);
+    assert.match(notify.summary, expected);
+    assert.doesNotMatch(
+      notify.summary,
+      /urn:autom8x|refused with|private\.person|[{}"]/u,
+      'the envelope and the address stay out of the timeline',
+    );
   }
 });
 
@@ -134,8 +196,13 @@ test('an outcome the platform never reported leaves `notified` absent, not false
   for (const error of [
     reset,
     timeout,
-    new CallbackRefusedError('mail', 502, ''),
-    new CallbackRefusedError('mail', 504, ''),
+    // The Edge's own 502 when Runs is unreachable, and a hop's empty 504: no reason either way.
+    refusalFixture('mail', {
+      status: 502,
+      code: 'DEPENDENCY_FAILURE',
+      detail: 'Runs service is unreachable',
+    }),
+    refusalFixture('mail', { status: 504, code: 'DEPENDENCY_FAILURE', detail: 'Gateway Timeout' }),
   ]) {
     const platform = new RecordingPlatform();
     platform.mail = () => Promise.reject(error);

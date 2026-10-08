@@ -18,6 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
+import { refusalFrom } from './refusals.js';
 
 /**
  * The automation's only way to reach anything.
@@ -57,76 +58,6 @@ export interface AutomationPlatform {
   listArtifacts(): Promise<ArtifactListing[]>;
   /** The bytes a reference points at, fetched straight from the store. */
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
-}
-
-/**
- * The platform refused a callback.
- *
- * Distinguished from a transport failure because the two mean different things to
- * the caller: a 422 is this automation reporting a step its manifest never declared
- * (fix the code), a 409 is a run that has already ended (stop), a 404 from the
- * artifact callback is a file this run was not given, and a timeout is the
- * platform being unreachable (the run's own deadline sweep will fail it).
- */
-export class CallbackRefusedError extends Error {
-  /** The platform's answer, cut to 200 characters for the message. */
-  public readonly detail: string;
-  /**
-   * The platform's own `details.reason` when its problem body carried one —
-   * `step_not_declared`, `provider_not_declared`, `recipient_inside_workspace` —
-   * read from the whole answer, before the cut. Undefined when it sent none.
-   */
-  public readonly reason: string | undefined;
-
-  public constructor(
-    public readonly callback: string,
-    public readonly status: number,
-    answer: string,
-  ) {
-    const detail = answer.slice(0, 200);
-    super(`callback ${callback} refused with ${status}: ${detail}`);
-    this.name = 'CallbackRefusedError';
-    this.detail = detail;
-    this.reason = reasonOf(answer);
-  }
-}
-
-/** The platform answers a refusal with `{ error: { details: { reason } } }`; anything else has none. */
-function reasonOf(answer: string): string | undefined {
-  try {
-    const parsed: unknown = JSON.parse(answer);
-    const error = isObject(parsed) ? parsed.error : undefined;
-    const details = isObject(error) ? error.details : undefined;
-    const reason = isObject(details) ? details.reason : undefined;
-    return typeof reason === 'string' ? reason : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Whether a failed `sendMail` CERTAINLY sent nothing.
- *
- * The platform reserves the send before the transport and KEEPS the reservation
- * when the transport is slow, and this client never retries — so an answer that
- * never came (a `TimeoutError`, a dropped connection, a 502 or 504 from the hop in
- * front of the platform) means the mail MAY have gone, and a person must not
- * re-send by hand. Certain are the platform's own refusals decided before the
- * transport: the two that name themselves (`recipient_inside_workspace` at 403,
- * `workspace_membership_truncated` at 502, which also releases the reservation), a
- * 503 (outbound mail is not configured: nothing was attempted), and any other 4xx
- * (refused on the way in — a malformed address, a spent allowance).
- */
-export function mailCertainlyNotSent(error: unknown): boolean {
-  if (!(error instanceof CallbackRefusedError)) return false;
-  if (
-    error.reason === 'recipient_inside_workspace' ||
-    error.reason === 'workspace_membership_truncated'
-  ) {
-    return true;
-  }
-  if (error.status === 503) return true;
-  return error.status < 500;
 }
 
 export interface PlatformClientOptions {
@@ -196,6 +127,12 @@ export class PlatformClient implements AutomationPlatform {
    * platform refuses one that does not before anything is sent to a vendor.
    * `outputSchema` is honoured, not merely counted — pass an empty object for
    * free text.
+   *
+   * A completion the platform will not hand over is a typed refusal, thrown as a
+   * `ModelRefusedError`: 422 `output_schema_mismatch` (with `path` and `rule`),
+   * `content_filtered` or `truncated` (each with the vendor's `finishReason`), and
+   * 403 `over_plan_limit`, `capability_not_in_plan` or `entitlements_not_configured`
+   * (with `used` and, when the plan has one, `limit`). Never the completion's text.
    */
   public async callModel(request: ModelRequest): Promise<ModelCompletion> {
     const answer = await this.#post('model', request, this.#modelTimeoutMs);
@@ -241,9 +178,10 @@ export class PlatformClient implements AutomationPlatform {
    * self-send refusal, the per-run and per-workspace caps, and the sending
    * address. Exactly the four fields its handler allow-lists are sent. A refusal
    * surfaces as a `CallbackRefusedError`, as every other callback's does — its
-   * `detail` carries the platform's `details.reason` when the refusal was decided
-   * before the transport (`recipient_inside_workspace`), which is how a caller
-   * tells a certain failure from an answer that never came.
+   * `reason` is the platform's `details.reason` when the refusal was decided
+   * before the transport (`recipient_inside_workspace`,
+   * `workspace_membership_truncated`), which is how `mailCertainlyNotSent` tells
+   * a certain failure from an answer that never came.
    */
   public async sendMail(mail: MailRequest): Promise<void> {
     const answer = await this.#post(
@@ -323,7 +261,10 @@ export class PlatformClient implements AutomationPlatform {
       // and continuing as if it succeeded would produce a run whose timeline
       // disagrees with what actually happened.
       const answer = await response.text().catch(() => '');
-      throw new CallbackRefusedError(message, response.status, answer);
+      // The platform's problem body, read whole (`refusals.ts`): a model
+      // refusal the platform typed is a `ModelRefusedError`, anything else a
+      // `CallbackRefusedError` with the problem's `code`, `details` and `reason`.
+      throw refusalFrom(message, response.status, answer);
     }
 
     // Parsed once here rather than per message, and an empty body is `undefined`

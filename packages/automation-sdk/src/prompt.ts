@@ -126,6 +126,11 @@ export function loadPrompts(directory: string): PromptModule[] {
  * error embeds a snippet of its input and an error's message becomes the run's
  * failure reason on the platform — so a model's restatement of the customer's
  * document would end up in a timeline. Nothing below quotes the text.
+ *
+ * The platform holds a structured completion to the schema itself and refuses a
+ * truncated or filtered one as a typed 422 before any text is handed over
+ * (`ModelRefusedError`, `refusals.ts`), so against it only a `stop` or `other`
+ * completion reaches here; the checks stay for a platform that does not.
  */
 export function readJsonCompletion(completion: ModelCompletion): JsonObject {
   if (completion.finishReason !== 'stop') {

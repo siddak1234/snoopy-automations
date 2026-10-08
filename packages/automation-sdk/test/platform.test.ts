@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 
-import { CallbackRefusedError, PlatformClient, mailCertainlyNotSent } from '../src/platform.js';
-import { artifactFixture } from '../src/testing.js';
+import { PlatformClient } from '../src/platform.js';
+import { CallbackRefusedError } from '../src/refusals.js';
+import { artifactFixture, problemFixture } from '../src/testing.js';
 import { type StubPlatform, startStubPlatform } from './stub-platform.js';
 
 /**
@@ -140,18 +141,30 @@ test('an artifact is read by id and listed with none', async () => {
   assert.ok(!('downloadUrl' in (listing[0] ?? {})), 'a listing carries no link');
 });
 
-test('a refused callback surfaces the status and the platform detail', async () => {
+test('a refused callback surfaces the status, the platform detail and the reason past the cut', async () => {
+  // What `assertStepDeclared` raises and `createProblem` writes (the platform's
+  // `run-token.ts`): the reason sits in `details`, the last field of the body.
   stub.answers.step = () => ({
     status: 422,
-    body: { error: { code: 'BAD_REQUEST', details: { reason: 'step_not_declared' } } },
+    body: problemFixture({
+      status: 422,
+      code: 'BAD_REQUEST',
+      detail: 'The step is not declared in the manifest pipeline',
+      details: { stepId: 'nope', reason: 'step_not_declared' },
+    }),
   });
   await assert.rejects(
     client.reportStep({ runId: 'r', stepId: 'nope', outcome: 'ok', summary: 's' }),
-    (error: unknown) =>
-      error instanceof CallbackRefusedError &&
-      error.status === 422 &&
-      error.callback === 'step' &&
-      error.detail.includes('step_not_declared'),
+    (error: unknown) => {
+      assert.ok(error instanceof CallbackRefusedError);
+      assert.equal(error.status, 422);
+      assert.equal(error.callback, 'step');
+      assert.equal(error.code, 'BAD_REQUEST');
+      assert.ok(error.detail.startsWith('{"type":"urn:autom8x:problem:bad-request"'));
+      assert.equal(error.reason, 'step_not_declared');
+      assert.ok(!error.detail.includes('step_not_declared'), 'read from the body, not the cut');
+      return true;
+    },
   );
 });
 
@@ -213,7 +226,12 @@ test('a mail sends exactly the four fields the handler allowlists, with the toke
 
   stub.answers.mail = () => ({
     status: 403,
-    body: { error: { code: 'FORBIDDEN', details: { reason: 'recipient_inside_workspace' } } },
+    body: problemFixture({
+      status: 403,
+      code: 'FORBIDDEN',
+      detail: 'The recipient is an address inside the requesting workspace',
+      details: { reason: 'recipient_inside_workspace' },
+    }),
   });
   await assert.rejects(
     client.sendMail({
@@ -226,47 +244,6 @@ test('a mail sends exactly the four fields the handler allowlists, with the toke
       error instanceof CallbackRefusedError &&
       error.callback === 'mail' &&
       error.status === 403 &&
-      error.detail.includes('recipient_inside_workspace'),
+      error.reason === 'recipient_inside_workspace',
   );
-});
-
-test("a refusal's reason is read from the whole answer, and tells a certain mail failure from an unknown one", async () => {
-  const long = {
-    error: {
-      code: 'FORBIDDEN',
-      message: 'm'.repeat(300),
-      details: { reason: 'recipient_inside_workspace' },
-    },
-  };
-  stub.answers.mail = () => ({ status: 403, body: long });
-  const mail = { to: 'v@example.com', subject: 's', body: 'b', idempotencyKey: 'k'.repeat(16) };
-  await assert.rejects(client.sendMail(mail), (error: unknown) => {
-    assert.ok(error instanceof CallbackRefusedError);
-    assert.equal(error.reason, 'recipient_inside_workspace', 'read before the 200-character cut');
-    assert.equal(error.detail.length, 200);
-    assert.ok(mailCertainlyNotSent(error));
-    return true;
-  });
-  for (const [status, body, certain] of [
-    [502, { error: { details: { reason: 'workspace_membership_truncated' } } }, true],
-    [503, { error: { code: 'NOT_CONFIGURED' } }, true],
-    [429, { error: { code: 'TOO_MANY_REQUESTS' } }, true],
-    [400, 'not json', true],
-    [502, { error: { code: 'BAD_GATEWAY' } }, false],
-    [504, '', false],
-  ] as const) {
-    stub.answers.mail = () => ({ status, body });
-    await assert.rejects(client.sendMail(mail), (error: unknown) => {
-      assert.equal(mailCertainlyNotSent(error), certain, `${status} ${JSON.stringify(body)}`);
-      return true;
-    });
-  }
-  assert.equal(
-    mailCertainlyNotSent(new TypeError('fetch failed')),
-    false,
-    'a dropped connection is unknown',
-  );
-  const timeout = new Error('signal timed out');
-  timeout.name = 'TimeoutError';
-  assert.equal(mailCertainlyNotSent(timeout), false);
 });

@@ -4,13 +4,17 @@ import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
 import {
-  CallbackRefusedError,
   idempotencyKeyFor,
   readManifests,
   type InvokeRequest,
   type RunResult,
 } from '@autom8x/automation-sdk';
-import { RecordingPlatform, declaredSteps, invokeFixture } from '@autom8x/automation-sdk/testing';
+import {
+  RecordingPlatform,
+  declaredSteps,
+  invokeFixture,
+  refusalFixture,
+} from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
 
@@ -201,32 +205,43 @@ test('a direct or malformed payload is refused rather than invented into an invo
 
 test('a notice the platform refused or never answered is visible without undoing the accepted invoice', async () => {
   const privateMarker = 'private-provider-response@example.com';
+  // Each refusal in the problem shape the platform's `createProblem` writes and the
+  // Edge relays; the marker rides in `detail` and `details` to prove neither reaches
+  // a summary or the result.
   const cases: [() => Promise<void>, RegExp][] = [
     [
       () =>
         Promise.reject(
-          new CallbackRefusedError(
-            'mail',
-            403,
-            JSON.stringify({
-              error: {
-                code: 'FORBIDDEN',
-                details: { reason: 'recipient_inside_workspace', to: privateMarker },
-              },
-            }),
-          ),
+          refusalFixture('mail', {
+            status: 403,
+            code: 'FORBIDDEN',
+            detail: `The recipient is an address inside the requesting workspace: ${privateMarker}`,
+            details: { reason: 'recipient_inside_workspace', to: privateMarker },
+          }),
         ),
       /^The platform refused the intake notice: recipient_inside_workspace$/u,
     ],
     [
       () =>
         Promise.reject(
-          new CallbackRefusedError('mail', 400, `to must be a mailbox ${privateMarker}`),
+          refusalFixture('mail', {
+            status: 400,
+            code: 'BAD_REQUEST',
+            detail: `to must be a mailbox ${privateMarker}`,
+            details: { field: 'to' },
+          }),
         ),
       /^The platform refused the intake notice$/u,
     ],
     [
-      () => Promise.reject(new CallbackRefusedError('mail', 502, '')),
+      () =>
+        Promise.reject(
+          refusalFixture('mail', {
+            status: 502,
+            code: 'DEPENDENCY_FAILURE',
+            detail: 'Runs service is unreachable',
+          }),
+        ),
       /may have been sent — do not re-send by hand$/u,
     ],
     [() => Promise.reject(new TypeError(privateMarker)), /may have been sent/u],

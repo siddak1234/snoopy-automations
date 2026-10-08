@@ -113,6 +113,47 @@ logs ids and outcomes only — an error's message becomes the run's `failureReas
 so never build one from the document. A test hands the automation a
 `RecordingPlatform` from `@autom8x/automation-sdk/testing` instead.
 
+## Model calls
+
+A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
+input)` — and the platform chooses the model, holds the completion to the prompt's
+`outputSchema`, writes one `runs.model_calls` row, and answers `{ text, model,
+finishReason, usage }`; `readJsonCompletion` parses the text without ever quoting
+it. A completion the platform will not hand over is a **typed refusal**: a
+`ModelRefusedError` — a `CallbackRefusedError` whose `callback` is `model` —
+carrying the platform's `details.reason` and the fields beside it, and nothing of
+the completion's text, so a step can branch on a word:
+
+| status | `reason`                      | what it means, and the fields beside it                                                                                                                                                                                           |
+| ------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 422    | `output_schema_mismatch`      | the completion is not the document the schema describes; `path` (a JSON path from `$`) and `rule` (the keyword that failed: `type:number`, `required:total`, `enum`, `json`) say where and which, never the value; `finishReason` |
+| 422    | `content_filtered`            | the vendor declined (safety, recitation); permanent for that document; `finishReason` is `content_filter`                                                                                                                         |
+| 422    | `truncated`                   | the completion stopped at the output budget; retryable with a smaller prompt or document; `finishReason` is `length`                                                                                                              |
+| 403    | `over_plan_limit`             | the workspace's plan allows no more completions this month; `used` and `limit`                                                                                                                                                    |
+| 403    | `capability_not_in_plan`      | the plan grants no model calls at all; `used`                                                                                                                                                                                     |
+| 403    | `entitlements_not_configured` | the platform could not ask entitlements and refused rather than guess; `used`                                                                                                                                                     |
+
+The 422s spent tokens and are ledger rows; the 403s spent nothing. Uncaught, a
+`ModelRefusedError` fails the run with a `failureReason` that names the reason
+(`the model call was refused with 422: truncated (finish reason length)`), and the
+runner's timeline line for the step says `the model call was refused (truncated)`.
+Two model refusals are NOT typed, because nothing a step does at run time answers
+them: an `outputSchema` the platform cannot hold a completion to (`pattern`, `$ref`,
+the tuple form of `items`, …) is a plain 400 `CallbackRefusedError` with no reason
+and the keyword in `detail`, and a capability the manifest did not declare is 403
+`capability_not_declared`, which `defineAutomation` refuses before the wire. In a
+suite, `refusalFixture('model', { status, code, detail, details })` from
+`@autom8x/automation-sdk/testing` builds exactly what the client throws for that
+answer; `RecordingPlatform.model` rejects with it.
+
+Every refusal the platform answers is an RFC 7807 problem — `{ type, title, status,
+detail, instance, code, requestId, details }`, relayed verbatim by the Edge — and
+`CallbackRefusedError` reads `code`, `details` and `reason` from the whole body,
+never from the 200-character `detail` it keeps for the message. The mail callback's
+two pre-transport refusals name themselves the same way (`recipient_inside_workspace`
+at 403, `workspace_membership_truncated` at 502), which is what `mailCertainlyNotSent`
+reads.
+
 ## Invoice intake
 
 `invoice-intake` is the first automation written in this repository. A verified

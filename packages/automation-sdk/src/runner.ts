@@ -14,6 +14,7 @@ import type {
 import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import { renderPrompt, type PromptModule } from './prompt.js';
+import { ModelRefusedError } from './refusals.js';
 
 /**
  * The step runner — the orchestrator of how an automation runs (platform ADR-0034).
@@ -239,13 +240,18 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       } catch (error) {
         // The timeline names the step the run died in. The summary is fixed text:
         // an error's message may embed the document, and serve() already turns the
-        // message into the run's bounded failure reason.
+        // message into the run's bounded failure reason. A model refusal the
+        // platform typed adds its reason — one word from a closed list, never the
+        // completion — so the timeline says why without the step catching it.
         await platform
           .reportStep({
             runId: request.runId,
             stepId,
             outcome: 'failed',
-            summary: `The ${stepId} step failed`,
+            summary:
+              error instanceof ModelRefusedError
+                ? `The ${stepId} step failed: the model call was refused (${error.reason})`
+                : `The ${stepId} step failed`,
           })
           .catch(() => undefined);
         throw error;
