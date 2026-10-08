@@ -84,9 +84,11 @@ export interface AutomationDefinition {
   result: (state: JsonObject, request: InvokeRequest) => { output?: JsonObject; summary?: string };
   /**
    * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):
-   * a step absent here runs once. Declare one only where a repeat is safe — a read,
-   * or a side effect the step's idempotency key lets the platform answer from its
-   * record. A model call has no such record: repeated, it is made and counted again.
+   * a step absent here runs once. Declare one only where a repeat is safe — a read;
+   * mail with the same words, which the transport deduplicates under the step's key;
+   * or a provider write at a vendor that deduplicates on `Idempotency-Key`. A provider
+   * call that got no final answer has no record and is sent again, and a model call
+   * has none at all: repeated, it is made and counted again.
    */
   retry?: Readonly<Record<string, RetryPolicy>>;
 }
@@ -96,7 +98,7 @@ export interface Automation {
   readonly versions: readonly number[];
   readonly steps: readonly string[];
   readonly prompts: readonly PromptModule[];
-  /** Each declared retry policy as the runner applies it — clamped to the SDK's ceilings. */
+  /** Each declared retry policy as the runner applies it — clamped to the SDK's ceilings; one below its floor is refused. */
   readonly retry: Readonly<Record<string, RetryPolicy>>;
   /** What `serve()` runs. */
   execute(request: InvokeRequest, platform: AutomationPlatform): Promise<RunResult>;
@@ -148,7 +150,8 @@ export function idempotencyKeyFor(runId: string, stepId: string): string {
  * `requiredCapabilities` (one container serves these versions and any of its runs
  * may reach the step that sends the prompt — platform D2 makes that one version
  * for everything new); no prompt or step id repeats; and every retry policy names
- * an implemented step and counts its attempts and its wait in whole numbers.
+ * an implemented step, counts its attempts and its wait in whole numbers, and waits
+ * at least `MIN_STEP_BACKOFF_MS` before a repeat.
  */
 export function defineAutomation(definition: AutomationDefinition): Automation {
   const { templateId, manifests, steps, result } = definition;
