@@ -2,7 +2,7 @@
   "name": "@autom8x/automation-sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "The Autom8x automation SDK: the five callbacks, the serving shell, and test doubles. Deliberately depends on no platform package.",
+  "description": "The Autom8x automation SDK: the step runner, prompt modules, the six callbacks, the serving shell, and test doubles. Deliberately depends on no platform package.",
   "type": "module",
   "engines": {
     "node": ">=22"

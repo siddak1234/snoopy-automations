@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
-
 import type {
   ArtifactListing,
   ArtifactReference,
   InvokeRequest,
+  JsonObject,
+  MailRequest,
   ModelCompletion,
   ModelRequest,
   ProviderAnswer,
@@ -12,7 +12,9 @@ import type {
   StepReport,
 } from './contract.js';
 import { oneLine, toArtifactListing } from './contract.js';
-import { type AutomationPlatform, CallbackRefusedError, boundedResult } from './platform.js';
+import { readManifest } from './manifest.js';
+import { type AutomationPlatform, boundedResult } from './platform.js';
+import { type CallbackRefusedError, refusalFrom } from './refusals.js';
 
 /**
  * Test doubles for an automation's own suite.
@@ -37,11 +39,14 @@ export class RecordingPlatform implements AutomationPlatform {
   public results: { runId: string; result: RunResult }[] = [];
   public providerCalls: ProviderRequest[] = [];
   public modelCalls: ModelRequest[] = [];
+  public mails: MailRequest[] = [];
   public artifactReads: string[] = [];
 
   /** Overridden per test. The default is a provider that says yes with nothing. */
   public provider: (call: ProviderRequest) => Promise<ProviderAnswer> = () =>
     Promise.resolve({ status: 200, body: {} });
+  /** Overridden per test. The default is a platform that accepts every mail. */
+  public mail: (mail: MailRequest) => Promise<void> = () => Promise.resolve();
   /** Overridden per test. The default is a model that answers an empty object. */
   public model: (call: ModelRequest) => Promise<ModelCompletion> = () =>
     Promise.resolve({
@@ -81,6 +86,11 @@ export class RecordingPlatform implements AutomationPlatform {
     return this.provider(request);
   }
 
+  public sendMail(mail: MailRequest): Promise<void> {
+    this.mails.push(mail);
+    return this.mail(mail);
+  }
+
   public readArtifact(artifactId: string): Promise<ArtifactReference> {
     this.artifactReads.push(artifactId);
     const found = this.artifacts.find((artifact) => artifact.artifactId === artifactId);
@@ -88,7 +98,13 @@ export class RecordingPlatform implements AutomationPlatform {
     // reference outside this run is indistinguishable from one that never existed.
     return found
       ? Promise.resolve(found)
-      : Promise.reject(new CallbackRefusedError('artifact', 404, 'not found'));
+      : Promise.reject(
+          refusalFixture('artifact', {
+            status: 404,
+            code: 'NOT_FOUND',
+            detail: 'The requested resource was not found',
+          }),
+        );
   }
 
   public listArtifacts(): Promise<ArtifactListing[]> {
@@ -130,6 +146,59 @@ export function artifactFixture(overrides: Partial<ArtifactReference> = {}): Art
   };
 }
 
+/** A refusal as the platform's handlers raise it: a status, a code, a sentence, and the typed `details`. */
+export interface ProblemInput {
+  status: number;
+  code: string;
+  detail: string;
+  details?: JsonObject;
+  requestId?: string;
+}
+
+/** The problem codes the platform names and their titles — `titleFor` in its `packages/http`. */
+const PROBLEM_TITLES: Readonly<Record<string, string>> = {
+  BAD_REQUEST: 'Bad Request',
+  PAYLOAD_TOO_LARGE: 'Payload Too Large',
+  UNAUTHENTICATED: 'Authentication Required',
+  FORBIDDEN: 'Forbidden',
+  NOT_FOUND: 'Not Found',
+  CONFLICT: 'Conflict',
+  NOT_CONFIGURED: 'Service Not Configured',
+  TOO_MANY_REQUESTS: 'Too Many Requests',
+  DEPENDENCY_FAILURE: 'Dependency Failure',
+  INTERNAL_ERROR: 'Internal Server Error',
+};
+
+/**
+ * A refusal body exactly as the platform's `createProblem` writes it and the Edge
+ * relays it: RFC 7807, `details` at the top level, no `error` wrapper. Longer than
+ * the 200 characters `CallbackRefusedError.detail` keeps — which is the point: a
+ * fixture in this shape fails any reader that parses the cut instead of the body.
+ */
+export function problemFixture(input: ProblemInput): JsonObject {
+  const requestId = input.requestId ?? '55555555-5555-4555-8555-555555555555';
+  return {
+    type: `urn:autom8x:problem:${input.code.toLowerCase().replaceAll('_', '-')}`,
+    title: PROBLEM_TITLES[input.code] ?? input.code,
+    status: input.status,
+    detail: input.detail,
+    instance: `urn:autom8x:request:${requestId}`,
+    code: input.code,
+    requestId,
+    ...(input.details ? { details: input.details } : {}),
+  };
+}
+
+/**
+ * The error the client throws when `callback` answers this problem — built by the
+ * same function the client uses, so a `ModelRefusedError` for a typed model
+ * refusal and a `CallbackRefusedError` for anything else. Hand it to
+ * `RecordingPlatform.mail`, `.model` or `.provider` to rehearse a refusal.
+ */
+export function refusalFixture(callback: string, problem: ProblemInput): CallbackRefusedError {
+  return refusalFrom(callback, problem.status, JSON.stringify(problemFixture(problem)));
+}
+
 /**
  * The step ids a manifest declares, READ FROM THE MANIFEST.
  *
@@ -139,8 +208,10 @@ export function artifactFixture(overrides: Partial<ArtifactReference> = {}): Art
  * set, so the refusal happens here rather than as a 422 in production.
  */
 export function declaredSteps(manifestPath: string): Set<string> {
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-    pipeline: { id: string }[];
-  };
-  return new Set(manifest.pipeline.map((step) => step.id));
+  return new Set(readManifest(manifestPath).pipeline.map((step) => step.id));
+}
+
+/** The capabilities a manifest declares, READ FROM THE MANIFEST, for the same reason. */
+export function declaredCapabilities(manifestPath: string): Set<string> {
+  return new Set(readManifest(manifestPath).requiredCapabilities);
 }

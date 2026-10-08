@@ -111,8 +111,20 @@ export type RunResult =
   // (§12.1 #84): nothing read it, and the platform now refuses it as undeclared.
   | { outcome: 'failed'; failureReason: string };
 
+/**
+ * The vendor-neutral capabilities an automation may request, as the platform's
+ * model-request schema closes them. A prompt names one of these and never a
+ * model: choosing a model is choosing what the platform spends per call.
+ */
+export const CAPABILITIES = [
+  'document-extraction',
+  'classification',
+  'screening',
+  'summarization',
+] as const;
+
 /** Vendor-neutral capability an automation may request. Must be in the manifest. */
-export type Capability = 'document-extraction' | 'classification' | 'screening' | 'summarization';
+export type Capability = (typeof CAPABILITIES)[number];
 
 /** A model call the platform makes on the automation's behalf. The model is never named. */
 export interface ModelRequest {
@@ -181,6 +193,37 @@ export function toArtifactListing(reference: ArtifactReference): ArtifactListing
   return listing;
 }
 
+/* --- the sixth callback: mail --------------------------------------------- */
+
+/**
+ * One outbound mail the PLATFORM sends from its own identity (its ADR-0021) —
+ * the sixth callback, `POST /v1/automations/callbacks/mail`. The automation names
+ * a recipient and the words; the platform applies the self-send refusal, the
+ * per-run and per-workspace caps and the sending address, and answers
+ * `{ mail: { accepted: true } }` with nothing about transport, so an automation
+ * cannot start branching on a third party's status codes.
+ *
+ * COPIED FROM THE HANDLER'S ALLOW-LIST, NOT FROM A SCHEMA. The platform publishes
+ * `AutomationMailRequest` in its contracts package and names `mail` in its
+ * OpenAPI callback enum, but its emitted `schemas/` carry no
+ * `automation-mail-request.json` — so this is the one message here with no
+ * vendored schema to validate against (`contract/README.md`).
+ */
+export interface MailRequest {
+  /** A single ASCII mailbox address, at most 254 characters. The platform validates it. */
+  to: string;
+  /** One line, at most `MAIL_SUBJECT_MAX_LENGTH`; a line break is refused, not stripped. */
+  subject: string;
+  /** Plain text, at most `MAIL_BODY_MAX_LENGTH`. */
+  body: string;
+  /** 16–128 characters, stable for the step: a retried step sends one mail, not two. */
+  idempotencyKey: string;
+}
+
+/** The platform's own bounds on a mail, copied from its handler by rule. */
+export const MAIL_SUBJECT_MAX_LENGTH = 200;
+export const MAIL_BODY_MAX_LENGTH = 10_000;
+
 /* --- one-line fields ------------------------------------------------------ */
 
 /**
@@ -200,9 +243,25 @@ export const ONE_LINE_MAX_LENGTH = 200;
  * refuses it too and an author's own suite should be where that surfaces.
  */
 export function oneLine(value: string, field: string): string {
-  const line = value.trim().slice(0, ONE_LINE_MAX_LENGTH).trimEnd();
+  const line = truncateText(value.trim(), ONE_LINE_MAX_LENGTH).trimEnd();
   if (line === '') throw new Error(`${field} must be a non-empty line`);
   return line;
+}
+
+/**
+ * Cuts text to at most `maximum` UTF-16 units — the length the platform checks —
+ * without splitting a surrogate pair: a cut by index inside an astral character
+ * would send a lone surrogate that passes the length check and is mangled at the
+ * transport. The last character kept is always whole.
+ */
+export function truncateText(value: string, maximum: number): string {
+  if (value.length <= maximum) return value;
+  let out = '';
+  for (const point of value) {
+    if (out.length + point.length > maximum) break;
+    out += point;
+  }
+  return out;
 }
 
 /* --- guards --------------------------------------------------------------- */
@@ -257,6 +316,15 @@ export function isArtifactReference(value: unknown): value is ArtifactReference 
     typeof (value as JsonObject).downloadUrl === 'string' &&
     typeof (value as JsonObject).expiresAt === 'string'
   );
+}
+
+export function isCapability(value: unknown): value is Capability {
+  return typeof value === 'string' && (CAPABILITIES as readonly string[]).includes(value);
+}
+
+/** The mail callback's whole answer: accepted, and nothing about transport. */
+export function isMailAcceptance(value: unknown): value is { mail: { accepted: true } } {
+  return isObject(value) && isObject(value.mail) && value.mail.accepted === true;
 }
 
 export function isModelCompletion(value: unknown): value is ModelCompletion {

@@ -1,0 +1,63 @@
+{
+  "templateId": "invoice-check",
+  "version": 1,
+  "display": {
+    "name": "Invoice check",
+    "description": "Checks an invoice against your threshold and holds the large ones for someone to approve.",
+    "category": "Finance",
+    "icon": "Receipt"
+  },
+  "pricing": { "monthlyPriceUsd": 0 },
+  "trigger": { "kind": "manual" },
+  "requiredConnections": [],
+  "requiredCapabilities": [],
+  "setup": [
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Hold above",
+      "description": "Invoices above this amount wait for someone to approve them. Editable anytime.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Invoice received",
+      "description": "A run is started with the invoice to check."
+    },
+    {
+      "id": "validate",
+      "kicker": "ACTION",
+      "title": "Check the amount",
+      "description": "Compares the invoice against your threshold and holds it if it is above."
+    },
+    {
+      "id": "post",
+      "kicker": "ACTION",
+      "title": "Record the invoice",
+      "description": "Records the invoice once it is within threshold or has been approved."
+    }
+  ],
+  "service": {
+    "origin": "http://invoice-check.autom8x.internal:8080",
+    "serviceAccount": "invoice-check@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 40,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "reference": { "type": "string" },
+      "vendor": { "type": "string" },
+      "amount": { "type": "number" },
+      "decidedBy": { "type": "string" }
+    },
+    "required": ["reference", "vendor", "amount"]
+  }
+}

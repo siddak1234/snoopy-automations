@@ -2,7 +2,7 @@ import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { toArtifactListing } from '../src/contract.js';
-import { artifactFixture } from '../src/testing.js';
+import { artifactFixture, problemFixture } from '../src/testing.js';
 
 /**
  * A stub of the platform's callback surface, answering exactly as the Runs
@@ -56,6 +56,8 @@ function defaultAnswer(message: string, body: Record<string, unknown>): Answer {
       };
     case 'provider':
       return { status: 200, body: { provider: { status: 200, body: { id: 'sent' } } } };
+    case 'mail':
+      return { status: 200, body: { mail: { accepted: true } } };
     case 'artifact':
       return body.artifactId === undefined
         ? {
@@ -67,7 +69,17 @@ function defaultAnswer(message: string, body: Record<string, unknown>): Answer {
             body: { artifact: artifactFixture({ artifactId: String(body.artifactId) }) },
           };
     default:
-      return { status: 404, body: { error: 'not_found' } };
+      // Every refusal the platform answers is a problem (its `createProblem`),
+      // and the Edge relays it verbatim; a stub answering any other shape would
+      // teach the SDK to read what the platform never sends.
+      return {
+        status: 404,
+        body: problemFixture({
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: 'The requested resource was not found',
+        }),
+      };
   }
 }
 

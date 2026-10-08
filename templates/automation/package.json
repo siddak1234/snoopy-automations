@@ -1,0 +1,24 @@
+{
+  "name": "@autom8x/example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An Autom8x automation on the SDK's step runner: declared steps, a versioned prompt, a hold above a threshold, a provider action, and an outcome mailed by the platform.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

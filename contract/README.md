@@ -1,7 +1,7 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `db66611`, taken 2026-10-03. The platform emits
+(`snoopy-backend`, private) at commit `867d0ee`, taken 2026-10-08. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -38,8 +38,22 @@ Refreshed 2026-10-03 at `db66611` (the deployed `a82c870` carries the same bytes
 16 fields a trigger may collect (platform `280b06a`), and `email` among the setup controls
 (platform `d866aa0`). The other six files are byte-identical to the previous pin.
 
+Refreshed 2026-10-08 at `867d0ee` (Round 16's close; the platform's `main` at Round 17's
+open, `949dc8d`, carries the same blobs): **all seven files are byte-identical to
+`db66611`** — nothing moved. What did change is what the platform SERVES without emitting:
+the sixth callback, `POST /v1/automations/callbacks/mail` (its ADR-0021: the platform is
+the only sender). Its `AutomationMailRequest` is exported from the platform's contracts
+package and `docs/openapi.yaml`'s callback enum names `mail`, but `schemas/` carries no
+`automation-mail-request.json`, and the split `docs/openapi/automations.yaml` still
+names five messages. So the SDK's `MailRequest` is copied from the handler's allow-list —
+`to`, `subject`, `body`, `idempotencyKey` (`runId` optional there and never sent) — and
+`packages/automation-sdk/test/contract.test.ts` holds it to that list by name. It is the
+one message here with no vendored schema to validate against; filed for the platform as a
+finding with this refresh.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
-`automation-manifest.json` verbatim.
+`automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
+directory's example manifest the same way.
 
 ## What the platform refuses beyond the schema
 
