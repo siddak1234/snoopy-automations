@@ -345,11 +345,35 @@ test('an answer that never came is marked as such — timed out, refused, cut of
   assert.equal(stub.calls.length, sent, 'the unserialisable input never left');
 });
 
-test('the default bounds outlast the platform answering what they bound (platform BUILD-PLAN 25.2.13)', () => {
-  // Read at snoopy-backend: Runs waits up to 15 s on Connections for a provider
-  // call; the Edge relays a callback for up to 55 s, and the gateway waits 45 s on
-  // the vendor; mail waits on Access (5 s) and then the transport (10 s).
-  assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 15_000, 'the provider callback');
+test('the default bounds outlast the bounded waits the platform makes before it answers (platform BUILD-PLAN 25.2.13)', () => {
+  // Read at snoopy-backend 886eff5, the runs service's hops: every callback first
+  // asks Catalog (5 s); then a provider call waits on Connections (15 s), mail on
+  // Access (5 s) and the transport (10 s), and a result may dispatch a held run (5 s
+  // in every manifest today). A model call is bounded by the Edge's 55 s.
+  assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 5_000 + 15_000, 'the provider callback');
+  assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 5_000 + 5_000 + 5_000, 'the result callback');
+  assert.ok(DEFAULT_MAIL_TIMEOUT_MS > 5_000 + 5_000 + 10_000, 'the mail callback');
   assert.ok(DEFAULT_MODEL_TIMEOUT_MS > 55_000, 'the model callback');
-  assert.ok(DEFAULT_MAIL_TIMEOUT_MS > 5_000 + 10_000, 'the mail callback');
+});
+
+test('a client built with no options bounds each callback by its default', async (t) => {
+  const timeout = t.mock.method(AbortSignal, 'timeout');
+  const defaults = new PlatformClient(stub.origin, TOKEN);
+  await defaults.reportStep({ runId: 'r1', stepId: 'receive', outcome: 'ok', summary: 'Got it' });
+  await defaults.callModel({
+    capability: 'document-extraction',
+    prompt: 'Extract.',
+    input: { text: 'INV-1' },
+    outputSchema: { type: 'object' },
+  });
+  await defaults.sendMail({
+    to: 'vendor@example.com',
+    subject: 'Invoice INV-1 received',
+    body: 'We received it.',
+    idempotencyKey: 'notify-0123456789abcdef',
+  });
+  assert.deepEqual(
+    timeout.mock.calls.map((call) => call.arguments[0]),
+    [DEFAULT_CALLBACK_TIMEOUT_MS, DEFAULT_MODEL_TIMEOUT_MS, DEFAULT_MAIL_TIMEOUT_MS],
+  );
 });

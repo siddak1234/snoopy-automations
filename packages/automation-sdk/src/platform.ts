@@ -61,38 +61,46 @@ export interface AutomationPlatform {
 }
 
 /**
- * The client's default bounds. Each is longer than the platform takes to answer
- * the callbacks it bounds, so a step receives the platform's answer — recorded,
- * refused or failed — rather than this client's own timeout, which says only
- * "unknown". Read at snoopy-backend (platform BUILD-PLAN 25.2.13): the Edge relays a
- * callback for up to 55 s (5 s before 25.2.13); Runs waits up to 15 s on
- * Connections for a provider call, and Connections 10 s on the provider; the
- * gateway gives up on the model vendor at 45 s; mail waits on Access (5 s) and the
- * transport (10 s).
+ * The client's default bounds. Each outlasts the bounded waits the platform makes
+ * before it answers the callbacks it bounds, so in the ordinary case a step
+ * receives the platform's answer — recorded, refused or failed — rather than this
+ * client's own timeout, which says only "unknown". A database slower than its own
+ * bounds can still outlast them. Read at snoopy-backend `886eff5`, the runs
+ * service's hops in `compose.yml`: every callback first resolves its run token and
+ * asks Catalog (5 s); then a provider call waits on Connections (15 s); mail on
+ * Access (5 s) and the transport (10 s); a model call on Entitlements (5 s) and the
+ * gateway (the owner's setting, recommended 40 s); and a result may dispatch a held
+ * run (the manifest's `acceptTimeoutMs`, 5 s in every manifest today, up to 30 s
+ * allowed). The Edge in front relays a callback for up to 55 s from platform
+ * BUILD-PLAN 25.2.13 (built 2026-10-08, live from its promotion), and 5 s before it.
  */
-export const DEFAULT_CALLBACK_TIMEOUT_MS = 20_000;
+export const DEFAULT_CALLBACK_TIMEOUT_MS = 25_000;
 export const DEFAULT_MODEL_TIMEOUT_MS = 60_000;
 export const DEFAULT_MAIL_TIMEOUT_MS = 30_000;
 export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
 
 export interface PlatformClientOptions {
   /**
-   * Bound on the step, result, provider and artifact callbacks. Default 20 s,
-   * longer than Runs waits on Connections for a provider call (15 s).
+   * Bound on the step, result, provider and artifact callbacks. Default 25 s, above
+   * a provider call's 20 s (Catalog, then Connections) and a result's 15 s with
+   * today's manifests. A manifest's longer `acceptTimeoutMs` can outlast it on a
+   * result, which the platform records either way.
    */
   timeoutMs?: number;
   /**
    * Bound on the model callback, which waits on a provider's generation and
    * cannot be held to the same bound as the others without making the capability
-   * unusable. Default 60 s, longer than the Edge relays a callback (55 s), which is
-   * longer than the gateway waits on the vendor (45 s).
+   * unusable. Default 60 s, above the Edge's 55 s callback budget (25.2.13), which
+   * covers the model route's bounded waits with the gateway at its recommended 40 s
+   * (Catalog 5 s, Entitlements 5 s, the gateway 40 s).
    */
   modelTimeoutMs?: number;
   /** Bound on fetching an artifact's bytes, which may be a scanned document. Default 60 s. */
   downloadTimeoutMs?: number;
   /**
    * Bound on the mail callback, which reserves the send, resolves the workspace's
-   * members and calls the transport before it answers. Default 30 s. The platform
+   * members and calls the transport before it answers. Default 30 s, above Catalog,
+   * Access and the transport (5 + 5 + 10 s). The platform
    * KEEPS its reservation on a slow transport and this client never retries, so a
    * timeout here means "unknown", not "not sent" — and so does a 502 from the hop in
    * front of the platform, which before platform BUILD-PLAN 25.2.13 gave up after 5 s.

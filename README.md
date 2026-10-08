@@ -223,11 +223,13 @@ defineAutomation({
   - **Model.** No record: a model call repeated after a completion the container
     never received is a second vendor call, a second `runs.model_calls` row and a
     second unit of the plan's monthly allowance. Declare a policy on a step that
-    calls the model only if that cost is acceptable. The Edge relays a callback for
-    up to 55 seconds and the gateway gives up on the vendor at 45, inside the
-    client's 60 (platform BUILD-PLAN 25.2.13). Before 25.2.13 the Edge gave up
-    after 5 seconds, and a longer model call reached the container as a 502 while
-    the platform completed and counted it.
+    calls the model only if that cost is acceptable. From the platform's BUILD-PLAN
+    25.2.13 (built 2026-10-08, live from its promotion) the Edge relays a callback
+    for up to 55 seconds, which covers the model route's bounded waits with the
+    gateway at its recommended 40, inside the client's 60. Before it — and after
+    it, when the platform's own dependencies run a call past 55 seconds — a model
+    call can reach the container as a 502 while the platform completes and counts
+    it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
   it took more than one attempt, `(after N attempts)`; a step that failed every
   attempt is `The <step> step failed (after N attempts)` and the run fails with the
