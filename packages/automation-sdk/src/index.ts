@@ -55,6 +55,7 @@ export {
   renderPrompt,
 } from './prompt.js';
 export type { PromptModule } from './prompt.js';
+export type { RetryPolicy } from './retry.js';
 export { defineAutomation, held, idempotencyKeyFor } from './runner.js';
 export type {
   Automation,
