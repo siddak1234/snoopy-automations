@@ -15,6 +15,7 @@ import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import { renderPrompt, type PromptModule } from './prompt.js';
 import { ModelRefusedError } from './refusals.js';
+import { attempt, backoffWaits, boundedPolicy, type RetryPolicy, withAttempts } from './retry.js';
 
 /**
  * The step runner — the orchestrator of how an automation runs (platform ADR-0034).
@@ -24,9 +25,11 @@ import { ModelRefusedError } from './refusals.js';
  * order; reports each step through the step callback under the id the manifest
  * declares and no other; derives one idempotency key per run and step and attaches
  * it to every provider request and every mail; renders prompts by capability and
- * never by model; and, when an approval continues a held run, resumes from
- * `continuation.state` at the step after the one that held (FR-15: a held run ends;
- * FR-17: an approval mints a continuation).
+ * never by model; re-attempts a step that declared a retry policy when it fails
+ * transiently, with the same key, and reports it once (`retry.ts`); and, when an
+ * approval continues a held run, resumes from `continuation.state` at the step
+ * after the one that held (FR-15: a held run ends; FR-17: an approval mints a
+ * continuation).
  *
  * The platform never learns the runner exists. It sees steps, results and
  * callbacks, exactly as it did when `execute()` was bare.
@@ -79,6 +82,13 @@ export interface AutomationDefinition {
   prompts?: readonly PromptModule[];
   /** The success result once the pipeline has run: the output and the one-line summary. */
   result: (state: JsonObject, request: InvokeRequest) => { output?: JsonObject; summary?: string };
+  /**
+   * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):
+   * a step absent here runs once. Declare one only where a repeat is safe — a read,
+   * or a side effect the step's idempotency key lets the platform answer from its
+   * record. A model call has no such record: repeated, it is made and counted again.
+   */
+  retry?: Readonly<Record<string, RetryPolicy>>;
 }
 
 export interface Automation {
@@ -86,6 +96,8 @@ export interface Automation {
   readonly versions: readonly number[];
   readonly steps: readonly string[];
   readonly prompts: readonly PromptModule[];
+  /** Each declared retry policy as the runner applies it — clamped to the SDK's ceilings. */
+  readonly retry: Readonly<Record<string, RetryPolicy>>;
   /** What `serve()` runs. */
   execute(request: InvokeRequest, platform: AutomationPlatform): Promise<RunResult>;
 }
@@ -135,7 +147,8 @@ export function idempotencyKeyFor(runId: string, stepId: string): string {
  * manifest; every prompt's capability is in EVERY served manifest's
  * `requiredCapabilities` (one container serves these versions and any of its runs
  * may reach the step that sends the prompt — platform D2 makes that one version
- * for everything new); and no prompt or step id repeats.
+ * for everything new); no prompt or step id repeats; and every retry policy names
+ * an implemented step and counts its attempts and its wait in whole numbers.
  */
 export function defineAutomation(definition: AutomationDefinition): Automation {
   const { templateId, manifests, steps, result } = definition;
@@ -187,6 +200,15 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
     registered.set(key, prompt);
   }
   const versions = [...byVersion.keys()].sort((a, b) => a - b);
+  // A map, not an object: a step id is looked up, and an object would answer
+  // `constructor` — a valid step id — from its prototype.
+  const retries = new Map<string, RetryPolicy>();
+  for (const [stepId, policy] of Object.entries(definition.retry ?? {})) {
+    if (!Object.hasOwn(steps, stepId) || typeof steps[stepId] !== 'function') {
+      throw new Error(`a retry policy names step "${stepId}", which the code does not implement`);
+    }
+    retries.set(stepId, boundedPolicy(stepId, policy));
+  }
 
   async function execute(request: InvokeRequest, platform: AutomationPlatform): Promise<RunResult> {
     if (request.templateId !== templateId) {
@@ -234,10 +256,18 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
         idempotencyKey,
         platform: stepPlatform(platform, manifest, registered, idempotencyKey),
       };
-      let outcome: StepResult;
-      try {
-        outcome = await step(context);
-      } catch (error) {
+      // Every attempt runs with this one context, so with one key: a repeat reaches
+      // the platform's record for the key rather than a fresh one. Reported ONCE,
+      // after the last attempt, with the count when it took more than one.
+      const policy = retries.get(stepId);
+      const attempted = await attempt(
+        () => step(context),
+        policy ? backoffWaits(policy) : [],
+        request.deadline,
+      );
+      const { attempts } = attempted;
+      if (attempted.threw) {
+        const { error } = attempted;
         // The timeline names the step the run died in. The summary is fixed text:
         // an error's message may embed the document, and serve() already turns the
         // message into the run's bounded failure reason. A model refusal the
@@ -248,14 +278,17 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
             runId: request.runId,
             stepId,
             outcome: 'failed',
-            summary:
+            summary: withAttempts(
               error instanceof ModelRefusedError
                 ? `The ${stepId} step failed: the model call was refused (${error.reason})`
                 : `The ${stepId} step failed`,
+              attempts,
+            ),
           })
           .catch(() => undefined);
         throw error;
       }
+      const outcome = attempted.result;
       switch (outcome.outcome) {
         case 'skipped':
           continue;
@@ -264,7 +297,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
             runId: request.runId,
             stepId,
             outcome: 'ok',
-            summary: outcome.summary,
+            summary: withAttempts(outcome.summary, attempts),
           });
           state = outcome.state ?? state;
           continue;
@@ -273,7 +306,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
             runId: request.runId,
             stepId,
             outcome: 'failed',
-            summary: outcome.summary,
+            summary: withAttempts(outcome.summary, attempts),
           });
           if (outcome.failureReason !== undefined) return failed(outcome.failureReason);
           state = outcome.state ?? state;
@@ -283,7 +316,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
             runId: request.runId,
             stepId,
             outcome: 'held',
-            summary: outcome.summary,
+            summary: withAttempts(outcome.summary, attempts),
             heldReason: outcome.heldReason,
           });
           return {
@@ -306,6 +339,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
     versions,
     steps: Object.keys(steps),
     prompts,
+    retry: Object.fromEntries(retries),
     execute,
   };
 }

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 
-import { PlatformClient } from '../src/platform.js';
+import type { ModelRequest, ProviderRequest } from '../src/contract.js';
+import { PlatformClient, isUnanswered } from '../src/platform.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { artifactFixture, problemFixture } from '../src/testing.js';
 import { type StubPlatform, startStubPlatform } from './stub-platform.js';
@@ -246,4 +248,93 @@ test('a mail sends exactly the four fields the handler allowlists, with the toke
       error.status === 403 &&
       error.reason === 'recipient_inside_workspace',
   );
+});
+
+/** An origin nobody listens on: a port taken, then given back. */
+async function closedOrigin(): Promise<string> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return `http://127.0.0.1:${port}`;
+}
+
+/** A server that answers a status line and half a body, then drops the connection. */
+async function cuttingServer(): Promise<{ origin: string; close(): Promise<void> }> {
+  const server = createServer((request, response) => {
+    request.resume();
+    response.writeHead(200, { 'content-type': 'application/json', 'content-length': '100' });
+    response.write('{"mod');
+    setTimeout(() => response.socket?.destroy(), 20).unref();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
+
+test('an answer that never came is marked as such — timed out, refused, cut off — and nothing else is', async () => {
+  const model: ModelRequest = {
+    capability: 'summarization',
+    prompt: 'p',
+    input: {},
+    outputSchema: {},
+  };
+  const provider: ProviderRequest = {
+    providerId: 'p',
+    operation: 'o',
+    input: {},
+    idempotencyKey: 'k'.repeat(16),
+  };
+
+  // No answer: the timeout fired, the connection was refused, the body was cut off.
+  stub.delayMs = 500;
+  const impatient = new PlatformClient(stub.origin, TOKEN, { timeoutMs: 50 });
+  await assert.rejects(impatient.callProvider(provider), (error: unknown) => isUnanswered(error));
+  stub.delayMs = 0;
+  const closed = await closedOrigin();
+  await assert.rejects(new PlatformClient(closed, TOKEN).callProvider(provider), isUnanswered);
+  await assert.rejects(
+    client.readArtifactBytes(artifactFixture({ downloadUrl: `${closed}/objects/x` })),
+    isUnanswered,
+  );
+  const cutting = await cuttingServer();
+  try {
+    await assert.rejects(new PlatformClient(cutting.origin, TOKEN).callModel(model), isUnanswered);
+    await assert.rejects(
+      client.readArtifactBytes(artifactFixture({ downloadUrl: `${cutting.origin}/objects/x` })),
+      isUnanswered,
+    );
+  } finally {
+    await cutting.close();
+  }
+
+  // Answered, or never sent: a refusal, a malformed answer, a link the store
+  // refused, and an input JSON cannot carry — the step's own fault.
+  stub.answers.provider = () => ({
+    status: 422,
+    body: problemFixture({ status: 422, code: 'BAD_REQUEST', detail: 'The request was refused' }),
+  });
+  const answered = (error: unknown) => error instanceof Error && !isUnanswered(error);
+  await assert.rejects(client.callProvider(provider), answered);
+  stub.answers.model = () => ({ status: 200, body: { model: { text: 'x' } } });
+  await assert.rejects(client.callModel(model), answered);
+  await assert.rejects(
+    client.readArtifactBytes(artifactFixture({ downloadUrl: `${stub.origin}/objects/gone` })),
+    answered,
+  );
+  const sent = stub.calls.length;
+  await assert.rejects(
+    client.callProvider({ ...provider, input: { amount: 10n } }),
+    (error: unknown) => error instanceof TypeError && !isUnanswered(error),
+  );
+  assert.equal(stub.calls.length, sent, 'the unserialisable input never left');
 });

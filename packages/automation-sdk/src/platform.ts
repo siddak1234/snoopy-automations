@@ -233,27 +233,32 @@ export class PlatformClient implements AutomationPlatform {
    * which is why bytes never traverse the platform's public service.
    */
   public async readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array> {
-    const response = await fetch(artifact.downloadUrl, {
-      signal: AbortSignal.timeout(this.#downloadTimeoutMs),
-    });
+    const response = await unanswered(
+      fetch(artifact.downloadUrl, { signal: AbortSignal.timeout(this.#downloadTimeoutMs) }),
+    );
     if (!response.ok) {
       throw new Error(`artifact ${artifact.artifactId} refused the link with ${response.status}`);
     }
-    return new Uint8Array(await response.arrayBuffer());
+    return new Uint8Array(await unanswered(response.arrayBuffer()));
   }
 
   async #post(message: string, body: unknown, timeoutMs: number): Promise<unknown> {
-    const response = await fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        // The run token, as a bearer credential. The platform relays it inward and
-        // verifies it against the run it was minted for.
-        authorization: `Bearer ${this.runToken}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    // Serialised BEFORE the request, outside the mark: an input JSON cannot carry
+    // throws here, a step's own fault, and must never read as an answer that did not come.
+    const payload = JSON.stringify(body);
+    const response = await unanswered(
+      fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          // The run token, as a bearer credential. The platform relays it inward and
+          // verifies it against the run it was minted for.
+          authorization: `Bearer ${this.runToken}`,
+        },
+        body: payload,
+        signal: AbortSignal.timeout(timeoutMs),
+      }),
+    );
 
     if (!response.ok) {
       // Surfaced rather than swallowed. A refused callback means the platform
@@ -268,10 +273,37 @@ export class PlatformClient implements AutomationPlatform {
     }
 
     // Parsed once here rather than per message, and an empty body is `undefined`
-    // rather than a parse error.
-    const text = await response.text();
+    // rather than a parse error. A body cut off mid-read is no answer either; one
+    // that arrived whole and does not parse IS an answer, and is not marked.
+    const text = await unanswered(response.text());
     return text ? (JSON.parse(text) as unknown) : undefined;
   }
+}
+
+/**
+ * The failures that are NO ANSWER AT ALL: `fetch` rejected — the connection was
+ * refused, reset or never resolved, or the timeout fired — or the body was cut
+ * off mid-read. Marked here, where the request is made, because nothing later can
+ * tell them apart: Node rejects a refused connection, a cut body and an input
+ * `JSON.stringify` cannot carry with the same `TypeError` (measured on Node 22).
+ * The runner's step retry reads the mark (`retry.ts`); a refusal the platform
+ * answered, an answer that does not parse, and a step's own error are never marked.
+ * A set of the error objects themselves, so nothing is wrapped: a `TimeoutError`
+ * stays one, and its message stays the run's `failureReason`.
+ */
+const unansweredErrors = new WeakSet<object>();
+
+/** `pending`, with its rejection marked as an answer that never came, and passed on unchanged. */
+export function unanswered<T>(pending: Promise<T>): Promise<T> {
+  return pending.catch((error: unknown) => {
+    if (typeof error === 'object' && error !== null) unansweredErrors.add(error);
+    throw error;
+  });
+}
+
+/** Whether this client threw `error` because no answer came. */
+export function isUnanswered(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && unansweredErrors.has(error);
 }
 
 /** The result with every one-line field normalised to what the wire accepts. */
