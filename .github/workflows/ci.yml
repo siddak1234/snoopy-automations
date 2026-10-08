@@ -39,8 +39,10 @@ jobs:
       # in that order: the SDK's emitted types are what an automation typechecks
       # against. `test/architecture.test.ts` is inside it: no platform package
       # imported, every manifest valid, every workspace carrying the gate's
-      # scripts, the SDK consumable through its published entries, no
-      # environment file and no recovered client data tracked.
+      # scripts, the SDK consumable through its published entries, no automation
+      # depending on another, no environment file and no recovered client data
+      # tracked. `test/conformance.test.ts` holds every automation to the manifests
+      # it serves. The gate's last step re-emits docs/repo-facts/snoopy-automations.json.
       - name: Verify formatting, build, types, and tests
         run: npm run verify
 
@@ -48,7 +50,7 @@ jobs:
       # platform does. What ships is what must be clean, so the runtime tree is the
       # gate; dev tooling is reported but does not fail the build, because a gate
       # that goes red for things nobody can act on is a gate somebody switches off.
-      # Today there are no third-party runtime dependencies: invoice-intake uses
+      # Today there are no third-party runtime dependencies: both automations use
       # only the local SDK, which itself has none. That makes this pass trivially
       # clean and is exactly why it must remain — the day one is added is the day
       # nobody thinks to check.
@@ -59,39 +61,48 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
-  # The pull request's gate: the Dockerfile built, smoke-tested and scanned before
-  # anything may be pushed. This job never authenticates to a registry and never
-  # pushes, including on pull requests from forks. The bytes the backend pins are
-  # built, pushed and proven by Publish, below, from the same Dockerfile.
+  # The pull request's gate, once per automation: the Dockerfile built, smoke-tested
+  # and scanned before anything may be pushed. This job never authenticates to a
+  # registry and never pushes, including on pull requests from forks. The bytes
+  # the backend pins are built, pushed and proven by Publish, below, from the same
+  # Dockerfile. An automation added under `automations/` is added to the matrix
+  # here and in Publish, or it is never built.
   image:
     name: Image
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        automation: [invoice-check, invoice-intake]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Build invoice-intake, amd64
+      - name: Build ${{ matrix.automation }}, amd64
         run: >-
           docker build --platform linux/amd64
-          --file automations/invoice-intake/Dockerfile
-          --tag autom8x-invoice-intake:${{ github.sha }} .
+          --file automations/${{ matrix.automation }}/Dockerfile
+          --tag autom8x-${{ matrix.automation }}:${{ github.sha }} .
 
       # Starts the final stage, which proves the standalone lock installed a real
-      # SDK package rather than leaving a workspace link behind in the image.
+      # SDK package rather than leaving a workspace link behind in the image, and
+      # that the manifests the runner reads at startup were copied into it.
       - name: Smoke-test the packaged service
+        env:
+          AUTOMATION: ${{ matrix.automation }}
         run: |
-          container=invoice-intake-smoke
+          container="$AUTOMATION-smoke"
           trap 'docker logs "$container" || true; docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
           docker run --detach --name "$container" \
             --publish 127.0.0.1:18080:8080 \
-            autom8x-invoice-intake:${{ github.sha }} >/dev/null
+            "autom8x-$AUTOMATION:${{ github.sha }}" >/dev/null
           for attempt in {1..20}; do
             response="$(curl --fail --silent --show-error http://127.0.0.1:18080/health/live)" && break
             sleep 1
           done
-          test "${response:-}" = '{"status":"ok","templateId":"invoice-intake","contractVersion":1}'
+          test "${response:-}" = "{\"status\":\"ok\",\"templateId\":\"$AUTOMATION\",\"contractVersion\":1}"
 
       # Pinned because this action is itself part of the security boundary. Only
       # actionable CRITICAL/HIGH findings block; the second pass still reports
@@ -99,7 +110,7 @@ jobs:
       - name: Scan fixable CRITICAL and HIGH vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: autom8x-invoice-intake:${{ github.sha }}
+          image-ref: autom8x-${{ matrix.automation }}:${{ github.sha }}
           scanners: vuln
           severity: CRITICAL,HIGH
           ignore-unfixed: true
@@ -110,7 +121,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: autom8x-invoice-intake:${{ github.sha }}
+          image-ref: autom8x-${{ matrix.automation }}:${{ github.sha }}
           scanners: vuln
           severity: CRITICAL,HIGH
           ignore-unfixed: false
@@ -120,23 +131,28 @@ jobs:
   # A merge to main is the only publishing event. packages:write exists on this
   # job alone and authenticates with its own short-lived GITHUB_TOKEN.
   #
-  # Build once, push by digest, prove that digest, then name it. Until 2026-10-04
-  # this job rebuilt the image the Image job had just smoke-tested and scanned,
-  # so the bytes that reached GHCR were never the bytes that had been checked.
-  # Now the one build is pushed with no tag; the smoke test and both Trivy passes
-  # run against `IMAGE_NAME@sha256:…`, which is exactly what was pushed; and only
-  # when they pass does `imagetools create` give that index its commit tag. A
-  # digest that fails stays untagged: nothing names it, so nothing can pin it.
+  # Build once, push by digest, prove that digest, then name it — once per
+  # automation. Until 2026-10-04 this job rebuilt the image the Image job had just
+  # smoke-tested and scanned, so the bytes that reached GHCR were never the bytes
+  # that had been checked. Now the one build is pushed with no tag; the smoke test
+  # and both Trivy passes run against `IMAGE_NAME@sha256:…`, which is exactly what
+  # was pushed; and only when they pass does `imagetools create` give that index
+  # its commit tag. A digest that fails stays untagged: nothing names it, so
+  # nothing can pin it.
   publish:
     name: Publish
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [verify, image]
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        automation: [invoice-check, invoice-intake]
     permissions:
       contents: read
       packages: write
     env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/autom8x-invoice-intake
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/autom8x-${{ matrix.automation }}
     steps:
       - name: Checkout
         # This job holds packages:write, so every action it executes is immutable.
@@ -159,12 +175,12 @@ jobs:
       # attestation is kept, so what is pushed is an OCI image index (the amd64
       # manifest plus its attestation) and the digest returned is the INDEX
       # digest, the shape the platform's deploy/compose.prod.yml pins.
-      - name: Build and push invoice-intake by digest
+      - name: Build and push ${{ matrix.automation }} by digest
         id: publish
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: automations/invoice-intake/Dockerfile
+          file: automations/${{ matrix.automation }}/Dockerfile
           platforms: linux/amd64
           push: true
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
@@ -191,8 +207,9 @@ jobs:
       - name: Smoke-test the pushed digest
         env:
           REFERENCE: ${{ steps.pushed.outputs.reference }}
+          AUTOMATION: ${{ matrix.automation }}
         run: |
-          container=invoice-intake-smoke
+          container="$AUTOMATION-smoke"
           trap 'docker logs "$container" || true; docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
           docker run --detach --name "$container" \
             --publish 127.0.0.1:18080:8080 \
@@ -201,7 +218,7 @@ jobs:
             response="$(curl --fail --silent --show-error http://127.0.0.1:18080/health/live)" && break
             sleep 1
           done
-          test "${response:-}" = '{"status":"ok","templateId":"invoice-intake","contractVersion":1}'
+          test "${response:-}" = "{\"status\":\"ok\",\"templateId\":\"$AUTOMATION\",\"contractVersion\":1}"
 
       # The Image job's two Trivy passes, run against the pushed digest itself.
       - name: Scan the pushed digest for fixable CRITICAL and HIGH vulnerabilities
@@ -243,7 +260,7 @@ jobs:
             exit 1
           fi
           {
-            echo "### Image published"
+            echo "### Image published: ${{ matrix.automation }}"
             echo
             echo "- \`$REFERENCE\`"
             echo "- \`$TAG\` resolves to the same index digest"
@@ -251,10 +268,11 @@ jobs:
           echo "tagged: $TAG -> $DIGEST"
 
   # The one check for the ruleset to require, once it has reported on a pull
-  # request and on main. Green only when every job above succeeded. Publish is
-  # push-only by its own `if`, so on a pull request its "skipped" is the single
-  # skip allowed; a skip anywhere else, a failure or a cancellation is red. A job
-  # added above must be named in `needs` too, or this check never sees it.
+  # request and on main. Green only when every job above succeeded — for a matrix
+  # job, every one of its builds. Publish is push-only by its own `if`, so on a
+  # pull request its "skipped" is the single skip allowed; a skip anywhere else, a
+  # failure or a cancellation is red. A job added above must be named in `needs`
+  # too, or this check never sees it.
   all-green:
     name: all-green
     if: always()

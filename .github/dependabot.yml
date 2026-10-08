@@ -4,8 +4,8 @@
 # each a notification) arrived in one batch. A major that must not move is
 # `ignore`d below rather than left to be closed by hand every month.
 #
-# The Docker entry points at the first shipping automation; pointing Dependabot
-# at a directory that holds no Dockerfile only produces a failed update run.
+# The Docker entries point at the shipping automations; pointing Dependabot at a
+# directory that holds no Dockerfile only produces a failed update run.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -44,6 +44,17 @@ updates:
       interval: monthly
     open-pull-requests-limit: 1
     # The runtime major is a deliberate move, not a bot bump (owner, 2026-09-08).
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
+  # invoice-check moved in from the platform repository on 2026-10-08 (its
+  # BUILD-PLAN 25.3.8); the same base image and the same rule.
+  - package-ecosystem: docker
+    directory: /automations/invoice-check
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
     ignore:
       - dependency-name: node
         update-types: ['version-update:semver-major']

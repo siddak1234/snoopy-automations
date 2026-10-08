@@ -1,9 +1,8 @@
-import { readFileSync } from 'node:fs';
-
 import type {
   ArtifactListing,
   ArtifactReference,
   InvokeRequest,
+  MailRequest,
   ModelCompletion,
   ModelRequest,
   ProviderAnswer,
@@ -12,6 +11,7 @@ import type {
   StepReport,
 } from './contract.js';
 import { oneLine, toArtifactListing } from './contract.js';
+import { readManifest } from './manifest.js';
 import { type AutomationPlatform, CallbackRefusedError, boundedResult } from './platform.js';
 
 /**
@@ -37,11 +37,14 @@ export class RecordingPlatform implements AutomationPlatform {
   public results: { runId: string; result: RunResult }[] = [];
   public providerCalls: ProviderRequest[] = [];
   public modelCalls: ModelRequest[] = [];
+  public mails: MailRequest[] = [];
   public artifactReads: string[] = [];
 
   /** Overridden per test. The default is a provider that says yes with nothing. */
   public provider: (call: ProviderRequest) => Promise<ProviderAnswer> = () =>
     Promise.resolve({ status: 200, body: {} });
+  /** Overridden per test. The default is a platform that accepts every mail. */
+  public mail: (mail: MailRequest) => Promise<void> = () => Promise.resolve();
   /** Overridden per test. The default is a model that answers an empty object. */
   public model: (call: ModelRequest) => Promise<ModelCompletion> = () =>
     Promise.resolve({
@@ -79,6 +82,11 @@ export class RecordingPlatform implements AutomationPlatform {
   public callProvider(request: ProviderRequest): Promise<ProviderAnswer> {
     this.providerCalls.push(request);
     return this.provider(request);
+  }
+
+  public sendMail(mail: MailRequest): Promise<void> {
+    this.mails.push(mail);
+    return this.mail(mail);
   }
 
   public readArtifact(artifactId: string): Promise<ArtifactReference> {
@@ -139,8 +147,10 @@ export function artifactFixture(overrides: Partial<ArtifactReference> = {}): Art
  * set, so the refusal happens here rather than as a 422 in production.
  */
 export function declaredSteps(manifestPath: string): Set<string> {
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-    pipeline: { id: string }[];
-  };
-  return new Set(manifest.pipeline.map((step) => step.id));
+  return new Set(readManifest(manifestPath).pipeline.map((step) => step.id));
+}
+
+/** The capabilities a manifest declares, READ FROM THE MANIFEST, for the same reason. */
+export function declaredCapabilities(manifestPath: string): Set<string> {
+  return new Set(readManifest(manifestPath).requiredCapabilities);
 }

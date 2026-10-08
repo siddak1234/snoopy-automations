@@ -56,6 +56,8 @@ function defaultAnswer(message: string, body: Record<string, unknown>): Answer {
       };
     case 'provider':
       return { status: 200, body: { provider: { status: 200, body: { id: 'sent' } } } };
+    case 'mail':
+      return { status: 200, body: { mail: { accepted: true } } };
     case 'artifact':
       return body.artifactId === undefined
         ? {

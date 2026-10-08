@@ -2,6 +2,7 @@ import type {
   ArtifactListing,
   ArtifactReference,
   InvokeRequest,
+  MailRequest,
   ModelCompletion,
   ModelRequest,
   ProviderAnswer,
@@ -12,6 +13,7 @@ import type {
 import {
   isArtifactListing,
   isArtifactReference,
+  isMailAcceptance,
   isModelCompletion,
   isObject,
   oneLine,
@@ -33,9 +35,10 @@ import {
 /**
  * What an automation's `execute()` is handed. A test double implements the same.
  *
- * Five callbacks to the platform, each carrying the run token; one listing that is
- * the artifact callback asked without an id; and one fetch that is NOT a callback
- * and carries nothing — the bytes behind a signed link.
+ * Six callbacks to the platform, each carrying the run token — step, result,
+ * model, provider, artifact and mail; one listing that is the artifact callback
+ * asked without an id; and one fetch that is NOT a callback and carries nothing —
+ * the bytes behind a signed link.
  */
 export interface AutomationPlatform {
   /** Reports progress on one declared step. */
@@ -46,6 +49,8 @@ export interface AutomationPlatform {
   callModel(request: ModelRequest): Promise<ModelCompletion>;
   /** Asks the platform to call a provider operation this run's manifest declared. */
   callProvider(request: ProviderRequest): Promise<ProviderAnswer>;
+  /** Asks the platform to send one mail from its own identity — the only sender there is. */
+  sendMail(mail: MailRequest): Promise<void>;
   /** A file this run was given, by reference and a short-lived link. */
   readArtifact(artifactId: string): Promise<ArtifactReference>;
   /** Every file this run was given, without links. */
@@ -64,14 +69,64 @@ export interface AutomationPlatform {
  * platform being unreachable (the run's own deadline sweep will fail it).
  */
 export class CallbackRefusedError extends Error {
+  /** The platform's answer, cut to 200 characters for the message. */
+  public readonly detail: string;
+  /**
+   * The platform's own `details.reason` when its problem body carried one —
+   * `step_not_declared`, `provider_not_declared`, `recipient_inside_workspace` —
+   * read from the whole answer, before the cut. Undefined when it sent none.
+   */
+  public readonly reason: string | undefined;
+
   public constructor(
     public readonly callback: string,
     public readonly status: number,
-    public readonly detail: string,
+    answer: string,
   ) {
+    const detail = answer.slice(0, 200);
     super(`callback ${callback} refused with ${status}: ${detail}`);
     this.name = 'CallbackRefusedError';
+    this.detail = detail;
+    this.reason = reasonOf(answer);
   }
+}
+
+/** The platform answers a refusal with `{ error: { details: { reason } } }`; anything else has none. */
+function reasonOf(answer: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(answer);
+    const error = isObject(parsed) ? parsed.error : undefined;
+    const details = isObject(error) ? error.details : undefined;
+    const reason = isObject(details) ? details.reason : undefined;
+    return typeof reason === 'string' ? reason : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a failed `sendMail` CERTAINLY sent nothing.
+ *
+ * The platform reserves the send before the transport and KEEPS the reservation
+ * when the transport is slow, and this client never retries — so an answer that
+ * never came (a `TimeoutError`, a dropped connection, a 502 or 504 from the hop in
+ * front of the platform) means the mail MAY have gone, and a person must not
+ * re-send by hand. Certain are the platform's own refusals decided before the
+ * transport: the two that name themselves (`recipient_inside_workspace` at 403,
+ * `workspace_membership_truncated` at 502, which also releases the reservation), a
+ * 503 (outbound mail is not configured: nothing was attempted), and any other 4xx
+ * (refused on the way in — a malformed address, a spent allowance).
+ */
+export function mailCertainlyNotSent(error: unknown): boolean {
+  if (!(error instanceof CallbackRefusedError)) return false;
+  if (
+    error.reason === 'recipient_inside_workspace' ||
+    error.reason === 'workspace_membership_truncated'
+  ) {
+    return true;
+  }
+  if (error.status === 503) return true;
+  return error.status < 500;
 }
 
 export interface PlatformClientOptions {
@@ -85,12 +140,21 @@ export interface PlatformClientOptions {
   modelTimeoutMs?: number;
   /** Bound on fetching an artifact's bytes, which may be a scanned document. Default 60 s. */
   downloadTimeoutMs?: number;
+  /**
+   * Bound on the mail callback, which reserves the send, resolves the workspace's
+   * members and calls the transport before it answers. Default 30 s. The hop in
+   * front of the platform may give up sooner and answer 502: the platform KEEPS its
+   * reservation on a slow transport and this client never retries, so a timeout
+   * here means "unknown", not "not sent".
+   */
+  mailTimeoutMs?: number;
 }
 
 export class PlatformClient implements AutomationPlatform {
   readonly #timeoutMs: number;
   readonly #modelTimeoutMs: number;
   readonly #downloadTimeoutMs: number;
+  readonly #mailTimeoutMs: number;
 
   public constructor(
     private readonly callbackOrigin: string,
@@ -100,6 +164,7 @@ export class PlatformClient implements AutomationPlatform {
     this.#timeoutMs = options.timeoutMs ?? 10_000;
     this.#modelTimeoutMs = options.modelTimeoutMs ?? 60_000;
     this.#downloadTimeoutMs = options.downloadTimeoutMs ?? 60_000;
+    this.#mailTimeoutMs = options.mailTimeoutMs ?? 30_000;
   }
 
   public async reportStep(report: StepReport): Promise<void> {
@@ -169,6 +234,34 @@ export class PlatformClient implements AutomationPlatform {
   }
 
   /**
+   * Asks the PLATFORM to send one mail, from its own identity, to one address.
+   *
+   * The sixth callback (platform ADR-0021: the platform is the only sender). This
+   * process names no mailbox and holds no grant; the platform applies the
+   * self-send refusal, the per-run and per-workspace caps, and the sending
+   * address. Exactly the four fields its handler allow-lists are sent. A refusal
+   * surfaces as a `CallbackRefusedError`, as every other callback's does — its
+   * `detail` carries the platform's `details.reason` when the refusal was decided
+   * before the transport (`recipient_inside_workspace`), which is how a caller
+   * tells a certain failure from an answer that never came.
+   */
+  public async sendMail(mail: MailRequest): Promise<void> {
+    const answer = await this.#post(
+      'mail',
+      {
+        to: mail.to,
+        subject: mail.subject,
+        body: mail.body,
+        idempotencyKey: mail.idempotencyKey,
+      },
+      this.#mailTimeoutMs,
+    );
+    if (!isMailAcceptance(answer)) {
+      throw new Error('the mail callback did not answer with an acceptance');
+    }
+  }
+
+  /**
    * Reads a file this run was given.
    *
    * The automation names an artifact; the platform decides whether THIS run may
@@ -229,8 +322,8 @@ export class PlatformClient implements AutomationPlatform {
       // rejected something about this run — an undeclared step, an expired token —
       // and continuing as if it succeeded would produce a run whose timeline
       // disagrees with what actually happened.
-      const detail = await response.text().catch(() => '');
-      throw new CallbackRefusedError(message, response.status, detail.slice(0, 200));
+      const answer = await response.text().catch(() => '');
+      throw new CallbackRefusedError(message, response.status, answer);
     }
 
     // Parsed once here rather than per message, and an empty body is `undefined`

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 
-import { CallbackRefusedError, PlatformClient } from '../src/platform.js';
+import { CallbackRefusedError, PlatformClient, mailCertainlyNotSent } from '../src/platform.js';
 import { artifactFixture } from '../src/testing.js';
 import { type StubPlatform, startStubPlatform } from './stub-platform.js';
 
@@ -179,4 +179,94 @@ test('a callback that never answers times out instead of hanging the run', async
     impatient.reportStep({ runId: 'r', stepId: 'receive', outcome: 'ok', summary: 's' }),
     (error: unknown) => error instanceof Error && error.name === 'TimeoutError',
   );
+});
+
+test('a mail sends exactly the four fields the handler allowlists, with the token, and reads the acceptance', async () => {
+  await client.sendMail({
+    to: 'vendor@example.com',
+    subject: 'Invoice INV-1 received',
+    body: 'We received it.',
+    idempotencyKey: 'notify-0123456789abcdef',
+    // A field the handler would refuse must not travel even if a caller adds one.
+    ...({ from: 'me@customer.example' } as object),
+  });
+  const { path, headers, body } = last();
+  assert.equal(path, '/v1/automations/callbacks/mail');
+  assert.equal(headers.authorization, `Bearer ${TOKEN}`);
+  assert.deepEqual(body, {
+    to: 'vendor@example.com',
+    subject: 'Invoice INV-1 received',
+    body: 'We received it.',
+    idempotencyKey: 'notify-0123456789abcdef',
+  });
+
+  stub.answers.mail = () => ({ status: 200, body: { mail: { queued: true } } });
+  await assert.rejects(
+    client.sendMail({
+      to: 'v@example.com',
+      subject: 's',
+      body: 'b',
+      idempotencyKey: 'k'.repeat(16),
+    }),
+    /did not answer with an acceptance/u,
+  );
+
+  stub.answers.mail = () => ({
+    status: 403,
+    body: { error: { code: 'FORBIDDEN', details: { reason: 'recipient_inside_workspace' } } },
+  });
+  await assert.rejects(
+    client.sendMail({
+      to: 'v@example.com',
+      subject: 's',
+      body: 'b',
+      idempotencyKey: 'k'.repeat(16),
+    }),
+    (error: unknown) =>
+      error instanceof CallbackRefusedError &&
+      error.callback === 'mail' &&
+      error.status === 403 &&
+      error.detail.includes('recipient_inside_workspace'),
+  );
+});
+
+test("a refusal's reason is read from the whole answer, and tells a certain mail failure from an unknown one", async () => {
+  const long = {
+    error: {
+      code: 'FORBIDDEN',
+      message: 'm'.repeat(300),
+      details: { reason: 'recipient_inside_workspace' },
+    },
+  };
+  stub.answers.mail = () => ({ status: 403, body: long });
+  const mail = { to: 'v@example.com', subject: 's', body: 'b', idempotencyKey: 'k'.repeat(16) };
+  await assert.rejects(client.sendMail(mail), (error: unknown) => {
+    assert.ok(error instanceof CallbackRefusedError);
+    assert.equal(error.reason, 'recipient_inside_workspace', 'read before the 200-character cut');
+    assert.equal(error.detail.length, 200);
+    assert.ok(mailCertainlyNotSent(error));
+    return true;
+  });
+  for (const [status, body, certain] of [
+    [502, { error: { details: { reason: 'workspace_membership_truncated' } } }, true],
+    [503, { error: { code: 'NOT_CONFIGURED' } }, true],
+    [429, { error: { code: 'TOO_MANY_REQUESTS' } }, true],
+    [400, 'not json', true],
+    [502, { error: { code: 'BAD_GATEWAY' } }, false],
+    [504, '', false],
+  ] as const) {
+    stub.answers.mail = () => ({ status, body });
+    await assert.rejects(client.sendMail(mail), (error: unknown) => {
+      assert.equal(mailCertainlyNotSent(error), certain, `${status} ${JSON.stringify(body)}`);
+      return true;
+    });
+  }
+  assert.equal(
+    mailCertainlyNotSent(new TypeError('fetch failed')),
+    false,
+    'a dropped connection is unknown',
+  );
+  const timeout = new Error('signal timed out');
+  timeout.name = 'TimeoutError';
+  assert.equal(mailCertainlyNotSent(timeout), false);
 });

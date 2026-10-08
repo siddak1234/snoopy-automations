@@ -2,7 +2,7 @@
   "name": "snoopy-automations",
   "version": "0.1.0",
   "private": true,
-  "description": "Autom8x automations \u2014 automation logic that calls the platform API; holds no secrets, receives only run-scoped tokens at runtime.",
+  "description": "Autom8x automations — automation logic that calls the platform API; holds no secrets, receives only run-scoped tokens at runtime.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -15,9 +15,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
-    "test": "tsx --test \"test/**/*.test.ts\" && npm test --workspaces --if-present",
-    "verify": "npm run format:check && npm run build && npm run typecheck && npm test"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.test.json && npm run typecheck --workspaces --if-present",
+    "test": "tsx --test \"test/**/*.test.ts\" \"templates/automation/test/**/*.test.ts\" && npm test --workspaces --if-present",
+    "facts": "tsx scripts/repo-facts.ts",
+    "verify": "npm run format:check && npm run build && npm run typecheck && npm test && tsx scripts/repo-facts.ts --gate verify"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

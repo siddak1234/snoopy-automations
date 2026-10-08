@@ -1,14 +1,20 @@
 export {
+  CAPABILITIES,
   CONTRACT_VERSION,
+  MAIL_BODY_MAX_LENGTH,
+  MAIL_SUBJECT_MAX_LENGTH,
   ONE_LINE_MAX_LENGTH,
   isArtifactListing,
   isArtifactReference,
+  isCapability,
   isContinuation,
   isInvokeRequest,
+  isMailAcceptance,
   isModelCompletion,
   isObject,
   oneLine,
   toArtifactListing,
+  truncateText,
 } from './contract.js';
 export type {
   ArtifactListing,
@@ -18,6 +24,7 @@ export type {
   InvokeAck,
   InvokeRequest,
   JsonObject,
+  MailRequest,
   ModelCompletion,
   ModelRequest,
   ModelUsage,
@@ -28,7 +35,32 @@ export type {
   StepOutcome,
   StepReport,
 } from './contract.js';
-export { CallbackRefusedError, PlatformClient, boundedResult, clientFor } from './platform.js';
+export { isManifest, readManifest, readManifests } from './manifest.js';
+export type { Manifest } from './manifest.js';
+export {
+  CallbackRefusedError,
+  PlatformClient,
+  boundedResult,
+  clientFor,
+  mailCertainlyNotSent,
+} from './platform.js';
 export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
+export {
+  definePrompt,
+  loadPrompt,
+  loadPrompts,
+  readJsonCompletion,
+  renderPrompt,
+} from './prompt.js';
+export type { PromptModule } from './prompt.js';
+export { defineAutomation, held, idempotencyKeyFor } from './runner.js';
+export type {
+  Automation,
+  AutomationDefinition,
+  Step,
+  StepContext,
+  StepPlatform,
+  StepResult,
+} from './runner.js';
 export { jsonLogger, serve } from './serve.js';
 export type { Logger, RunningAutomation, ServeOptions } from './serve.js';
