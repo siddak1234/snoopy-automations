@@ -105,8 +105,11 @@ const review: Step = async ({ request, state }) => {
 const act: Step = async ({ request, state, platform }) => {
   if (typeof state.reference !== 'string' || typeof state.amount !== 'number')
     return malformedState();
-  // The platform attaches the workspace's grant and this step's idempotency key:
-  // a re-run of this step never records the document twice.
+  // The platform attaches the workspace's grant and this step's idempotency key.
+  // A re-run after the provider's final answer is answered from the platform's
+  // record of it; a re-run after NO answer calls the provider again, which records
+  // the document twice unless the vendor deduplicates on `Idempotency-Key` — so
+  // this step declares no retry (README, "Retrying a step").
   const answer = await platform.callProvider({
     providerId: 'example-provider',
     operation: 'records.create',
@@ -159,13 +162,14 @@ export function define(manifests: readonly Manifest[]): Automation {
     manifests,
     prompts,
     steps: { receive, extract, review, act, notify },
-    // `act` is run again after a failure the platform did not decide — no answer,
-    // or a 502/503/504 with no reason — with the same idempotency key, so a repeat
-    // meets the platform's record of the first instead of posting twice (README,
-    // "Retrying a step"). Not `extract`: a repeated model call is a second vendor
-    // call and a second ledger row. `receive` only reads and could be; `notify`
-    // catches its own failure, so a policy there would never fire.
-    retry: { act: { attempts: 3, backoffMs: 5_000 } },
+    // No step declares a retry. `act` is a provider WRITE: a repeat after a call
+    // that got no final answer is sent to the provider again, and none of the
+    // platform's registered providers (Google, QuickBooks, Slack) is recorded as
+    // deduplicating on `Idempotency-Key`.
+    // `extract`: a repeated model call is a second vendor call and a second ledger
+    // row. `notify` catches its own failure, so a policy there would never fire.
+    // `receive` only reads, and is where a policy is safe:
+    //   retry: { receive: { attempts: 2, backoffMs: 10_000 } },
     result: (state, request) => ({
       output: {
         reference: state.reference,

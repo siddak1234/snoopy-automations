@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { JsonObject } from '../src/contract.js';
-import { PlatformClient, unanswered } from '../src/platform.js';
+import { PlatformClient } from '../src/platform.js';
 import { CallbackRefusedError, ModelRefusedError } from '../src/refusals.js';
-import { MAX_STEP_BACKOFF_MS, attempt, backoffWaits } from '../src/retry.js';
-import { type AutomationDefinition, type Step, held, idempotencyKeyFor } from '../src/runner.js';
+import { MIN_STEP_BACKOFF_MS } from '../src/retry.js';
+import { type Step, held, idempotencyKeyFor } from '../src/runner.js';
 import { RecordingPlatform, refusalFixture } from '../src/testing.js';
+import { noAnswer, recordedWaits, retrying } from './retry-fixtures.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';
 import { startStubPlatform } from './stub-platform.js';
 
@@ -14,31 +15,11 @@ import { startStubPlatform } from './stub-platform.js';
  * The step runner's bounded retry (platform BUILD-PLAN 25.5.1): only a step that
  * declares a policy is run again, only after a failure the platform did not
  * decide, with the same key on every attempt, within the SDK's ceilings and the
- * run's deadline — and it is reported once.
+ * run's deadline — and it is reported once. How a policy is refused or clamped at
+ * definition is `runner-retry-policy.test.ts`.
  */
 
-/** An answer that never came, marked as the client marks fetch's own rejection. */
-async function noAnswer(message = 'fetch failed'): Promise<TypeError> {
-  const error = new TypeError(message);
-  await unanswered(Promise.reject(error)).catch(() => undefined);
-  return error;
-}
-
-const posting: Step = async ({ platform }) => {
-  const answer = await platform.callProvider({
-    providerId: 'example-provider',
-    operation: 'records.create',
-    input: { reference: 'INV-7' },
-  });
-  return { outcome: 'ok', summary: `Posted with ${answer.status}` };
-};
-
-function retrying(retry?: AutomationDefinition['retry'], post: Step = posting) {
-  return define({
-    steps: { receive: ok('Received'), validate: ok('Validated'), post },
-    ...(retry ? { retry } : {}),
-  });
-}
+const waited = recordedWaits();
 
 function timeline(platform: RecordingPlatform): string[][] {
   return platform.steps.map((step) => [step.stepId, step.outcome, step.summary]);
@@ -56,16 +37,16 @@ test('a transient failure then success: one report, ok, the attempts noted, the 
     new CallbackRefusedError('provider', 503, ''),
   ];
   for (const failure of failures) {
+    waited.length = 0;
     const platform = new RecordingPlatform();
     platform.provider = () =>
       platform.providerCalls.length === 1
         ? Promise.reject(failure)
         : Promise.resolve({ status: 201, body: {} });
     const request = invoke();
-    const result = await retrying({ post: { attempts: 3, backoffMs: 1 } }).execute(
-      request,
-      platform,
-    );
+    const result = await retrying({
+      post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS },
+    }).execute(request, platform);
     assert.deepEqual(timeline(platform), [
       ['receive', 'ok', 'Received'],
       ['validate', 'ok', 'Validated'],
@@ -77,6 +58,7 @@ test('a transient failure then success: one report, ok, the attempts noted, the 
       [key, key],
       'the repeat carries the key the first attempt did',
     );
+    assert.deepEqual(waited, [MIN_STEP_BACKOFF_MS], 'one wait, the floor, before the repeat');
     assert.equal(result.outcome, 'success');
   }
 });
@@ -139,7 +121,7 @@ test('only a failure the platform did not decide is re-attempted: no 4xx, no typ
       manifests: [manifest(1, ['receive', 'validate', 'post'], ['document-extraction'])],
       prompts: [extract],
       steps: { receive: ok('r'), validate: ok('v'), post: step },
-      retry: { post: { attempts: 3, backoffMs: 1 } },
+      retry: { post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } },
     });
     await assert.rejects(automation.execute(invoke(), platform), (thrown) => thrown === error);
     assert.equal(attempts, 1, `${label}: attempted once`);
@@ -159,10 +141,11 @@ test('attempts exhausted: reported failed once, with fixed text and the count, a
   const platform = new RecordingPlatform();
   platform.provider = () => Promise.reject(failure);
   await assert.rejects(
-    retrying({ post: { attempts: 2, backoffMs: 1 } }).execute(invoke(), platform),
+    retrying({ post: { attempts: 2, backoffMs: MIN_STEP_BACKOFF_MS } }).execute(invoke(), platform),
     (thrown) => thrown === failure,
   );
   assert.equal(platform.providerCalls.length, 2);
+  assert.deepEqual(waited, [MIN_STEP_BACKOFF_MS]);
   assert.deepEqual(timeline(platform), [
     ['receive', 'ok', 'Received'],
     ['validate', 'ok', 'Validated'],
@@ -176,7 +159,8 @@ test('attempts exhausted: reported failed once, with fixed text and the count, a
 
 test('the deadline stops the retries: none starts at or after it, and a deadline that does not parse allows none', async () => {
   const deadlines = [
-    new Date(Date.now() + 200).toISOString(),
+    // Inside the floor: the first wait would end past it.
+    new Date(Date.now() + 5_000).toISOString(),
     new Date(Date.now() - 1_000).toISOString(),
     'not a date',
   ];
@@ -185,63 +169,39 @@ test('the deadline stops the retries: none starts at or after it, and a deadline
     const platform = new RecordingPlatform();
     platform.provider = () => Promise.reject(failure);
     await assert.rejects(
-      retrying({ post: { attempts: 3, backoffMs: 1_000 } }).execute(invoke({ deadline }), platform),
+      retrying({ post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } }).execute(
+        invoke({ deadline }),
+        platform,
+      ),
       (thrown) => thrown === failure,
     );
     assert.equal(platform.providerCalls.length, 1, deadline);
+    assert.deepEqual(waited, [], deadline);
     assert.equal(platform.steps.at(-1)?.summary, 'The post step failed');
   }
-});
 
-test('the ceilings clamp a policy that asks for more: three attempts, thirty seconds of waiting in all', async () => {
-  const automation = define({
-    steps: { receive: ok('r'), validate: ok('v'), post: posting },
-    retry: {
-      receive: { attempts: 3, backoffMs: 2_000 },
-      validate: { attempts: 2, backoffMs: 45_000 },
-      post: { attempts: 9, backoffMs: 60_000 },
-    },
-  });
-  assert.deepEqual(automation.retry, {
-    receive: { attempts: 3, backoffMs: 2_000 },
-    validate: { attempts: 2, backoffMs: 30_000 },
-    post: { attempts: 3, backoffMs: 10_000 },
-  });
-
-  // The waits the runner sleeps are the clamped ones.
-  const policy = automation.retry.post;
-  assert.ok(policy);
+  // Room for the first wait (10 s) and not the second (20 s): one repeat, then the failure.
   const failure = await noAnswer();
-  const slept: number[] = [];
-  const attempted = await attempt(
-    () => Promise.reject(failure),
-    backoffWaits(policy),
-    new Date(Date.now() + 900_000).toISOString(),
-    (milliseconds) => {
-      slept.push(milliseconds);
-      return Promise.resolve();
-    },
-  );
-  assert.deepEqual(slept, [10_000, 20_000]);
-  assert.equal(
-    slept.reduce((sum, wait) => sum + wait, 0),
-    MAX_STEP_BACKOFF_MS,
-  );
-  assert.ok(attempted.threw && attempted.attempts === 3);
-
-  // A step that asks for nine attempts makes three.
   const platform = new RecordingPlatform();
   platform.provider = () => Promise.reject(failure);
   await assert.rejects(
-    retrying({ post: { attempts: 9, backoffMs: 1 } }).execute(invoke(), platform),
+    retrying({ post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } }).execute(
+      invoke({ deadline: new Date(Date.now() + 15_000).toISOString() }),
+      platform,
+    ),
+    (thrown) => thrown === failure,
   );
-  assert.equal(platform.providerCalls.length, 3);
-  assert.equal(platform.steps.at(-1)?.summary, 'The post step failed (after 3 attempts)');
+  assert.equal(platform.providerCalls.length, 2);
+  assert.deepEqual(waited, [MIN_STEP_BACKOFF_MS]);
+  assert.equal(platform.steps.at(-1)?.summary, 'The post step failed (after 2 attempts)');
 });
 
 test('a step with no policy behaves exactly as before: one attempt, the same fixed text, the same error', async () => {
   const failure = await noAnswer();
-  for (const automation of [retrying(), retrying({ validate: { attempts: 3, backoffMs: 1 } })]) {
+  for (const automation of [
+    retrying(),
+    retrying({ validate: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } }),
+  ]) {
     const platform = new RecordingPlatform();
     platform.provider = () => Promise.reject(failure);
     await assert.rejects(automation.execute(invoke(), platform), (thrown) => thrown === failure);
@@ -273,7 +233,7 @@ test('a result the step returns is final: a held step is never run again, and ne
     platform.provider = () => Promise.reject(failure);
     const result = await define({
       steps: { receive: ok('r'), validate: holding, post: ok('p') },
-      retry: { validate: { attempts: 3, backoffMs: 1 } },
+      retry: { validate: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } },
     }).execute(invoke(), platform);
     assert.equal(result.outcome, 'held');
     assert.equal(runs, failFirst ? 2 : 1, 'held ends the attempts as it ends the run');
@@ -295,7 +255,7 @@ test('a result the step returns is final: a held step is never run again, and ne
   const platform = new RecordingPlatform();
   const result = await define({
     steps: { receive: ok('r'), validate: ok('v'), post: failing },
-    retry: { post: { attempts: 3, backoffMs: 1 } },
+    retry: { post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS } },
   }).execute(invoke(), platform);
   assert.deepEqual(result, { outcome: 'failed', failureReason: 'refused' });
   assert.equal(runs, 1);
@@ -315,32 +275,16 @@ test('the count always fits the line: the step’s words are cut to make room, a
     };
     const platform = new RecordingPlatform();
     platform.provider = () => Promise.reject(failure);
-    const running = retrying({ post: { attempts: 2, backoffMs: 1 } }, step).execute(
-      invoke(),
-      platform,
-    );
+    const running = retrying(
+      { post: { attempts: 2, backoffMs: MIN_STEP_BACKOFF_MS } },
+      step,
+    ).execute(invoke(), platform);
     if (expected === undefined) {
       await assert.rejects(running, /summary must be a non-empty line/u);
     } else {
       await running;
       assert.equal(platform.steps.at(-1)?.summary, expected);
     }
-  }
-});
-
-test('a retry policy is refused at definition when it names a step with no code or counts nothing', () => {
-  for (const [retry, refusal] of [
-    [
-      { audit: { attempts: 2, backoffMs: 1 } },
-      /names step "audit", which the code does not implement/u,
-    ],
-    [{ constructor: { attempts: 2, backoffMs: 1 } }, /names step "constructor"/u],
-    [{ post: { attempts: 0, backoffMs: 1 } }, /must count at least one attempt/u],
-    [{ post: { attempts: 1.5, backoffMs: 1 } }, /must count at least one attempt/u],
-    [{ post: { attempts: 2, backoffMs: -1 } }, /must wait a whole number of milliseconds/u],
-    [{ post: { attempts: 2, backoffMs: Number.NaN } }, /must wait a whole number of milliseconds/u],
-  ] as const) {
-    assert.throws(() => retrying(retry), refusal);
   }
 });
 
@@ -358,7 +302,9 @@ test('on the wire: an answer that never came and a 503 are re-attempted with the
     };
     const client = new PlatformClient(stub.origin, 'run-token-under-test', { timeoutMs: 100 });
     const request = invoke();
-    const result = await retrying({ post: { attempts: 3, backoffMs: 1 } }).execute(request, client);
+    const result = await retrying({
+      post: { attempts: 3, backoffMs: MIN_STEP_BACKOFF_MS },
+    }).execute(request, client);
     const bodies = (path: string) =>
       stub.calls.filter((call) => call.path.endsWith(path)).map((call) => call.body as JsonObject);
     const key = idempotencyKeyFor(request.runId, 'post');
@@ -374,6 +320,7 @@ test('on the wire: an answer that never came and a 503 are re-attempted with the
         ['post', 'ok', 'Posted with 201 (after 3 attempts)'],
       ],
     );
+    assert.deepEqual(waited, [10_000, 20_000]);
     assert.equal(result.outcome, 'success');
   } finally {
     await stub.close();
