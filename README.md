@@ -168,15 +168,17 @@ defineAutomation({
   manifests,
   steps,
   result,
-  retry: { act: { attempts: 3, backoffMs: 5_000 } },
+  retry: { receive: { attempts: 2, backoffMs: 10_000 } },
 });
 ```
 
 - **Bounded by the SDK.** At most 3 attempts, the first included; `backoffMs` before
   the second and twice that before the third, never more than 30 seconds of waiting
-  in all. A policy asking for more is clamped — `automation.retry` shows what is
-  applied — and one that counts no attempt, or names a step with no code, is refused
-  at startup. No attempt starts at or after the invoke's `deadline`: past it the
+  in all. `backoffMs` is at least 10 seconds (`MIN_STEP_BACKOFF_MS`, the reason is
+  under Provider below), so with three attempts the floor is also the ceiling. A
+  policy asking for more is clamped — `automation.retry` shows what is applied — and
+  one that counts no attempt, waits less than the floor, or names a step with no
+  code is refused at startup. No attempt starts at or after the invoke's `deadline`: past it the
   platform refuses every callback (403 `deadline_exceeded`), and a deadline that does
   not parse allows no retry. The figures are integrator figures, not measurements
   (`retry.ts` says why).
@@ -198,9 +200,18 @@ defineAutomation({
     record of the first — `replayed`, the provider not called. Without one — the
     provider unreachable, one of those statuses, or a first call still in flight —
     nothing is recorded yet, and the provider is called again under the same
-    `Idempotency-Key` header, which only a vendor that honours it deduplicates.
-    Connections bounds a provider call at 10 seconds, the client's own timeout, so a
-    retry that waits a few seconds finds the first call over. The same key with a
+    `Idempotency-Key` header, which only a vendor that honours it deduplicates; none
+    of the platform's registered providers is recorded as doing so. A call can fail
+    in the container while it is still running — a reset, a proxy's 502, and before
+    the platform's BUILD-PLAN 25.2.13 the Edge giving up on its hop to Runs after 5
+    seconds — while Connections carries on for up to 10 seconds and records the
+    answer only when it comes. The floor waits out that bound, which in the common
+    case — a slow provider behind a fast platform — replays a first call the
+    provider answered instead of sending it twice. It narrows the window and does
+    not close it: the platform's own work before the provider call does not stop
+    either, so a slow platform can start the first call late. A first call with no
+    final answer is sent again whatever the wait. So a provider WRITE is safe to
+    retry only at a vendor that deduplicates on the key. The same key with a
     different request is refused 409, which reaches the container as a 502 today and
     is retried to the bound, performing nothing (a finding returned to the platform).
   - **Mail.** The same key and the same words claim no further allowance — the
@@ -212,7 +223,13 @@ defineAutomation({
   - **Model.** No record: a model call repeated after a completion the container
     never received is a second vendor call, a second `runs.model_calls` row and a
     second unit of the plan's monthly allowance. Declare a policy on a step that
-    calls the model only if that cost is acceptable.
+    calls the model only if that cost is acceptable. From the platform's BUILD-PLAN
+    25.2.13 (built 2026-10-08, live from its promotion) the Edge relays a callback
+    for up to 55 seconds, which covers the model route's bounded waits with the
+    gateway at its recommended 40, inside the client's 60. Before it — and after
+    it, when the platform's own dependencies run a call past 55 seconds — a model
+    call can reach the container as a 502 while the platform completes and counts
+    it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
   it took more than one attempt, `(after N attempts)`; a step that failed every
   attempt is `The <step> step failed (after N attempts)` and the run fails with the
@@ -222,10 +239,12 @@ defineAutomation({
 Neither automation here declares a policy. `invoice-intake` calls the platform only
 in `notify`, and `notify` in both automations catches its own failure and reports
 it, so a policy there would never fire; `invoice-check`'s `receive` only reads the
-file its run was given and is the one safe candidate. The template declares one on
-`act`, its provider call. In a suite, `refusalFixture('provider', { status: 502,
-code: 'DEPENDENCY_FAILURE', detail: 'Runs service is unreachable' })` from
-`@autom8x/automation-sdk/testing` is a transient answer to rehearse a retry with.
+file its run was given and is the one safe candidate. The template declares none
+and says why beside its `define`: its `act` is a provider write. In a suite,
+`refusalFixture('provider', { status: 502, code: 'DEPENDENCY_FAILURE', detail:
+'Runs service is unreachable' })` from `@autom8x/automation-sdk/testing` is a
+transient answer to rehearse a retry with; the rehearsal waits the floor, 10
+seconds, in real time.
 
 ## Invoice intake
 

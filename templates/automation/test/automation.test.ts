@@ -166,32 +166,26 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
   assert.equal(unmailed.steps.at(-1)?.outcome, 'failed');
 });
 
-test('act is run again after a failure the platform did not decide, with the same key, and reported once', async () => {
-  assert.deepEqual(automation.retry, { act: { attempts: 3, backoffMs: 5_000 } });
+test('act, a provider write, declares no retry: a failure the platform did not decide fails the run, and the provider is called once', async () => {
+  assert.deepEqual(automation.retry, {});
   const platform = platformWith({ vendor: 'Contoso', amount: 120.5 });
-  // The Edge could not reach Runs: a 502 that names no reason. The template waits
-  // its 5 seconds before the second attempt.
-  platform.provider = () =>
-    platform.providerCalls.length === 1
-      ? Promise.reject(
-          refusalFixture('provider', {
-            status: 502,
-            code: 'DEPENDENCY_FAILURE',
-            detail: 'Runs service is unreachable',
-          }),
-        )
-      : Promise.resolve({ status: 201, body: {} });
+  // The Edge could not reach Runs: a 502 that names no reason. The first call may
+  // still be running at the provider, so it is not sent again.
+  const refusal = refusalFixture('provider', {
+    status: 502,
+    code: 'DEPENDENCY_FAILURE',
+    detail: 'Runs service is unreachable',
+  });
+  platform.provider = () => Promise.reject(refusal);
   const request = invoke();
-  const result = await automation.execute(request, platform);
-  assert.equal(result.outcome, 'success');
-  const key = idempotencyKeyFor(request.runId, 'act');
+  await assert.rejects(automation.execute(request, platform), (thrown) => thrown === refusal);
   assert.deepEqual(
     platform.providerCalls.map((call) => call.idempotencyKey),
-    [key, key],
+    [idempotencyKeyFor(request.runId, 'act')],
   );
   assert.deepEqual(
     platform.steps.filter((step) => step.stepId === 'act').map((step) => step.summary),
-    ['Recorded DOC-1 automatically, within threshold (after 2 attempts)'],
+    ['The act step failed'],
   );
   assert.equal(platform.modelCalls.length, 1, 'the extraction before it is not repeated');
 });

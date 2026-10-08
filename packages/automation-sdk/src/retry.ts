@@ -12,7 +12,7 @@ import type { StepResult } from './runner.js';
  * fails inside a running automation is the runner's to re-attempt, here.
  *
  * **Declared, or nothing.** A step re-attempts only when its automation declares a
- * policy for it (`defineAutomation({ retry: { act: { attempts: 3, backoffMs: 5_000 } } })`);
+ * policy for it (`defineAutomation({ retry: { receive: { attempts: 2, backoffMs: 10_000 } } })`);
  * a step with none runs once, exactly as before this file existed.
  *
  * **Bounded three ways.** At most `MAX_STEP_ATTEMPTS` attempts, the first
@@ -22,14 +22,19 @@ import type { StepResult } from './runner.js';
  * refuses every callback (403 `deadline_exceeded`) and its sweep fails the run; a
  * deadline that does not parse allows no retry at all.
  *
+ * **Never sooner than `MIN_STEP_BACKOFF_MS`.** A policy that waits less is refused
+ * at definition: a repeat sent sooner can reach the platform while the first
+ * attempt's provider call is still running (the constant says why).
+ *
  * **Only a transient failure** (`isTransient`): the platform did not decide.
  * Never a 4xx, never a typed refusal, never an error the step's own code made.
  *
  * **One key for every attempt.** The step's idempotency key is derived once from
  * the run and the step (25.3.2), so a repeated provider request or mail reaches
- * the platform's records for that key rather than a fresh one; README's "Retrying
- * a step" says what each record does with it — and that a repeated MODEL call has
- * none, and is a second vendor call and a second `runs.model_calls` row.
+ * the platform's records for that key rather than a fresh one. README's "Retrying
+ * a step" says what each record does with it, and where there is none: a provider
+ * call that got no final answer is sent to the vendor again, and a repeated MODEL
+ * call is a second vendor call and a second `runs.model_calls` row.
  *
  * The two ceilings are integrator figures, not measurements: three attempts and
  * 30 seconds of waiting in all. Callbacks reach the Edge through the platform's
@@ -43,7 +48,7 @@ import type { StepResult } from './runner.js';
 export interface RetryPolicy {
   /** Every attempt, the first included — 2 is one retry. A positive integer; above `MAX_STEP_ATTEMPTS` it is clamped. */
   readonly attempts: number;
-  /** Milliseconds before the second attempt; the wait doubles before each later one. Clamped so the waits sum to at most `MAX_STEP_BACKOFF_MS`. */
+  /** Milliseconds before the second attempt; the wait doubles before each later one. At least `MIN_STEP_BACKOFF_MS`, or the policy is refused; clamped so the waits sum to at most `MAX_STEP_BACKOFF_MS`. */
   readonly backoffMs: number;
 }
 
@@ -53,12 +58,34 @@ export const MAX_STEP_ATTEMPTS = 3;
 /** The most a step's waits between attempts add up to, in milliseconds. */
 export const MAX_STEP_BACKOFF_MS = 30_000;
 
+/**
+ * The shortest wait before a repeat, in milliseconds — a platform fact, not a
+ * preference. A failure the container sees before the platform has finished — a
+ * reset, a proxy's 502, and before platform BUILD-PLAN 25.2.13 the Edge giving up
+ * on its hop to Runs after 5 seconds — can leave the first provider call running.
+ * Read at snoopy-backend `886eff5`: nothing in Runs or Connections stops when its
+ * caller goes. Runs checks the run token and asks Catalog, Connections makes three
+ * reads, and only then starts the provider call, bounds it at 10 seconds
+ * (`apps/connections/src/operations.ts:315`) and records a final answer AFTER it
+ * returns (`apps/connections/src/routes-operations.ts:227-252`), with no
+ * reservation while it runs. A repeat that reaches Connections inside that window
+ * finds no record and calls the provider a second time. Waiting at least the
+ * call's own bound, 10 seconds, covers the common case — a slow provider behind a
+ * fast platform — so a first call the provider answered is replayed from the
+ * record (`replayed`). It narrows the window and does not close it: a slow
+ * platform can start the first call late. A first call that got no final answer
+ * has no record either way, and is sent again. With three attempts the floor is
+ * also the ceiling: 10 + 20 seconds is `MAX_STEP_BACKOFF_MS`.
+ */
+export const MIN_STEP_BACKOFF_MS = 10_000;
+
 /** The statuses a callback answers when the platform could not decide: a hop or a dependency did not answer. */
 const TRANSIENT_STATUSES: readonly number[] = [502, 503, 504];
 
 /**
- * The policy as the runner applies it: refused at definition when malformed,
- * clamped when it asks for more than the ceilings allow.
+ * The policy as the runner applies it: refused at definition when malformed or
+ * when it would repeat sooner than the floor, clamped when it asks for more than
+ * the ceilings allow.
  */
 export function boundedPolicy(stepId: string, policy: RetryPolicy): RetryPolicy {
   if (!Number.isInteger(policy.attempts) || policy.attempts < 1) {
@@ -69,6 +96,11 @@ export function boundedPolicy(stepId: string, policy: RetryPolicy): RetryPolicy 
       `the retry policy for step "${stepId}" must wait a whole number of milliseconds`,
     );
   }
+  if (policy.backoffMs < MIN_STEP_BACKOFF_MS) {
+    throw new Error(
+      `the retry policy for step "${stepId}" must wait at least ${MIN_STEP_BACKOFF_MS} milliseconds before a repeat`,
+    );
+  }
   const attempts = Math.min(policy.attempts, MAX_STEP_ATTEMPTS);
   // The waits, counted in first waits: none for one attempt, 1 for two, 1 + 2 for three.
   const firstWaits = 2 ** (attempts - 1) - 1;
@@ -76,6 +108,15 @@ export function boundedPolicy(stepId: string, policy: RetryPolicy): RetryPolicy 
     firstWaits === 0 ? 0 : Math.min(policy.backoffMs, Math.floor(MAX_STEP_BACKOFF_MS / firstWaits));
   return { attempts, backoffMs };
 }
+
+/**
+ * How the runner waits between attempts: `setTimeout` from `node:timers/promises`.
+ * Replaced only by this package's own suite, which runs a retry at the floor
+ * without spending the floor in real time; the package does not export it.
+ */
+export const retryClock: { sleep: (milliseconds: number) => Promise<unknown> } = {
+  sleep: (milliseconds) => sleepFor(milliseconds),
+};
 
 /** The waits before the second and each later attempt. */
 export function backoffWaits(policy: RetryPolicy): number[] {
@@ -121,13 +162,14 @@ export type Attempted =
  * wait remains, and the next attempt would start before the deadline. A result
  * the step RETURNS ends it on the spot — `ok`, `failed`, `skipped` and `held`
  * alike, so a held step is never run twice; only a THROWN transient failure is
- * re-attempted. `sleep` is the wait itself, replaced only by a test.
+ * re-attempted. `sleep` is the wait itself — `retryClock`'s unless a test passes one.
  */
 export async function attempt(
   run: () => Promise<StepResult>,
   waits: readonly number[],
   deadline: string,
-  sleep: (milliseconds: number) => Promise<unknown> = sleepFor,
+  sleep: (milliseconds: number) => Promise<unknown> = (milliseconds) =>
+    retryClock.sleep(milliseconds),
 ): Promise<Attempted> {
   const deadlineAt = Date.parse(deadline);
   for (let attempts = 1; ; attempts += 1) {
