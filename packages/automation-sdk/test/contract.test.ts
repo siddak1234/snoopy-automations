@@ -193,23 +193,26 @@ test('the answers the platform sends back are recognised in their real shapes', 
   assert.equal(isModelCompletion({ text: '{}', model: 'm', finishReason: 'stop' }), false);
 });
 
-test('a mail request carries exactly what the platform handler allow-lists, since no schema is published for it', () => {
-  // The platform emits no `automation-mail-request.json` (contract/README.md
-  // names the gap), so the shape is held to the handler's allow-list by name:
-  // `rejectUnexpected(body, ['runId', 'to', 'subject', 'body', 'idempotencyKey'])`
-  // in its `handleMail`. `runId` is optional there and the client never sends it.
+test('a mail request validates against the published schema, and the SDK bounds are its bounds', () => {
+  const validate = validator('automation-mail-request');
   const mail: MailRequest = {
     to: 'vendor@example.com',
     subject: 'Invoice received',
     body: 'Thank you.',
     idempotencyKey: 'notify-0123456789abcdef',
   };
-  assert.deepEqual(Object.keys(mail).sort(), ['body', 'idempotencyKey', 'subject', 'to']);
+  assertValid(validate, mail, 'a mail request');
+  // `runId` is optional in the handler's allow-list but not in the published
+  // request, and the client never sends it.
+  assert.equal(validate({ ...mail, runId: '44444444-4444-4444-8444-444444444444' }), false);
+  const schema = JSON.parse(
+    readFileSync(join(schemas, 'automation-mail-request.json'), 'utf8'),
+  ) as { properties: Record<'subject' | 'body', { maxLength: number }> };
+  assert.equal(MAIL_SUBJECT_MAX_LENGTH, schema.properties.subject.maxLength);
+  assert.equal(MAIL_BODY_MAX_LENGTH, schema.properties.body.maxLength);
   assert.ok(isMailAcceptance({ mail: { accepted: true } }));
   assert.equal(isMailAcceptance({ mail: { accepted: false } }), false);
   assert.equal(isMailAcceptance({ provider: { status: 200 } }), false);
-  assert.equal(MAIL_SUBJECT_MAX_LENGTH, 200, "the handler's MAXIMUM_SUBJECT_LENGTH");
-  assert.equal(MAIL_BODY_MAX_LENGTH, 10_000, "the handler's MAXIMUM_BODY_LENGTH");
 });
 
 test('the capability list is the model-request schema’s enum, exactly', () => {
