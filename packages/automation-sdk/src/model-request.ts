@@ -26,6 +26,13 @@
  *   * OpenRouter's own namespace — `openrouter/…` and `~openrouter/…` are routers that pick
  *     models, and can run tools, the request never named (the platform's review of its
  *     25.2.16, 2026-10-09).
+ *
+ * And two variants are refused by the owner's cost guard (the platform's BUILD-PLAN
+ * 25.2.19, 2026-10-09), because each re-routes the call to a service tier the platform did
+ * not choose: `:nitro` admits priority-tier endpoints, billed at priority rates
+ * (https://openrouter.ai/docs/guides/routing/model-variants/nitro), and `:floor` admits
+ * flex-tier endpoints, "cheaper, in exchange for higher latency and lower availability"
+ * (https://openrouter.ai/docs/guides/features/service-tiers).
  */
 export const MODEL_REQUEST_LIMITS = {
   /** The primary and up to two fallbacks, tried in order. */
@@ -36,13 +43,14 @@ export const MODEL_REQUEST_LIMITS = {
 
 /** Every rule at once: the published schema's `pattern`, character for character. */
 export const MODEL_ID_PATTERN = new RegExp(
-  `^(?!~?openrouter/)(?!.*:online(?::|$))[a-z0-9._:/~-]{1,${MODEL_REQUEST_LIMITS.modelIdLength}}$`,
+  `^(?!~?openrouter/)(?!.*:online(?::|$))(?!.*:(?:nitro|floor)(?::|$))[a-z0-9._:/~-]{1,${MODEL_REQUEST_LIMITS.modelIdLength}}$`,
   'u',
 );
 
 const SHAPE = new RegExp(`^[!-~]{1,${MODEL_REQUEST_LIMITS.modelIdLength}}$`, 'u');
 const OPENROUTER_SET = /^[a-z0-9._:/~-]+$/u;
 const ROUTER = /^~?openrouter\//u;
+const WEB_SEARCH = /:online(?::|$)/u;
 
 /**
  * Why `value` is not a model id the platform sends, in its words; undefined when it is
@@ -60,7 +68,8 @@ export function modelIdProblem(value: unknown): string | undefined {
   if (ROUTER.test(value)) {
     return "must not name an OpenRouter router ('openrouter/…'), which runs models and tools the request never named";
   }
-  return "must not switch on OpenRouter's web search (':online')";
+  if (WEB_SEARCH.test(value)) return "must not switch on OpenRouter's web search (':online')";
+  return "must not choose OpenRouter's ':nitro' or ':floor' routing, a service tier the platform did not choose";
 }
 
 /**
