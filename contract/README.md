@@ -1,7 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `e0d58d4`, taken 2026-10-09. The platform emits
+(`snoopy-backend`, private) at commit `94794c7`, taken 2026-10-09 — the head of a
+platform branch not yet merged; the last refresh note below says why. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -56,6 +57,25 @@ platform emits it since `ccc10e4` (#179, its BUILD-PLAN 25.3.7), and its split
 `docs/openapi/automations.yaml` names `mail` among the callbacks — so the finding above is
 answered, and `packages/automation-sdk/test/contract.test.ts` validates `MailRequest` against the
 schema as it does every other message. The other seven files are byte-identical to `867d0ee`'s.
+
+Refreshed 2026-10-09, later, at `dcb8ddb` — the head of the platform's branch
+`round-17/openrouter-v2`, not yet merged — for its BUILD-PLAN 25.2.16:
+`automation-model-request.json` gains the optional `models`, one to three distinct model
+ids (the primary, then its fallbacks), each held to the platform's one model-id rule as a
+`pattern`. The other seven files are byte-identical to `e0d58d4`'s (each checked with
+`cmp`). Taken from the branch because this repository's half of 25.2.16 — `ModelRequest.models`
+and `packages/automation-sdk/src/model-request.ts`, held to this file by
+`packages/automation-sdk/test/contract.test.ts` — is built beside the platform's, and the
+platform's `main` and its live deployment answer `models` with a 400 until that pull
+request merges and is promoted. When it lands (squash-merged, so under another commit),
+this copy is refreshed to the merge commit, its bytes unchanged unless the review changed
+them.
+
+Refreshed 2026-10-09, later still, at `94794c7` — the same branch after its pull request's
+second review, which changed them: `automation-model-request.json`'s `pattern` now holds a
+model id to OpenRouter's lowercase set and refuses OpenRouter's own `openrouter/…` routers.
+The other seven files are byte-identical to `dcb8ddb`'s (each checked with `cmp`). The note
+above still holds: re-pinned to the merge commit when it lands.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

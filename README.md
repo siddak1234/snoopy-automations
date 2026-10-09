@@ -107,8 +107,8 @@ first run. A step returns `ok`, `skipped` (nothing reported), `failed` (visible;
 run goes on unless it names a `failureReason`), or `held`. A **prompt module** is a
 versioned template with its `outputSchema`, kept as `prompts/<id>.v<n>.json` beside
 `src/`, rendered from the run's input and sent through the model callback by
-capability: the SDK accepts no model name, because the platform chooses what it
-spends. The shell answers the probe, acknowledges an invoke before working, refuses
+capability; a prompt names no model — the step names the models on the call ("Pick
+a model", below). The shell answers the probe, acknowledges an invoke before working, refuses
 above capacity or while draining, reports the result (or the failure) for you, and
 logs ids and outcomes only — an error's message becomes the run's `failureReason`,
 so never build one from the document. A test hands the automation a
@@ -117,10 +117,11 @@ so never build one from the document. A test hands the automation a
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
-input)` — and the platform chooses the model, holds the completion to the prompt's
-`outputSchema`, writes one `runs.model_calls` row, and answers `{ text, model,
-finishReason, usage }`; `readJsonCompletion` parses the text without ever quoting
-it. A completion the platform will not hand over is a **typed refusal**: a
+input, models?)` — and the platform makes the call with its own key, holds the
+completion to the prompt's `outputSchema`, writes one `runs.model_calls` row, and
+answers `{ text, model, finishReason, usage }`, `model` being the one that served;
+`readJsonCompletion` parses the text without ever quoting it. A completion the
+platform will not hand over is a **typed refusal**: a
 `ModelRefusedError` — a `CallbackRefusedError` whose `callback` is `model` —
 carrying the platform's `details.reason` and the fields beside it, and nothing of
 the completion's text, so a step can branch on a word:
@@ -154,6 +155,53 @@ never from the 200-character `detail` it keeps for the message. The mail callbac
 two pre-transport refusals name themselves the same way (`recipient_inside_workspace`
 at 403, `workspace_membership_truncated` at 502), which is what `mailCertainlyNotSent`
 reads.
+
+## Pick a model
+
+A step names the models its call asks for, or none. In the template that is one
+constant beside the step that calls the model, and a new automation needs nothing else:
+
+```ts
+// Primary first, then up to two fallbacks: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'].
+export const MODELS: readonly string[] | undefined = undefined; // the platform's default
+
+const completion = await platform.callModel(extractFields, input, MODELS);
+```
+
+- **The primary, then up to two fallbacks.** OpenRouter tries them in order when the
+  one before errors, as one call: one `runs.model_calls` row, for the model that
+  served. Left `undefined`, the platform's default model serves.
+- **The owner's setting wins.** The owner switches any automation's model on the
+  platform at once, with no restart and nothing released here (the platform's
+  `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
+  set it is the only model, whatever `MODELS` says.
+- **Refused before anything is sent.** The client refuses, in the words of the
+  platform's 400, a list that is empty, longer than three, names an id twice, or holds
+  an id outside the platform's rule: 1–128 characters from OpenRouter's lowercase set
+  (letters, digits and `. _ : / ~ -`, so no space and no `@` preset), no `:online` (web
+  search) and no `openrouter/` router (which picks models, and can run tools, the request
+  never named). `RecordingPlatform` refuses the same, so a suite is where the mistake
+  shows. A prompt file names no model: `definePrompt` refuses `model` and `models` alike.
+- **Held by the platform, whatever is named.** Every call is held to zero data
+  retention and no data collection, to structured output for a declared
+  `outputSchema`, and to the owner's price ceiling — \$5 per million prompt tokens and
+  \$15 per million completion tokens. A model no endpoint can serve within those is
+  refused by the router, never served anyway, and the step sees a 502 from the model
+  callback. The workspace's monthly allowance is asked first (the 403s above). Those
+  bounds are OpenRouter's, so a platform deployed with any other model gateway answers a
+  request naming `models` with a 400 before anything is spent. Choose
+  from OpenRouter's list of zero-retention endpoints,
+  `https://openrouter.ai/api/v1/endpoints/zdr`: an entry whose `supported_parameters`
+  include `structured_outputs` and `temperature`, and whose `pricing` (US dollars per
+  token) is within the ceiling — both ids above qualified on 2026-10-09.
+- **One key, on the platform only.** The platform holds the one OpenRouter key and
+  makes every call with it. Nothing in this repository, its images or a running
+  container holds a key; a container presents its run token and nothing else.
+
+The platform's half — its BUILD-PLAN 25.2.14 to 25.2.16: OpenRouter, the owner's
+setting, and `models` — was built 2026-10-09 and is not yet live. Until its promotion
+the platform answers a request naming `models` with a 400, which is why the template
+leaves `MODELS` undefined.
 
 ## Retrying a step
 

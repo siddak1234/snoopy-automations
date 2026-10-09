@@ -25,11 +25,11 @@ import { attempt, backoffWaits, boundedPolicy, type RetryPolicy, withAttempts } 
  * order; reports each step through the step callback under the id the manifest
  * declares and no other; derives one idempotency key per run and step and attaches
  * it to every provider request and every mail; renders prompts by capability and
- * never by model; re-attempts a step that declared a retry policy when it fails
- * transiently, with the same key, and reports it once (`retry.ts`); and, when an
- * approval continues a held run, resumes from `continuation.state` at the step
- * after the one that held (FR-15: a held run ends; FR-17: an approval mints a
- * continuation).
+ * sends them to the models a step names, if any; re-attempts a step that declared a
+ * retry policy when it fails transiently, with the same key, and reports it once
+ * (`retry.ts`); and, when an approval continues a held run, resumes from
+ * `continuation.state` at the step after the one that held (FR-15: a held run
+ * ends; FR-17: an approval mints a continuation).
  *
  * The platform never learns the runner exists. It sees steps, results and
  * callbacks, exactly as it did when `execute()` was bare.
@@ -37,8 +37,15 @@ import { attempt, backoffWaits, boundedPolicy, type RetryPolicy, withAttempts } 
 
 /** What a step may reach. The run token travels with every call; no key or grant exists here. */
 export interface StepPlatform {
-  /** Sends a REGISTERED prompt, rendered from `input`, by its capability. */
-  callModel(prompt: PromptModule, input: JsonObject): Promise<ModelCompletion>;
+  /**
+   * Sends a REGISTERED prompt, rendered from `input`, by its capability — to `models`
+   * when given: the primary, then up to two fallbacks (`ModelRequest.models`).
+   */
+  callModel(
+    prompt: PromptModule,
+    input: JsonObject,
+    models?: readonly string[],
+  ): Promise<ModelCompletion>;
   /** A provider operation the manifest declared, with this step's idempotency key attached. */
   callProvider(request: Omit<ProviderRequest, 'idempotencyKey'>): Promise<ProviderAnswer>;
   /** A mail the platform sends from its own identity, with this step's idempotency key attached. */
@@ -363,7 +370,7 @@ function stepPlatform(
   idempotencyKey: string,
 ): StepPlatform {
   return {
-    callModel(prompt, input) {
+    callModel(prompt, input, models) {
       const module = registered.get(`${prompt.id}@${prompt.version}`);
       if (!module) {
         throw new Error(
@@ -379,7 +386,8 @@ function stepPlatform(
           `prompt ${module.id} v${module.version} uses ${module.capability}, which ${manifest.templateId} v${manifest.version} does not declare`,
         );
       }
-      return platform.callModel(renderPrompt(module, input));
+      const request = renderPrompt(module, input);
+      return platform.callModel(models === undefined ? request : { ...request, models });
     },
     callProvider: (request) => platform.callProvider({ ...request, idempotencyKey }),
     sendMail: (mail) => platform.sendMail({ ...mail, idempotencyKey }),
