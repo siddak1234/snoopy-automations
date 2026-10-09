@@ -1,7 +1,7 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `867d0ee`, taken 2026-10-08. The platform emits
+(`snoopy-backend`, private) at commit `e0d58d4`, taken 2026-10-09. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -50,6 +50,12 @@ names five messages. So the SDK's `MailRequest` is copied from the handler's all
 `packages/automation-sdk/test/contract.test.ts` holds it to that list by name. It is the
 one message here with no vendored schema to validate against; filed for the platform as a
 finding with this refresh.
+
+Refreshed 2026-10-09 at `e0d58d4`: **eight files**. `automation-mail-request.json` arrived — the
+platform emits it since `ccc10e4` (#179, its BUILD-PLAN 25.3.7), and its split
+`docs/openapi/automations.yaml` names `mail` among the callbacks — so the finding above is
+answered, and `packages/automation-sdk/test/contract.test.ts` validates `MailRequest` against the
+schema as it does every other message. The other seven files are byte-identical to `867d0ee`'s.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

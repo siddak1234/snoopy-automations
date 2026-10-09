@@ -224,7 +224,7 @@ defineAutomation({
     never received is a second vendor call, a second `runs.model_calls` row and a
     second unit of the plan's monthly allowance. Declare a policy on a step that
     calls the model only if that cost is acceptable. From the platform's BUILD-PLAN
-    25.2.13 (built 2026-10-08, live from its promotion) the Edge relays a callback
+    25.2.13 (live since its TWENTY-SIXTH promotion, 2026-10-09) the Edge relays a callback
     for up to 55 seconds, which covers the model route's bounded waits with the
     gateway at its recommended 40, inside the client's 60. Before it — and after
     it, when the platform's own dependencies run a call past 55 seconds — a model
@@ -303,7 +303,9 @@ A registered manifest at a version is **immutable.** Changing anything means a n
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
 called. The platform's decision of 2026-10-08 (D2) is one container and one image
 per manifest version for everything new; `invoice-check` and `invoice-intake` keep
-their several versions on one container until the superseded ones are retired.
+their several versions on one container. The superseded ones were retired from the
+platform's catalog on 2026-10-09 (its BUILD-PLAN 25.3.8), and the containers keep every
+version's alias, so a flow on a withdrawn version still runs.
 
 ## Working here
 
