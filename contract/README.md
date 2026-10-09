@@ -1,8 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `1e5ab5b`, taken 2026-10-09 — the platform's `main`
-after its #190; the last refresh note below says how. The platform emits
+(`snoopy-backend`, private) at commit `49c9fac`, taken 2026-10-09 — the platform's `main`
+after its #193; the last refresh note below says how. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -80,6 +80,11 @@ above still holds: re-pinned to the merge commit when it lands.
 Re-pinned 2026-10-09 at `1e5ab5b`, the platform's `main` after #190 squash-merged that branch:
 its tree is `94794c7`'s (`c2e0713`), so all eight files are byte-identical (each checked with
 `cmp` against `1e5ab5b`) and only the commit above moves.
+
+Refreshed 2026-10-09, later still, at `49c9fac` — the platform's `main` after its #193 (its
+BUILD-PLAN 25.2.17, 25.2.19 and 25.2.20): `automation-model-request.json`'s `pattern` now also
+refuses OpenRouter's `:nitro` and `:floor` variants, the owner's cost guard. The other seven
+files are byte-identical to `1e5ab5b`'s (each checked with `cmp` against `49c9fac`).
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

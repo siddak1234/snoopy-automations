@@ -170,22 +170,30 @@ const completion = await platform.callModel(extractFields, input, MODELS);
 
 - **The primary, then up to two fallbacks.** OpenRouter tries them in order when the
   one before errors, as one call: one `runs.model_calls` row, for the model that
-  served. Left `undefined`, the platform's default model serves.
+  served. And an answer the platform cannot use — empty, cut off, refused by the model,
+  or not matching the declared `outputSchema` — is tried on the next model in the list
+  before the step sees any refusal, each attempt its own row (the platform's BUILD-PLAN
+  25.2.20, the owner's "runs should not fail"): naming fallbacks is how a step gets that.
+  Left `undefined`, the platform's default models serve, with fallbacks of their own.
 - **The owner's setting wins.** The owner switches any automation's model on the
   platform at once, with no restart and nothing released here (the platform's
   `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
-  set it is the only model, whatever `MODELS` says.
+  set its models — up to three, the first serving and the rest its fallbacks — are the
+  only ones, whatever `MODELS` says.
 - **Refused before anything is sent.** The client refuses, in the words of the
   platform's 400, a list that is empty, longer than three, names an id twice, or holds
   an id outside the platform's rule: 1–128 characters from OpenRouter's lowercase set
   (letters, digits and `. _ : / ~ -`, so no space and no `@` preset), no `:online` (web
-  search) and no `openrouter/` router (which picks models, and can run tools, the request
-  never named). `RecordingPlatform` refuses the same, so a suite is where the mistake
-  shows. A prompt file names no model: `definePrompt` refuses `model` and `models` alike.
+  search), no `openrouter/` router (which picks models, and can run tools, the request
+  never named) and no `:nitro` or `:floor` variant (the owner's cost guard: a priority
+  tier's pricing, a flex tier's latency). `RecordingPlatform` refuses the same, so a
+  suite is where the mistake shows. A prompt file names no model: `definePrompt` refuses
+  `model` and `models` alike.
 - **Held by the platform, whatever is named.** Every call is held to zero data
   retention and no data collection, to structured output for a declared
-  `outputSchema`, and to the owner's price ceiling — \$5 per million prompt tokens and
-  \$15 per million completion tokens. A model no endpoint can serve within those is
+  `outputSchema`, to the owner's price ceiling — \$5 per million prompt tokens and
+  \$15 per million completion tokens — and to an answer of about 8,000 tokens at
+  most (the owner's cost guard). A model no endpoint can serve within those is
   refused by the router, never served anyway, and the step sees a 502 from the model
   callback. The workspace's monthly allowance is asked first (the 403s above). Those
   bounds are OpenRouter's, so a platform deployed with any other model gateway answers a
@@ -199,9 +207,12 @@ const completion = await platform.callModel(extractFields, input, MODELS);
   container holds a key; a container presents its run token and nothing else.
 
 The platform's half — its BUILD-PLAN 25.2.14 to 25.2.16: OpenRouter, the owner's
-setting, and `models` — was built 2026-10-09 and is not yet live. Until its promotion
-the platform answers a request naming `models` with a 400, which is why the template
-leaves `MODELS` undefined.
+setting, and `models` — is live since its TWENTY-EIGHTH promotion (2026-10-09), but its
+model gateway stays unconfigured until the owner's OpenRouter key, which comes last on
+the owner's order: until then every model call is answered 503, so an automation is
+built and tested against a simulated model (`RecordingPlatform`), and the template leaves
+`MODELS` undefined. The fallbacks, the cap and the `:nitro`/`:floor` refusal (its
+25.2.17, 25.2.19 and 25.2.20) go live with its next platform promotion.
 
 ## Retrying a step
 

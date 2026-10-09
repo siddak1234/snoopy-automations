@@ -208,16 +208,18 @@ test('a model request naming its models validates, and one naming the singular m
 
 /**
  * The samples the platform judges its model-id rule and migration 0018's CHECK on
- * (snoopy-backend `test/helpers/model-ids.ts` at `1e5ab5b`), copied as data.
+ * (snoopy-backend `test/helpers/model-ids.ts` at `49c9fac`), copied as data.
  */
 const ACCEPTED_MODEL_IDS = [
   'google/gemini-2.5-flash',
   '~google/gemini-flash-latest',
   'meta-llama/llama-3.3-70b-instruct:free',
-  'openai/gpt-5.2:nitro:exacto',
+  'openai/gpt-5.2:exacto',
   'gemini-2.5-flash',
   'vendor/model:onlinex',
   'vendor/online-model',
+  'vendor/model:nitrox',
+  'vendor/floor-model',
   'x'.repeat(128),
 ];
 const REFUSED_MODEL_IDS: [string, RegExp][] = [
@@ -238,6 +240,10 @@ const REFUSED_MODEL_IDS: [string, RegExp][] = [
   ['openrouter/fusion', /router/u],
   ['openrouter/auto', /router/u],
   ['~openrouter/auto', /router/u],
+  ['openai/gpt-5.2:nitro', /routing/u],
+  ['openai/gpt-5.2:nitro:exacto', /routing/u],
+  ['google/gemini-2.5-flash:floor', /routing/u],
+  ['meta-llama/llama-3.3-70b-instruct:free:floor', /routing/u],
 ];
 
 test('the SDK’s model rule is the published schema’s: its pattern, its bounds, its answer for every sample', () => {
