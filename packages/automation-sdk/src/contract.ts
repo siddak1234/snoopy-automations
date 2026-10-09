@@ -114,7 +114,8 @@ export type RunResult =
 /**
  * The vendor-neutral capabilities an automation may request, as the platform's
  * model-request schema closes them. A prompt names one of these and never a
- * model: choosing a model is choosing what the platform spends per call.
+ * model; the models that answer are the request's `models`, which a step names on
+ * the call, and the owner's setting on the platform wins over them.
  */
 export const CAPABILITIES = [
   'document-extraction',
@@ -126,13 +127,22 @@ export const CAPABILITIES = [
 /** Vendor-neutral capability an automation may request. Must be in the manifest. */
 export type Capability = (typeof CAPABILITIES)[number];
 
-/** A model call the platform makes on the automation's behalf. The model is never named. */
+/** A model call the platform makes on the automation's behalf, with the one key it holds. */
 export interface ModelRequest {
   capability: Capability;
   prompt: string;
   input: JsonObject;
   /** Honoured, not merely counted: an empty object means free text. */
   outputSchema: JsonObject;
+  /**
+   * The models to ask, in order: the primary, then up to two fallbacks the router tries
+   * when the one before errors — each id held to the platform's rule
+   * (`model-request.ts`). Left out, the platform's default model serves the call. The
+   * owner's setting for this automation, when there is one, wins over the list (platform
+   * ADR-0033 decision 1 as amended 2026-10-09, BUILD-PLAN 25.2.16). The singular `model`
+   * is refused by the platform.
+   */
+  models?: readonly string[];
 }
 
 export interface ModelUsage {

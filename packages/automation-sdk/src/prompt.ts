@@ -21,8 +21,11 @@ import {
  * the document itself belongs in `input`, never in the template.
  *
  * There is deliberately no field for a model name, and `definePrompt` refuses a
- * module that carries one: the platform chooses what it spends per call, and its
- * model callback refuses a request that names a model (its §12.1 #193).
+ * module that carries `model` or `models`: a prompt says what is asked, and a step
+ * names the models that answer on the call (`StepPlatform.callModel`), where the
+ * request carries them as `models`. A module's copy would otherwise be dropped
+ * without a word. The platform's model callback refuses the singular `model` on
+ * the wire too (its §12.1 #193, and its BUILD-PLAN 25.2.16).
  */
 export interface PromptModule {
   /** Lowercase letters, digits and hyphens, like a step id. */
@@ -43,8 +46,8 @@ const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu;
 export function definePrompt(module: PromptModule): PromptModule {
   if (!isObject(module)) throw new Error('a prompt module must be an object');
   const id = typeof module.id === 'string' ? module.id : '?';
-  if ('model' in module) {
-    throw new Error(`prompt ${id} names a model; the platform chooses what it spends`);
+  if ('model' in module || 'models' in module) {
+    throw new Error(`prompt ${id} names a model; a step names its models on the call`);
   }
   if (!PROMPT_ID.test(id)) {
     throw new Error(
