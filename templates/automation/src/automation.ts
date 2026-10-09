@@ -20,7 +20,9 @@ import {
  * It has the shape the platform's first real automation needs (its BUILD-PLAN
  * 25.4.1): it reads the file its run was given, extracts with a model call through
  * a versioned prompt, ends held above a configured threshold, acts on the provider
- * through the provider callback, and sends its outcome from the platform.
+ * through the provider callback, and sends its outcome from the platform. The
+ * models the extraction asks for are `MODELS`, beside the step (README, "Pick a
+ * model").
  */
 export const TEMPLATE_ID = 'example';
 
@@ -60,13 +62,17 @@ const receive: Step = async ({ request, platform }) => {
   };
 };
 
+// Primary first, then up to two fallbacks: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'].
+export const MODELS: readonly string[] | undefined = undefined; // the platform's default
+
 const extract: Step = async ({ state, platform }) => {
   // The document travels as the model's INPUT; the prompt is rendered from the
   // reference alone. The completion is parsed without ever quoting it.
-  const completion = await platform.callModel(extractFields, {
-    reference: String(state.reference ?? ''),
-    document: String(state.document ?? ''),
-  });
+  const completion = await platform.callModel(
+    extractFields,
+    { reference: String(state.reference ?? ''), document: String(state.document ?? '') },
+    MODELS,
+  );
   const fields = readJsonCompletion(completion);
   const vendor = typeof fields.vendor === 'string' ? fields.vendor.trim() : '';
   const amount = fields.amount;

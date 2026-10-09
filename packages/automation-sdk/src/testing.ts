@@ -13,6 +13,7 @@ import type {
 } from './contract.js';
 import { oneLine, toArtifactListing } from './contract.js';
 import { readManifest } from './manifest.js';
+import { modelsProblem } from './model-request.js';
 import { type AutomationPlatform, boundedResult } from './platform.js';
 import { type CallbackRefusedError, refusalFrom } from './refusals.js';
 
@@ -26,7 +27,10 @@ import { type CallbackRefusedError, refusalFrom } from './refusals.js';
  *
  * The double behaves as the client does on the two things an author's code can
  * branch on: one-line fields are bounded and refused when empty, and a file this
- * run was not given is a `CallbackRefusedError` with status 404.
+ * run was not given is a `CallbackRefusedError` with status 404. It also refuses
+ * the one mistake no branch answers, as the client does: a model request whose
+ * `models` the platform would answer 400 is refused in the client's words before it
+ * is recorded, so an author's own suite is where the mistake shows.
  *
  * Exported from `@autom8x/automation-sdk/testing` so no automation re-implements
  * the double — the one in the original template went stale the moment the wire
@@ -77,6 +81,8 @@ export class RecordingPlatform implements AutomationPlatform {
   }
 
   public callModel(request: ModelRequest): Promise<ModelCompletion> {
+    const problem = request.models === undefined ? undefined : modelsProblem(request.models);
+    if (problem) return Promise.reject(new Error(problem));
     this.modelCalls.push(request);
     return this.model(request);
   }

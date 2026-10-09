@@ -15,7 +15,7 @@ import {
   refusalFixture,
 } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, define } from '../src/automation.js';
+import { MODELS, TEMPLATE_ID, define } from '../src/automation.js';
 
 /**
  * The template's own suite — what a new automation starts from. The example
@@ -76,8 +76,9 @@ test('reads the file, extracts with the prompt, records through the provider, an
       properties: { vendor: { type: 'string' }, amount: { type: 'number' } },
       required: ['vendor', 'amount'],
     },
+    ...(MODELS === undefined ? {} : { models: MODELS }),
   });
-  assert.ok(!('model' in (platform.modelCalls[0] ?? {})), 'no model is named');
+  assert.ok(!('model' in (platform.modelCalls[0] ?? {})), 'the singular model is never named');
   assert.deepEqual(platform.providerCalls, [
     {
       providerId: 'example-provider',
@@ -98,6 +99,15 @@ test('reads the file, extracts with the prompt, records through the provider, an
     },
     summary: 'Recorded DOC-1 automatically, within threshold',
   });
+});
+
+test('the extraction asks for MODELS, the primary first, or names none and the platform default serves', async () => {
+  const platform = platformWith({ vendor: 'Contoso', amount: 120.5 });
+  await automation.execute(invoke(), platform);
+  assert.equal(platform.modelCalls.length, 1);
+  const call = platform.modelCalls[0] ?? {};
+  assert.equal('models' in call, MODELS !== undefined, 'a list only when MODELS names one');
+  assert.deepEqual((call as { models?: unknown }).models, MODELS, 'as written, in order');
 });
 
 test('an amount above the threshold ends the run held, and the approval records from the state alone', async () => {

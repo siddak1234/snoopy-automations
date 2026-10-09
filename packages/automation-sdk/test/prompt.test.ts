@@ -24,14 +24,20 @@ after(() => {
   for (const directory of directories) rmSync(directory, { recursive: true, force: true });
 });
 
-test('a prompt is validated and frozen, and one that names a model is refused', () => {
+test('a prompt is validated and frozen, and one that names a model or models is refused', () => {
   const prompt = definePrompt(module);
   assert.ok(Object.isFrozen(prompt));
   assert.deepEqual(prompt, module);
 
   assert.throws(
     () => definePrompt({ ...module, model: 'gemini-2.5-flash' } as never),
-    /prompt extract-invoice names a model; the platform chooses what it spends/u,
+    /prompt extract-invoice names a model; a step names its models on the call/u,
+  );
+  // Refused rather than dropped: the models go on the call, and a prompt file's copy
+  // would otherwise vanish without a word.
+  assert.throws(
+    () => definePrompt({ ...module, models: ['google/gemini-2.5-flash'] } as never),
+    /prompt extract-invoice names a model; a step names its models on the call/u,
   );
   assert.throws(() => definePrompt({ ...module, id: 'Extract Invoice' }), /must be lowercase/u);
   assert.throws(() => definePrompt({ ...module, version: 0 }), /positive integer version/u);

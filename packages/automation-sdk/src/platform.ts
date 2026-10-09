@@ -18,6 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
+import { modelsProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
 
 /**
@@ -146,14 +147,21 @@ export class PlatformClient implements AutomationPlatform {
   }
 
   /**
-   * A model call the platform makes on this run's behalf.
+   * A model call the platform makes on this run's behalf, with the platform's one
+   * key: none exists in this process.
    *
-   * The model itself is not named here and cannot be: choosing one is choosing
-   * what the platform spends per call, which is a deployment's decision. The
-   * `capability` must appear in the manifest's `requiredCapabilities`; the
-   * platform refuses one that does not before anything is sent to a vendor.
-   * `outputSchema` is honoured, not merely counted — pass an empty object for
-   * free text.
+   * `models` may name up to three models, the primary then its fallbacks in order,
+   * or be left out for the platform's default. Whatever it names, the platform
+   * holds the call to zero data retention, to structured output for a declared
+   * `outputSchema`, to the owner's price ceiling and to the workspace's allowance,
+   * and the owner's setting for this automation, when there is one, wins over the
+   * list (platform ADR-0033 decision 1 as amended 2026-10-09). A list the platform
+   * would answer with a 400 — empty, longer than three, an id outside its rule, an
+   * id twice — is refused HERE, before anything is sent, in the platform's words
+   * (`model-request.ts`). The `capability` must appear in the manifest's
+   * `requiredCapabilities`; the platform refuses one that does not before anything
+   * is sent to a vendor. `outputSchema` is honoured, not merely counted — pass an
+   * empty object for free text.
    *
    * A completion the platform will not hand over is a typed refusal, thrown as a
    * `ModelRefusedError`: 422 `output_schema_mismatch` (with `path` and `rule`),
@@ -162,6 +170,8 @@ export class PlatformClient implements AutomationPlatform {
    * (with `used` and, when the plan has one, `limit`). Never the completion's text.
    */
   public async callModel(request: ModelRequest): Promise<ModelCompletion> {
+    const problem = request.models === undefined ? undefined : modelsProblem(request.models);
+    if (problem) throw new Error(problem);
     const answer = await this.#post('model', request, this.#modelTimeoutMs);
     const completion = isObject(answer) ? answer.model : undefined;
     if (!isModelCompletion(completion)) {
