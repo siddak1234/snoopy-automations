@@ -177,16 +177,19 @@ const completion = await platform.callModel(extractFields, input, MODELS);
   set it is the only model, whatever `MODELS` says.
 - **Refused before anything is sent.** The client refuses, in the words of the
   platform's 400, a list that is empty, longer than three, names an id twice, or holds
-  an id outside the platform's rule: 1–128 printable ASCII characters, no space, no `@`
-  (an OpenRouter preset) and no `:online` (web search). `RecordingPlatform` refuses the
-  same, so a suite is where the mistake shows. A prompt file names no model:
-  `definePrompt` refuses `model` and `models` alike.
+  an id outside the platform's rule: 1–128 characters from OpenRouter's lowercase set
+  (letters, digits and `. _ : / ~ -`, so no space and no `@` preset), no `:online` (web
+  search) and no `openrouter/` router (which picks models, and can run tools, the request
+  never named). `RecordingPlatform` refuses the same, so a suite is where the mistake
+  shows. A prompt file names no model: `definePrompt` refuses `model` and `models` alike.
 - **Held by the platform, whatever is named.** Every call is held to zero data
   retention and no data collection, to structured output for a declared
-  `outputSchema`, and to the owner's price ceiling — $5 per million prompt tokens and
-  $15 per million completion tokens. A model no endpoint can serve within those is
+  `outputSchema`, and to the owner's price ceiling — \$5 per million prompt tokens and
+  \$15 per million completion tokens. A model no endpoint can serve within those is
   refused by the router, never served anyway, and the step sees a 502 from the model
-  callback. The workspace's monthly allowance is asked first (the 403s above). Choose
+  callback. The workspace's monthly allowance is asked first (the 403s above). Those
+  bounds are OpenRouter's, so a platform deployed with any other model gateway answers a
+  request naming `models` with a 400 before anything is spent. Choose
   from OpenRouter's list of zero-retention endpoints,
   `https://openrouter.ai/api/v1/endpoints/zdr`: an entry whose `supported_parameters`
   include `structured_outputs` and `temperature`, and whose `pricing` (US dollars per

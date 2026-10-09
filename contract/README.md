@@ -1,7 +1,7 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `dcb8ddb`, taken 2026-10-09 — the head of a
+(`snoopy-backend`, private) at commit `94794c7`, taken 2026-10-09 — the head of a
 platform branch not yet merged; the last refresh note below says why. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
@@ -70,6 +70,12 @@ platform's `main` and its live deployment answer `models` with a 400 until that 
 request merges and is promoted. When it lands (squash-merged, so under another commit),
 this copy is refreshed to the merge commit, its bytes unchanged unless the review changed
 them.
+
+Refreshed 2026-10-09, later still, at `94794c7` — the same branch after its pull request's
+second review, which changed them: `automation-model-request.json`'s `pattern` now holds a
+model id to OpenRouter's lowercase set and refuses OpenRouter's own `openrouter/…` routers.
+The other seven files are byte-identical to `dcb8ddb`'s (each checked with `cmp`). The note
+above still holds: re-pinned to the merge commit when it lands.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

@@ -31,7 +31,7 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128,
-        "pattern": "^(?!.*@)(?!.*:online(?::|$))[!-~]{1,128}$"
+        "pattern": "^(?!~?openrouter\\/)(?!.*:online(?::|$))[a-z0-9._:/~-]{1,128}$"
       }
     }
   },
