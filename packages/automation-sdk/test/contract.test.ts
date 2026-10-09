@@ -208,7 +208,7 @@ test('a model request naming its models validates, and one naming the singular m
 
 /**
  * The samples the platform judges its model-id rule and migration 0018's CHECK on
- * (snoopy-backend `test/helpers/model-ids.ts` at `94794c7`), copied as data.
+ * (snoopy-backend `test/helpers/model-ids.ts` at `1e5ab5b`), copied as data.
  */
 const ACCEPTED_MODEL_IDS = [
   'google/gemini-2.5-flash',
