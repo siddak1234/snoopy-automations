@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-mail-request.json",
+  "title": "AutomationMailRequest",
+  "type": "object",
+  "properties": {
+    "to": {
+      "type": "string",
+      "format": "email",
+      "minLength": 1,
+      "maxLength": 254
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "to",
+    "subject",
+    "body",
+    "idempotencyKey"
+  ],
+  "additionalProperties": false
+}

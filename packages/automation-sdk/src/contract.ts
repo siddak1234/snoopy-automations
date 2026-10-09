@@ -203,11 +203,10 @@ export function toArtifactListing(reference: ArtifactReference): ArtifactListing
  * `{ mail: { accepted: true } }` with nothing about transport, so an automation
  * cannot start branching on a third party's status codes.
  *
- * COPIED FROM THE HANDLER'S ALLOW-LIST, NOT FROM A SCHEMA. The platform publishes
- * `AutomationMailRequest` in its contracts package and names `mail` in its
- * OpenAPI callback enum, but its emitted `schemas/` carry no
- * `automation-mail-request.json` — so this is the one message here with no
- * vendored schema to validate against (`contract/README.md`).
+ * Held to the platform's published `automation-mail-request.json`, vendored in
+ * `contract/schemas` since 2026-10-09 (`contract/README.md`): `to`, `subject`,
+ * `body` and `idempotencyKey` and nothing else — `runId`, optional in the
+ * handler's allow-list, is not in the schema and is never sent.
  */
 export interface MailRequest {
   /** A single ASCII mailbox address, at most 254 characters. The platform validates it. */
