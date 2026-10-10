@@ -1,0 +1,102 @@
+{
+  "templateId": "invoice-processing",
+  "version": 1,
+  "display": {
+    "name": "Invoice Processing",
+    "description": "Reads a supplier invoice from a PDF or photo and creates an unpaid bill in QuickBooks Online. New vendors, possible duplicates and bills over your limit wait for approval.",
+    "category": "Accounting",
+    "icon": "Receipt"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "manual",
+    "input": [
+      {
+        "key": "invoiceFile",
+        "title": "Invoice",
+        "description": "The supplier invoice: a PDF, or a JPEG or PNG photo.",
+        "control": "artifact",
+        "required": false
+      }
+    ]
+  },
+  "requiredConnections": [
+    {
+      "providerId": "quickbooks",
+      "displayName": "QuickBooks Online",
+      "purpose": "Looks up vendors, accounts and bills, and creates vendors and unpaid bills.",
+      "scopes": ["com.intuit.quickbooks.accounting"]
+    }
+  ],
+  "requiredCapabilities": ["document-extraction"],
+  "artifacts": {
+    "acceptedContentTypes": ["application/pdf", "image/jpeg", "image/png"],
+    "maximumSizeBytes": 3500000
+  },
+  "setup": [
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Approval limit",
+      "description": "Bills over this amount wait for an owner or admin to approve. 500 when left empty.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "expenseAccount",
+      "title": "Expense account",
+      "description": "The QuickBooks expense account for these bills, as QuickBooks shows it, without its number. For a sub-account: Parent:Child.",
+      "control": "text",
+      "required": true
+    },
+    {
+      "section": "notifications",
+      "key": "notifyEmail",
+      "title": "Also email",
+      "description": "An address outside your workspace, such as your bookkeeper, that gets a short summary of each bill.",
+      "control": "email",
+      "required": false
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Invoice received",
+      "description": "A person starts the run with a PDF or photo of the invoice. The file is checked before anything is spent."
+    },
+    {
+      "id": "read-company",
+      "kicker": "ACTION",
+      "title": "Check the QuickBooks company",
+      "description": "Confirms QuickBooks is connected and the company is a US company."
+    },
+    {
+      "id": "read-preferences",
+      "kicker": "ACTION",
+      "title": "Read QuickBooks settings",
+      "description": "Reads the home currency, the multicurrency setting and the closing date of the books."
+    },
+    {
+      "id": "find-account",
+      "kicker": "ACTION",
+      "title": "Find the expense account",
+      "description": "Finds the expense account named in this flow's settings."
+    }
+  ],
+  "service": {
+    "origin": "http://invoice-processing-v1.autom8x.internal:8080",
+    "serviceAccount": "invoice-processing-v1@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 1,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object"
+  }
+}

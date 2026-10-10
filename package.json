@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "workspaces": [
+    "packages/automation-sdk",
     "packages/*",
     "automations/*"
   ],
