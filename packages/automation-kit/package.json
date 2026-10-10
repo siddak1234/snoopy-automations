@@ -1,0 +1,31 @@
+{
+  "name": "@autom8x/automation-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A library automations build with: QuickBooks reads through the SDK's provider call, and a QuickBooks simulator for their suites. Node built-ins only; packed into each automation's image at build time, so nothing is shared at run time.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    "./quickbooks": {
+      "types": "./dist/quickbooks/index.d.ts",
+      "default": "./dist/quickbooks/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@autom8x/automation-sdk": "file:../automation-sdk"
+  }
+}

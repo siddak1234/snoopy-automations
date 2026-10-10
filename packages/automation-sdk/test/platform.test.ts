@@ -149,6 +149,13 @@ test('an artifact is read by id and listed with none', async () => {
   assert.ok(!('downloadUrl' in (listing[0] ?? {})), 'a listing carries no link');
 });
 
+test("the platform's upload measurements reach the step as it sent them", async () => {
+  const measured = { measuredKind: 'png', widthPixels: 1200, heightPixels: 900 } as const;
+  const artifact = { ...artifactFixture(), ...measured, pageCount: null };
+  stub.answers.artifact = () => ({ status: 200, body: { artifact } });
+  assert.deepEqual(await client.readArtifact(artifact.artifactId), artifact);
+});
+
 test('a refused callback surfaces the status, the platform detail and the reason past the cut', async () => {
   // What `assertStepDeclared` raises and `createProblem` writes (the platform's
   // `run-token.ts`): the reason sits in `details`, the last field of the body.

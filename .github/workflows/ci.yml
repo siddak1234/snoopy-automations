@@ -39,10 +39,12 @@ jobs:
       # in that order: the SDK's emitted types are what an automation typechecks
       # against. `test/architecture.test.ts` is inside it: no platform package
       # imported, every manifest valid, every workspace carrying the gate's
-      # scripts, the SDK consumable through its published entries, no automation
-      # depending on another, no environment file and no recovered client data
-      # tracked. `test/conformance.test.ts` holds every automation to the manifests
-      # it serves. The gate's last step re-emits docs/repo-facts/snoopy-automations.json.
+      # scripts, the SDK and the kit consumable through their published entries
+      # and shipping their built dist on Node built-ins alone, no environment file
+      # and no recovered client data tracked; `test/isolation.test.ts`, no
+      # automation depending on another. `test/conformance.test.ts` holds every
+      # automation to the manifests it serves. The gate's last step re-emits
+      # docs/repo-facts/snoopy-automations.json.
       - name: Verify formatting, build, types, and tests
         run: npm run verify
 
@@ -50,10 +52,10 @@ jobs:
       # platform does. What ships is what must be clean, so the runtime tree is the
       # gate; dev tooling is reported but does not fail the build, because a gate
       # that goes red for things nobody can act on is a gate somebody switches off.
-      # Today there are no third-party runtime dependencies: both automations use
-      # only the local SDK, which itself has none. That makes this pass trivially
-      # clean and is exactly why it must remain — the day one is added is the day
-      # nobody thinks to check.
+      # Today there are no third-party runtime dependencies: every automation uses
+      # only the local SDK and kit, which themselves have none. That makes this pass
+      # trivially clean and is exactly why it must remain — the day one is added is
+      # the day nobody thinks to check.
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
 
@@ -73,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        automation: [invoice-check, invoice-intake]
+        automation: [invoice-check, invoice-intake, invoice-processing]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -147,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        automation: [invoice-check, invoice-intake]
+        automation: [invoice-check, invoice-intake, invoice-processing]
     permissions:
       contents: read
       packages: write
