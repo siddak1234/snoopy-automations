@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 
 import type { ModelRequest } from '../src/contract.js';
-import { PlatformClient, isUnanswered } from '../src/platform.js';
+import { isUnanswered } from '../src/marks.js';
+import { PlatformClient } from '../src/platform.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { isTransient } from '../src/retry.js';
-import type { Step } from '../src/runner.js';
+import type { Step } from '../src/steps.js';
 import { RecordingPlatform } from '../src/testing.js';
 import { recordedWaits } from './retry-fixtures.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';

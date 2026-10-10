@@ -90,3 +90,21 @@ export function modelsProblem(models: unknown): string | undefined {
   if (new Set(models).size !== models.length) return 'models must not name a model twice';
   return undefined;
 }
+
+/**
+ * An uploaded file's id, as the platform's rule has it (`ARTIFACT_ID_PATTERN` in its
+ * `@snoopy/contracts`, the emitted schema's `artifactId.pattern`) — copied, as the
+ * model-id rule above is, and held to the vendored schema by `test/contract.test.ts`.
+ */
+export const ARTIFACT_ID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u;
+
+/**
+ * Why `artifactId` is not an id the platform takes, in the words of its 400; undefined
+ * when it is one. `undefined` is the caller's to skip: a call without a file names none.
+ */
+export function artifactIdProblem(artifactId: unknown): string | undefined {
+  return typeof artifactId === 'string' && ARTIFACT_ID_PATTERN.test(artifactId)
+    ? undefined
+    : 'artifactId must be the id of an uploaded file';
+}

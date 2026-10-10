@@ -5,7 +5,7 @@ import type { JsonObject } from '../src/contract.js';
 import { PlatformClient } from '../src/platform.js';
 import { CallbackRefusedError, ModelRefusedError } from '../src/refusals.js';
 import { MIN_STEP_BACKOFF_MS } from '../src/retry.js';
-import { type Step, held, idempotencyKeyFor } from '../src/runner.js';
+import { type Step, held, idempotencyKeyFor } from '../src/steps.js';
 import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { noAnswer, recordedWaits, retrying } from './retry-fixtures.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';
