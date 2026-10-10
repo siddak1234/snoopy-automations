@@ -19,7 +19,7 @@ import { type StubPlatform, startStubPlatform } from './stub-platform.js';
  * is sent (`model-request.ts`), by the client and the recording double alike; a list it
  * accepts is sent as written, in order; and a step that names none sends none, so the
  * platform's default serves. The rule itself is held to the published schema in
- * `contract.test.ts`.
+ * `contract-model-request.test.ts`.
  */
 
 const REQUEST: ModelRequest = {
