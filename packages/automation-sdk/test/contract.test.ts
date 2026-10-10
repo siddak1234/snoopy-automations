@@ -165,7 +165,7 @@ test('a manifest may declare the files its runs accept, in the published block',
   // The platform's BUILD-PLAN 25.2.21: until it, the schema had no `artifacts` and closed
   // the manifest, so a manifest declaring the block its validator has always read
   // failed this copy. The verdicts are its validator's (snoopy-backend
-  // `test/wire-schema.test.ts` at `1137ac9`), copied as data.
+  // `test/wire-schema.test.ts` at `4875579`), copied as data.
   const validate = validator('automation-manifest');
   const reference = JSON.parse(
     readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
