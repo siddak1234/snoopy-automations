@@ -124,7 +124,7 @@ test('the SDK’s model rule is the published schema’s: its pattern, its bound
 
 test("a model request may name the run's file, by the published schema's rule, which is the SDK's", () => {
   // The platform's BUILD-PLAN 25.2.18; its samples (snoopy-backend
-  // `test/wire-schema.test.ts` at `1137ac9`), copied as data.
+  // `test/wire-schema.test.ts` at `4875579`), copied as data.
   const validate = validator('automation-model-request');
   const schema = JSON.parse(
     readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
