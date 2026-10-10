@@ -1,8 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `1137ac9`, taken 2026-10-10 — the head of a
-platform branch not yet merged; the last refresh note below says why. The platform emits
+(`snoopy-backend`, private) at commit `4875579`, taken 2026-10-10 — the platform's `main`
+after its #195; the last refresh note below says how. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -100,6 +100,11 @@ same reason as `dcb8ddb` above: this repository's half — `ModelRequest.artifac
 `packages/automation-sdk/test/contract-model-request.test.ts` — is built beside the platform's, which
 answers `artifactId` with a 400 until that pull request merges and is promoted. Re-pinned
 to the merge commit when it lands.
+
+Re-pinned 2026-10-10 at `4875579`, the platform's `main` after #195 squash-merged that branch:
+its tree is `1137ac9`'s (`00713ed`), so all eight files are byte-identical (each checked with
+`cmp` against `4875579`) and only the commit above moves. The platform serves `artifactId` once
+a promotion carries `4875579`; until then its live deployment answers it with a 400.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
