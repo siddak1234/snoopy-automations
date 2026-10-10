@@ -1,7 +1,8 @@
 import type { InvokeRequest, JsonObject } from '../src/contract.js';
 import type { Manifest } from '../src/manifest.js';
 import { definePrompt } from '../src/prompt.js';
-import { type AutomationDefinition, type Step, defineAutomation } from '../src/runner.js';
+import { defineAutomation } from '../src/runner.js';
+import type { AutomationDefinition, Step } from '../src/steps.js';
 import { invokeFixture } from '../src/testing.js';
 
 /** The fixtures the runner's two suites share: a template, its manifests, steps and a prompt. */

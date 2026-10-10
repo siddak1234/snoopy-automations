@@ -147,14 +147,30 @@ test('an amount above the threshold ends the run held, and the approval records 
 
 test('a completion that is not the fields the schema asked for fails the run without quoting it', async () => {
   const secret = 'ACCOUNT-9911-ROUTING-2200';
-  const platform = platformWith({ vendor: '', note: secret });
-  const result = await automation.execute(invoke(), platform);
-  assert.deepEqual(result, {
+  // Off the declared schema: the platform refuses it before the step sees it, typed,
+  // and the recording platform answers as the platform does (SDK 25.3.10).
+  const offSchema = platformWith({ vendor: 'Contoso', note: secret });
+  await assert.rejects(
+    automation.execute(invoke(), offSchema),
+    (error: unknown) =>
+      error instanceof Error &&
+      /output_schema_mismatch at \$ \(required:amount\)/u.test(error.message) &&
+      !error.message.includes(secret),
+  );
+  assert.equal(
+    offSchema.steps.at(-1)?.summary,
+    'The extract step failed: the model call was refused (output_schema_mismatch)',
+  );
+  assert.ok(!JSON.stringify(offSchema.steps).includes(secret));
+  assert.equal(offSchema.providerCalls.length, 0);
+
+  // In the schema's shape but empty where the step needs a value: the step's own check.
+  const empty = platformWith({ vendor: ' ', amount: 120 });
+  assert.deepEqual(await automation.execute(invoke(), empty), {
     outcome: 'failed',
     failureReason: 'the extraction did not yield a vendor and an amount',
   });
-  assert.ok(!JSON.stringify(platform.steps).includes(secret));
-  assert.equal(platform.providerCalls.length, 0);
+  assert.equal(empty.providerCalls.length, 0);
 });
 
 test('a provider refusal fails the run at act, and a refused mail does not', async () => {

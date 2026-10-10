@@ -282,6 +282,27 @@ test('a model refusal the platform typed is a ModelRefusedError carrying its rea
       { ...none, reason: 'entitlements_not_configured', used: 3, limit: undefined },
       /entitlements_not_configured$/u,
     ],
+    // The run's file (platform BUILD-PLAN 25.2.18): refused before anything was spent.
+    [
+      {
+        status: 422,
+        code: 'BAD_REQUEST',
+        detail: "The run's file is a password-protected PDF",
+        details: { reason: 'file_encrypted' },
+      },
+      { ...none, reason: 'file_encrypted', used: undefined, limit: undefined },
+      /^the model call was refused with 422: file_encrypted$/u,
+    ],
+    [
+      {
+        status: 502,
+        code: 'DEPENDENCY_FAILURE',
+        detail: "The run's file is not the one the store measured",
+        details: { reason: 'file_integrity' },
+      },
+      { ...none, reason: 'file_integrity', used: undefined, limit: undefined },
+      /^the model call was refused with 502: file_integrity$/u,
+    ],
   ];
   for (const [problem, typed, message] of cases) {
     stub.answers.model = () => ({ status: problem.status, body: problemFixture(problem) });
@@ -306,12 +327,17 @@ test('a model refusal the platform typed is a ModelRefusedError carrying its rea
     [
       'capability_not_in_plan',
       'content_filtered',
+      'content_type_not_accepted',
       'entitlements_not_configured',
+      'file_content_mismatch',
+      'file_encrypted',
+      'file_integrity',
+      'file_too_large',
       'output_schema_mismatch',
       'over_plan_limit',
       'truncated',
     ],
-    "the platform's six, and no other",
+    "the platform's eleven, and no other",
   );
 });
 

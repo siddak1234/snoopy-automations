@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { definePrompt } from '../src/prompt.js';
 import { ModelRefusedError } from '../src/refusals.js';
-import { type Step, held } from '../src/runner.js';
+import { type Step, held } from '../src/steps.js';
 import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';
 

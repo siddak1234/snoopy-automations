@@ -1,8 +1,8 @@
 import { beforeEach } from 'node:test';
 
-import { unanswered } from '../src/platform.js';
+import { unanswered } from '../src/marks.js';
 import { retryClock } from '../src/retry.js';
-import type { AutomationDefinition, Step } from '../src/runner.js';
+import type { AutomationDefinition, Step } from '../src/steps.js';
 import { define, ok } from './runner-fixtures.js';
 
 /** What the retry suites share: a failure with no answer, a posting step, and the waits. */

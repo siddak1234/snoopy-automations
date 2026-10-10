@@ -18,8 +18,9 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
-import { modelsProblem } from './model-request.js';
+import { artifactIdProblem, modelsProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
+import { unanswered, unsent } from './marks.js';
 
 /**
  * The automation's only way to reach anything.
@@ -69,14 +70,15 @@ export interface AutomationPlatform {
  * bounds can still outlast them. Read at snoopy-backend `886eff5`, the runs
  * service's hops in `compose.yml`: every callback first resolves its run token and
  * asks Catalog (5 s); then a provider call waits on Connections (15 s); mail on
- * Access (5 s) and the transport (10 s); a model call on Entitlements (5 s) and the
- * gateway (the owner's setting, recommended 40 s); and a result may dispatch a held
- * run (the manifest's `acceptTimeoutMs`, 5 s in every manifest today, up to 30 s
- * allowed). The Edge in front relays a callback for up to 55 s from platform
- * BUILD-PLAN 25.2.13 (built 2026-10-08, live from its promotion), and 5 s before it.
+ * Access (5 s) and the transport (10 s); a model call on Entitlements and the
+ * gateway, every attempt inside the owner's budget (recommended 140 s, at most 150 s);
+ * and a result may dispatch a held run (the manifest's `acceptTimeoutMs`, 5 s in every
+ * manifest today, up to 30 s allowed). The Edge in front relays a callback for up to
+ * 55 s from platform BUILD-PLAN 25.2.13, and a model callback for 230 s from 25.2.22,
+ * above every wait the platform makes around the budget.
  */
 export const DEFAULT_CALLBACK_TIMEOUT_MS = 25_000;
-export const DEFAULT_MODEL_TIMEOUT_MS = 60_000;
+export const DEFAULT_MODEL_TIMEOUT_MS = 260_000;
 export const DEFAULT_MAIL_TIMEOUT_MS = 30_000;
 export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
 
@@ -89,11 +91,14 @@ export interface PlatformClientOptions {
    */
   timeoutMs?: number;
   /**
-   * Bound on the model callback, which waits on a provider's generation and
-   * cannot be held to the same bound as the others without making the capability
-   * unusable. Default 60 s, above the Edge's 55 s callback budget (25.2.13), which
-   * covers the model route's bounded waits with the gateway at its recommended 40 s
-   * (Catalog 5 s, Entitlements 5 s, the gateway 40 s).
+   * Bound on the model callback, which waits on a provider's generation — up to three
+   * models, one per attempt, each on its own time limit (platform BUILD-PLAN 25.2.22,
+   * the owner's decision of 2026-10-10) — and cannot be held to the same bound as the
+   * others without making the capability unusable. Default 260 s: above the Edge's
+   * 230 s relay of a model callback and the load balancer's 250 s idle timeout in front
+   * of it (25.7.5), so the platform's answer arrives before this client gives up; and
+   * under the 300 s at which Node's fetch stops waiting for headers, which would end
+   * the wait first. Only images built with this default carry it.
    */
   modelTimeoutMs?: number;
   /** Bound on fetching an artifact's bytes, which may be a scanned document. Default 60 s. */
@@ -170,7 +175,9 @@ export class PlatformClient implements AutomationPlatform {
    * (with `used` and, when the plan has one, `limit`). Never the completion's text.
    */
   public async callModel(request: ModelRequest): Promise<ModelCompletion> {
-    const problem = request.models === undefined ? undefined : modelsProblem(request.models);
+    const problem =
+      (request.models === undefined ? undefined : modelsProblem(request.models)) ??
+      (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId));
     if (problem) throw new Error(problem);
     const answer = await this.#post('model', request, this.#modelTimeoutMs);
     const completion = isObject(answer) ? answer.model : undefined;
@@ -284,17 +291,19 @@ export class PlatformClient implements AutomationPlatform {
     // throws here, a step's own fault, and must never read as an answer that did not come.
     const payload = JSON.stringify(body);
     const response = await unanswered(
-      fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          // The run token, as a bearer credential. The platform relays it inward and
-          // verifies it against the run it was minted for.
-          authorization: `Bearer ${this.runToken}`,
-        },
-        body: payload,
-        signal: AbortSignal.timeout(timeoutMs),
-      }),
+      unsent(
+        fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            // The run token, as a bearer credential. The platform relays it inward and
+            // verifies it against the run it was minted for.
+            authorization: `Bearer ${this.runToken}`,
+          },
+          body: payload,
+          signal: AbortSignal.timeout(timeoutMs),
+        }),
+      ),
     );
 
     if (!response.ok) {
@@ -315,32 +324,6 @@ export class PlatformClient implements AutomationPlatform {
     const text = await unanswered(response.text());
     return text ? (JSON.parse(text) as unknown) : undefined;
   }
-}
-
-/**
- * The failures that are NO ANSWER AT ALL: `fetch` rejected — the connection was
- * refused, reset or never resolved, or the timeout fired — or the body was cut
- * off mid-read. Marked here, where the request is made, because nothing later can
- * tell them apart: Node rejects a refused connection, a cut body and an input
- * `JSON.stringify` cannot carry with the same `TypeError` (measured on Node 22).
- * The runner's step retry reads the mark (`retry.ts`); a refusal the platform
- * answered, an answer that does not parse, and a step's own error are never marked.
- * A set of the error objects themselves, so nothing is wrapped: a `TimeoutError`
- * stays one, and its message stays the run's `failureReason`.
- */
-const unansweredErrors = new WeakSet<object>();
-
-/** `pending`, with its rejection marked as an answer that never came, and passed on unchanged. */
-export function unanswered<T>(pending: Promise<T>): Promise<T> {
-  return pending.catch((error: unknown) => {
-    if (typeof error === 'object' && error !== null) unansweredErrors.add(error);
-    throw error;
-  });
-}
-
-/** Whether this client threw `error` because no answer came. */
-export function isUnanswered(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && unansweredErrors.has(error);
 }
 
 /** The result with every one-line field normalised to what the wire accepts. */

@@ -3,9 +3,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
-import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
-
 import {
   CAPABILITIES,
   MAIL_BODY_MAX_LENGTH,
@@ -28,40 +25,15 @@ import {
   type StepReport,
 } from '../src/contract.js';
 import { isManifest, readManifest } from '../src/manifest.js';
-import {
-  MODEL_ID_PATTERN,
-  MODEL_REQUEST_LIMITS,
-  modelIdProblem,
-  modelsProblem,
-} from '../src/model-request.js';
 import { artifactFixture, invokeFixture } from '../src/testing.js';
+import { assertValid, schemas, validator } from './published-schemas.js';
 
 /**
  * The SDK's shapes against the platform's PUBLISHED schemas, vendored at
  * `contract/schemas`. What the SDK sends must validate; what the SDK reads must be
- * accepted by its guards in the shape the platform actually answers.
+ * accepted by its guards in the shape the platform actually answers. The model-id and
+ * file-id rules are held to the model request's schema in `contract-model-request.test.ts`.
  */
-
-const schemas = resolve(import.meta.dirname, '../../../contract/schemas');
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats.default(ajv);
-
-// Compiled once each: Ajv refuses a second schema under the same `$id`.
-const compiled = new Map<string, ValidateFunction>();
-
-function validator(name: string): ValidateFunction {
-  const cached = compiled.get(name);
-  if (cached) return cached;
-  const validate = ajv.compile(
-    JSON.parse(readFileSync(join(schemas, `${name}.json`), 'utf8')) as object,
-  );
-  compiled.set(name, validate);
-  return validate;
-}
-
-function assertValid(validate: ValidateFunction, value: unknown, what: string): void {
-  assert.ok(validate(value), `${what}: ${ajv.errorsText(validate.errors)}`);
-}
 
 test('an invoke the platform would send is accepted, with or without a continuation', () => {
   const validate = validator('automation-invoke-request');
@@ -189,103 +161,69 @@ test('provider and model requests validate', () => {
   assertValid(validator('automation-model-request'), model, 'model request');
 });
 
-test('a model request naming its models validates, and one naming the singular model does not', () => {
-  // Since the platform's BUILD-PLAN 25.2.16 (`contract/README.md`, refreshed 2026-10-09).
-  const validate = validator('automation-model-request');
-  const request: ModelRequest = {
-    capability: 'document-extraction',
-    prompt: 'Extract the invoice fields.',
-    input: { text: '...' },
-    outputSchema: { type: 'object' },
-    models: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini', 'anthropic/claude-haiku-4.5'],
-  };
-  assertValid(validate, request, 'a primary and two fallbacks');
-  assertValid(validate, { ...request, models: ['google/gemini-2.5-flash'] }, 'a primary alone');
-  const { models: _models, ...withoutModels } = request;
-  assert.equal(validate({ ...withoutModels, model: 'google/gemini-2.5-flash' }), false);
-  assert.equal(validate({ ...request, model: 'google/gemini-2.5-flash' }), false);
-});
+test('a manifest may declare the files its runs accept, in the published block', () => {
+  // The platform's BUILD-PLAN 25.2.21: until it, the schema had no `artifacts` and closed
+  // the manifest, so a manifest declaring the block its validator has always read
+  // failed this copy. The verdicts are its validator's (snoopy-backend
+  // `test/wire-schema.test.ts` at `1137ac9`), copied as data.
+  const validate = validator('automation-manifest');
+  const reference = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  const withArtifacts = (artifacts: unknown) => ({ ...reference, artifacts });
+  assertValid(validate, reference, 'the reference manifest alone');
+  const declared = withArtifacts({
+    acceptedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'],
+    maximumSizeBytes: 3_500_000,
+  });
+  assertValid(validate, declared, 'a manifest declaring its files');
+  assert.ok(isManifest(declared), 'and the runner reads it');
 
-/**
- * The samples the platform judges its model-id rule and migration 0018's CHECK on
- * (snoopy-backend `test/helpers/model-ids.ts` at `49c9fac`), copied as data.
- */
-const ACCEPTED_MODEL_IDS = [
-  'google/gemini-2.5-flash',
-  '~google/gemini-flash-latest',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'openai/gpt-5.2:exacto',
-  'gemini-2.5-flash',
-  'vendor/model:onlinex',
-  'vendor/online-model',
-  'vendor/model:nitrox',
-  'vendor/floor-model',
-  'x'.repeat(128),
-];
-const REFUSED_MODEL_IDS: [string, RegExp][] = [
-  ['', /printable ASCII/u],
-  ['x'.repeat(129), /printable ASCII/u],
-  ['google/gemini 2.5', /printable ASCII/u],
-  ['tab\tmodel', /printable ASCII/u],
-  ['new\nline', /printable ASCII/u],
-  ['modèle', /printable ASCII/u],
-  ['@preset/invoice', /preset/u],
-  ['openai/gpt-4@preset/invoice', /preset/u],
-  ['google/gemini-2.5-flash:online', /web search/u],
-  ['google/gemini-2.5-flash:online:nitro', /web search/u],
-  ['meta-llama/llama-3.3-70b-instruct:free:online', /web search/u],
-  ['openai/gpt-4o:ONLINE', /lowercase/u],
-  ['Google/Gemini-2.5-Flash', /lowercase/u],
-  ['OpenRouter/Fusion', /lowercase/u],
-  ['openrouter/fusion', /router/u],
-  ['openrouter/auto', /router/u],
-  ['~openrouter/auto', /router/u],
-  ['openai/gpt-5.2:nitro', /routing/u],
-  ['openai/gpt-5.2:nitro:exacto', /routing/u],
-  ['google/gemini-2.5-flash:floor', /routing/u],
-  ['meta-llama/llama-3.3-70b-instruct:free:floor', /routing/u],
-];
-
-test('the SDK’s model rule is the published schema’s: its pattern, its bounds, its answer for every sample', () => {
-  const validate = validator('automation-model-request');
-  const schema = JSON.parse(
-    readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
-  ) as {
-    required: string[];
-    properties: {
-      models: {
-        minItems: number;
-        maxItems: number;
-        uniqueItems: boolean;
-        items: { maxLength: number; pattern: string };
-      };
-    };
-  };
-  const { models } = schema.properties;
-  assert.ok(!schema.required.includes('models'), 'models is optional');
-  assert.deepEqual(
-    [models.minItems, models.maxItems, models.uniqueItems],
-    [1, MODEL_REQUEST_LIMITS.models, true],
-  );
-  assert.equal(models.items.pattern, MODEL_ID_PATTERN.source);
-  assert.equal(models.items.maxLength, MODEL_REQUEST_LIMITS.modelIdLength);
-
-  const base = { capability: 'summarization', prompt: 'p', input: {}, outputSchema: {} };
-  for (const id of ACCEPTED_MODEL_IDS) {
-    assert.equal(modelIdProblem(id), undefined, id);
-    assert.ok(validate({ ...base, models: [id] }), id);
+  const mediaTypes: [string, boolean][] = [
+    ['application/pdf', true],
+    ['image/jpeg', true],
+    ['image/png', true],
+    ['image/*', true],
+    ['Application/PDF', true],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', true],
+    ['text/plain+x', true],
+    ['pdf', false],
+    ['image/', false],
+    ['/png', false],
+    ['*/*', false],
+    ['image/**', false],
+    ['image/png; charset=binary', false],
+    ['image/png ', false],
+    ['image\\png', false],
+    ['imäge/png', false],
+    ['image/pnǵ', false],
+  ];
+  for (const [mediaType, expected] of mediaTypes) {
+    const verdict = validate(
+      withArtifacts({ acceptedContentTypes: [mediaType], maximumSizeBytes: 1024 }),
+    );
+    assert.equal(verdict, expected, mediaType);
   }
-  for (const [id, words] of REFUSED_MODEL_IDS) {
-    assert.match(modelsProblem([id]) ?? '', words, JSON.stringify(id));
-    assert.equal(validate({ ...base, models: [id] }), false, JSON.stringify(id));
+  for (const [size, expected] of [
+    [0, false],
+    [1, true],
+    [104_857_600, true],
+    [104_857_601, false],
+    [1.5, false],
+  ] as const) {
+    const verdict = validate(
+      withArtifacts({ acceptedContentTypes: ['application/pdf'], maximumSizeBytes: size }),
+    );
+    assert.equal(verdict, expected, `${size} bytes`);
   }
-  // The list's own bounds, the same both ways: three is the most, none is not a list.
-  for (const list of [[], ['a/b', 'c/d', 'e/f', 'g/h'], ['a/b', 'a/b'], 'a/b', null, [42]]) {
-    assert.notEqual(modelsProblem(list), undefined, JSON.stringify(list));
-    assert.equal(validate({ ...base, models: list }), false, JSON.stringify(list));
+  for (const artifacts of [
+    { acceptedContentTypes: [], maximumSizeBytes: 1024 },
+    { acceptedContentTypes: ['application/pdf'] },
+    { maximumSizeBytes: 1024 },
+    { acceptedContentTypes: ['application/pdf'], maximumSizeBytes: 1024, maximumPages: 10 },
+  ]) {
+    assert.equal(validate(withArtifacts(artifacts)), false, JSON.stringify(artifacts));
   }
-  assert.equal(modelsProblem(['a/b', 'c/d', 'e/f']), undefined);
-  assert.ok(validate({ ...base, models: ['a/b', 'c/d', 'e/f'] }));
 });
 
 test('the answers the platform sends back are recognised in their real shapes', () => {
