@@ -84,9 +84,10 @@ export class CallbackRefusedError extends Error {
 
 /**
  * The reasons the platform's model callback refuses with (its `routes-model.ts`):
- * three 422s about the completion (`model-completion.ts`) and three 403s about the
- * allowance (`model-allowance.ts`). A closed list, so a step branches on a word
- * the platform's tests pin, and anything else stays a plain `CallbackRefusedError`.
+ * three 422s about the completion (`model-completion.ts`), three 403s about the
+ * allowance (`model-allowance.ts`), and, since platform BUILD-PLAN 25.2.18, five about
+ * the run's file (`model-file.ts`). A closed list, so a step branches on a word the
+ * platform's tests pin, and anything else stays a plain `CallbackRefusedError`.
  */
 export const MODEL_REFUSAL_REASONS = [
   /** 422: the completion is not the document `outputSchema` describes; `path` and `rule` say where and which keyword. */
@@ -101,6 +102,16 @@ export const MODEL_REFUSAL_REASONS = [
   'capability_not_in_plan',
   /** 403: the platform could not ask entitlements and refused rather than guess; `used`. Nothing was spent. */
   'entitlements_not_configured',
+  /** 422: the pinned manifest takes no files, or not this type, or a model does not read it. Nothing was spent. */
+  'content_type_not_accepted',
+  /** 422: the file is larger than the manifest's bound or the platform's. Nothing was spent. */
+  'file_too_large',
+  /** 422: the file's leading bytes are not the type its upload declared. Nothing was spent. */
+  'file_content_mismatch',
+  /** 422: a password-protected PDF, which the models refuse. Nothing was spent. */
+  'file_encrypted',
+  /** 502: the store handed over a file unlike the one it measured. Nothing was spent. */
+  'file_integrity',
 ] as const;
 
 export type ModelRefusalReason = (typeof MODEL_REFUSAL_REASONS)[number];

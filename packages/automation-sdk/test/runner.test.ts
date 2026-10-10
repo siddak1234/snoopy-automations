@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { type Step, idempotencyKeyFor } from '../src/runner.js';
+import { type Step, idempotencyKeyFor } from '../src/steps.js';
 import { RecordingPlatform } from '../src/testing.js';
 import { TEMPLATE, define, extract, invoke, manifest, ok } from './runner-fixtures.js';
 

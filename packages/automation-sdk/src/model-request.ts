@@ -4,7 +4,7 @@
  * anything is spent (its `apps/runs/src/routes-model.ts`, `requestedModels`; the rule is
  * `modelIdProblem` in its `packages/contracts/src/model-request.ts` — ADR-0033 decision 1
  * as amended 2026-10-09, BUILD-PLAN 25.2.16). Copied, not imported: the boundary is the
- * wire format. `test/contract.test.ts` holds this copy to the vendored
+ * wire format. `test/contract-model-request.test.ts` holds this copy to the vendored
  * `automation-model-request.json` — the same pattern, the same bounds, the same answer
  * for every sample — and the words are the platform's own, so a mistake reads the same
  * in the container as in the platform's 400, only sooner and before anything left.
@@ -89,4 +89,23 @@ export function modelsProblem(models: unknown): string | undefined {
   }
   if (new Set(models).size !== models.length) return 'models must not name a model twice';
   return undefined;
+}
+
+/**
+ * An uploaded file's id, as the platform's rule has it (`ARTIFACT_ID_PATTERN` in its
+ * `@snoopy/contracts`, the emitted schema's `artifactId.pattern`) — copied, as the
+ * model-id rule above is, and held to the vendored schema by
+ * `test/contract-model-request.test.ts`.
+ */
+export const ARTIFACT_ID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u;
+
+/**
+ * Why `artifactId` is not an id the platform takes, in the words of its 400; undefined
+ * when it is one. `undefined` is the caller's to skip: a call without a file names none.
+ */
+export function artifactIdProblem(artifactId: unknown): string | undefined {
+  return typeof artifactId === 'string' && ARTIFACT_ID_PATTERN.test(artifactId)
+    ? undefined
+    : 'artifactId must be the id of an uploaded file';
 }

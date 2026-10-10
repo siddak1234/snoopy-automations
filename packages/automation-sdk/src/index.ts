@@ -56,14 +56,16 @@ export {
 } from './prompt.js';
 export type { PromptModule } from './prompt.js';
 export type { RetryPolicy } from './retry.js';
-export { defineAutomation, held, idempotencyKeyFor } from './runner.js';
+export { defineAutomation } from './runner.js';
+export { held, idempotencyKeyFor } from './steps.js';
 export type {
   Automation,
   AutomationDefinition,
+  ModelCallOptions,
   Step,
   StepContext,
   StepPlatform,
   StepResult,
-} from './runner.js';
+} from './steps.js';
 export { jsonLogger, serve } from './serve.js';
 export type { Logger, RunningAutomation, ServeOptions } from './serve.js';

@@ -3,12 +3,12 @@ import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 
 import type { ModelRequest, ProviderRequest } from '../src/contract.js';
+import { isUnanswered } from '../src/marks.js';
 import {
   DEFAULT_CALLBACK_TIMEOUT_MS,
   DEFAULT_MAIL_TIMEOUT_MS,
   DEFAULT_MODEL_TIMEOUT_MS,
   PlatformClient,
-  isUnanswered,
 } from '../src/platform.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { artifactFixture, problemFixture } from '../src/testing.js';
@@ -345,15 +345,20 @@ test('an answer that never came is marked as such — timed out, refused, cut of
   assert.equal(stub.calls.length, sent, 'the unserialisable input never left');
 });
 
-test('the default bounds outlast the bounded waits the platform makes before it answers (platform BUILD-PLAN 25.2.13)', () => {
+test('the default bounds outlast the bounded waits the platform makes before it answers (platform BUILD-PLAN 25.2.13, 25.2.22)', () => {
   // Read at snoopy-backend 886eff5, the runs service's hops: every callback first
   // asks Catalog (5 s); then a provider call waits on Connections (15 s), mail on
   // Access (5 s) and the transport (10 s), and a result may dispatch a held run (5 s
-  // in every manifest today). A model call is bounded by the Edge's 55 s.
+  // in every manifest today).
   assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 5_000 + 15_000, 'the provider callback');
   assert.ok(DEFAULT_CALLBACK_TIMEOUT_MS > 5_000 + 5_000 + 5_000, 'the result callback');
   assert.ok(DEFAULT_MAIL_TIMEOUT_MS > 5_000 + 5_000 + 10_000, 'the mail callback');
-  assert.ok(DEFAULT_MODEL_TIMEOUT_MS > 55_000, 'the model callback');
+  // A model call (25.2.22): the Edge relays it for 230 s and the load balancer holds the
+  // connection for 250 s; this client waits longer than both, and less than the 300 s
+  // after which Node's fetch gives up on the headers itself.
+  assert.ok(DEFAULT_MODEL_TIMEOUT_MS > 230_000, 'the Edge relay');
+  assert.ok(DEFAULT_MODEL_TIMEOUT_MS > 250_000, 'the load balancer');
+  assert.ok(DEFAULT_MODEL_TIMEOUT_MS < 300_000, "Node's fetch");
 });
 
 test('a client built with no options bounds each callback by its default', async (t) => {

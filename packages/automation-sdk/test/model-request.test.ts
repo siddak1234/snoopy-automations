@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 
 import type { ModelRequest } from '../src/contract.js';
-import { PlatformClient, isUnanswered } from '../src/platform.js';
+import { isUnanswered } from '../src/marks.js';
+import { PlatformClient } from '../src/platform.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { isTransient } from '../src/retry.js';
-import type { Step } from '../src/runner.js';
+import type { Step } from '../src/steps.js';
 import { RecordingPlatform } from '../src/testing.js';
 import { recordedWaits } from './retry-fixtures.js';
 import { define, extract, invoke, manifest, ok } from './runner-fixtures.js';
@@ -18,7 +19,7 @@ import { type StubPlatform, startStubPlatform } from './stub-platform.js';
  * is sent (`model-request.ts`), by the client and the recording double alike; a list it
  * accepts is sent as written, in order; and a step that names none sends none, so the
  * platform's default serves. The rule itself is held to the published schema in
- * `contract.test.ts`.
+ * `contract-model-request.test.ts`.
  */
 
 const REQUEST: ModelRequest = {

@@ -120,7 +120,9 @@ A step sends a REGISTERED prompt module by capability — `platform.callModel(pr
 input, models?)` — and the platform makes the call with its own key, holds the
 completion to the prompt's `outputSchema`, writes one `runs.model_calls` row, and
 answers `{ text, model, finishReason, usage }`, `model` being the one that served;
-`readJsonCompletion` parses the text without ever quoting it. A completion the
+`readJsonCompletion` parses the text without ever quoting it, and reads an answer
+whose `finishReason` is `other` as it reads `stop`, since the platform holds both to
+the schema and bills both (the platform's BUILD-PLAN 25.3.12). A completion the
 platform will not hand over is a **typed refusal**: a
 `ModelRefusedError` — a `CallbackRefusedError` whose `callback` is `model` —
 carrying the platform's `details.reason` and the fields beside it, and nothing of
@@ -142,7 +144,9 @@ runner's timeline line for the step says `the model call was refused (truncated)
 Two model refusals are NOT typed, because nothing a step does at run time answers
 them: an `outputSchema` the platform cannot hold a completion to (`pattern`, `$ref`,
 the tuple form of `items`, …) is a plain 400 `CallbackRefusedError` with no reason
-and the keyword in `detail`, and a capability the manifest did not declare is 403
+and the keyword in `detail`, which `definePrompt` refuses when the prompt loads, in
+the platform's words, from a copy of its keyword list (`output-schema.ts`, the
+platform's BUILD-PLAN 25.3.11); and a capability the manifest did not declare is 403
 `capability_not_declared`, which `defineAutomation` refuses before the wire. In a
 suite, `refusalFixture('model', { status, code, detail, details })` from
 `@autom8x/automation-sdk/testing` builds exactly what the client throws for that
@@ -158,50 +162,66 @@ reads.
 
 ## Pick a model
 
-A step names the models its call asks for, or none. In the template that is one
-constant beside the step that calls the model, and a new automation needs nothing else:
+A step names the models its call asks for, or none, and — when the model must read the
+run's own file — the file. In the template that is one constant beside the step that calls
+the model, and a new automation needs nothing else:
 
 ```ts
-// Primary first, then up to two fallbacks: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'].
+// Primary first, then up to two fallbacks, from at least two providers.
 export const MODELS: readonly string[] | undefined = undefined; // the platform's default
 
 const completion = await platform.callModel(extractFields, input, MODELS);
+// With the run's file, which the platform reads and sends; this container never does:
+await platform.callModel(extractFields, input, { models: MODELS, artifactId: fileId });
 ```
 
-- **The primary, then up to two fallbacks.** OpenRouter tries them in order when the
-  one before errors, as one call: one `runs.model_calls` row, for the model that
-  served. And an answer the platform cannot use — empty, cut off, refused by the model,
-  or not matching the declared `outputSchema` — is tried on the next model in the list
-  before the step sees any refusal, each attempt its own row (the platform's BUILD-PLAN
-  25.2.20, the owner's "runs should not fail"): naming fallbacks is how a step gets that.
-  Left `undefined`, the platform's default models serve, with fallbacks of their own.
+- **The primary, then up to two fallbacks, one model per attempt.** The platform asks
+  one model at a time, each on its own time limit, and tries the next when an answer is
+  unusable — empty, cut off, refused by the model, or not matching the declared
+  `outputSchema` — when none comes in time, or when the router refuses the model; each
+  attempt the vendor may have billed is its own `runs.model_calls` row (the platform's
+  BUILD-PLAN 25.2.20 and 25.2.22, the owner's "runs should not fail"). Naming fallbacks
+  is how a step gets that. Left `undefined`, the platform's default models serve, with
+  fallbacks of their own.
+- **The run's file.** `artifactId` names the run's own upload — this run's or its
+  chain's first run's (25.2.18). The platform holds it to the manifest's `artifacts`
+  block and its own leading bytes and sends it with every attempt, a PDF as a file and a
+  JPEG or PNG as an image; a type the manifest or a model does not take, a file over the
+  bound and an encrypted PDF are 422s naming the reason, before anything is spent.
 - **The owner's setting wins.** The owner switches any automation's model on the
   platform at once, with no restart and nothing released here (the platform's
   `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
-  set its models — up to three, the first serving and the rest its fallbacks — are the
-  only ones, whatever `MODELS` says.
+  set its models — up to three, each with a reasoning setting (25.2.23) — are the only
+  ones, whatever `MODELS` says. The switch holds each model to the owner's rules against
+  OpenRouter's lists (25.2.24); the models a step names in code are held to them only by
+  the router, so name models that would pass them (below), and leave any that must think
+  at a lower effort to the owner's setting: a model named here is sent with no reasoning
+  setting at all.
 - **Refused before anything is sent.** The client refuses, in the words of the
   platform's 400, a list that is empty, longer than three, names an id twice, or holds
   an id outside the platform's rule: 1–128 characters from OpenRouter's lowercase set
   (letters, digits and `. _ : / ~ -`, so no space and no `@` preset), no `:online` (web
   search), no `openrouter/` router (which picks models, and can run tools, the request
   never named) and no `:nitro` or `:floor` variant (the owner's cost guard: a priority
-  tier's pricing, a flex tier's latency). `RecordingPlatform` refuses the same, so a
-  suite is where the mistake shows. A prompt file names no model: `definePrompt` refuses
-  `model` and `models` alike.
+  tier's pricing, a flex tier's latency); and an `artifactId` that is not an upload's id.
+  `RecordingPlatform` refuses the same, so a suite is where the mistake shows. A prompt
+  file names no model: `definePrompt` refuses `model` and `models` alike.
 - **Held by the platform, whatever is named.** Every call is held to zero data
-  retention and no data collection, to structured output for a declared
-  `outputSchema`, to the owner's price ceiling — \$5 per million prompt tokens and
-  \$15 per million completion tokens — and to an answer of about 8,000 tokens at
-  most (the owner's cost guard). A model no endpoint can serve within those is
-  refused by the router, never served anyway, and the step sees a 502 from the model
-  callback. The workspace's monthly allowance is asked first (the 403s above). Those
-  bounds are OpenRouter's, so a platform deployed with any other model gateway answers a
-  request naming `models` with a 400 before anything is spent. Choose
-  from OpenRouter's list of zero-retention endpoints,
-  `https://openrouter.ai/api/v1/endpoints/zdr`: an entry whose `supported_parameters`
-  include `structured_outputs` and `temperature`, and whose `pricing` (US dollars per
-  token) is within the ceiling — both ids above qualified on 2026-10-09.
+  retention and no data collection, to OpenRouter's endpoints in the United States
+  (the platform's 25.2.25, the owner's decision of 2026-10-10), to structured output for
+  a declared `outputSchema`, to the owner's price ceiling — \$5 per million prompt tokens
+  and \$15 per million completion tokens — and to an answer of about 8,000 tokens at
+  most (the owner's cost guard). A model no such endpoint can serve is refused by the
+  router, and the platform tries the next. The workspace's monthly allowance is asked
+  before each attempt (the 403s above). Choose from OpenRouter's list of zero-retention
+  endpoints, `https://openrouter.ai/api/v1/endpoints/zdr`: an entry tagged in the United
+  States (`…/us` or `…/us-<region>`) whose `supported_parameters` include
+  `structured_outputs`, `response_format`, `temperature` and `max_tokens`, whose
+  `pricing` (US dollars per token) is within the ceiling, whose model reads images and
+  files when the step sends one, and which is not about to expire. On 2026-10-10
+  `anthropic/claude-haiku-4.5` qualified with no setting, and `google/gemini-3.5-flash`
+  needed the owner's `@low`; `google/gemini-2.5-flash` and `openai/gpt-4.1-mini` did not
+  (no US endpoint).
 - **One key, on the platform only.** The platform holds the one OpenRouter key and
   makes every call with it. Nothing in this repository, its images or a running
   container holds a key; a container presents its run token and nothing else.
@@ -210,9 +230,11 @@ The platform's half — its BUILD-PLAN 25.2.14 to 25.2.16: OpenRouter, the owner
 setting, and `models` — is live since its TWENTY-EIGHTH promotion (2026-10-09), but its
 model gateway stays unconfigured until the owner's OpenRouter key, which comes last on
 the owner's order: until then every model call is answered 503, so an automation is
-built and tested against a simulated model (`RecordingPlatform`), and the template leaves
-`MODELS` undefined. The fallbacks, the cap and the `:nitro`/`:floor` refusal (its
-25.2.17, 25.2.19 and 25.2.20) go live with its next platform promotion.
+built and tested against a simulated model (`RecordingPlatform`, which answers a call as
+the platform does: one model per attempt, `NO_ANSWER` for an attempt that times out, the
+platform's refusals in its order), and the template leaves `MODELS` undefined. The
+fallbacks, the cap, the run's file, one model per attempt, the reasoning settings and US
+routing (its 25.2.17–25.2.25) go live with its next platform promotion.
 
 ## Retrying a step
 
@@ -251,6 +273,16 @@ defineAutomation({
   provider's own status (it arrives inside a 200 and is the step's to judge), a link
   the store refused, or anything the step's own code threw. A step that wants the
   retry lets the platform's error through as it came.
+- **Or only what never left: `when: 'unsent'`.** A policy with
+  `retry: { extract: { attempts: 2, backoffMs: 10_000, when: 'unsent' } }` repeats the
+  step only when a callback provably never left the container — the connection was
+  refused, or the platform's name did not resolve (`ECONNREFUSED`, `ENOTFOUND`,
+  `EAI_AGAIN` on the error's `cause`, the split the platform makes for its own vendor
+  calls). A timeout, a reset, a cut answer and every status the platform answers are
+  not repeated, because the call may have reached the platform. It is the policy for
+  a step that calls the model (the platform's BUILD-PLAN 25.3.13, the owner's
+  decision of 2026-10-10: after a restart, one retry only if nothing was sent); see
+  Model below for why any other repeat of a model call costs.
 - **The same key on every attempt.** The whole step runs again, with the same `state`
   (treat it as read-only) and the same idempotency key, so a repeat meets the
   platform's records for that key:
@@ -282,13 +314,14 @@ defineAutomation({
   - **Model.** No record: a model call repeated after a completion the container
     never received is a second vendor call, a second `runs.model_calls` row and a
     second unit of the plan's monthly allowance. Declare a policy on a step that
-    calls the model only if that cost is acceptable. From the platform's BUILD-PLAN
-    25.2.13 (live since its TWENTY-SIXTH promotion, 2026-10-09) the Edge relays a callback
-    for up to 55 seconds, which covers the model route's bounded waits with the
-    gateway at its recommended 40, inside the client's 60. Before it — and after
-    it, when the platform's own dependencies run a call past 55 seconds — a model
-    call can reach the container as a 502 while the platform completes and counts
-    it.
+    calls the model only if that cost is acceptable, or declare `when: 'unsent'`,
+    which repeats it only when it never left. From the platform's BUILD-PLAN
+    25.2.22 the Edge relays a model callback for up to 230 seconds — every attempt
+    inside the owner's budget, at most 150, and the waits around it — inside the load
+    balancer's 250 and this client's 260 (`DEFAULT_MODEL_TIMEOUT_MS`, in every image
+    built since). Before those limits are all live — and whenever the platform's own
+    dependencies run a call past them — a model call can reach the container as a 502
+    while the platform completes and counts it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
   it took more than one attempt, `(after N attempts)`; a step that failed every
   attempt is `The <step> step failed (after N attempts)` and the run fails with the

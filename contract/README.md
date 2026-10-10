@@ -1,8 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `49c9fac`, taken 2026-10-09 — the platform's `main`
-after its #193; the last refresh note below says how. The platform emits
+(`snoopy-backend`, private) at commit `1137ac9`, taken 2026-10-10 — the head of a
+platform branch not yet merged; the last refresh note below says why. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -86,6 +86,21 @@ BUILD-PLAN 25.2.17, 25.2.19 and 25.2.20): `automation-model-request.json`'s `pat
 refuses OpenRouter's `:nitro` and `:floor` variants, the owner's cost guard. The other seven
 files are byte-identical to `1e5ab5b`'s (each checked with `cmp` against `49c9fac`).
 
+Refreshed 2026-10-10 at `1137ac9` — the head of the platform's branch
+`round-17/model-path-invoice` (its #195, which carries #194), not yet merged — for its
+BUILD-PLAN 25.2.21 and 25.2.18. `automation-manifest.json` gains the optional `artifacts`
+block the platform's validator has always read (1–32 media types, each held to its
+`MEDIA_TYPE_PATTERN`, and `maximumSizeBytes` from 1 to 100 MiB): until it, the schema closed
+the manifest without it, so a manifest declaring its files failed this copy.
+`automation-model-request.json` gains the optional `artifactId`, the run's file the model
+reads, held to the platform's `ARTIFACT_ID_PATTERN`. The other six files are byte-identical
+to `49c9fac`'s (each checked with `cmp` against `1137ac9`). Taken from the branch for the
+same reason as `dcb8ddb` above: this repository's half — `ModelRequest.artifactId` and
+`artifactIdProblem` in `packages/automation-sdk/src/model-request.ts`, held to this file by
+`packages/automation-sdk/test/contract-model-request.test.ts` — is built beside the platform's, which
+answers `artifactId` with a 400 until that pull request merges and is promoted. Re-pinned
+to the merge commit when it lands.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -135,8 +150,11 @@ registration.
 **`pipeline`** — "must declare at least the trigger step"; a step `id` "is declared more
 than once" refused; "only the first step may be a TRIGGER".
 
-**`artifacts`** — media types "must be a media type, optionally with a \* subtype";
-`maximumSizeBytes` "must be a positive integer" and at most 100 MiB.
+**`artifacts`** — media types "must be a media type, optionally with a \* subtype"; an
+empty list "must declare at least one media type — omit `artifacts` entirely to accept no
+files"; `maximumSizeBytes` "must be a positive integer" and at most 100 MiB. In the schema
+as well since the platform's 25.2.21 (2026-10-10), from the same constants: until then a
+manifest declaring `artifacts` passed the validator and failed this copy of the schema.
 
 **Arrays** — connections, capabilities, setup fields, pipeline steps and scopes per
 connection each "must contain at most N entries".

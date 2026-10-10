@@ -9,6 +9,7 @@ import {
   type ModelCompletion,
   type ModelRequest,
 } from './contract.js';
+import { outputSchemaProblem } from './output-schema.js';
 
 /**
  * Prompt modules — a versioned template with its output schema.
@@ -67,6 +68,12 @@ export function definePrompt(module: PromptModule): PromptModule {
     throw new Error(
       `prompt ${id} v${module.version} must carry an outputSchema object ({} for free text)`,
     );
+  }
+  // The platform refuses a schema outside its keyword set 400, before any call
+  // (25.3.11): refused here, when the prompt loads, in the platform's own words.
+  const schemaProblem = outputSchemaProblem(module.outputSchema);
+  if (schemaProblem !== undefined) {
+    throw new Error(`prompt ${id} v${module.version}: ${schemaProblem}`);
   }
   return Object.freeze({
     id,
@@ -133,10 +140,12 @@ export function loadPrompts(directory: string): PromptModule[] {
  * The platform holds a structured completion to the schema itself and refuses a
  * truncated or filtered one as a typed 422 before any text is handed over
  * (`ModelRefusedError`, `refusals.ts`), so against it only a `stop` or `other`
- * completion reaches here; the checks stay for a platform that does not.
+ * completion reaches here; the checks stay for a platform that does not. `other` is
+ * read like `stop`, as the platform holds it to the schema like `stop` and bills it
+ * (25.3.12): refusing it here failed a run on an answer the platform had passed.
  */
 export function readJsonCompletion(completion: ModelCompletion): JsonObject {
-  if (completion.finishReason !== 'stop') {
+  if (completion.finishReason !== 'stop' && completion.finishReason !== 'other') {
     throw new Error(`the model stopped early (${completion.finishReason})`);
   }
   let parsed: unknown;

@@ -135,14 +135,23 @@ export interface ModelRequest {
   /** Honoured, not merely counted: an empty object means free text. */
   outputSchema: JsonObject;
   /**
-   * The models to ask, in order: the primary, then up to two fallbacks the router tries
-   * when the one before errors — each id held to the platform's rule
-   * (`model-request.ts`). Left out, the platform's default model serves the call. The
-   * owner's setting for this automation, when there is one, wins over the list (platform
-   * ADR-0033 decision 1 as amended 2026-10-09, BUILD-PLAN 25.2.16). The singular `model`
-   * is refused by the platform.
+   * The models to ask, in order: the primary, then up to two fallbacks — each id held to
+   * the platform's rule (`model-request.ts`). The platform asks one model per attempt,
+   * each on its own time limit, and tries the next when an answer is unusable, does not
+   * come in time, or the router refuses the model (platform BUILD-PLAN 25.2.20, 25.2.22).
+   * Left out, the platform's default models serve the call. The owner's setting for this
+   * automation, when there is one, wins over the list (platform ADR-0033 decision 1 as
+   * amended 2026-10-09, BUILD-PLAN 25.2.16). The singular `model` is refused.
    */
   models?: readonly string[];
+  /**
+   * The run's own file, by the id its upload was given (`artifactIdProblem` holds the
+   * shape): the platform reads it, holds it to the pinned manifest's `artifacts` block
+   * and its own leading bytes, and sends it with every attempt — a PDF as a file, a JPEG
+   * or PNG as an image (platform BUILD-PLAN 25.2.18). This container sends no bytes and
+   * holds no link for it. This run's file or its chain's first run's, and no other.
+   */
+  artifactId?: string;
 }
 
 export interface ModelUsage {

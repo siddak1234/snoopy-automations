@@ -1,9 +1,9 @@
 import { setTimeout as sleepFor } from 'node:timers/promises';
 
 import { ONE_LINE_MAX_LENGTH, truncateText } from './contract.js';
-import { isUnanswered } from './platform.js';
+import { isUnanswered, isUnsent } from './marks.js';
 import { CallbackRefusedError } from './refusals.js';
-import type { StepResult } from './runner.js';
+import type { StepResult } from './steps.js';
 
 /**
  * The runner's bounded step-level retry — platform BUILD-PLAN 25.5.1, the runner's
@@ -50,6 +50,15 @@ export interface RetryPolicy {
   readonly attempts: number;
   /** Milliseconds before the second attempt; the wait doubles before each later one. At least `MIN_STEP_BACKOFF_MS`, or the policy is refused; clamped so the waits sum to at most `MAX_STEP_BACKOFF_MS`. */
   readonly backoffMs: number;
+  /**
+   * Which failures are repeated. `'transient'`, the default, is `isTransient`.
+   * `'unsent'` is only a callback that provably never left (`isUnsent`: the
+   * connection was refused, or the platform's name did not resolve) — the policy
+   * for a step that calls a model (platform BUILD-PLAN 25.3.13, the owner's decision
+   * of 2026-10-10): a model call that reached the platform may have been made and
+   * billed, and repeating it makes it again.
+   */
+  readonly when?: 'transient' | 'unsent';
 }
 
 /** The most attempts any step makes, the first included. */
@@ -101,12 +110,22 @@ export function boundedPolicy(stepId: string, policy: RetryPolicy): RetryPolicy 
       `the retry policy for step "${stepId}" must wait at least ${MIN_STEP_BACKOFF_MS} milliseconds before a repeat`,
     );
   }
+  if (policy.when !== undefined && policy.when !== 'transient' && policy.when !== 'unsent') {
+    throw new Error(
+      `the retry policy for step "${stepId}" must repeat on 'transient' or 'unsent' failures`,
+    );
+  }
   const attempts = Math.min(policy.attempts, MAX_STEP_ATTEMPTS);
   // The waits, counted in first waits: none for one attempt, 1 for two, 1 + 2 for three.
   const firstWaits = 2 ** (attempts - 1) - 1;
   const backoffMs =
     firstWaits === 0 ? 0 : Math.min(policy.backoffMs, Math.floor(MAX_STEP_BACKOFF_MS / firstWaits));
-  return { attempts, backoffMs };
+  return { attempts, backoffMs, ...(policy.when === undefined ? {} : { when: policy.when }) };
+}
+
+/** The test a failure must pass to be repeated under `policy`: `isUnsent` for `'unsent'`, else `isTransient`. */
+export function retryableUnder(policy: RetryPolicy | undefined): (error: unknown) => boolean {
+  return policy?.when === 'unsent' ? isUnsent : isTransient;
 }
 
 /**
@@ -158,11 +177,12 @@ export type Attempted =
   | { readonly threw: true; readonly error: unknown; readonly attempts: number };
 
 /**
- * Runs a step, then again after each wait while its failure is transient, a
+ * Runs a step, then again after each wait while its failure is retryable, a
  * wait remains, and the next attempt would start before the deadline. A result
  * the step RETURNS ends it on the spot — `ok`, `failed`, `skipped` and `held`
- * alike, so a held step is never run twice; only a THROWN transient failure is
- * re-attempted. `sleep` is the wait itself — `retryClock`'s unless a test passes one.
+ * alike, so a held step is never run twice; only a THROWN retryable failure is
+ * re-attempted. `sleep` is the wait itself — `retryClock`'s unless a test passes one;
+ * `retryable` is the policy's test (`retryableUnder`), `isTransient` unless given.
  */
 export async function attempt(
   run: () => Promise<StepResult>,
@@ -170,6 +190,7 @@ export async function attempt(
   deadline: string,
   sleep: (milliseconds: number) => Promise<unknown> = (milliseconds) =>
     retryClock.sleep(milliseconds),
+  retryable: (error: unknown) => boolean = isTransient,
 ): Promise<Attempted> {
   const deadlineAt = Date.parse(deadline);
   for (let attempts = 1; ; attempts += 1) {
@@ -178,7 +199,7 @@ export async function attempt(
     } catch (error) {
       const wait = waits[attempts - 1];
       // `<` against NaN is false: a deadline the runner cannot read allows no retry.
-      if (wait === undefined || !isTransient(error) || !(Date.now() + wait < deadlineAt)) {
+      if (wait === undefined || !retryable(error) || !(Date.now() + wait < deadlineAt)) {
         return { threw: true, error, attempts };
       }
       await sleep(wait);

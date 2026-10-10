@@ -129,6 +129,12 @@ test('a completion is read as the JSON object the schema asked for, and the text
     readJsonCompletion({ text: '{"amount": 12.5}', model: 'm', finishReason: 'stop', usage }),
     { amount: 12.5 },
   );
+  // 25.3.12: the platform holds an `other` answer to the schema like `stop`, and
+  // bills it, so it is read like `stop` here too.
+  assert.deepEqual(
+    readJsonCompletion({ text: '{"amount": 7}', model: 'm', finishReason: 'other', usage }),
+    { amount: 7 },
+  );
   const secret = 'ACCOUNT-9911-ROUTING-2200';
   for (const [completion, expected] of [
     [
@@ -150,4 +156,37 @@ test('a completion is read as the JSON object the schema asked for, and the text
         error instanceof Error && expected.test(error.message) && !error.message.includes(secret),
     );
   }
+});
+
+test("a prompt whose schema the platform would refuse is refused when it loads, in the platform's words (25.3.11)", () => {
+  for (const [outputSchema, message] of [
+    [
+      { type: 'object', properties: { number: { type: 'string', pattern: '^INV-' } } },
+      /prompt extract-invoice v2: outputSchema\.properties\.number uses pattern, which the platform cannot hold a completion to$/u,
+    ],
+    [{ $ref: '#/definitions/invoice' }, /prompt extract-invoice v2: outputSchema uses \$ref/u],
+    [
+      { type: 'array', items: [{ type: 'string' }] },
+      /outputSchema\.items must be a schema object/u,
+    ],
+    [{ type: 'money' }, /outputSchema\.type names a type the platform does not know/u],
+  ] as const) {
+    assert.throws(() => definePrompt({ ...module, outputSchema }), message);
+  }
+  // What the platform holds a completion to, and the annotations it ignores, load.
+  assert.doesNotThrow(() =>
+    definePrompt({
+      ...module,
+      outputSchema: {
+        type: 'object',
+        description: 'The invoice as printed',
+        properties: {
+          total: { type: ['number', 'null'], description: 'As printed', format: 'decimal' },
+          lines: { type: 'array', items: { type: 'object', additionalProperties: false } },
+        },
+        required: ['total', 'lines'],
+        additionalProperties: false,
+      },
+    }),
+  );
 });
