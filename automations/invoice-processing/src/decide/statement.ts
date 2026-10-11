@@ -27,6 +27,8 @@ export interface StatementResult {
   readonly listedCheckable: boolean;
   /** (c) null when the statement's list is not complete. */
   readonly openBillsNotListed: { readonly count: number; readonly totalCents: number } | null;
+  /** False when the open-bills lookup reached its maximum: more open bills may be unseen (D6). */
+  readonly openBillsCheckable: boolean;
   /** (d) */
   readonly quickBooksOpenCents: number | null;
   readonly differenceCents: number | null;
@@ -79,6 +81,7 @@ export function statementResult(state: DecideState, switchOn: boolean): Statemen
     openBillsNotListed: complete
       ? { count: open.length, totalCents: open.reduce((sum, bill) => sum + bill.balanceCents, 0) }
       : null,
+    openBillsCheckable: amountLookup?.reachedMax !== true,
     quickBooksOpenCents: quickBooksOpen,
     differenceCents: closing !== null && quickBooksOpen !== null ? closing - quickBooksOpen : null,
     secondCheck: verification.status === 'made' ? 'made' : 'not_made',
@@ -118,9 +121,8 @@ export function statementLine(result: StatementResult): string {
     parts.push(result.listedCheckable ? words : `${words} (too many to check)`);
   }
   if (result.openBillsNotListed !== null && result.openBillsNotListed.count > 0) {
-    parts.push(
-      `${plural(result.openBillsNotListed.count, 'open bill', 'open bills')} not on it (${formatMoney(result.openBillsNotListed.totalCents)})`,
-    );
+    const words = `${plural(result.openBillsNotListed.count, 'open bill', 'open bills')} not on it (${formatMoney(result.openBillsNotListed.totalCents)})`;
+    parts.push(result.openBillsCheckable ? words : `${words} (too many to check)`);
   }
   if (result.ownSum === 'differs' && result.ownSumDifferenceCents !== null) {
     parts.push(`its own rows differ by ${formatMoney(Math.abs(result.ownSumDifferenceCents))}`);

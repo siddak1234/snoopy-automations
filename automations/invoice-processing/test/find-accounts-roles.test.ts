@@ -7,6 +7,8 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 import { ACCOUNT_SETTINGS, ROLE_TYPES } from '../src/account-settings.js';
 import { CATEGORY_SETTINGS } from '../src/spend-types.js';
 import {
+  CARD_DIGITS_UNREADABLE,
+  CARD_SETTING,
   OWNERS_UNREADABLE,
   OWNER_PLACE,
   accountSentence,
@@ -221,6 +223,38 @@ test("an owner's own account is equity, and its failures name the Owners and par
     assert.equal(unreadable.line?.[2], 'Owners and partners not read (owners_setting_invalid)');
     assert.deepEqual(unreadable.sent, [], setting);
   }
+});
+
+test("'Company card's last four digits' filled in but not four digits fails here, naming the setting, before the query and any read; empty or four digits passes", async () => {
+  assert.equal(CARD_SETTING.key, 'companyCardLast4');
+  assert.equal(
+    CARD_DIGITS_UNREADABLE,
+    "The 'Company card's last four digits' setting must be exactly four digits, such as 4417. Fix it in this flow's settings, then run it again. Nothing was created.",
+  );
+  assert.ok(CARD_DIGITS_UNREADABLE.length <= 200);
+  for (const setting of ['Visa 4417', '****4417', '441', '44 17', '44170', '4417-0000-0000-4417']) {
+    const typed = await find({ ...BASE, companyCardLast4: setting });
+    assert.deepEqual(typed.result, failed(CARD_DIGITS_UNREADABLE), setting);
+    assert.equal(
+      typed.line?.[2],
+      "Company card's last four digits not read (card_digits_setting_invalid)",
+      setting,
+    );
+    assert.deepEqual(typed.sent, [], `${setting}: no QuickBooks call`);
+    assert.deepEqual(typed.platform.modelCalls, [], `${setting}: nothing read`);
+  }
+  for (const setting of ['4417', ' 4417 ', '', '   ', null, undefined]) {
+    const fine = await find({
+      ...BASE,
+      ...(setting === undefined ? {} : { companyCardLast4: setting }),
+    });
+    assert.equal(fine.result.outcome, 'success', String(setting));
+  }
+  // Checked before "Owners and partners", after the account settings' own names.
+  const both = await find({ ...BASE, companyCardLast4: 'Visa 4417', ownerNames: 'Pat =' });
+  assert.deepEqual(both.result, failed(CARD_DIGITS_UNREADABLE));
+  const named = await find({ expenseAccount: 'A::B', companyCardLast4: 'Visa 4417' });
+  assert.equal(named.line?.[2]?.endsWith('(account_setting_invalid)'), true);
 });
 
 test('with multicurrency on, every account must hold USD; with it off, the currency is not read', async () => {

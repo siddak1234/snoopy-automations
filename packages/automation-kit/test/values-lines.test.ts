@@ -7,6 +7,7 @@ import {
   capitalised,
   fitLine,
   fitReasonLine,
+  phrasesKept,
 } from '../src/values/lines.js';
 
 const name = (text: string) => ({ name: text });
@@ -60,9 +61,9 @@ test('the decided reason line: the phrases first, the first letter capital, then
   assert.equal(
     fitReasonLine(
       ['Paid personally', 'over the $500 limit'],
-      [name('Jane Doe'), ' paid ', name('Office Depot'), ', $612.40'],
+      [name('Jane Doe'), ' paid ', name('Brightquill Office Mart'), ', $612.40'],
     ),
-    'Paid personally; over the $500 limit: Jane Doe paid Office Depot, $612.40',
+    'Paid personally; over the $500 limit: Jane Doe paid Brightquill Office Mart, $612.40',
   );
   assert.equal(fitReasonLine([], [name('Acme'), ', $5.00']), 'Acme, $5.00');
   assert.equal(capitalised('new vendor'), 'New vendor');
@@ -91,4 +92,17 @@ test('one phrase too long for any room is still kept, and the names cut to fit',
   const line = fitReasonLine(['x'.repeat(190)], [name('Acme Supplies'), ', $5.00']);
   assert.ok(line.length <= 200);
   assert.ok(line.endsWith(', $5.00'));
+});
+
+test("how many phrases the reason line keeps: the rest are its '+N more', for a line beside it to say", () => {
+  const ending = [name('Acme Supplies'), ', INV-1001, $1,250.00'];
+  assert.equal(phrasesKept([], ending), 0);
+  assert.equal(phrasesKept(['over the $500 limit', 'new vendor'], ending), 2);
+  assert.equal(phrasesKept(['x'.repeat(190)], ending), 1, 'never fewer than one');
+  const phrases = Array.from({ length: 12 }, (_, index) => `reason number ${index + 1} is long`);
+  const kept = phrasesKept(phrases, ending);
+  assert.ok(kept > 1 && kept < phrases.length, String(kept));
+  const line = fitReasonLine(phrases, ending);
+  assert.ok(line.includes(`; ${phrases[kept - 1]!}; +${phrases.length - kept} more: `), line);
+  assert.ok(!line.includes(phrases[kept]!), 'the first one given up is not in the line');
 });

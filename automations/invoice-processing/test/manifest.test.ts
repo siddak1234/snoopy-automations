@@ -5,6 +5,7 @@ import { test } from 'node:test';
 
 import { ACCOUNT_SETTINGS, OWNERS_SETTING } from '../src/account-settings.js';
 import { CATEGORY_SETTINGS, SPEND_TYPES } from '../src/spend-types.js';
+import { CARD_SETTING } from '../src/steps/find-accounts.js';
 import { manifestsRoot } from './fixtures.js';
 
 /**
@@ -82,11 +83,14 @@ test('every setting the code reads is declared, as text, optional but the defaul
     [owners?.title, owners?.control, owners?.required],
     [OWNERS_SETTING.title, 'text', false],
   );
-  const card = byKey.get('companyCardLast4');
+  // The card check's setting: find-accounts holds it to four digits under this key and title.
+  const card = byKey.get(CARD_SETTING.key);
   assert.deepEqual(
     [card?.title, card?.control, card?.required],
-    ["Company card's last four digits", 'text', false],
+    [CARD_SETTING.title, 'text', false],
   );
+  assert.equal(CARD_SETTING.title, "Company card's last four digits");
+  assert.match(card?.description ?? '', /such as 4417: exactly four digits, or left empty\./u);
   assert.deepEqual(
     manifest.setup.map((field) => field.key),
     [

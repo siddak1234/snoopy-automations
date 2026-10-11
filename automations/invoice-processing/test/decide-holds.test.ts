@@ -216,14 +216,23 @@ test("every reason that applies, in one hold, in the plan's order; the reason li
   );
   assert.ok(many.reason.length <= 200, String(many.reason.length));
   assert.match(many.reason, /^Over the \$500 limit; new vendor; possible duplicate; /u);
-  assert.match(many.reason, /\+\d+ more: N+…, HOS-1042, \$999\.00$/u);
+  assert.match(many.reason, /; \+3 more: N+…, HOS-1042, \$999\.00$/u);
   assert.equal(many.saved.holdReasons.length, 10, 'the saved data carries them all');
-  assert.ok(
-    many.summary.startsWith(
-      'Held: $999.00 is over the $500 limit; new vendor, 2 similar names in QuickBooks; possible duplicate: too many to check',
-    ),
+  // decide's line names what the reason line gave up to '+3 more', and the category, always.
+  assert.equal(
+    many.summary,
+    'Held: $999.00 is over the $500 limit; unclear: date; no currency printed, USD will be used; name used by a customer, will be created with (vendor); category Office Supplies (office supplies)',
   );
   assert.ok(many.summary.length <= 200);
+  // Every reason in one of the two lines (decide-lines.test.ts holds every path to this).
+  const said = `${many.reason}\n${many.summary}`.toLowerCase();
+  for (const hold of many.holds) {
+    const { phrase, detail } = hold;
+    assert.ok(
+      said.includes(phrase.toLowerCase()) || said.includes(detail.toLowerCase()),
+      hold.code,
+    );
+  }
 });
 
 test('a reimbursement always waits for approval, at any amount (D16)', () => {
@@ -280,7 +289,7 @@ test('the card check (D19): the same digits, other digits, none printed, and pai
   assert.deepEqual(
     card(receipt(), { companyCardLast4: '44 17' }),
     [],
-    'a setting not of four digits is not set',
+    'a setting not of four digits never reaches decide, find-accounts fails the run first; here it compares nothing',
   );
   assert.deepEqual(
     phrases({

@@ -34,7 +34,7 @@ export type Decision =
   | { readonly outcome: 'ok'; readonly summary: string; readonly saved: SavedState }
   | {
       readonly outcome: 'held';
-      /** decide's timeline line: every reason with its detail. */
+      /** decide's timeline line: what the reason line gave up first, the details that fit, the category. */
       readonly summary: string;
       /** The wording under decide's line: what approving creates (§2.7). */
       readonly heldReason: string;
@@ -73,7 +73,7 @@ export function decideRun(input: DecideInput): Decision {
   }
   return {
     outcome: 'held',
-    summary: heldSummary(holds, notes),
+    summary: heldSummary(state, plan, holds, notes),
     heldReason: approvalWording(state, plan, matches),
     reason: reasonLine(state, plan, holds),
     holds,

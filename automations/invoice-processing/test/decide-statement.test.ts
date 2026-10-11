@@ -51,6 +51,7 @@ test('every listed invoice in QuickBooks, and the balances the same: the line sa
     listedNotInQuickBooks: [],
     listedCheckable: true,
     openBillsNotListed: { count: 0, totalCents: 0 },
+    openBillsCheckable: true,
     quickBooksOpenCents: OPEN,
     differenceCents: 0,
     secondCheck: 'made',
@@ -103,6 +104,28 @@ test('a lookup at its maximum: the missing count may be too many', () => {
   });
   assert.equal(result.listedCheckable, false);
   assert.match(summary, /3 listed invoices not in QuickBooks \(too many to check\)/u);
+});
+
+test('the open-bills lookup at its maximum: the open bills it does not list may be more, and the line says so (D6)', () => {
+  const open = [
+    billRow({ id: '501', docNumber: 'HOS-0900', balanceCents: 1_000 }),
+    billRow({ id: '502', docNumber: 'HOS-0901', balanceCents: 2_000 }),
+  ];
+  const line = (reachedMax: boolean) =>
+    compared({
+      lookups: { numberLookup: listedFound, amountLookup: { reachedMax, records: open } },
+    });
+  const all = line(false);
+  assert.equal(all.result.openBillsCheckable, true);
+  assert.match(all.summary, /; 2 open bills not on it \(\$30\.00\)\. Nothing was created\.$/u);
+  const capped = line(true);
+  assert.equal(capped.result.openBillsCheckable, false);
+  assert.deepEqual(capped.result.openBillsNotListed, { count: 2, totalCents: 3_000 });
+  assert.match(
+    capped.summary,
+    /; 2 open bills not on it \(\$30\.00\) \(too many to check\)\. Nothing was created\.$/u,
+  );
+  assert.equal(capped.result.listedCheckable, true, 'the number lookup was not capped');
 });
 
 test('read 2 not made, the switch on, QuickBooks showing nothing open: the line says each; still no approval', () => {

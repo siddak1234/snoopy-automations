@@ -14,7 +14,14 @@ export { ISO_4217_LIST_ONE, cleanCurrency } from './currency.js';
 export type { CurrencyReading } from './currency.js';
 export { EARLIEST_YEAR, addDays, isWithin, parseDate, utcDay } from './dates.js';
 export type { DateReading } from './dates.js';
-export { LINE_MAXIMUM, NAME_ROOM, capitalised, fitLine, fitReasonLine } from './lines.js';
+export {
+  LINE_MAXIMUM,
+  NAME_ROOM,
+  capitalised,
+  fitLine,
+  fitReasonLine,
+  phrasesKept,
+} from './lines.js';
 export type { LinePiece } from './lines.js';
 export {
   MAXIMUM_CENTS,

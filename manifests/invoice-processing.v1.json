@@ -82,7 +82,7 @@
       "section": "rules",
       "key": "companyCardLast4",
       "title": "Company card's last four digits",
-      "description": "The last four digits of the company card. A receipt that shows another card waits for approval.",
+      "description": "The last four digits of the company card, such as 4417: exactly four digits, or left empty. A receipt that shows another card waits for approval.",
       "control": "text",
       "required": false
     },

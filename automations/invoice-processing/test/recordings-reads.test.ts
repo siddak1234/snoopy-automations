@@ -6,12 +6,15 @@ import { test } from 'node:test';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { secondReadOf } from '../src/checks/answers.js';
+import { CHECK_DOCUMENT_REASONS, CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
 import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
-import { compareReads } from '../src/reads/compare.js';
+import { compareReads, recheckedWith } from '../src/reads/compare.js';
+import type { VerificationState } from '../src/state.js';
 import { checkedSummary } from '../src/steps/check-document.js';
 import { verifiedSummary } from '../src/steps/verify-read.js';
-import { check } from './check-world.js';
-import { secondAnswer } from './fixtures.js';
+import { VISA, check } from './check-world.js';
+import { decide } from './decide-world.js';
+import { everythingSaid, lines, reads, secondAnswer, setUp } from './fixtures.js';
 import {
   FIRST_READ,
   READS,
@@ -29,8 +32,8 @@ import { SAMPLE_ROUTES } from './sample-routes.js';
 /**
  * Each sample recorded twice — read 1 (`extract-document.v1`) and read 2 (`verify-document.v1`),
  * by separate agents blind to each other, each read in its own directory — and the recorded
- * answers run through check-document and verify-read's comparison. The tests over recordings run
- * on whatever exist, and are skipped, saying why, while none do.
+ * answers run through check-document, verify-read's comparison and decide. The tests over
+ * recordings run on whatever exist, and are skipped, saying why, while none do.
  */
 
 const [typed] = SAMPLES;
@@ -175,7 +178,119 @@ test(
   },
 );
 
-test('the recordings directory for read 2 is kept in git, empty but for its placeholder', () => {
-  const placeholder = join(SECOND_READ.directory, '.gitkeep');
-  assert.equal(readFileSync(placeholder, 'utf8'), '');
+test(
+  "each sample's two recordings through steps 1–8 and decide — the vendor matched, nothing found: no line, sentence, reason, wording or saved data carries its marker",
+  {
+    skip:
+      firstFiles.length === 0 || secondFiles.length === 0
+        ? 'no sample has both recordings yet'
+        : false,
+  },
+  async (t) => {
+    let decided = 0;
+    for (const sample of SAMPLES) {
+      const [first, second] = [recordingOf(sample, FIRST_READ), recordingOf(sample, SECOND_READ)];
+      if (!first || !second) continue;
+      const answer = JSON.parse(first.text) as JsonObject;
+      const secondText = JSON.parse(second.text) as JsonObject;
+      // The run as far as it goes today, the model answering each read as it was recorded.
+      const run = setUp({
+        config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
+      });
+      run.platform.model = reads(answer, secondText);
+      const result = await run.run();
+      const said = everythingSaid(run.platform, result);
+      assert.ok(!said.includes(sample.marker), `${sample.name}: the run's lines and result`);
+      const checked = check(answer, { paidFrom: VISA });
+      if (checked.outcome === 'failed') {
+        const { rule } = checked;
+        assert.notEqual(rule, 'answer_unusable', sample.name);
+        if (rule !== 'answer_unusable') {
+          const failureReason = CHECK_DOCUMENT_SENTENCES[rule];
+          assert.deepEqual(result, { outcome: 'failed', failureReason }, sample.name);
+        }
+        continue;
+      }
+      // decide, on what verify-read keeps: the comparison, and the arithmetic again on a total
+      // the tie-break took from read 2.
+      const read = secondReadOf(secondText);
+      assert.ok(read, sample.name);
+      const comparison = compareReads(checked.document, read);
+      let document = checked.document;
+      if (comparison.totalPicked === 'second' && comparison.secondTotalCents !== null) {
+        const rechecked = recheckedWith(document, comparison.secondTotalCents);
+        if (rechecked.outcome === 'failed') continue;
+        document = rechecked.document;
+      }
+      const verification: VerificationState = {
+        status: 'made',
+        modelServed: 'google/gemini-3.1-flash-lite',
+        compared: comparison.compared,
+        differences: comparison.differences,
+        totalPicked: comparison.totalPicked,
+        spendTypeDisputed: comparison.spendTypeDisputed,
+      };
+      for (const holdAboveAmount of [0, 1_000_000]) {
+        const decision = decide({
+          answer,
+          verification,
+          config: { expenseAccount: 'Utilities:Electric', holdAboveAmount },
+          state: { document: document as unknown as JsonObject },
+        });
+        assert.ok(
+          !JSON.stringify(decision).includes(sample.marker),
+          `${sample.name}: decide (${decision.outcome})`,
+        );
+        if (holdAboveAmount > 0) t.diagnostic(`${sample.name}: ${decision.outcome}`);
+        decided += 1;
+      }
+    }
+    assert.equal(decided, 40, 'the 20 recordings check-document passes, each held and as it comes');
+  },
+);
+
+test(
+  "the card statement's recordings: both reads took its planted note for the document number, and the run fails C1 before anything carries it",
+  {
+    skip:
+      firstFiles.includes('bank-card-statement.json') &&
+      secondFiles.includes('bank-card-statement.json')
+        ? false
+        : 'the bank-card-statement sample has not both recordings yet',
+  },
+  async () => {
+    const sample = SAMPLES.find((each) => each.name === 'bank-card-statement');
+    assert.ok(sample);
+    const [first, second] = [recordingOf(sample, FIRST_READ), recordingOf(sample, SECOND_READ)];
+    const answers = [first, second].map((recording) => JSON.parse(recording?.text ?? '{}'));
+    assert.deepEqual(
+      answers.map((answer) => [answer.documentType, answer.documentNumber]),
+      [
+        ['bank_statement', sample.marker],
+        ['bank_statement', sample.marker],
+      ],
+    );
+    assert.deepEqual(check(answers[0]), { outcome: 'failed', rule: 'C1' });
+    const run = setUp({
+      config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
+    });
+    run.platform.model = reads(answers[0], answers[1]);
+    const result = await run.run();
+    assert.deepEqual(result, { outcome: 'failed', failureReason: CHECK_DOCUMENT_SENTENCES.C1 });
+    assert.deepEqual(lines(run.platform).at(-1), [
+      'check-document',
+      'failed',
+      `Checked, not recorded (${CHECK_DOCUMENT_REASONS.C1})`,
+    ]);
+    assert.equal(run.platform.modelCalls.length, 1, 'read 2 is not made for a document that fails');
+    assert.ok(!everythingSaid(run.platform, result).includes(sample.marker));
+  },
+);
+
+test('each recordings directory is kept in git by its placeholder, and holds one recording for every sample', () => {
+  const samples = SAMPLES.map((sample) => `${sample.name}.json`).sort();
+  for (const read of READS) {
+    assert.equal(readFileSync(join(read.directory, '.gitkeep'), 'utf8'), '', read.name);
+    assert.deepEqual(recordingFiles(read).sort(), samples, read.name);
+  }
 });

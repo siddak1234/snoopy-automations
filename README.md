@@ -420,7 +420,9 @@ multicurrency flag, the books' closing date and whether a vendor credit may carr
 number; `find-accounts` resolves every account the flow's settings name — the default
 category, Paid from, Owed to team members, Owner's investment account, each owner's own
 account and one category per spend type — in one `FullyQualifiedName IN (…)` query, each
-held to the kinds its role accepts and, with multicurrency on, to USD; `find-payer`, when a
+held to the kinds its role accepts and, with multicurrency on, to USD, and before that query
+fails the run on a "Company card's last four digits" filled in but not exactly four digits,
+which would otherwise turn the card check off unseen; `find-payer`, when a
 person switched on "I paid for this with my own money", finds who paid among the flow's
 owners and partners, or as an employee in QuickBooks, before anything is read. `extract`,
 the one model call, sends `prompts/extract-document.v1.json` — 17 rules and a 27-field
@@ -471,9 +473,15 @@ two agents blind to each other: read 1 — an agent acting as the model, given e
 `npm run recording-request` prints for a sample — in
 `test/recordings/extract-document.v1/<sample>.json`, and read 2, given what
 `npm run recording-request -- --read 2` prints, in `test/recordings/verify-document.v1/`;
-the loader refuses one made for another prompt or version, or other prompt or sample bytes,
-and the tests over them — each recorded answer run through check-document, and read 2's
-compared with read 1's — are skipped, saying why, until they exist.
+the loader refuses one made for another prompt or version, or other prompt or sample bytes.
+All 50 are recorded — read 1 by agents on `claude-opus-5-5`, read 2 on `claude-sonnet-5-5`,
+each given only its read's request and the document under a neutral file name — and the tests
+over them run each pair through steps 1–8 with the model answering as recorded, check-document,
+read 2's comparison and decide (the vendor matched, nothing found): the sample's marker reaches
+no line, sentence, reason or saved data. `test/planted-marker.test.ts` plants each marker in
+every field the code reads but never passes on — read 1's currency, card digits, dates and
+listed references (not a statement's, which are carried), read 2's currency, card digits and
+dates — on every path, held and straight through.
 
 ## The kit
 
@@ -508,8 +516,9 @@ only what an automation here uses:
   `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
   marked), `parseDate` (a real day from 2000 on), `cleanCurrency` against ISO 4217 List One
   of 2026-09-17 (155 codes), `formatMoney`, `fitLine` and `fitReasonLine` (a line of at most
-  200 characters, names shortened first with '…'), and the receipt and credit rules:
-  `cardDigits`, `tipRule`, `creditSignRule`.
+  200 characters, names shortened first with '…'; `phrasesKept` says how many phrases a reason
+  line keeps before '+N more'), and the receipt and credit rules: `cardDigits`, `tipRule`,
+  `creditSignRule`.
 - `@autom8x/automation-kit/testing` — `QuickBooksSimulator`, plugged in as
   `RecordingPlatform.provider`: QuickBooks answering from a made-up company, behind
   Connections' rules — a final answer replayed for the same request under its key, a

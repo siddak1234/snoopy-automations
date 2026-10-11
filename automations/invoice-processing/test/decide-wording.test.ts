@@ -73,6 +73,38 @@ test("each path: the wording under decide's line, and the end of the reason line
   );
 });
 
+test("a contractor matched by company name: both lines name the vendor as QuickBooks shows it, never as typed in 'Who paid'", () => {
+  const contractor = heldOf(
+    decide({
+      answer: receipt(),
+      check: paidBy('not_employee', { paidFrom: null }),
+      vendor: {
+        ...VENDOR,
+        id: '61',
+        displayName: 'Samuel Lee Consulting',
+        matchedBy: 'company name',
+        vendor1099: true,
+      },
+    }),
+  );
+  assert.equal(
+    contractor.heldReason,
+    'Approve to create a bill so the company repays Samuel Lee Consulting $60.63',
+  );
+  assert.equal(
+    contractor.reason,
+    'Paid personally: Samuel Lee Consulting (1099 vendor) paid Tidewell Hardware, $60.63',
+  );
+  assert.deepEqual(contractor.saved.plan.payee, {
+    kind: 'vendor',
+    id: '61',
+    name: 'Samuel Lee Consulting',
+  });
+  for (const line of [contractor.heldReason, contractor.reason, contractor.summary]) {
+    assert.ok(!line.includes('Sam Lee '), `the name as typed: ${line}`);
+  }
+});
+
 test("the plan's full example: paid personally and over the limit", () => {
   const answer = receipt({ total: 612.4, subtotal: 612.4, tax: null, lineItems: [] });
   const held = heldOf(decide({ answer, check: paidBy('employee', { paidFrom: null }) }));

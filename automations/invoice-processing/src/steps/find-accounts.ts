@@ -5,6 +5,7 @@ import {
   readQuickBooks,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
+import { cardDigits } from '@autom8x/automation-kit/values';
 import { isObject, truncateText, type JsonObject, type Step } from '@autom8x/automation-sdk';
 
 import {
@@ -31,7 +32,10 @@ import type { AccountRef, AccountsState } from '../state.js';
  * holding USD. The first setting that fails, in the manifest's order, stops the run with
  * find-account's sentences naming that setting (A1), before any model call. An optional
  * setting left empty fails only when a document needs it, later; an empty category setting
- * means the default category.
+ * means the default category. The two settings beside them that name no account fail here
+ * too, before the query, when they are filled in but cannot be read: "Company card's last four
+ * digits" unless exactly four digits (the owner's decision of 2026-10-11 — read as unset, it
+ * would turn the card check off unseen), and "Owners and partners".
  */
 
 /** Where a sentence says an account was named. */
@@ -102,6 +106,16 @@ export function accountSentence(reason: AccountReason, place: Place, role: Accou
 export const OWNERS_UNREADABLE =
   "The 'Owners and partners' setting could not be read. Write one entry per person, separated by semicolons, such as Jane Doe = Partner investments:Jane; Sam Lee, then run it again.";
 
+/** The card check's setting (D19), read by decide; here only held to its form. */
+export const CARD_SETTING = {
+  key: 'companyCardLast4',
+  title: "Company card's last four digits",
+} as const;
+
+/** A card setting filled in but not four digits: fixed, never the value typed (a card's full number, perhaps). */
+export const CARD_DIGITS_UNREADABLE =
+  "The 'Company card's last four digits' setting must be exactly four digits, such as 4417. Fix it in this flow's settings, then run it again. Nothing was created.";
+
 /** The timeline's words for a failure of the one query, or of its answer. */
 const WHAT = "The accounts in this flow's settings were not looked up";
 
@@ -162,6 +176,14 @@ export function findAccounts(clock: Clock): Step {
         return refused({ place, role: setting.role }, typed, 'account_setting_invalid');
       }
       asked.push({ place, role: setting.role, name, setting });
+    }
+    // Left empty, the card check has nothing to compare; filled in, it must be four digits.
+    if (cardDigits(request.config[CARD_SETTING.key]).kind === 'unclear') {
+      return failedWith(
+        `${CARD_SETTING.title} not read`,
+        'card_digits_setting_invalid',
+        CARD_DIGITS_UNREADABLE,
+      );
     }
     const owners = readOwners(request.config[OWNERS_SETTING.key]);
     if (!owners) {

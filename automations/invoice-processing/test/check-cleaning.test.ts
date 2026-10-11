@@ -214,9 +214,11 @@ test("a statement's rows: at most 40, references cleaned like a number, a row dr
 test('a web or e-mail address in the seller is noted (D4); two reads of a name are roughly one', () => {
   for (const name of [
     'Acme https://pay.example',
-    'www.acme-supplies.com',
+    'www.acme-supplies.example',
     'billing@acme.example',
     'quillfeather-paper.example',
+    // The 'io' suffix has no reserved name (RFC 2606 and 6761 reserve .example, .test, .invalid
+    // and .localhost), so it is shown on the placeholder company, Acme.
     'Acme.io Labs',
   ]) {
     assert.ok(hasWebAddress(name), name);

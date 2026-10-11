@@ -62,6 +62,8 @@ export function limitCentsOf(config: JsonObject): number {
 
 /** An account's or a person's name inside a phrase: never more than 40 characters. */
 const named = (name: string) => shorten(name, 40);
+/** A value one read gave, inside a detail — a seller's name may be 500 characters: never more than 40. */
+const valued = (value: string) => shorten(value, 40);
 /** A record's number inside a phrase: cut to 30, as the reason line's ending cuts it. */
 const numbered = (number: string | null) => (number === null ? null : shorten(number, 30));
 
@@ -198,12 +200,16 @@ export function holdsOf(context: HoldContext): Hold[] {
   add('amounts_mismatch', findings.has('amounts_mismatch') ? "amounts don't add up" : null);
   if (verification.status === 'made' && verification.differences.length > 0) {
     const fields = verification.differences.map((difference) => difference.field);
-    const both = verification.differences
+    // Both reads' values, for up to two fields as the phrase names them, each value bounded, so
+    // what is recorded always ends the detail (Group 2's D4).
+    const shown = verification.differences
+      .slice(0, 2)
       .map(
         (difference) =>
-          `${namedFields([difference.field])} ${difference.first} vs ${difference.second}`,
-      )
-      .join(', ');
+          `${namedFields([difference.field])} ${valued(difference.first)} vs ${valued(difference.second)}`,
+      );
+    const more = verification.differences.length - shown.length;
+    const both = `${shown.join(', ')}${more > 0 ? ` +${more} more` : ''}`;
     const recorded =
       verification.totalPicked === 'second'
         ? "; the second read's total recorded, it adds up"

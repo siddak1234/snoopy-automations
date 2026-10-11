@@ -86,12 +86,44 @@ export function capitalised(text: string): string {
   return text === '' ? text : `${text[0]!.toUpperCase()}${text.slice(1)}`;
 }
 
+/** A reason line's pieces: the first `kept` phrases, '+N more' for the rest, ': ', the ending. */
+function reasonPieces(
+  phrases: readonly string[],
+  kept: number,
+  ending: readonly LinePiece[],
+): LinePiece[] {
+  const dropped = phrases.length - kept;
+  const head = capitalised(
+    [...phrases.slice(0, kept), ...(dropped > 0 ? [`+${dropped} more`] : [])].join('; '),
+  );
+  return [`${head}: `, ...ending];
+}
+
+/**
+ * How many of the phrases an approval's reason line keeps whole, in their order: all of them
+ * while the names keep `NAME_ROOM` characters each (or their whole length, when shorter); else
+ * the most that leave them that, and never fewer than one. The rest are its '+N more', which
+ * whoever writes the reason line may want to say elsewhere. 0 with no phrase.
+ */
+export function phrasesKept(
+  phrases: readonly string[],
+  ending: readonly LinePiece[],
+  maximum = LINE_MAXIMUM,
+): number {
+  const names = ending.filter((piece): piece is { name: string } => typeof piece !== 'string');
+  const needed = names.reduce((total, piece) => total + Math.min(piece.name.length, NAME_ROOM), 0);
+  for (let kept = phrases.length; kept > 1; kept -= 1) {
+    if (maximum - lengthOf(reasonPieces(phrases, kept, ending), true) >= needed) return kept;
+  }
+  return Math.min(phrases.length, 1);
+}
+
 /**
  * An approval's reason line: the phrases in their order, joined by '; ', the first letter
  * upper-case, then ': ' and the ending — "Over the $500 limit; new vendor: Acme Supplies,
  * INV-1001, $1,250.00". When the phrases leave the names fewer than `NAME_ROOM` characters each
- * (or their whole length, when shorter), the last phrases give way to '+N more'; then only the
- * names are shortened. With no phrase it is the ending alone.
+ * (or their whole length, when shorter), the last phrases give way to '+N more' (`phrasesKept`);
+ * then only the names are shortened. With no phrase it is the ending alone.
  */
 export function fitReasonLine(
   phrases: readonly string[],
@@ -99,15 +131,6 @@ export function fitReasonLine(
   maximum = LINE_MAXIMUM,
 ): string {
   if (phrases.length === 0) return fitLine(ending, maximum);
-  const names = ending.filter((piece): piece is { name: string } => typeof piece !== 'string');
-  const needed = names.reduce((total, piece) => total + Math.min(piece.name.length, NAME_ROOM), 0);
-  for (let kept = phrases.length; kept >= 1; kept -= 1) {
-    const dropped = phrases.length - kept;
-    const head = capitalised(
-      [...phrases.slice(0, kept), ...(dropped > 0 ? [`+${dropped} more`] : [])].join('; '),
-    );
-    const line: LinePiece[] = [`${head}: `, ...ending];
-    if (kept === 1 || maximum - lengthOf(line, true) >= needed) return fitLine(line, maximum);
-  }
-  return fitLine(ending, maximum);
+  const kept = phrasesKept(phrases, ending, maximum);
+  return fitLine(reasonPieces(phrases, kept, ending), maximum);
 }
