@@ -1,0 +1,9 @@
+{
+  "fileSha256": "0bcf84b90c518cc1416ec585f24d94c470dd4f46010d172b3a89f8ff6dcee234",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bank_statement\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Larkspur Example Bank\",\"documentNumber\":\"QZ7BNK\",\"documentDate\":\"2026-09-25\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":520.71,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"other\",\"lineItems\":[{\"amount\":60.63},{\"amount\":298.53},{\"amount\":49.15}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

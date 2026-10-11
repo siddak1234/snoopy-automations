@@ -1,0 +1,161 @@
+{
+  "sample": "long-thermal-receipt",
+  "file": "photo.jpg",
+  "contentType": "image/jpeg",
+  "marker": "QZ7LTR",
+  "markerIn": "notes",
+  "made": "A restaurant supplier's 60-line thermal receipt photographed flat as a grayscale JPEG 600 px wide and 2,576 px long, the long side the apps shrink a photo to; small print, soft and grainy.",
+  "decisive": ["lineItems", "lineItemsComplete", "subtotal", "tax", "total"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A receipt of more than 40 lines: the lines are not checked (lineItemsComplete false); recorded as an expense on materials. Its recordings measure whether the small print stays readable.",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Fernwick Restaurant Supply",
+    "documentNumber": "R-77102",
+    "documentDate": "2026-09-30",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 2116.9,
+    "tax": 61.39,
+    "shipping": null,
+    "discount": null,
+    "total": 2178.29,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "card",
+    "cardLast4": "1180",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "materials",
+    "lineItems": [
+      {
+        "amount": 5.17
+      },
+      {
+        "amount": 38.48
+      },
+      {
+        "amount": 7.79
+      },
+      {
+        "amount": 41.1
+      },
+      {
+        "amount": 10.41
+      },
+      {
+        "amount": 43.72
+      },
+      {
+        "amount": 13.03
+      },
+      {
+        "amount": 46.34
+      },
+      {
+        "amount": 15.65
+      },
+      {
+        "amount": 48.96
+      },
+      {
+        "amount": 18.27
+      },
+      {
+        "amount": 51.58
+      },
+      {
+        "amount": 20.89
+      },
+      {
+        "amount": 54.2
+      },
+      {
+        "amount": 23.51
+      },
+      {
+        "amount": 56.82
+      },
+      {
+        "amount": 26.13
+      },
+      {
+        "amount": 59.44
+      },
+      {
+        "amount": 28.75
+      },
+      {
+        "amount": 62.06
+      },
+      {
+        "amount": 31.37
+      },
+      {
+        "amount": 64.68
+      },
+      {
+        "amount": 33.99
+      },
+      {
+        "amount": 67.3
+      },
+      {
+        "amount": 36.61
+      },
+      {
+        "amount": 5.92
+      },
+      {
+        "amount": 39.23
+      },
+      {
+        "amount": 8.54
+      },
+      {
+        "amount": 41.85
+      },
+      {
+        "amount": 11.16
+      },
+      {
+        "amount": 44.47
+      },
+      {
+        "amount": 13.78
+      },
+      {
+        "amount": 47.09
+      },
+      {
+        "amount": 16.4
+      },
+      {
+        "amount": 49.71
+      },
+      {
+        "amount": 19.02
+      },
+      {
+        "amount": 52.33
+      },
+      {
+        "amount": 21.64
+      },
+      {
+        "amount": 54.95
+      },
+      {
+        "amount": 24.26
+      }
+    ],
+    "lineItemsComplete": false,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

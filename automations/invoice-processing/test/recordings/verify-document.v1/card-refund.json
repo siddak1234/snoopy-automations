@@ -1,0 +1,9 @@
+{
+  "fileSha256": "feb75bd74bbfae23cc5fdb3956fd1c58ba69b34ddcfae73f15e5aaf11d9e4644",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"credit_note\",\"vendorName\":\"Tidewell Hardware\",\"documentNumber\":\"R-6603\",\"documentDate\":\"2026-10-02\",\"dueDate\":null,\"currency\":null,\"total\":-23.72,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"4417\",\"refundMethod\":\"refund_to_card\",\"spendType\":\"other\",\"uncertainFields\":[]}"
+}

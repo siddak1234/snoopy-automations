@@ -5,11 +5,12 @@ import type { ProblemInput } from '@autom8x/automation-sdk/testing';
 
 import {
   faultAnswer,
-  queryAnswer,
   readAnswer,
   sampleCompany,
   type SimulatedCompany,
 } from './quickbooks-company.js';
+import { answerQuery } from './quickbooks-queries.js';
+import { answerCreate } from './quickbooks-writes.js';
 
 /**
  * QuickBooks behind the platform, for a suite: plugged in as `RecordingPlatform.provider`
@@ -25,11 +26,14 @@ import {
  * - **An answer over 192 KiB** reaches the automation as a 502 naming no reason, recorded nowhere.
  * - **An input naming `accountId`** — the platform fills it — is refused 400 `reserved_parameter`.
  *
- * QuickBooks itself answers from `company`: `companyInfo.get`, `preferences.get`, and
- * `query.run` for exactly the text `lookupQuery` builds on `Account` by
- * `FullyQualifiedName`, matched without case as Intuit matches; any other query text is a
- * 400 parser Fault, so a changed query fails the suite that sent it. `script` queues
- * answers or refusals per operation ahead of the company's.
+ * QuickBooks itself answers from `company`: `companyInfo.get`, `preferences.get`;
+ * `query.run` for exactly the text the kit's builders write — a lookup of an account or an
+ * employee, a search of expenses, vendor credits or journal entries — by Intuit's documented
+ * query rules (`quickbooks-queries.ts`), any other text a 400 parser Fault, so a changed
+ * query fails the suite that sent it; and the creates of an expense, a vendor credit and a
+ * journal entry, by the rules Intuit documents (`quickbooks-writes.ts`), each record kept for
+ * the queries after it. `script` queues answers or refusals per operation ahead of the
+ * company's.
  *
  * The kit runs on Node built-ins alone, so the simulator throws a refusal through the
  * SDK's own `refusalFixture`, which the suite hands it — the very error the SDK's client
@@ -111,6 +115,11 @@ export class QuickBooksSimulator {
   public connected = true;
   /** Every call, in order, with how it ended. */
   public readonly calls: SimulatedCall[] = [];
+  /**
+   * Sandbox item S4: whether an expense can be searched by `TotalAmt`. Intuit's model does
+   * not mark it filterable, though its own sample filters on it; off, as the model reads.
+   */
+  public expenseAmountSearchable = false;
   readonly #refusal: QuickBooksSimulatorOptions['refusal'];
   readonly #scripts = new Map<string, ScriptedAnswer[]>();
   readonly #records = new Map<string, { hash: string; answer: ProviderAnswer }>();
@@ -172,17 +181,15 @@ export class QuickBooksSimulator {
         return { status: 200, body: readAnswer('CompanyInfo', this.company.companyInfo) };
       case 'preferences.get':
         return { status: 200, body: readAnswer('Preferences', this.company.preferences) };
-      case 'query.run': {
-        const lookup = ACCOUNT_LOOKUP.exec(String(call.input.query));
-        if (!lookup) return { status: 400, body: faultAnswer('4000') };
-        const name = lookup[1]!.replace(/\\(.)/gu, '$1').toLowerCase();
-        const rows = this.company.accounts.filter(
-          (account) => String(account.FullyQualifiedName).toLowerCase() === name,
-        );
-        return { status: 200, body: queryAnswer('Account', rows.slice(0, Number(lookup[2]))) };
-      }
-      default:
+      case 'query.run':
+        return answerQuery(this.company, String(call.input.query), {
+          expenseAmountSearchable: this.expenseAmountSearchable,
+        });
+      default: {
+        const created = answerCreate(this.company, call.operation, call.input);
+        if (created) return created;
         throw new Error(`the QuickBooks simulator does not answer ${call.operation}`);
+      }
     }
   }
 
@@ -201,10 +208,6 @@ export class QuickBooksSimulator {
     });
   }
 }
-
-/** Exactly `lookupQuery('Account', 'FullyQualifiedName', value, n)`: the value, then n. */
-const ACCOUNT_LOOKUP =
-  /^SELECT \* FROM Account WHERE FullyQualifiedName = '((?:[^'\\]|\\.)*)' AND Active IN \(true, false\) MAXRESULTS ([1-9][0-9]{0,3})$/u;
 
 /** Connections records an answer that is the provider's verdict on the request (`isFinalAnswer`). */
 function isFinalAnswer(status: number): boolean {

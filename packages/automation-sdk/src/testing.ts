@@ -13,7 +13,7 @@ import type {
 } from './contract.js';
 import { oneLine, toArtifactListing } from './contract.js';
 import { readManifest } from './manifest.js';
-import { artifactIdProblem, modelsProblem } from './model-request.js';
+import { modelAuthor, modelRequestProblem } from './model-request.js';
 import { outputSchemaProblem, schemaMismatch, type SchemaMismatch } from './output-schema.js';
 import { type AutomationPlatform, boundedResult } from './platform.js';
 import { type CallbackRefusedError, refusalFrom } from './refusals.js';
@@ -30,13 +30,16 @@ import { type CallbackRefusedError, refusalFrom } from './refusals.js';
  * branch on: one-line fields are bounded and refused when empty, and a file this
  * run was not given is a `CallbackRefusedError` with status 404. It also refuses
  * the one mistake no branch answers, as the client does: a model request whose
- * `models` the platform would answer 400 is refused in the client's words before it
- * is recorded, so an author's own suite is where the mistake shows.
+ * `models`, `excludeModelAuthors` or `artifactId` the platform would answer 400 is
+ * refused in the client's words before it is recorded, so an author's own suite is
+ * where the mistake shows.
  *
  * **A model call is answered as the platform's callback answers it** (platform
- * BUILD-PLAN 25.2.3, 25.2.20, 25.2.22; SDK 25.3.10): a schema outside the platform's
- * keywords is its 400; then each model in the call's list — its `models`, else
- * `defaultModels` — is one attempt, `model` answering it; an answer the platform
+ * BUILD-PLAN 25.2.3, 25.2.20, 25.2.22, 25.2.29; SDK 25.3.10), in its order: a schema
+ * outside the platform's keywords is its 400; the call's list — its `models`, else
+ * `defaultModels` — less every model by a maker it leaves out, the rest in order, and
+ * its 422 `no_model_left` when none is left; a file the run was not given, its 404;
+ * then each model left is one attempt, `model` answering it; an answer the platform
  * could not use (filtered, truncated, empty, not the declared schema) and an attempt
  * that got no answer (`NO_ANSWER`) fall to the next model, in the platform's order;
  * and when none answers usably the call is the last refusal, typed as the platform
@@ -100,10 +103,34 @@ export class RecordingPlatform implements AutomationPlatform {
   }
 
   public callModel(request: ModelRequest): Promise<ModelCompletion> {
-    const problem =
-      (request.models === undefined ? undefined : modelsProblem(request.models)) ??
-      (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId));
+    const problem = modelRequestProblem(request);
     if (problem) return Promise.reject(new Error(problem));
+    // The platform's 400 for a schema it cannot hold an answer to, before any attempt.
+    const schemaProblem = outputSchemaProblem(request.outputSchema);
+    if (schemaProblem) {
+      return Promise.reject(
+        refusalFixture('model', { status: 400, code: 'BAD_REQUEST', detail: schemaProblem }),
+      );
+    }
+    // The makers the call leaves out, removed from the list that serves it (platform
+    // BUILD-PLAN 25.2.29) — an id with no `/` names none and stays — and its 422, with
+    // nothing spent, when none is left: before the file is read, and recorded nowhere.
+    const listed = request.models ?? this.defaultModels;
+    const excluded = request.excludeModelAuthors ?? [];
+    const serving = listed.filter((model) => {
+      const author = modelAuthor(model);
+      return author === undefined || !excluded.includes(author);
+    });
+    if (listed.length > 0 && serving.length === 0) {
+      return Promise.reject(
+        refusalFixture('model', {
+          status: 422,
+          code: 'BAD_REQUEST',
+          detail: 'Every model that would serve this call is by a maker it excludes',
+          details: { reason: 'no_model_left' },
+        }),
+      );
+    }
     // A file this run was not given is the platform's 404, as the artifact callback's is
     // (platform BUILD-PLAN 25.2.18): its own, or its chain's first run's, and no other.
     const { artifactId } = request;
@@ -121,15 +148,8 @@ export class RecordingPlatform implements AutomationPlatform {
         );
       }
     }
-    // The platform's 400 for a schema it cannot hold an answer to, before any attempt.
-    const schemaProblem = outputSchemaProblem(request.outputSchema);
-    if (schemaProblem) {
-      return Promise.reject(
-        refusalFixture('model', { status: 400, code: 'BAD_REQUEST', detail: schemaProblem }),
-      );
-    }
     this.modelCalls.push(request);
-    return this.#attempt(request, [...(request.models ?? this.defaultModels)]);
+    return this.#attempt(request, serving);
   }
 
   /** One model per attempt, the next on an answer the platform could not use. */

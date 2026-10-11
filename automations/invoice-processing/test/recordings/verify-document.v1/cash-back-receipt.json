@@ -1,0 +1,9 @@
+{
+  "fileSha256": "228f10abbf38ce6d8279e2bb73ed3e9fb4a52de65a25ce3706dda4594a022065",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"vendorName\":\"Bramblewick Market\",\"documentNumber\":\"20714\",\"documentDate\":\"2026-09-26\",\"dueDate\":null,\"currency\":null,\"total\":76.87,\"amountDue\":null,\"cashBackPrinted\":true,\"paymentMethod\":\"card\",\"cardLast4\":\"7731\",\"refundMethod\":\"not_applicable\",\"spendType\":\"materials\",\"uncertainFields\":[]}"
+}

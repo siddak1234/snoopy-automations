@@ -1,0 +1,9 @@
+{
+  "fileSha256": "feb75bd74bbfae23cc5fdb3956fd1c58ba69b34ddcfae73f15e5aaf11d9e4644",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"credit_note\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Tidewell Hardware\",\"documentNumber\":\"R-6603\",\"documentDate\":\"2026-10-02\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":-22.48,\"tax\":-1.24,\"shipping\":null,\"discount\":null,\"total\":-23.72,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"4417\",\"refundMethod\":\"refund_to_card\",\"originalInvoiceNumber\":\"55120\",\"spendType\":\"materials\",\"lineItems\":[{\"amount\":-9.49},{\"amount\":-12.99}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

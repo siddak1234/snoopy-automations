@@ -1,0 +1,47 @@
+{
+  "sample": "restaurant-tip-written-total",
+  "file": "receipt.png",
+  "contentType": "image/png",
+  "marker": "QZ7RTW",
+  "markerIn": "notes",
+  "made": "A restaurant receipt scanned as a grayscale PNG: two dishes, tax and the amount printed, then the tip and the final total written in by hand on its blank lines; paid by Visa ending 8812.",
+  "decisive": ["total", "tip", "subtotal", "tax", "paymentMethod"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A receipt whose parts add up with the tip (42.00 + 3.47 + 9.00 = 54.47): the tip is in the total, recorded as an expense of 54.47 on meals from 'Paid from'.",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Juniperwick Bistro",
+    "documentNumber": "0451",
+    "documentDate": "2026-09-19",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 42,
+    "tax": 3.47,
+    "shipping": null,
+    "discount": null,
+    "total": 54.47,
+    "amountDue": null,
+    "tip": 9,
+    "cashBackPrinted": false,
+    "paymentMethod": "card",
+    "cardLast4": "8812",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "meals",
+    "lineItems": [
+      {
+        "amount": 24
+      },
+      {
+        "amount": 18
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

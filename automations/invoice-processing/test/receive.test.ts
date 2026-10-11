@@ -34,7 +34,7 @@ function refusedWith(sentence: string, reason: string) {
   return async (file: ArtifactReference | null, input?: Record<string, unknown>) => {
     const { result, first, platform } = await received(file, input);
     assert.deepEqual(result, { outcome: 'failed', failureReason: sentence });
-    assert.deepEqual(first, ['receive', 'failed', `Invoice file not accepted (${reason})`]);
+    assert.deepEqual(first, ['receive', 'failed', `Document file not accepted (${reason})`]);
     assert.equal(platform.steps.length, 1, 'nothing after receive runs');
     assert.deepEqual(platform.providerCalls, [], 'no QuickBooks call');
     assert.deepEqual(platform.modelCalls, [], 'no model call');
@@ -81,9 +81,9 @@ test('a JPEG and a PNG continue with their pixels and no pages; a missing digest
   assert.deepEqual(one.first, ['receive', 'ok', 'Received a 1-page PDF, 999 bytes']);
 });
 
-test('no invoice file — missing, null, not text, empty or blank — fails with no callback at all', async () => {
+test('no document file — missing, null, not text, empty or blank — fails with no callback at all', async () => {
   const noFile = refusedWith(
-    'No invoice file was given. Start the run again with the invoice.',
+    'No document file was given. Start the run again with the document.',
     'no_file',
   );
   for (const input of [
@@ -104,7 +104,7 @@ test('no invoice file — missing, null, not text, empty or blank — fails with
 
 test('a file the run was not given, or one that is gone (404), fails as no longer available', async () => {
   const gone = refusedWith(
-    'The invoice file is no longer available. Upload it again and start a new run.',
+    'The document file is no longer available. Upload it again and start a new run.',
     'file_gone',
   );
   const platform = await gone(null);
@@ -143,7 +143,7 @@ test('a measurement that is missing or malformed fails closed', async () => {
 
 test('a type other than PDF, JPEG or PNG fails, whether the upload declared it or the platform measured it', async () => {
   const unsupported = refusedWith(
-    'The invoice must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
+    'The document must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
     'unsupported_type',
   );
   for (const contentType of ['text/plain', 'image/heic', 'application/octet-stream', '']) {
@@ -157,7 +157,7 @@ test('a type other than PDF, JPEG or PNG fails, whether the upload declared it o
 
 test('a measured kind that is not the declared type fails as not a real PDF, JPEG or PNG', async () => {
   const mismatch = refusedWith(
-    'This file is not a real PDF, JPEG or PNG. Save the invoice again as a PDF, or take a photo of it.',
+    'This file is not a real PDF, JPEG or PNG. Save the document again as a PDF, or take a photo of it.',
     'content_mismatch',
   );
   await mismatch(jpeg({ contentType: 'application/pdf' }));
@@ -169,7 +169,7 @@ test('a measured kind that is not the declared type fails as not a real PDF, JPE
 test('3,500,000 bytes passes and 3,500,001 fails', async () => {
   assert.equal((await received(pdf({ sizeBytes: 3_500_000 }))).first?.[1], 'ok');
   await refusedWith(
-    'The invoice file is larger than 3.5 MB. Upload a smaller file or a photo of the invoice.',
+    'The document file is larger than 3.5 MB. Upload a smaller file or a photo of the document.',
     'file_too_large',
   )(jpeg({ sizeBytes: 3_500_001 }));
 });
@@ -180,7 +180,7 @@ test('a PDF of 10 pages passes and one of 11 fails', async () => {
     'Received a 10-page PDF, 184,203 bytes',
   );
   await refusedWith(
-    'This PDF has more than 10 pages. Upload only the invoice pages, at most 10.',
+    'This PDF has more than 10 pages. Upload only the document pages, at most 10.',
     'too_many_pages',
   )(pdf({ pageCount: 11 }));
 });
@@ -207,13 +207,17 @@ test('nothing said carries the filename or the download link', async () => {
   }
 });
 
-test("the limits' types and bytes are the manifest's artifacts block", () => {
+test("the limits are the manifest's artifacts block, the pages and pixels the platform measures among them", () => {
+  // Without a page or pixel limit the platform measures nothing (its BUILD-PLAN 25.2.28), and
+  // receive, failing closed, would refuse every file.
   const manifest = JSON.parse(
     readFileSync(join(manifestsRoot, 'invoice-processing.v1.json'), 'utf8'),
   ) as { artifacts: unknown };
   assert.deepEqual(manifest.artifacts, {
     acceptedContentTypes: FILE_LIMITS.acceptedContentTypes,
     maximumSizeBytes: FILE_LIMITS.maximumSizeBytes,
+    maximumPdfPages: FILE_LIMITS.maximumPdfPages,
+    maximumImageSidePixels: FILE_LIMITS.maximumImageSidePixels,
   });
   assert.equal(FILE_LIMITS.maximumPdfPages, 10);
   assert.equal(FILE_LIMITS.maximumImageSidePixels, 8_000);

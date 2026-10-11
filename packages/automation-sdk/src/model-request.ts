@@ -1,3 +1,5 @@
+import type { ModelRequest } from './contract.js';
+
 /**
  * The models a model request may name, and the one rule each model id is held to —
  * copied from the platform, which answers a request outside them with a 400 before
@@ -39,6 +41,8 @@ export const MODEL_REQUEST_LIMITS = {
   models: 3,
   /** As long as the platform's ledger column holds a model. */
   modelIdLength: 128,
+  /** The makers one call may leave out (25.2.29): as many as a list holds models. */
+  excludeModelAuthors: 3,
 } as const;
 
 /** Every rule at once: the published schema's `pattern`, character for character. */
@@ -108,4 +112,77 @@ export function artifactIdProblem(artifactId: unknown): string | undefined {
   return typeof artifactId === 'string' && ARTIFACT_ID_PATTERN.test(artifactId)
     ? undefined
     : 'artifactId must be the id of an uploaded file';
+}
+
+/**
+ * A model's maker, which a model call may leave out — the platform's BUILD-PLAN 25.2.29, the
+ * owner's decision of 2026-10-10 ("Approve group 2"): "an AI call can exclude a model maker: the
+ * platform removes it from your switch, the code list or the default list, and refuses with no
+ * charge if no other maker is left". Invoice Processing reads each invoice twice, and its second
+ * read must be by another maker than the model that served the first, whatever the owner's
+ * setting names. Copied, as the model-id rule above is, from the platform's
+ * `packages/contracts/src/model-request.ts` (`MODEL_AUTHOR_PATTERN`, `modelAuthor`,
+ * `excludeModelAuthorsProblem`) on its branch `round-17/model-author-exclusion` at `e25fd74`,
+ * not yet merged, and held to the vendored schema by `test/contract-model-request.test.ts`.
+ *
+ * The maker is OpenRouter's "author": the part of a model id before its `/`. Held to the model-id
+ * rule's own characters less its three markers — `/` ends an author, `:` begins a variant and
+ * `~` marks an alias — and lowercase, as an id is: 1–128 lowercase letters, digits and `. _ -`.
+ */
+export const MODEL_AUTHOR_PATTERN = new RegExp(
+  `^[a-z0-9._-]{1,${MODEL_REQUEST_LIMITS.modelIdLength}}$`,
+  'u',
+);
+
+/**
+ * The maker of `model`, undefined when its id names none: the part before the first `/`, an
+ * alias's after its `~` (`~anthropic/claude-sonnet-latest` is Anthropic's). An id with no `/`
+ * names no maker, so no exclusion removes it. The same reading serves a completion's `model`,
+ * the model that served, which is how a second call learns whose model the first one was.
+ */
+export function modelAuthor(model: string): string | undefined {
+  const slash = model.indexOf('/');
+  const author = slash < 0 ? '' : model.slice(model.startsWith('~') ? 1 : 0, slash);
+  return author === '' ? undefined : author;
+}
+
+/**
+ * Why `value` is not a list of makers a model call may leave out, in the words of the
+ * platform's 400; undefined when it is one: one to three distinct authors, each held to
+ * `MODEL_AUTHOR_PATTERN`. `undefined` is the caller's to skip — a call that excludes nothing
+ * names none — and anything else, `null` included, is checked.
+ */
+export function excludeModelAuthorsProblem(value: unknown): string | undefined {
+  const most = MODEL_REQUEST_LIMITS.excludeModelAuthors;
+  if (!Array.isArray(value) || value.length === 0 || value.length > most) {
+    return `excludeModelAuthors must list 1 to ${most} model authors`;
+  }
+  for (const [index, author] of (value as unknown[]).entries()) {
+    if (typeof author !== 'string' || !MODEL_AUTHOR_PATTERN.test(author)) {
+      return (
+        `excludeModelAuthors[${index}] must be a model author, the part of a model id before ` +
+        `its '/': 1–${MODEL_REQUEST_LIMITS.modelIdLength} lowercase letters, digits and . _ -`
+      );
+    }
+  }
+  if (new Set(value).size !== value.length) {
+    return 'excludeModelAuthors must not name an author twice';
+  }
+  return undefined;
+}
+
+/**
+ * Why the platform would answer this request's own lists with a 400, in its words, or undefined:
+ * its `models`, then its `excludeModelAuthors`, then its `artifactId`, each only when present.
+ * What the client (`platform.ts`) and the recording double (`testing.ts`) refuse before anything
+ * is sent or recorded, so the two cannot disagree.
+ */
+export function modelRequestProblem(request: ModelRequest): string | undefined {
+  return (
+    (request.models === undefined ? undefined : modelsProblem(request.models)) ??
+    (request.excludeModelAuthors === undefined
+      ? undefined
+      : excludeModelAuthorsProblem(request.excludeModelAuthors)) ??
+    (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId))
+  );
 }

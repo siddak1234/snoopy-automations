@@ -279,12 +279,13 @@ function stepPlatform(
           `prompt ${module.id} v${module.version} uses ${module.capability}, which ${manifest.templateId} v${manifest.version} does not declare`,
         );
       }
-      const { models, artifactId } = Array.isArray(options)
-        ? { models: options as readonly string[], artifactId: undefined }
+      const { models, excludeModelAuthors, artifactId }: ModelCallOptions = Array.isArray(options)
+        ? { models: options as readonly string[] }
         : ((options ?? {}) as ModelCallOptions);
       return platform.callModel({
         ...renderPrompt(module, input),
         ...(models === undefined ? {} : { models }),
+        ...(excludeModelAuthors === undefined ? {} : { excludeModelAuthors }),
         ...(artifactId === undefined ? {} : { artifactId }),
       });
     },

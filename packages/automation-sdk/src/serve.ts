@@ -7,6 +7,7 @@ import {
   type InvokeRequest,
   type RunResult,
 } from './contract.js';
+import { isUnanswered } from './marks.js';
 import { type AutomationPlatform, clientFor } from './platform.js';
 
 /**
@@ -42,10 +43,10 @@ export interface ServeOptions {
    * The automation. Runs after the acknowledgement; its result is reported for it.
    *
    * If it throws, the error's MESSAGE becomes the run's `failureReason` on the
-   * platform and a line in this container's log. Never build an error message
-   * from the document being processed — a `JSON.parse` failure on Node embeds a
-   * snippet of its input, so parse customer content inside a try that rethrows
-   * with a plain message.
+   * platform and a line in this container's log — but for an answer that never came,
+   * which is `UNANSWERED_REASON`. Never build an error message from the document being
+   * processed — a `JSON.parse` failure on Node embeds a snippet of its input, so parse
+   * customer content inside a try that rethrows with a plain message.
    */
   execute: (request: InvokeRequest, platform: AutomationPlatform) => Promise<RunResult>;
   /** Defaults to `PORT`, then 8080. `0` picks a free port. */
@@ -76,6 +77,15 @@ export interface RunningAutomation {
   /** Drains, stops listening, and resolves once every accepted run has reported. */
   close(): Promise<void>;
 }
+
+/**
+ * The run's failure reason when `execute` threw an answer that never came — a callback
+ * refused, reset, timed out or cut off, or a file's bytes not fetched, which the client
+ * marks where it makes the request (`marks.ts`). One fixed sentence: Node's own words for
+ * it ('fetch failed', 'The operation was aborted due to timeout') tell a person nothing
+ * they can act on.
+ */
+export const UNANSWERED_REASON = 'The platform did not answer in time, so the run stopped.';
 
 export async function serve(options: ServeOptions): Promise<RunningAutomation> {
   const templateId = options.templateId;
@@ -115,7 +125,7 @@ export async function serve(options: ServeOptions): Promise<RunningAutomation> {
     try {
       result = await options.execute(request, platform);
     } catch (error) {
-      const reason = describe(error);
+      const reason = isUnanswered(error) ? UNANSWERED_REASON : describe(error);
       log('error', 'run_failed', { runId: request.runId, reason });
       result = { outcome: 'failed', failureReason: reason };
     }

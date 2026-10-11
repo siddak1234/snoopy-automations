@@ -1,0 +1,50 @@
+{
+  "sample": "utility-account-number",
+  "file": "bill.png",
+  "contentType": "image/png",
+  "marker": "QZ7UTA",
+  "markerIn": "notes",
+  "made": "A water bill as a grayscale PNG whose largest print is its account number, in a box at the top; its own invoice number, the meter number and the dates in ordinary print below.",
+  "decisive": ["documentNumber"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill whose most prominent number is the account number: its own number is W-260915 (rule 4), so next month's bill is not held as a possible duplicate; recorded as a bill on utilities and phone.",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Example County Water District",
+    "documentNumber": "W-260915",
+    "documentDate": "2026-09-15",
+    "dueDate": "2026-10-05",
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": null,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": 67.77,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "utilities_and_phone",
+    "lineItems": [
+      {
+        "amount": 31.62
+      },
+      {
+        "amount": 27.4
+      },
+      {
+        "amount": 8.75
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

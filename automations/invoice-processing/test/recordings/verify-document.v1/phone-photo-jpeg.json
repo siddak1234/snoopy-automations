@@ -1,0 +1,9 @@
+{
+  "fileSha256": "188606586675c97b331dcfcf747895711ac8e7f3e0e136b73487d32c5bc62f69",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"vendorName\":\"Bluefinch Print & Sign\",\"documentNumber\":\"BPS-2207\",\"documentDate\":\"2026-09-03\",\"dueDate\":\"2026-10-03\",\"currency\":null,\"total\":301.48,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"advertising\",\"uncertainFields\":[]}"
+}

@@ -150,6 +150,13 @@ test('the SDK and the kit are consumable through their published entries', async
     'definePrompt',
     'held',
     'readManifests',
+    'isUnsent',
+    'isUnanswered',
+    'DEFAULT_MODEL_TIMEOUT_MS',
+    'UNANSWERED_REASON',
+    'modelAuthor',
+    'excludeModelAuthorsProblem',
+    'artifactIdProblem',
   ]) {
     assert.ok(name in sdk, `@autom8x/automation-sdk exports no ${name} — run npm run build first?`);
   }
@@ -161,11 +168,31 @@ test('the SDK and the kit are consumable through their published entries', async
     string,
     unknown
   >;
-  for (const name of ['readQuickBooks', 'lookupQuery', 'queryRowsOf', 'QUICKBOOKS_SENTENCES']) {
+  for (const name of [
+    'readQuickBooks',
+    'lookupQuery',
+    'lookupInQuery',
+    'transactionQuery',
+    'dateRange',
+    'queryRowsOf',
+    'QUICKBOOKS_SENTENCES',
+    'writeQuickBooks',
+    'writeSentences',
+    'QUICKBOOKS_WRITES',
+  ]) {
     assert.ok(name in quickbooks, `@autom8x/automation-kit/quickbooks exports no ${name}`);
   }
+  const values = (await import('@autom8x/automation-kit/values')) as Record<string, unknown>;
+  for (const name of ['cleanText', 'toCents', 'parseDate', 'cleanCurrency', 'fitReasonLine']) {
+    assert.ok(name in values, `@autom8x/automation-kit/values exports no ${name}`);
+  }
   const kitTesting = (await import('@autom8x/automation-kit/testing')) as Record<string, unknown>;
-  for (const name of ['QuickBooksSimulator', 'PROVIDER_REFUSALS', 'sampleAccount']) {
+  for (const name of [
+    'QuickBooksSimulator',
+    'PROVIDER_REFUSALS',
+    'sampleAccount',
+    'sampleEmployee',
+  ]) {
     assert.ok(name in kitTesting, `@autom8x/automation-kit/testing exports no ${name}`);
   }
 });

@@ -1,0 +1,9 @@
+{
+  "fileSha256": "eb2c6cd84e9a8626885ef9041f463994d3e9eb533b5b5fb1c98d8dc8a4190cbe",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Example County Water District\",\"documentNumber\":\"W-260915\",\"documentDate\":\"2026-09-15\",\"dueDate\":\"2026-10-05\",\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":67.77,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"utilities_and_phone\",\"lineItems\":[{\"amount\":31.62},{\"amount\":27.40},{\"amount\":8.75}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

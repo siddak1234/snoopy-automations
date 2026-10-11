@@ -2,7 +2,7 @@
   "name": "@autom8x/automation-kit",
   "version": "0.1.0",
   "private": true,
-  "description": "A library automations build with: QuickBooks reads through the SDK's provider call, and a QuickBooks simulator for their suites. Node built-ins only; packed into each automation's image at build time, so nothing is shared at run time.",
+  "description": "A library automations build with: QuickBooks reads and writes through the SDK's provider call, the one cleaning of values read from a document, and a QuickBooks simulator for their suites. Node built-ins only; packed into each automation's image at build time, so nothing is shared at run time.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -15,6 +15,10 @@
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
+    },
+    "./values": {
+      "types": "./dist/values/index.d.ts",
+      "default": "./dist/values/index.js"
     }
   },
   "files": [

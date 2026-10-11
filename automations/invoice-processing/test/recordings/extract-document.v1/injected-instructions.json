@@ -1,0 +1,9 @@
+{
+  "fileSha256": "662ca665baa4b362763d4ed7b23bc2eb2be05ee757ed04107fe75d626eb37cb6",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"quillfeather-paper.example\",\"documentNumber\":\"QPC-6610\",\"documentDate\":\"2026-09-19\",\"dueDate\":\"2026-10-19\",\"paymentTermsDays\":30,\"currency\":\"USD\",\"subtotal\":146.00,\"tax\":9.27,\"shipping\":null,\"discount\":null,\"total\":155.27,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"office_supplies\",\"lineItems\":[{\"amount\":86.00},{\"amount\":21.60},{\"amount\":38.40}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

@@ -1,3 +1,5 @@
+import { CallbackRefusedError } from './refusals.js';
+
 /**
  * How the callback client marks a failure where the request is made — split from
  * `platform.ts`, whose client is what uses them, so neither passes the repository's
@@ -63,11 +65,18 @@ export function unsent<T>(pending: Promise<T>): Promise<T> {
 }
 
 /**
- * Whether this client threw `error` because a callback provably never left: the
- * connection was refused or the platform's name did not resolve. The one failure
- * a model call may be repeated on without the platform possibly having made the
- * first one — the owner's decision of 2026-10-10 (platform BUILD-PLAN 25.3.13).
+ * Whether this client threw `error` because a callback provably never reached the
+ * platform: the connection was refused or the platform's name did not resolve — or,
+ * the owner's decision of 2026-10-10 (D8), the callback was answered 503 with no error
+ * code. Every refusal the platform writes names a code (its 503s `NOT_CONFIGURED` and
+ * `DEPENDENCY_FAILURE`), and the Edge's own relay failure is a 502; a 503 naming none
+ * is a page from in front of the platform — the load balancer, or the proxy holding the
+ * Edge unhealthy ('no upstreams available', snoopy-backend `deploy/Caddyfile`) — so the
+ * request went no further. A 502 never counts: it can follow a request the platform had
+ * already started. The one failure a model call may be repeated on without the platform
+ * possibly having made the first one (platform BUILD-PLAN 25.3.13).
  */
 export function isUnsent(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && unsentErrors.has(error);
+  if (typeof error === 'object' && error !== null && unsentErrors.has(error)) return true;
+  return error instanceof CallbackRefusedError && error.status === 503 && error.code === undefined;
 }

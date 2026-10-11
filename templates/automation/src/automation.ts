@@ -62,7 +62,9 @@ const receive: Step = async ({ request, platform }) => {
   };
 };
 
-// Primary first, then up to two fallbacks: ['google/gemini-2.5-flash', 'openai/gpt-4.1-mini'].
+// Primary first, then up to two fallbacks by another maker, each with a US zero-retention
+// endpoint (README, "Pick a model"), such as ['anthropic/claude-haiku-4.5',
+// 'google/gemini-3.1-flash-lite'], both qualifying on 2026-10-10.
 export const MODELS: readonly string[] | undefined = undefined; // the platform's default
 
 const extract: Step = async ({ state, platform }) => {

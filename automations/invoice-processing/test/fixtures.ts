@@ -3,11 +3,14 @@ import { resolve } from 'node:path';
 import { QuickBooksSimulator } from '@autom8x/automation-kit/testing';
 import {
   idempotencyKeyFor,
+  isObject,
   readManifests,
   type ArtifactReference,
   type InvokeRequest,
   type JsonObject,
   type Logger,
+  type ModelCompletion,
+  type ModelRequest,
 } from '@autom8x/automation-sdk';
 import {
   RecordingPlatform,
@@ -17,11 +20,15 @@ import {
 } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
+import { SECOND_READ_FIELDS } from '../src/checks/answers.js';
+import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 
 /**
  * The suite's world: the repository's own v1 manifest, a run started with one upload,
  * QuickBooks behind the platform (the kit's simulator, holding Connections to its
- * rules), and a clock that records QuickBooks' 60-second waits instead of waiting.
+ * rules), a model that reads every document as `GOOD_ANSWER` — and, asked the second
+ * read's prompt, gives the same document's 14 fields — and a clock that records
+ * QuickBooks' 60-second waits instead of waiting.
  */
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
@@ -83,6 +90,78 @@ export function png(overrides: Overrides = {}): ArtifactReference {
   });
 }
 
+/** A whole answer as the platform hands it over: every one of the prompt's 27 fields. */
+export const GOOD_ANSWER: JsonObject = {
+  documentType: 'bill',
+  documentCount: 1,
+  pagesMissing: false,
+  vendorName: 'Harrowgate Office Supply',
+  documentNumber: 'HOS-1042',
+  documentDate: '2026-09-14',
+  dueDate: '2026-10-14',
+  paymentTermsDays: 30,
+  currency: 'USD',
+  subtotal: 412.5,
+  tax: 34.03,
+  shipping: 15,
+  discount: null,
+  total: 461.53,
+  amountDue: null,
+  tip: null,
+  cashBackPrinted: false,
+  paymentMethod: 'not_shown',
+  cardLast4: null,
+  refundMethod: 'not_applicable',
+  originalInvoiceNumber: null,
+  spendType: 'office_supplies',
+  lineItems: [{ amount: 189.5 }, { amount: 223 }],
+  lineItemsComplete: true,
+  listedItems: [],
+  listedItemsComplete: true,
+  uncertainFields: [],
+};
+
+/** The second read's answer of a reader who agrees with `answer`: its 14 fields, then `changes`. */
+export function secondAnswer(answer: JsonObject, changes: JsonObject = {}): JsonObject {
+  const fields = SECOND_READ_FIELDS as readonly string[];
+  const picked = Object.fromEntries(fields.map((field) => [field, answer[field]]));
+  const unclear = Array.isArray(answer.uncertainFields)
+    ? answer.uncertainFields.filter((field) => fields.includes(String(field)))
+    : [];
+  return { ...picked, uncertainFields: unclear, ...changes };
+}
+
+/** Whether a model call is the second read's: its prompt is `verify-document`'s. */
+export function isSecondRead(call: ModelRequest): boolean {
+  return call.prompt === VERIFY_DOCUMENT_V1.template;
+}
+
+/**
+ * A model that reads every document as `first`, and — asked the second read's prompt — as
+ * `second`, by default the same document's 14 fields.
+ */
+export function reads(
+  first: unknown = GOOD_ANSWER,
+  second: unknown = isObject(first) ? secondAnswer(first) : first,
+) {
+  return (call: ModelRequest, model: string) =>
+    Promise.resolve(completion(model, isSecondRead(call) ? second : first));
+}
+
+/** One attempt's answer, as the platform's model callback hands it over. */
+export function completion(
+  model: string,
+  answer: unknown = GOOD_ANSWER,
+  finishReason: ModelCompletion['finishReason'] = 'stop',
+): ModelCompletion {
+  return {
+    text: typeof answer === 'string' ? answer : JSON.stringify(answer),
+    model,
+    finishReason,
+    usage: { inputTokens: 1_900, outputTokens: 400, totalTokens: 2_300 },
+  };
+}
+
 export interface SetUp {
   /** The upload the run was given; `null` for a run given none. */
   file?: ArtifactReference | null;
@@ -110,6 +189,7 @@ export function setUp(options: SetUp = {}) {
   const simulator = options.simulator ?? new QuickBooksSimulator({ refusal: refusalFixture });
   const platform = new RecordingPlatform();
   platform.provider = simulator.provider;
+  platform.model = reads();
   platform.artifacts = options.file === null ? [] : [options.file ?? pdf()];
   const request: InvokeRequest = invokeFixture({
     ...(options.runId === undefined ? {} : { runId: options.runId }),

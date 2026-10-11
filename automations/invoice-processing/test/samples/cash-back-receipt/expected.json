@@ -1,0 +1,56 @@
+{
+  "sample": "cash-back-receipt",
+  "file": "receipt.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7CBK",
+  "markerIn": "notes",
+  "made": "A grocery till receipt as a narrow text PDF, paid by debit card ending 7731 with 40.00 cash back, the card charged the total and the cash back together.",
+  "decisive": ["documentType", "cashBackPrinted", "total"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A receipt with cash back: check-document fails it (C16), since cash back is not an expense; it is entered by hand.",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Bramblewick Market",
+    "documentNumber": "20714",
+    "documentDate": "2026-09-26",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 76.87,
+    "tax": 0,
+    "shipping": null,
+    "discount": null,
+    "total": 76.87,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": true,
+    "paymentMethod": "card",
+    "cardLast4": "7731",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "materials",
+    "lineItems": [
+      {
+        "amount": 18.99
+      },
+      {
+        "amount": 11.49
+      },
+      {
+        "amount": 17.96
+      },
+      {
+        "amount": 15.45
+      },
+      {
+        "amount": 12.98
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

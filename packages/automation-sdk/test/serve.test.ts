@@ -3,10 +3,16 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { after, before, beforeEach, test } from 'node:test';
 
 import type { InvokeRequest, RunResult } from '../src/contract.js';
-import type { AutomationPlatform } from '../src/platform.js';
-import { type Logger, type RunningAutomation, type ServeOptions, serve } from '../src/serve.js';
+import { type AutomationPlatform, PlatformClient } from '../src/platform.js';
+import {
+  type Logger,
+  type RunningAutomation,
+  type ServeOptions,
+  UNANSWERED_REASON,
+  serve,
+} from '../src/serve.js';
 import { invokeFixture } from '../src/testing.js';
-import { type StubPlatform, startStubPlatform, waitFor } from './stub-platform.js';
+import { type StubPlatform, closedOrigin, startStubPlatform, waitFor } from './stub-platform.js';
 
 /**
  * The shell as the platform sees it: two routes, strict acknowledgements, work
@@ -200,6 +206,44 @@ test('a throwing automation is reported as failed with its reason, bounded and n
   await invoke(automation, { runId: 'aaaaaaaa-0000-4000-8000-000000000004' });
   await waitFor(() => stub.calls.length === 1);
   assert.equal((stub.calls[0]!.body as { failureReason: string }).failureReason, 'unknown error');
+});
+
+test("a run that ends on an answer that never came is reported in one fixed sentence, not Node's words", async () => {
+  const automation = await start();
+  const nowhere = await closedOrigin();
+  const report = { runId: RUN_ID, stepId: 'receive', outcome: 'ok' as const, summary: 'Got it' };
+  // Refused before a byte left ('fetch failed'), and timed out while the platform was slow.
+  const unanswered: Execute[] = [
+    () =>
+      new PlatformClient(nowhere, 'token').reportStep(report).then(() => ({ outcome: 'success' })),
+    () =>
+      new PlatformClient(stub.origin, 'token', { timeoutMs: 1 })
+        .reportStep(report)
+        .then(() => ({ outcome: 'success' })),
+  ];
+  stub.delayMs = 50;
+  try {
+    for (const [index, failing] of unanswered.entries()) {
+      stub.calls = [];
+      logs.length = 0;
+      execute = failing;
+      await invoke(automation, { runId: `aaaaaaaa-0000-4000-8000-00000000001${index}` });
+      await waitFor(() => stub.calls.some((call) => call.path.endsWith('/result')));
+      const result = stub.calls.find((call) => call.path.endsWith('/result'))?.body;
+      assert.deepEqual(result, {
+        runId: `aaaaaaaa-0000-4000-8000-00000000001${index}`,
+        outcome: 'failed',
+        failureReason: 'The platform did not answer in time, so the run stopped.',
+      });
+      assert.equal(
+        logs.find((line) => line.message === 'run_failed')?.fields.reason,
+        UNANSWERED_REASON,
+      );
+      assert.ok(!JSON.stringify(logs).includes(nowhere), 'no address in the log');
+    }
+  } finally {
+    stub.delayMs = 0;
+  }
 });
 
 test('a platform that refuses the result is logged once, not re-reported as a failure', async () => {

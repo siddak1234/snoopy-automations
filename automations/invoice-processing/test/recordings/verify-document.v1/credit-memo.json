@@ -1,0 +1,9 @@
+{
+  "fileSha256": "91fc4dd34174ec5ff94523c1e5278d8968f70b32255c417c1f4aa1a1aba699cf",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"credit_note\",\"vendorName\":\"Harrowgate Office Supply\",\"documentNumber\":\"CM-0077\",\"documentDate\":\"2026-09-22\",\"dueDate\":null,\"currency\":null,\"total\":-203.2,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"credit_on_account\",\"spendType\":\"office_supplies\",\"uncertainFields\":[]}"
+}

@@ -1,0 +1,54 @@
+{
+  "sample": "credit-memo",
+  "file": "credit-memo.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7CRM",
+  "markerIn": "line",
+  "made": "A supplier credit memo typed into a PDF: returned lines and the total printed with minus signs, a 5% allowance printed as a positive discount, the credited invoice named, the credit kept on account.",
+  "decisive": [
+    "documentType",
+    "refundMethod",
+    "subtotal",
+    "discount",
+    "total",
+    "originalInvoiceNumber"
+  ],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A credit note kept on account: every amount but the discount is negative, so code makes them positive (213.90 less the 10.70 allowance is the 203.20 credit), with no false hold; recorded as a vendor credit for an existing vendor (F5 otherwise).",
+  "answer": {
+    "documentType": "credit_note",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Harrowgate Office Supply",
+    "documentNumber": "CM-0077",
+    "documentDate": "2026-09-22",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": -213.9,
+    "tax": null,
+    "shipping": null,
+    "discount": 10.7,
+    "total": -203.2,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "credit_on_account",
+    "originalInvoiceNumber": "HOS-1042",
+    "spendType": "office_supplies",
+    "lineItems": [
+      {
+        "amount": -189
+      },
+      {
+        "amount": -24.9
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

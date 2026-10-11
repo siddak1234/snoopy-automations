@@ -85,9 +85,10 @@ export class CallbackRefusedError extends Error {
 /**
  * The reasons the platform's model callback refuses with (its `routes-model.ts`):
  * three 422s about the completion (`model-completion.ts`), three 403s about the
- * allowance (`model-allowance.ts`), and, since platform BUILD-PLAN 25.2.18, five about
- * the run's file (`model-file.ts`). A closed list, so a step branches on a word the
- * platform's tests pin, and anything else stays a plain `CallbackRefusedError`.
+ * allowance (`model-allowance.ts`), since platform BUILD-PLAN 25.2.18 five about the
+ * run's file (`model-file.ts`), and since its 25.2.29 one about the makers a call leaves
+ * out (`model-authors.ts`). A closed list, so a step branches on a word the platform's
+ * tests pin, and anything else stays a plain `CallbackRefusedError`.
  */
 export const MODEL_REFUSAL_REASONS = [
   /** 422: the completion is not the document `outputSchema` describes; `path` and `rule` say where and which keyword. */
@@ -112,6 +113,8 @@ export const MODEL_REFUSAL_REASONS = [
   'file_encrypted',
   /** 502: the store handed over a file unlike the one it measured. Nothing was spent. */
   'file_integrity',
+  /** 422: every model that would serve the call is by a maker it leaves out. Nothing was spent; not retryable. */
+  'no_model_left',
 ] as const;
 
 export type ModelRefusalReason = (typeof MODEL_REFUSAL_REASONS)[number];

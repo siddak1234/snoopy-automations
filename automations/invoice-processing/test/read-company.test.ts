@@ -6,7 +6,7 @@ import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import { callsOf, everythingSaid, lines, setUp } from './fixtures.js';
 
-/** `read-company`: one `companyInfo.get`; a US company continues with its names kept. */
+/** `read-company`: one `companyInfo.get`; a US company continues with its names and payroll flag kept. */
 
 async function readWith(edit: (info: Record<string, unknown>) => void = () => undefined) {
   const world = setUp();
@@ -24,6 +24,7 @@ test('a US company continues: its names are kept and the line names it', async (
     name: 'Sample Bakery',
     legalName: 'Sample Bakery LLC',
     country: 'USA',
+    payrollFeature: false,
   });
   assert.deepEqual(callsOf(platform, request, 'read-company'), [
     { providerId: 'quickbooks', operation: 'companyInfo.get', input: {} },
@@ -44,7 +45,7 @@ test('another country fails as not US; a missing or blank one as unknown', async
     assert.deepEqual(result, {
       outcome: 'failed',
       failureReason:
-        'Invoice Processing works only with US QuickBooks companies, and this company is set up for another country.',
+        'Bills & Receipts works only with US QuickBooks companies, and this company is set up for another country.',
     });
     assert.deepEqual(line, [
       'read-company',
@@ -63,10 +64,28 @@ test('another country fails as not US; a missing or blank one as unknown', async
     assert.deepEqual(result, {
       outcome: 'failed',
       failureReason:
-        'QuickBooks did not say which country this company is in, so Invoice Processing cannot use it. Nothing was created.',
+        'QuickBooks did not say which country this company is in, so Bills & Receipts cannot use it. Nothing was created.',
     });
     assert.equal(line?.[2], 'QuickBooks company not checked (company_country_unknown)');
   }
+});
+
+test("PayrollFeature is kept as Intuit's sample gives it: 'true' or 'false', and null for anything else", async () => {
+  const payroll = async (value: unknown) => {
+    const { result } = await readWith((info) => {
+      info.NameValue = value === undefined ? [] : [{ Name: 'PayrollFeature', Value: value }];
+    });
+    assert.ok(result.outcome === 'success');
+    return (result.output?.company as { payrollFeature: unknown }).payrollFeature;
+  };
+  assert.equal(await payroll('true'), true);
+  assert.equal(await payroll('false'), false);
+  for (const value of [undefined, 'TRUE', true, 'yes', '']) {
+    assert.equal(await payroll(value), null, String(value));
+  }
+  const { result } = await readWith((info) => delete info.NameValue);
+  assert.ok(result.outcome === 'success');
+  assert.equal((result.output?.company as { payrollFeature: unknown }).payrollFeature, null);
 });
 
 test('a missing or blank LegalName is kept as null', async () => {

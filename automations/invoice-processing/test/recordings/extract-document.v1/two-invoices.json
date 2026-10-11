@@ -1,0 +1,9 @@
+{
+  "fileSha256": "6ba73332fe6d2e972947dae06d8fb40e21696cc152e45b5cfe9e99666fe70387",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":2,\"pagesMissing\":false,\"vendorName\":\"Kestrel Courier Co\",\"documentNumber\":\"KCC-301\",\"documentDate\":\"2026-09-10\",\"dueDate\":\"2026-09-25\",\"paymentTermsDays\":15,\"currency\":\"USD\",\"subtotal\":143.00,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":143.00,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"other\",\"lineItems\":[{\"amount\":132.00},{\"amount\":11.00}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

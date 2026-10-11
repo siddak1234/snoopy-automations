@@ -1,0 +1,77 @@
+{
+  "sample": "missing-page",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7MSP",
+  "markerIn": "notes",
+  "made": "The first page of a two-page text PDF alone: \"Page 1 of 2\", the lines continued, no totals.",
+  "decisive": ["pagesMissing"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "Pages are missing: check-document fails it (C6), asking for the whole document.",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": true,
+    "vendorName": "Fernhill Linen Service",
+    "documentNumber": "FLS-4470",
+    "documentDate": "2026-09-25",
+    "dueDate": "2026-10-25",
+    "paymentTermsDays": 30,
+    "currency": null,
+    "subtotal": null,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": null,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "other",
+    "lineItems": [
+      {
+        "amount": 18
+      },
+      {
+        "amount": 21.5
+      },
+      {
+        "amount": 25
+      },
+      {
+        "amount": 28.5
+      },
+      {
+        "amount": 32
+      },
+      {
+        "amount": 35.5
+      },
+      {
+        "amount": 39
+      },
+      {
+        "amount": 42.5
+      },
+      {
+        "amount": 46
+      },
+      {
+        "amount": 49.5
+      },
+      {
+        "amount": 53
+      },
+      {
+        "amount": 56.5
+      }
+    ],
+    "lineItemsComplete": false,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": ["total"]
+  }
+}

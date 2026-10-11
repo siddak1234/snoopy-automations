@@ -1,0 +1,9 @@
+{
+  "fileSha256": "8bffaf10d2cc6bde50319aa21dc8599cbe2a7e6fa0b7d95f8b5e01068f2f89fc",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"supplier_statement\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Harrowgate Office Supply\",\"documentNumber\":\"ST-2609-118\",\"documentDate\":\"2026-09-30\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":686.54,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"other\",\"lineItems\":[],\"lineItemsComplete\":true,\"listedItems\":[{\"reference\":\"Balance forward\",\"amount\":214.20,\"kind\":\"balance_forward\"},{\"reference\":\"HOS-1031\",\"amount\":380.00,\"kind\":\"invoice\"},{\"reference\":\"PMT-5520\",\"amount\":-214.20,\"kind\":\"payment\"},{\"reference\":\"HOS-1042\",\"amount\":413.34,\"kind\":\"invoice\"},{\"reference\":\"CM-0077\",\"amount\":-203.20,\"kind\":\"credit\"},{\"reference\":\"HOS-1050\",\"amount\":96.40,\"kind\":\"invoice\"}],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

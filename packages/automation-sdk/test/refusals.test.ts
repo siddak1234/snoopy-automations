@@ -4,7 +4,6 @@ import { after, before, beforeEach, test } from 'node:test';
 import { PlatformClient } from '../src/platform.js';
 import {
   CallbackRefusedError,
-  MODEL_REFUSAL_REASONS,
   ModelRefusedError,
   mailCertainlyNotSent,
   problemOf,
@@ -322,23 +321,7 @@ test('a model refusal the platform typed is a ModelRefusedError carrying its rea
       return true;
     });
   }
-  assert.deepEqual(
-    [...MODEL_REFUSAL_REASONS].sort(),
-    [
-      'capability_not_in_plan',
-      'content_filtered',
-      'content_type_not_accepted',
-      'entitlements_not_configured',
-      'file_content_mismatch',
-      'file_encrypted',
-      'file_integrity',
-      'file_too_large',
-      'output_schema_mismatch',
-      'over_plan_limit',
-      'truncated',
-    ],
-    "the platform's eleven, and no other",
-  );
+  // The closed list itself, and 25.2.29's `no_model_left`, are held in model-authors.test.ts.
 });
 
 test('a model refusal the platform did not type stays a plain CallbackRefusedError, with what it carries', async () => {

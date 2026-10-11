@@ -1,0 +1,50 @@
+{
+  "sample": "utility-statement-balance",
+  "file": "statement.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7UTB",
+  "markerIn": "notes",
+  "made": "An electric utility's bill titled STATEMENT, typed into a PDF: an account number and a bill number, this period's charges and tax, then the previous balance, a part payment, and a total amount due that includes the 58.40 left over.",
+  "decisive": ["documentType", "documentNumber", "total", "amountDue"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill whose amount due includes an earlier balance: recorded as a bill for this period's 149.50 on utilities and phone, holding with 'earlier balance $58.40 also due' (D24).",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Sample Valley Electric Cooperative",
+    "documentNumber": "4471-0926",
+    "documentDate": "2026-09-24",
+    "dueDate": "2026-10-15",
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 140.38,
+    "tax": 9.12,
+    "shipping": null,
+    "discount": null,
+    "total": 149.5,
+    "amountDue": 207.9,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "utilities_and_phone",
+    "lineItems": [
+      {
+        "amount": 118.58
+      },
+      {
+        "amount": 9.8
+      },
+      {
+        "amount": 12
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

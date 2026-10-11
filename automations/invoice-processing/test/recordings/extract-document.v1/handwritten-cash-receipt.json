@@ -1,0 +1,9 @@
+{
+  "fileSha256": "1918802d5a83a9f1493753b6951dac2400b5a8e1c3d3b4dd4cfd99931f815df4",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"GLIMMERFIELD GLASS & GLAZING\",\"documentNumber\":\"0412\",\"documentDate\":\"2026-09-18\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":150.00,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"cash\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"repairs_and_maintenance\",\"lineItems\":[],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

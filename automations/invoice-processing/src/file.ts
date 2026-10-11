@@ -1,7 +1,7 @@
 import type { ArtifactReference } from '@autom8x/automation-sdk';
 
 /**
- * The invoice file: the owner's limits, and the one place the platform's measurements
+ * The document's file: the owner's limits, and the one place the platform's measurements
  * of it are read.
  *
  * The platform measures a file once, when its upload is sealed — its real kind from the
@@ -13,10 +13,11 @@ import type { ArtifactReference } from '@autom8x/automation-sdk';
 
 /**
  * The owner's decisions of 2026-10-10: a PDF, JPEG or PNG; at most 3,500,000 bytes; a
- * PDF at most 10 pages; an image at most 8,000 px on a side. The first two are the
- * manifest's `artifacts` block, and a test holds them equal; the last two are named as
- * the platform names the block's page and pixel limits, which the vendored schema
- * gains when its pull request merges.
+ * PDF at most 10 pages; an image at most 8,000 px on a side. All four are the manifest's
+ * `artifacts` block, and a test holds them equal: the platform measures a file's pages
+ * and pixels only for a manifest that declares a page or pixel limit (its BUILD-PLAN
+ * 25.2.28, merged as its `main` 7086e5e), so without the last two every measurement
+ * `receive` reads would be null and every file refused.
  */
 export const FILE_LIMITS = {
   acceptedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'],
