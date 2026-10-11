@@ -48,11 +48,13 @@ Four rules follow, and the tests enforce them:
 ```
 contract/schemas/            the wire contract — JSON Schemas vendored from the platform
 packages/automation-sdk/     the step runner, prompt modules, the six callbacks, the serving shell, test doubles
+packages/automation-kit/     a library automations build with: QuickBooks reads, and a QuickBooks simulator
 automations/<name>/          one automation per directory, with its own Dockerfile and lockfile
 templates/automation/        the template directory: a copyable automation on the runner, tested by the gate
 manifests/<name>.v<n>.json   what the platform registers, validated here first and shipped in the image
 scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from the gate
-test/architecture.test.ts    the boundary and the engine rule, enforced
+test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
+test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
 ```
 
@@ -328,15 +330,16 @@ defineAutomation({
   last error. A result the step returns — `ok`, `failed`, `skipped` or `held` — ends
   the attempts, so a held step is never run twice.
 
-Neither automation here declares a policy. `invoice-intake` calls the platform only
-in `notify`, and `notify` in both automations catches its own failure and reports
-it, so a policy there would never fire; `invoice-check`'s `receive` only reads the
-file its run was given and is the one safe candidate. The template declares none
-and says why beside its `define`: its `act` is a provider write. In a suite,
-`refusalFixture('provider', { status: 502, code: 'DEPENDENCY_FAILURE', detail:
-'Runs service is unreachable' })` from `@autom8x/automation-sdk/testing` is a
-transient answer to rehearse a retry with; the rehearsal waits the floor, 10
-seconds, in real time.
+`invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
+four steps, which only read. Neither older automation declares a policy:
+`invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
+own failure and reports it, so a policy there would never fire; `invoice-check`'s
+`receive` only reads the file its run was given and is the one safe candidate. The
+template declares none and says why beside its `define`: its `act` is a provider
+write. In a suite, `refusalFixture('provider', { status: 502, code:
+'DEPENDENCY_FAILURE', detail: 'Runs service is unreachable' })` from
+`@autom8x/automation-sdk/testing` is a transient answer to rehearse a retry with; the
+rehearsal waits the floor, 10 seconds, in real time.
 
 ## Invoice intake
 
@@ -363,6 +366,56 @@ v1 run never reaches `notify` because v1's pipeline does not declare it. Its res
 summary is bounded by the SDK before it is sent, so a long reference no longer fails
 a run already recorded (platform §12.1 #220).
 
+## Invoice processing
+
+`invoice-processing` reads a supplier invoice from a PDF or photo and creates an unpaid
+bill in QuickBooks Online (the platform's BUILD-PLAN 25.4.1, the owner's design of
+2026-10-10). It is built in groups, each appending its steps to
+`manifests/invoice-processing.v1.json` before that version is registered; the first four
+spend nothing. `receive` holds the platform's measurements of the upload — its real kind,
+its size, a PDF's pages, an image's pixels, taken once when the upload was sealed — to the
+owner's limits (a PDF, JPEG or PNG, measured as the type it declares; 3,500,000 bytes; 10
+pages; 8,000 px a side), fails closed when one is missing, and never downloads the file;
+`read-company` proves QuickBooks is connected and the company is in the US;
+`read-preferences` keeps the home currency, the multicurrency flag and the books' closing
+date; `find-account` turns the Expense account setting into exactly one active Expense
+account. Every failure ends the run with a fixed sentence, a run that ends on a thrown
+error included — never the error's message. The measurements — `measuredKind`,
+`pageCount`, `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference`
+from the platform's pull request before it merged (its BUILD-PLAN 25.2.28), and
+`measurementsOf` in `src/file.ts` is the one place that reads them.
+
+## The kit
+
+`packages/automation-kit` (`@autom8x/automation-kit`) is a library automations build
+with — the owner's decision of 2026-10-10: "should we create a library folder that
+specific automation folders call to build with". An automation depends on it by
+`file:` as it depends on the SDK, and its Dockerfile builds it and packs it into the
+image with `--install-links`, so every image carries its own copy and nothing is shared
+at run time (platform ADR-0034 decision 6; `test/isolation.test.ts` allows an automation
+the SDK and the packages under `packages/`, never another automation). It runs on Node
+built-ins alone, reaches the platform only through the SDK types it is handed, and holds
+only what an automation here uses:
+
+- `@autom8x/automation-kit/quickbooks` — `readQuickBooks`, one QuickBooks READ through
+  the step's `callProvider`. QuickBooks' own 429, inside a successful callback, waits 60
+  seconds and asks again, at most twice and only while five minutes of the run would
+  remain; a 5xx asks again once; then, and for a 408 or 425, QuickBooks is busy. A 401,
+  a 403, no live connection, a missing scope and the platform's other refusals with a
+  cause end with a fixed sentence (`QUICKBOOKS_SENTENCES`); a Fault is named by its
+  number alone; any other failure is thrown on unchanged, so the SDK's step retry can
+  repeat it. The waits use an injected `Clock`, so a suite never waits a minute. Reads
+  only: a repeated write could create a second record. Beside it, `lookupQuery` —
+  the value quoted with every backslash doubled, then every apostrophe escaped — and
+  readers for Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+- `@autom8x/automation-kit/testing` — `QuickBooksSimulator`, plugged in as
+  `RecordingPlatform.provider`: QuickBooks answering from a made-up company, behind
+  Connections' rules — a final answer replayed for the same request under its key, a
+  different request under a used key refused 409, nothing recorded for a 5xx, 401, 403,
+  408, 425 or 429, an answer over 192 KiB a 502 naming no reason, an input naming
+  `accountId` refused. It throws each refusal through the SDK's `refusalFixture`, which
+  the suite hands it, so the kit imports nothing at run time.
+
 ## Adding an automation
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
@@ -370,7 +423,9 @@ a run already recorded (platform §12.1 #220).
    lockfile: copy an existing automation's `package-lock.json` and change its two
    `name` fields, then run `npm install --package-lock-only --ignore-scripts` at the
    root so the root lock learns the workspace. Write the steps; keep prompts in
-   `prompts/`.
+   `prompts/`. To build with the kit, depend on it by `file:../../packages/automation-kit`
+   as on the SDK, pin it beside the SDK in the automation's lockfile, and build and pack
+   it in the Dockerfile as the SDK is — `invoice-processing` shows all three.
 2. Write `manifests/<templateId>.v1.json` (the template's `example.v1.json` is a
    valid start). `npm run verify` validates it against the vendored schema and
    `test/conformance.test.ts` checks that every step your code can report is
@@ -387,9 +442,14 @@ a run already recorded (platform §12.1 #220).
    customer documents get sent, review is the authorization, and a pull request is
    the only write path that carries one. The rules a manifest must meet beyond the
    schema are in `contract/README.md`, in the validator's own words.
-6. Declare the origin as `http://<templateId>.autom8x.internal:8080`. The platform
-   gives your container that name as a network alias, so it is reachable only on
-   the compose network by construction — the shape every automation here uses.
+6. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
+   service account of its own for each version: one container per manifest version for
+   everything new (the platform's D2), and its `scripts/add-automation.mjs` refuses any
+   other origin. The platform gives that version's container the name as a network
+   alias, so it is reachable only on the compose network by construction.
+   `invoice-check` and `invoice-intake` predate the rule: each v1 keeps
+   `http://<templateId>.autom8x.internal:8080`, and one container answers every
+   version's alias.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
