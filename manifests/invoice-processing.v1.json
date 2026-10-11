@@ -255,6 +255,66 @@
       "kicker": "AI STEP",
       "title": "Read it a second time",
       "description": "A second AI, by another maker, reads the type and what will be recorded without seeing the first reading; code compares the two."
+    },
+    {
+      "id": "find-vendor",
+      "kicker": "ACTION",
+      "title": "Find the vendor in QuickBooks",
+      "description": "Looks up the seller by the exact name on the document, active or inactive, or, for a purchase someone paid personally, that person among vendors."
+    },
+    {
+      "id": "find-vendor-company",
+      "kicker": "ACTION",
+      "title": "Find the vendor by company name",
+      "description": "When no vendor has that name, looks for a vendor whose company name it is."
+    },
+    {
+      "id": "find-similar-vendors",
+      "kicker": "ACTION",
+      "title": "Look for similar vendor names",
+      "description": "For a new vendor, lists existing vendors with a similar name so the approver can spot the same supplier."
+    },
+    {
+      "id": "find-customer-name",
+      "kicker": "ACTION",
+      "title": "Check customer names",
+      "description": "For a new vendor, checks that no customer already uses the name, which QuickBooks does not allow."
+    },
+    {
+      "id": "find-employee-name",
+      "kicker": "ACTION",
+      "title": "Check employee names",
+      "description": "For a new vendor, checks that no employee already uses the name, which QuickBooks does not allow."
+    },
+    {
+      "id": "find-duplicate-number",
+      "kicker": "ACTION",
+      "title": "Look for this number in QuickBooks",
+      "description": "Looks for a record that already carries the document's number, or for a statement, the numbers it lists among the vendor's records."
+    },
+    {
+      "id": "find-duplicate-amount",
+      "kicker": "ACTION",
+      "title": "Look for this amount in QuickBooks",
+      "description": "Looks for a record of the same amount around the document's date, such as a charge the bank feed brought in, or a statement's open balance."
+    },
+    {
+      "id": "find-related",
+      "kicker": "ACTION",
+      "title": "Look for a related record",
+      "description": "Looks for the record this one relates to: one with its number, a purchase it may pay, the original of a credit, or a company charge."
+    },
+    {
+      "id": "find-other-record",
+      "kicker": "ACTION",
+      "title": "Look for the same purchase recorded another way",
+      "description": "Looks for the same purchase already recorded as another kind of record, such as a receipt entered before the supplier's request for payment."
+    },
+    {
+      "id": "decide",
+      "kicker": "ACTION",
+      "title": "Decide: record it or hold it for approval",
+      "description": "Decides in code from everything found: record it, hold it once with every reason for an owner or admin, or stop with one plain sentence. Statements are compared only."
     }
   ],
   "service": {

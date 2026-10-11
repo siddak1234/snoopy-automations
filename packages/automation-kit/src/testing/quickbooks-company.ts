@@ -30,6 +30,12 @@ export interface SimulatedCompany {
   accounts: JsonObject[];
   /** Searched by `query.run` on `Employee`. */
   employees: JsonObject[];
+  /** Searched by `query.run` on `Vendor`. */
+  vendors: JsonObject[];
+  /** Searched by `query.run` on `Customer`. */
+  customers: JsonObject[];
+  /** Searched by `query.run` on `Bill`. */
+  bills: JsonObject[];
   /** Expenses: searched on `Purchase`, added by `purchase.create`. */
   purchases: JsonObject[];
   /** Searched on `VendorCredit`, added by `vendorCredit.create`. */
@@ -91,8 +97,153 @@ export function sampleEmployee(
 }
 
 /**
+ * A Vendor entity: `DisplayName` is the name QuickBooks shows, unique across vendors, customers
+ * and employees; `CompanyName` the business name, here the same unless overridden; `Balance` what
+ * the company owes it; `Vendor1099` its 1099 mark; no `CurrencyRef` (the home currency).
+ */
+export function sampleVendor(
+  id: string,
+  displayName: string,
+  overrides: JsonObject = {},
+): JsonObject {
+  return {
+    Id: id,
+    DisplayName: displayName,
+    CompanyName: displayName,
+    PrintOnCheckName: displayName,
+    Active: true,
+    Balance: 0,
+    Vendor1099: false,
+    SyncToken: '0',
+    domain: 'QBO',
+    sparse: false,
+    MetaData: META,
+    ...overrides,
+  };
+}
+
+/** A Customer entity, found by its `DisplayName` as a vendor is. */
+export function sampleCustomer(
+  id: string,
+  displayName: string,
+  overrides: JsonObject = {},
+): JsonObject {
+  return {
+    Id: id,
+    DisplayName: displayName,
+    FullyQualifiedName: displayName,
+    Active: true,
+    Balance: 0,
+    SyncToken: '0',
+    domain: 'QBO',
+    sparse: false,
+    MetaData: META,
+    ...overrides,
+  };
+}
+
+/** One account-based expense line, as a bill's or an expense's `Line` holds it. */
+export function expenseLine(amount: number, account: { value: string; name: string }): JsonObject {
+  return {
+    Id: '1',
+    Amount: amount,
+    DetailType: 'AccountBasedExpenseLineDetail',
+    AccountBasedExpenseLineDetail: { AccountRef: account, BillableStatus: 'NotBillable' },
+  };
+}
+
+/**
+ * A Bill entity in Intuit's sample shape: owed to `vendor` (its `VendorRef`), dated today, open
+ * for its whole `TotalAmt` — a `Balance` of 0 is paid — with one line on Office Supplies, unless
+ * overridden.
+ */
+export function sampleBill(
+  id: string,
+  vendor: { value: string; name: string },
+  overrides: JsonObject = {},
+): JsonObject {
+  const total = typeof overrides.TotalAmt === 'number' ? overrides.TotalAmt : 100;
+  return {
+    Id: id,
+    VendorRef: vendor,
+    TxnDate: TODAY,
+    DueDate: TODAY,
+    TotalAmt: total,
+    Balance: total,
+    APAccountRef: { value: '33', name: 'Accounts Payable (A/P)' },
+    Line: [expenseLine(total, { value: '64', name: 'Office Supplies' })],
+    SyncToken: '0',
+    domain: 'QBO',
+    sparse: false,
+    MetaData: META,
+    ...overrides,
+  };
+}
+
+/**
+ * A Purchase entity (an expense) in Intuit's sample shape: paid from `account` (its `AccountRef`),
+ * dated today, with one line on Office Supplies; `Credit` true is a refund to a card.
+ */
+export function samplePurchase(
+  id: string,
+  account: { value: string; name: string },
+  overrides: JsonObject = {},
+): JsonObject {
+  const total = typeof overrides.TotalAmt === 'number' ? overrides.TotalAmt : 100;
+  return {
+    Id: id,
+    AccountRef: account,
+    PaymentType: 'CreditCard',
+    TxnDate: TODAY,
+    TotalAmt: total,
+    Line: [expenseLine(total, { value: '64', name: 'Office Supplies' })],
+    SyncToken: '0',
+    domain: 'QBO',
+    sparse: false,
+    MetaData: META,
+    ...overrides,
+  };
+}
+
+/**
+ * A JournalEntry entity: `amount` debited to `debit` and credited to `credit`, the credit line
+ * naming `entity` when given (an employee owed, say); its `TotalAmt` 0, as Intuit's model says.
+ */
+export function sampleJournalEntry(
+  id: string,
+  amount: number,
+  accounts: { debit: { value: string; name: string }; credit: { value: string; name: string } },
+  overrides: JsonObject = {},
+  entity?: { Type: string; EntityRef: { value: string; name: string } },
+): JsonObject {
+  const line = (lineId: string, posting: string, account: JsonObject, named = false) => ({
+    Id: lineId,
+    Amount: amount,
+    DetailType: 'JournalEntryLineDetail',
+    JournalEntryLineDetail: {
+      PostingType: posting,
+      AccountRef: account,
+      ...(named && entity ? { Entity: entity } : {}),
+    },
+  });
+  return {
+    Id: id,
+    TxnDate: TODAY,
+    TotalAmt: 0,
+    Adjustment: false,
+    Line: [line('0', 'Debit', accounts.debit), line('1', 'Credit', accounts.credit, true)],
+    SyncToken: '0',
+    domain: 'QBO',
+    sparse: false,
+    MetaData: META,
+    ...overrides,
+  };
+}
+
+/**
  * A fresh company: US, home currency USD, books closed through 2025-12-31, no payroll; an
- * account for every role a flow's settings may name, one employee, and no transactions.
+ * account for every role a flow's settings may name, one employee, and no vendor, customer or
+ * transaction.
  */
 export function sampleCompany(): SimulatedCompany {
   return {
@@ -157,6 +308,9 @@ export function sampleCompany(): SimulatedCompany {
       sampleAccount('66', 'Meals', 'Expense'),
     ],
     employees: [sampleEmployee('55', 'Robin Example')],
+    vendors: [],
+    customers: [],
+    bills: [],
     purchases: [],
     vendorCredits: [],
     journalEntries: [],

@@ -71,6 +71,19 @@ export function groupedDigits(value: number): string {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/gu, ',');
 }
 
+/**
+ * Cents as a QuickBooks query's amount: whole dollars, a dot and two digits, with no sign,
+ * separator or symbol — `125000` is `1250.00`, `50` is `0.50` — the form Intuit's own examples
+ * quote (`TotalAmt > '1000.0'`), built from the integer, never through floating point. Anything
+ * but whole cents of 0 or more is the caller's mistake, refused.
+ */
+export function queryAmount(cents: number): string {
+  if (!Number.isSafeInteger(cents) || cents < 0) {
+    throw new Error('a searched amount is whole cents, 0 or more');
+  }
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+}
+
 /** Cents as a person reads them: `$1,250.00` in US dollars, `1,250.00 CAD` in any other code. */
 export function formatMoney(cents: number, currency = 'USD'): string {
   const sign = cents < 0 ? '-' : '';

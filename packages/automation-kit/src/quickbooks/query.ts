@@ -88,6 +88,25 @@ export function lookupInQuery(
   return `SELECT * FROM ${nameOf(entity, 'entity')} WHERE ${nameOf(field, 'field')} IN ${listOf(values)} AND Active IN (true, false) MAXRESULTS ${boundOf(maxResults)}`;
 }
 
+/** A word a LIKE search may hold: letters and digits only — no wildcard, apostrophe or backslash. */
+const LIKE_WORD = /^[\p{L}\p{N}]+$/u;
+
+/**
+ * Every record of `entity` — active or not — whose `field` holds `word`, at most `maxResults` of
+ * them: `SELECT * FROM Vendor WHERE DisplayName LIKE '%acme%' AND Active IN (true, false) MAXRESULTS 3`.
+ * Intuit's LIKE takes `%` alone as its wildcard, and compares without case; `word` must be one
+ * word of letters and digits, so it carries no wildcard and needs no escape of its own.
+ */
+export function lookupLikeQuery(
+  entity: string,
+  field: string,
+  word: string,
+  maxResults: number,
+): string {
+  if (!LIKE_WORD.test(word)) throw new Error('a LIKE search takes one word of letters and digits');
+  return `SELECT * FROM ${nameOf(entity, 'entity')} WHERE ${nameOf(field, 'field')} LIKE ${quoteQueryValue(`%${word}%`)} AND Active IN (true, false) MAXRESULTS ${boundOf(maxResults)}`;
+}
+
 /** The transactions a search may name: none of them is a name list, so none can be inactive. */
 export const TRANSACTION_ENTITIES = ['Bill', 'Purchase', 'VendorCredit', 'JournalEntry'] as const;
 export type TransactionEntity = (typeof TRANSACTION_ENTITIES)[number];

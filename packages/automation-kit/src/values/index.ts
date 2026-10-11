@@ -29,6 +29,7 @@ export {
   formatLimit,
   formatMoney,
   groupedDigits,
+  queryAmount,
   toCents,
   withinOneCent,
 } from './money.js';

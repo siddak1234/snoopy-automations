@@ -47,6 +47,15 @@ export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-preferences',
   'find-accounts',
   'find-payer',
+  'find-vendor',
+  'find-vendor-company',
+  'find-similar-vendors',
+  'find-customer-name',
+  'find-employee-name',
+  'find-duplicate-number',
+  'find-duplicate-amount',
+  'find-related',
+  'find-other-record',
 ]);
 
 /** The steps that call a model: a throw there that got no answer ends with the SDK's sentence. */

@@ -7,6 +7,7 @@ import {
   formatLimit,
   formatMoney,
   groupedDigits,
+  queryAmount,
   toCents,
   withinOneCent,
 } from '../src/values/money.js';
@@ -82,4 +83,16 @@ test('money as a person reads it: dollars with a sign in front, any other code a
   assert.equal(formatLimit(50050), '$500.50');
   assert.equal(groupedDigits(1234567), '1,234,567');
   assert.equal(groupedDigits(999), '999');
+});
+
+test("a searched amount is the query's literal: whole dollars, a dot, two digits, from the integer", () => {
+  assert.equal(queryAmount(125000), '1250.00');
+  assert.equal(queryAmount(50), '0.50');
+  assert.equal(queryAmount(100), '1.00');
+  assert.equal(queryAmount(0), '0.00');
+  assert.equal(queryAmount(123456789), '1234567.89');
+  assert.equal(queryAmount(MAXIMUM_CENTS), '9999999999.99');
+  for (const cents of [-1, 1.5, Number.NaN, 2 ** 53]) {
+    assert.throws(() => queryAmount(cents), /whole cents/u, String(cents));
+  }
 });

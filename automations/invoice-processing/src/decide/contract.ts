@@ -1,6 +1,7 @@
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
 import type { Route } from '../document.js';
+import { EXPENSE_SEARCH, type ExpenseSearch } from '../lookups/expense-search.js';
 import type {
   AccountsState,
   CompanyState,
@@ -11,14 +12,16 @@ import type {
 } from '../state.js';
 
 /**
- * decide's whole input (the plan's §2.6 and §5): the run state every step before it leaves. The
- * keys up to `verification` are written today; the rest are written by Group 4's lookups (steps
- * 9–17, not yet approved), and this file is the contract they adopt. decide reads nothing else,
- * and a key it needs that is missing or malformed fails the run ("could not finish its checks")
- * rather than guess (ip-review design-checks-rules-and-approval.json, cross_cutting[10]).
+ * decide's whole input (the plan's §2.6 and §5): the run state every step before it leaves — steps
+ * 1–8's keys, then the keys Group 4's lookups (steps 9–17) write, which this file is the contract
+ * of. decide reads nothing else, and a key it needs that is missing or malformed fails the run
+ * ("could not finish its checks") rather than guess (ip-review design-checks-rules-and-approval.json,
+ * cross_cutting[10]).
  *
  * A lookup that does not apply is SKIPPED, and a skipped step writes no state (the SDK's runner),
- * so its key is absent; `REQUIRED_LOOKUPS` says, per route, which must have run.
+ * so its key is absent; one that applies but has nothing it could search for — no number QuickBooks
+ * could hold (Group 4's G4-4) — says "Not checked" on its line and writes none either. `lookupUses`
+ * says which, per route, for the steps and for decide alike, so the two cannot drift apart.
  */
 
 /** find-vendor, then find-vendor-company: the supplier or seller — or, for a contractor, the person who paid. */
@@ -149,51 +152,83 @@ export interface DecideState {
 }
 
 /**
- * The lookups each route needs to have run, from what the document and the vendor are (the
- * plan's §5): a number lookup only for a number QuickBooks could hold (1–21 characters; Group 4's
- * G4-4) — a receipt's only for a seller already a vendor; a related lookup for a bill's number, a
- * credit's original invoice, a receipt and a payer; the other-record lookup (D32) for a bill and
- * a company receipt; a statement's number lookup only when it lists invoices.
+ * How a lookup step meets a document: it runs its query and writes its key; it applies, but there
+ * is no number QuickBooks could hold to search for (none read, or over 21 characters: G4-4), so its
+ * line says "Not checked" and it writes nothing; or it does not apply — skipped, no line.
  */
+export type LookupUse = 'run' | 'not_checked' | 'skip';
+
+/**
+ * Each lookup's use per route, from what the document and the vendor are (the plan's §5):
+ * - a number lookup only for a number QuickBooks could hold — a receipt's only for a seller already
+ *   a vendor, a purchase paid personally only for a bill document, a statement's only when it lists
+ *   invoices;
+ * - an amount lookup on every route;
+ * - a related lookup for a bill's number, a receipt, a payer, and a credit's original invoice
+ *   number — whatever its length, which simply finds nothing past 21 characters — from a linked
+ *   vendor;
+ * - the other-record lookup (D32) for a bill — only while expenses are searched by amount (S4's
+ *   fallback drops it) — and for a company receipt;
+ * - nothing at all for a vendor credit or a statement whose vendor is not in QuickBooks: their
+ *   lookups need the vendor, and decide fails them (F5, F6).
+ */
+export function lookupUses(
+  route: Route,
+  document: DocumentState,
+  vendor: VendorState | null,
+  expenseSearch: ExpenseSearch = EXPENSE_SEARCH,
+): Readonly<Record<LookupKey, LookupUse>> {
+  const linked = vendor?.status === 'matched';
+  const byNumber: LookupUse = document.numberUsable ? 'run' : 'not_checked';
+  const when = (applies: boolean, use: LookupUse = 'run'): LookupUse => (applies ? use : 'skip');
+  const uses = (
+    numberLookup: LookupUse,
+    relatedLookup: LookupUse,
+    otherRecordLookup: LookupUse = 'skip',
+  ) => ({ numberLookup, amountLookup: 'run' as const, relatedLookup, otherRecordLookup });
+  switch (route) {
+    case 'bill':
+      return uses(byNumber, byNumber, when(expenseSearch === 'amount'));
+    case 'company_receipt':
+      return uses(when(linked, byNumber), 'run', 'run');
+    case 'card_refund':
+      return uses(byNumber, when(linked && document.originalInvoiceNumber !== null));
+    case 'employee':
+    case 'owner':
+    case 'contractor':
+      return uses(when(document.type === 'bill', byNumber), 'run');
+    case 'vendor_credit':
+    case 'statement': {
+      if (!linked) {
+        return {
+          numberLookup: 'skip',
+          amountLookup: 'skip',
+          relatedLookup: 'skip',
+          otherRecordLookup: 'skip',
+        };
+      }
+      return route === 'statement'
+        ? uses(when((document.statement?.rows ?? []).some((row) => row.kind === 'invoice')), 'skip')
+        : uses(byNumber, when(document.originalInvoiceNumber !== null));
+    }
+  }
+}
+
+/** The lookups a route needs to have run — its `lookupUses` that run — amount first. */
 export function requiredLookups(
   route: Route,
   document: DocumentState,
   vendor: VendorState | null,
+  expenseSearch: ExpenseSearch = EXPENSE_SEARCH,
 ): readonly LookupKey[] {
-  const linked = vendor?.status === 'matched';
-  const numbered = document.numberUsable;
-  const original = document.originalInvoiceNumber !== null;
-  const required: LookupKey[] = ['amountLookup'];
-  switch (route) {
-    case 'bill':
-      if (numbered) required.push('numberLookup', 'relatedLookup');
-      required.push('otherRecordLookup');
-      break;
-    case 'company_receipt':
-      if (numbered && linked) required.push('numberLookup');
-      required.push('relatedLookup', 'otherRecordLookup');
-      break;
-    case 'card_refund':
-      if (numbered) required.push('numberLookup');
-      if (linked && original) required.push('relatedLookup');
-      break;
-    case 'vendor_credit':
-      if (numbered) required.push('numberLookup');
-      if (original) required.push('relatedLookup');
-      break;
-    case 'employee':
-    case 'owner':
-    case 'contractor':
-      if (numbered && document.type === 'bill') required.push('numberLookup');
-      required.push('relatedLookup');
-      break;
-    case 'statement':
-      if ((document.statement?.rows ?? []).some((row) => row.kind === 'invoice')) {
-        required.push('numberLookup');
-      }
-      break;
-  }
-  return required;
+  const uses = lookupUses(route, document, vendor, expenseSearch);
+  const order: readonly LookupKey[] = [
+    'amountLookup',
+    'numberLookup',
+    'relatedLookup',
+    'otherRecordLookup',
+  ];
+  return order.filter((key) => uses[key] === 'run');
 }
 
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== '';
@@ -254,7 +289,8 @@ function lookupOf(value: unknown): LookupState | null | undefined {
   return value.records.every(isRecord) ? (value as unknown as LookupState) : undefined;
 }
 
-function vendorOf(value: unknown): VendorState | null | undefined {
+/** `state.vendor` as find-vendor writes it: null when absent, undefined when malformed. */
+export function vendorOf(value: unknown): VendorState | null | undefined {
   if (value === undefined) return null;
   if (!isObject(value)) return undefined;
   if (value.status === 'new') return { status: 'new' };
@@ -279,9 +315,13 @@ function clashOf(value: unknown): NameClash | null | undefined {
 /**
  * The state as decide reads it, or undefined when a record it needs is missing or malformed: the
  * earlier steps' keys, the vendor on every route that has one, the name checks for a new vendor's
- * bill, and each lookup the route requires — "state incomplete", never a guess.
+ * bill, and each lookup the route requires under `expenseSearch` (S4) — "state incomplete", never
+ * a guess.
  */
-export function readDecideState(state: JsonObject): DecideState | undefined {
+export function readDecideState(
+  state: JsonObject,
+  expenseSearch: ExpenseSearch = EXPENSE_SEARCH,
+): DecideState | undefined {
   const { file, company, preferences, accounts, document, verification, modelServed } = state;
   if (
     !isObject(file) ||
@@ -326,7 +366,7 @@ export function readDecideState(state: JsonObject): DecideState | undefined {
       ? (similar as unknown as SimilarVendorsState)
       : null;
   if (newVendorBill && (customer === null || employee === null)) return undefined;
-  for (const key of requiredLookups(doc.route, doc, vendor)) {
+  for (const key of requiredLookups(doc.route, doc, vendor, expenseSearch)) {
     if (lookups[key] === null) return undefined;
   }
   return {

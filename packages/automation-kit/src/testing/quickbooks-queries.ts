@@ -2,6 +2,7 @@ import type { JsonObject, ProviderAnswer } from '@autom8x/automation-sdk';
 
 import {
   lookupInQuery,
+  lookupLikeQuery,
   lookupQuery,
   transactionQuery,
   type QueryCondition,
@@ -13,14 +14,16 @@ import { faultAnswer, queryAnswer, type SimulatedCompany } from './quickbooks-co
  * QuickBooks answering `query.run` from the made-up company, by Intuit's documented rules
  * ("Query operations and syntax"; the filterable and sortable flags of its model file,
  * CodesModelsJsonObjects_v2.json, read 2026-10-11): values compared without case, IN, =,
- * <, >, <= and >= joined by AND, ORDERBY on a sortable field, MAXRESULTS the most rows
- * returned, and `Active IN (true, false)` on a name list alone.
+ * <, >, <=, >= and LIKE (`%` its one wildcard) joined by AND — never OR — ORDERBY on a
+ * sortable field, MAXRESULTS the most rows returned, and `Active IN (true, false)` on a name
+ * list alone.
  *
- * It answers only the text the kit's builders write — `lookupQuery` and `lookupInQuery` on
- * Account and Employee, `transactionQuery` on Purchase, VendorCredit and JournalEntry —
- * read back and written again, byte for byte. Any other text, a field Intuit does not mark
- * filterable, or an ORDERBY on one it does not mark sortable, is a 400 parser Fault: what
- * Intuit answers there is not documented, and a test that sends one should fail.
+ * It answers only the text the kit's builders write — `lookupQuery`, `lookupInQuery` and
+ * `lookupLikeQuery` on Account, Employee, Vendor and Customer, `transactionQuery` on Bill,
+ * Purchase, VendorCredit and JournalEntry — read back and written again, byte for byte. Any
+ * other text, an OR among them, a field Intuit does not mark filterable, or an ORDERBY on one
+ * it does not mark sortable, is a 400 parser Fault: what Intuit answers there is not
+ * documented, and a test that sends one should fail.
  */
 
 /** The entities the simulator holds, where each lives, and which are name lists. */
@@ -32,6 +35,9 @@ const ENTITIES: Readonly<
 > = {
   Account: { rows: (company) => company.accounts, list: true },
   Employee: { rows: (company) => company.employees, list: true },
+  Vendor: { rows: (company) => company.vendors, list: true },
+  Customer: { rows: (company) => company.customers, list: true },
+  Bill: { rows: (company) => company.bills, list: false },
   Purchase: { rows: (company) => company.purchases, list: false },
   VendorCredit: { rows: (company) => company.vendorCredits, list: false },
   JournalEntry: { rows: (company) => company.journalEntries, list: false },
@@ -63,6 +69,42 @@ const FILTERABLE: Readonly<Record<string, readonly string[]>> = {
     'PrintOnCheckName',
     'Active',
   ],
+  Vendor: [
+    'Id',
+    'DisplayName',
+    'GivenName',
+    'MiddleName',
+    'FamilyName',
+    'Suffix',
+    'PrintOnCheckName',
+    'CompanyName',
+    'Active',
+    'Balance',
+  ],
+  Customer: [
+    'Id',
+    'DisplayName',
+    'GivenName',
+    'MiddleName',
+    'FamilyName',
+    'PrintOnCheckName',
+    'CompanyName',
+    'FullyQualifiedName',
+    'PrimaryEmailAddr',
+    'Active',
+    'Balance',
+  ],
+  Bill: [
+    'Id',
+    'TxnDate',
+    'DueDate',
+    'DocNumber',
+    'TotalAmt',
+    'Balance',
+    'VendorRef',
+    'APAccountRef',
+    'SalesTermRef',
+  ],
   // Not TotalAmt: sandbox item S4, behind `expenseAmountSearchable`.
   Purchase: ['Id', 'TxnDate', 'DocNumber'],
   VendorCredit: ['Id', 'TxnDate', 'DocNumber', 'TotalAmt', 'APAccountRef'],
@@ -71,6 +113,15 @@ const FILTERABLE: Readonly<Record<string, readonly string[]>> = {
 
 /** Marked `sortable` in Intuit's model file, for the transactions a search may order. */
 const SORTABLE: Readonly<Record<string, readonly string[]>> = {
+  Bill: [
+    'TxnDate',
+    'DueDate',
+    'DocNumber',
+    'TotalAmt',
+    'VendorRef',
+    'APAccountRef',
+    'SalesTermRef',
+  ],
   Purchase: ['TxnDate', 'DocNumber'],
   VendorCredit: ['TxnDate', 'DocNumber', 'TotalAmt', 'APAccountRef', 'Balance'],
   JournalEntry: ['TxnDate', 'DocNumber'],
@@ -84,10 +135,14 @@ export interface QueryRules {
   readonly expenseAmountSearchable: boolean;
 }
 
+/** A condition read back: a builder's, or a name list's `LIKE '%word%'`. */
+type Condition =
+  QueryCondition | { readonly field: string; readonly operator: 'LIKE'; readonly value: string };
+
 /** A query read back: `Active IN (true, false)` is consumed and not kept — the rebuild writes it. */
 interface Parsed {
   readonly entity: string;
-  readonly where: QueryCondition[];
+  readonly where: Condition[];
   readonly orderBy?: { readonly field: string; readonly descending: boolean };
   readonly maxResults: number;
 }
@@ -131,7 +186,7 @@ function parse(text: string): Parsed | undefined {
   if (!expect('SELECT') || !expect('*') || !expect('FROM')) return undefined;
   const entity = next();
   if (entity === undefined || !expect('WHERE')) return undefined;
-  const where: QueryCondition[] = [];
+  const where: Condition[] = [];
   for (;;) {
     const field = next();
     const operator = next();
@@ -152,7 +207,7 @@ function parse(text: string): Parsed | undefined {
         }
         where.push({ field, operator: 'IN', values });
       }
-    } else if (['=', '<', '>', '<=', '>='].includes(operator)) {
+    } else if (['=', '<', '>', '<=', '>=', 'LIKE'].includes(operator)) {
       const item = value();
       if (item === undefined) return undefined;
       where.push({ field, operator: operator as '=', value: item });
@@ -194,13 +249,21 @@ function rebuilt(parsed: Parsed): string | undefined {
     if (holder.list) {
       const [first] = where;
       if (!first) return undefined;
+      if (first.operator === 'LIKE') {
+        // The builder writes `%word%`: the word is what lies between the two wildcards.
+        const word = /^%(.*)%$/su.exec(first.value)?.[1];
+        return word === undefined
+          ? undefined
+          : lookupLikeQuery(entity, first.field, word, maxResults);
+      }
       return first.operator === 'IN'
         ? lookupInQuery(entity, first.field, first.values, maxResults)
         : lookupQuery(entity, first.field, first.value, maxResults);
     }
+    // A LIKE on a transaction is no builder's: `transactionQuery` refuses the operator.
     return transactionQuery({
       entity: entity as TransactionEntity,
-      where,
+      where: where as QueryCondition[],
       ...(orderBy ? { orderBy } : {}),
       maxResults,
     });
@@ -217,8 +280,14 @@ function fieldOf(row: JsonObject, field: string): unknown {
     : value;
 }
 
+/** `LIKE`: the value's `%` any run of characters, the rest matched as written, without case. */
+function likePattern(value: string): RegExp {
+  const parts = value.split('%').map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'));
+  return new RegExp(`^${parts.join('.*')}$`, 'isu');
+}
+
 /** Intuit compares without case; a number as a number, a date as its `YYYY-MM-DD` text. */
-function holds(row: JsonObject, condition: QueryCondition): boolean {
+function holds(row: JsonObject, condition: Condition): boolean {
   const actual = fieldOf(row, condition.field);
   if (actual === undefined || actual === null) return false;
   const compare = (wanted: string): number => {
@@ -228,6 +297,8 @@ function holds(row: JsonObject, condition: QueryCondition): boolean {
     return left < right ? -1 : left > right ? 1 : 0;
   };
   switch (condition.operator) {
+    case 'LIKE':
+      return typeof actual === 'string' && likePattern(condition.value).test(actual);
     case 'IN':
       return condition.values.some((wanted) => compare(wanted) === 0);
     case '=':
