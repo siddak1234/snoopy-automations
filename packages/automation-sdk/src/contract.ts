@@ -201,6 +201,21 @@ export interface ArtifactReference {
   sha256?: string | null;
   downloadUrl: string;
   expiresAt: string;
+  /*
+   * COPIED from the platform's artifact answer as its pull request names it (BUILD-PLAN
+   * 25.2.28: snoopy-backend 023aa84 on `round-17/upload-file-measurement`, not yet
+   * merged), to be re-copied when it merges: what the file's bytes were measured to be
+   * when its upload was sealed — each null when nothing was measured, and absent from a
+   * platform without that change. Read only by `measurementsOf` in
+   * `automations/invoice-processing/src/file.ts`.
+   */
+  /** The real kind, from the file's leading bytes. */
+  measuredKind?: 'pdf' | 'jpeg' | 'png' | null;
+  /** A PDF's pages. */
+  pageCount?: number | null;
+  /** A JPEG's or PNG's stored width and height. */
+  widthPixels?: number | null;
+  heightPixels?: number | null;
 }
 
 /** A file named without a link — what the callback answers when no id is asked for. */

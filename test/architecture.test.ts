@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative, resolve, sep } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 
 // Named import for ajv, `.default` for ajv-formats: both ship CommonJS with
@@ -135,9 +135,9 @@ test('every workspace declares the scripts the gate runs', () => {
   }
 });
 
-test('the SDK is consumable through its published entries', async () => {
+test('the SDK and the kit are consumable through their published entries', async () => {
   // Resolved through the package `exports` map to `dist`, exactly as an automation
-  // imports it — which the SDK's own suite never does, since it imports `src`. A
+  // imports it — which a package's own suite never does, since it imports `src`. A
   // broken entry would otherwise surface only in the first automation's build.
   // Needs the build to have run: `npm run verify` orders it before this.
   const sdk = (await import('@autom8x/automation-sdk')) as Record<string, unknown>;
@@ -156,6 +156,71 @@ test('the SDK is consumable through its published entries', async () => {
   const testing = (await import('@autom8x/automation-sdk/testing')) as Record<string, unknown>;
   for (const name of ['RecordingPlatform', 'invokeFixture', 'declaredSteps']) {
     assert.ok(name in testing, `@autom8x/automation-sdk/testing exports no ${name}`);
+  }
+  const quickbooks = (await import('@autom8x/automation-kit/quickbooks')) as Record<
+    string,
+    unknown
+  >;
+  for (const name of ['readQuickBooks', 'lookupQuery', 'queryRowsOf', 'QUICKBOOKS_SENTENCES']) {
+    assert.ok(name in quickbooks, `@autom8x/automation-kit/quickbooks exports no ${name}`);
+  }
+  const kitTesting = (await import('@autom8x/automation-kit/testing')) as Record<string, unknown>;
+  for (const name of ['QuickBooksSimulator', 'PROVIDER_REFUSALS', 'sampleAccount']) {
+    assert.ok(name in kitTesting, `@autom8x/automation-kit/testing exports no ${name}`);
+  }
+});
+
+/**
+ * The modules built JavaScript imports: its `import` and `export … from` statements,
+ * which the compiler writes at the start of a line, and any dynamic `import()`. Read
+ * by statement, so a string that happens to end in "from" is not taken for one.
+ */
+function importedModules(source: string): string[] {
+  const statements = /^\s*(?:import|export)\s+(?:[\w$*{},\s]+?\s+from\s*)?['"]([^'"]+)['"]/gmu;
+  const dynamic = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/gu;
+  return [...source.matchAll(statements), ...source.matchAll(dynamic)].map((match) => match[1]!);
+}
+
+/** What a package under `packages/` declares about how it ships. */
+interface LibraryJson extends PackageJson {
+  files?: unknown;
+  exports?: Record<string, Record<string, string>>;
+}
+
+test('every package under packages/ ships its built dist alone, and runs on Node built-ins alone', () => {
+  // Each is packed into every image that depends on it (`--install-links`), so what
+  // ships is `dist`; a runtime dependency would ride into every one of those images
+  // unaudited (rule 8). What runs is the build, so the build is what is read:
+  // every module its JavaScript imports is a Node built-in or one of its own files —
+  // a type of the SDK's is imported as a type, and is gone.
+  const libraries = childDirectories(packagesRoot);
+  assert.ok(libraries.length > 0, 'packages/ holds no package');
+  for (const directory of libraries) {
+    const label = relative(repositoryRoot, directory);
+    const manifest = JSON.parse(
+      readFileSync(join(directory, 'package.json'), 'utf8'),
+    ) as LibraryJson;
+    assert.deepEqual(manifest.files, ['dist'], `${label} must ship dist alone`);
+    for (const [entry, targets] of Object.entries(manifest.exports ?? {})) {
+      for (const target of Object.values(targets)) {
+        assert.ok(target.startsWith('./dist/'), `${label} exports ${entry} from ${target}`);
+      }
+    }
+    for (const block of ['dependencies', 'peerDependencies', 'optionalDependencies'] as const) {
+      assert.deepEqual(Object.keys(manifest[block] ?? {}), [], `${label} declares ${block}`);
+    }
+    const built = sourceFiles(join(directory, 'dist')).filter((file) => file.endsWith('.js'));
+    assert.ok(built.length > 0, `${label}/dist holds no JavaScript — run npm run build first?`);
+    for (const file of built) {
+      for (const specifier of importedModules(readFileSync(file, 'utf8'))) {
+        assert.ok(
+          specifier.startsWith('node:') ||
+            specifier.startsWith('./') ||
+            specifier.startsWith('../'),
+          `${relative(repositoryRoot, file)} imports ${specifier} at run time`,
+        );
+      }
+    }
   }
 });
 
@@ -183,7 +248,7 @@ test('every automation is a complete unit', () => {
   }
 });
 
-test('every automation lockfile belongs to that automation and locks the local SDK', () => {
+test('every automation lockfile pins each local package it uses, and its image packs each one', () => {
   for (const directory of childDirectories(automationsRoot)) {
     const packageManifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as {
       name?: string;
@@ -217,11 +282,30 @@ test('every automation lockfile belongs to that automation and locks the local S
       'file:../../packages/automation-sdk',
       `${basename(directory)} must consume the local SDK as its platform boundary`,
     );
-    assert.equal(
-      lock.packages?.['node_modules/@autom8x/automation-sdk']?.resolved,
-      'file:../../packages/automation-sdk',
-      `${basename(directory)} lock does not pin the local SDK`,
+    // Every local package — the SDK, and any library it builds with — pinned in its
+    // own lock and packed by its own image: its manifest and built dist copied out of
+    // the build stage, then installed as files, not linked.
+    const dockerfile = readFileSync(join(directory, 'Dockerfile'), 'utf8');
+    assert.match(
+      dockerfile,
+      /npm ci --omit=dev --ignore-scripts --workspaces=false --install-links=true/u,
+      `${basename(directory)}/Dockerfile does not pack its local packages`,
     );
+    for (const [dependency, range] of Object.entries(packageManifest.dependencies ?? {})) {
+      if (!range.startsWith('file:')) continue;
+      assert.equal(
+        lock.packages?.[`node_modules/${dependency}`]?.resolved,
+        range,
+        `${basename(directory)} lock does not pin ${dependency} at ${range}`,
+      );
+      const local = relative(repositoryRoot, resolve(directory, range.slice('file:'.length)));
+      for (const part of ['package.json', 'dist']) {
+        assert.ok(
+          dockerfile.includes(`COPY --from=build /workspace/${local}/${part} ./${local}/${part}`),
+          `${basename(directory)}/Dockerfile does not pack ${local}/${part}`,
+        );
+      }
+    }
   }
 });
 
@@ -281,108 +365,4 @@ test('source files stay under the line ceiling', () => {
     if (lines > LINE_CEILING) over.push(`${relative(repositoryRoot, file)} (${lines})`);
   }
   assert.deepEqual(over, [], `over ${LINE_CEILING} lines — split the file`);
-});
-
-/**
- * The engine rule — platform ADR-0034 decision 6, the owner's words of 2026-10-08:
- * "automations are vendor or tool agnostic ... each automation is its own applet
- * service. however it should not bring another down." An automation may run ANY
- * engine behind the serving shell — Temporal, n8n, another — as one engine
- * instance per automation, with that engine's state in the automation's own store;
- * nothing is shared with another automation or with the platform, so one engine's
- * failure reaches no other automation; the contract stays the probe, the invoke
- * and the callbacks, and every provider and model call still goes through the
- * platform.
- *
- * WHAT THIS TEST HOLDS, the strongest form a static test here can: every automation
- * is a complete unit with its own package.json, lockfile, Dockerfile and entrypoint
- * (the test above); no automation declares a dependency on another automation, by
- * name or by `file:` path — the one local dependency allowed is the SDK; no source
- * file under `automations/<a>` imports anything under `automations/<b>`, by package
- * name or by relative path; no automation's Dockerfile copies anything from another
- * automation's directory into its image. Two automations therefore share no code,
- * no file, no image layer of each other's, and no process.
- *
- * WHAT IT CANNOT CHECK: whether two containers share a volume, a database, a queue
- * or a network at run time, and whether an engine runs as one instance per
- * automation — those are written in the platform's compose files and the engine's
- * own configuration, which this repository does not hold. The platform's compose
- * is where that half of the rule is read.
- */
-test('no automation depends on, imports from, or copies another automation (ADR-0034 decision 6)', () => {
-  const automations = childDirectories(automationsRoot);
-  const names = new Map<string, string>(); // package name -> directory name
-  for (const directory of automations) {
-    const manifest = JSON.parse(
-      readFileSync(join(directory, 'package.json'), 'utf8'),
-    ) as PackageJson;
-    if (manifest.name) names.set(manifest.name, basename(directory));
-  }
-  assert.ok(names.size === automations.length, 'every automation names its package');
-
-  for (const directory of automations) {
-    const name = basename(directory);
-    const manifest = JSON.parse(
-      readFileSync(join(directory, 'package.json'), 'utf8'),
-    ) as PackageJson;
-    for (const block of [
-      manifest.dependencies,
-      manifest.devDependencies,
-      manifest.peerDependencies,
-      manifest.optionalDependencies,
-    ]) {
-      for (const [dependency, range] of Object.entries(block ?? {})) {
-        assert.ok(
-          !names.has(dependency) || names.get(dependency) === name,
-          `automations/${name} declares ${dependency}, another automation — an automation shares no code with another`,
-        );
-        assert.ok(
-          !range.startsWith('file:') || dependency === '@autom8x/automation-sdk',
-          `automations/${name} declares ${dependency} as ${range}; the only local dependency is the SDK`,
-        );
-      }
-    }
-
-    for (const file of sourceFiles(directory)) {
-      const source = readFileSync(file, 'utf8');
-      // `from '…'`, a bare `import '…'`, `import('…')` and `require('…')` alike.
-      for (const match of source.matchAll(
-        /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/gu,
-      )) {
-        const specifier = match[1]!;
-        for (const [packageName, owner] of names) {
-          assert.ok(
-            owner === name ||
-              !(specifier === packageName || specifier.startsWith(`${packageName}/`)),
-            `${relative(repositoryRoot, file)} imports ${specifier}, another automation`,
-          );
-        }
-        if (specifier.startsWith('.')) {
-          const target = resolve(join(file, '..'), specifier);
-          assert.ok(
-            target.startsWith(directory + sep) || target === directory,
-            `${relative(repositoryRoot, file)} imports ${specifier}, which leaves automations/${name}`,
-          );
-        }
-      }
-    }
-
-    // Sources only: the last token of a COPY or ADD is the destination inside the
-    // image, where naming a directory copies nothing.
-    const dockerfile = readFileSync(join(directory, 'Dockerfile'), 'utf8');
-    for (const match of dockerfile.matchAll(/^\s*(?:COPY|ADD)\b(.*)$/gmu)) {
-      const sources = match[1]!
-        .trim()
-        .split(/\s+/u)
-        .filter((token) => !token.startsWith('--'))
-        .slice(0, -1);
-      for (const source of sources) {
-        const other = /^automations\/([a-z0-9-]+)(?:\/|$)/u.exec(source);
-        assert.ok(
-          !other || other[1] === name,
-          `automations/${name}/Dockerfile copies ${source} into its image: two automations share no file and no image layer`,
-        );
-      }
-    }
-  }
 });

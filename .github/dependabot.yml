@@ -33,11 +33,10 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
-  # No npm entry for automations/invoice-intake or automations/invoice-check: each
-  # one's only dependency is the local SDK (file:), and its dev tooling is never
-  # installed in the image (the Dockerfile's `--omit=dev`). An entry there raised
-  # ranges the root lock did not carry, and the root entry raised ranges that
-  # automation's lock did not carry.
+  # No npm entry for any automation: each one's only dependencies are the local SDK
+  # and kit (file:), and its dev tooling is never installed in the image (the
+  # Dockerfile's `--omit=dev`). An entry there raised ranges the root lock did not
+  # carry, and the root entry raised ranges that automation's lock did not carry.
 
   - package-ecosystem: docker
     directory: /automations/invoice-intake
@@ -53,6 +52,17 @@ updates:
   # BUILD-PLAN 25.3.8); the same base image and the same rule.
   - package-ecosystem: docker
     directory: /automations/invoice-check
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
+  # invoice-processing, Round 17's first automation (its BUILD-PLAN 25.4.1): the same
+  # base image and the same rule.
+  - package-ecosystem: docker
+    directory: /automations/invoice-processing
     schedule:
       interval: monthly
     open-pull-requests-limit: 1

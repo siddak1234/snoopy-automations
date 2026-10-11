@@ -1,0 +1,25 @@
+{
+  "name": "@autom8x/invoice-processing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reads a supplier invoice from a PDF or photo and creates an unpaid bill in QuickBooks Online. Built in groups: this one checks the file, the QuickBooks company, its settings and the expense account.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@autom8x/automation-kit": "file:../../packages/automation-kit",
+    "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
