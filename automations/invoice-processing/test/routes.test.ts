@@ -214,7 +214,7 @@ test("a statement: compared, never held — the vendor's bills among its numbers
   );
 });
 
-test("a statement whose vendor has 41 open bills it does not list, the lookup reading 40: the output's count says it may be short (D6)", async () => {
+test("a statement whose vendor has 41 open bills it does not list, the lookup reading 40: the output's flag, decide's line and the run's summary each say the count may be short (D6)", async () => {
   const { world } = await route({
     answer: statement(),
     company: (sim) => {
@@ -238,7 +238,14 @@ test("a statement whose vendor has 41 open bills it does not list, the lookup re
     [compared.openBillsNotListed, compared.openBillsCheckable, compared.listedCheckable],
     [{ count: 40, totalCents: 40_000 }, false, true],
   );
-  assert.match(world.result.summary ?? '', /; 40 open bills not on it \(\$400\.00\)/u);
+  const line =
+    'Statement balance $686.54; QuickBooks shows $980.00 open (differs by $293.46); 3 listed invoices not in QuickBooks; 40 open bills not on it ($400.00) (too many to check). Nothing was created.';
+  assert.equal(
+    world.platform.steps.find((step) => step.stepId === 'decide')?.summary,
+    line,
+    "decide's line",
+  );
+  assert.equal(world.result.summary, line, "the run's summary");
 });
 
 test('a bill whose number an expense already carries, whoever its payee, holds as a possible duplicate (decision 6, G4-5)', async () => {

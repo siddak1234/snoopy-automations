@@ -43,7 +43,7 @@ test('Bills & Receipts, still the invoice-processing template, says what each do
   );
   assert.equal(
     manifest.requiredConnections[0]?.purpose,
-    'Looks up accounts, vendors, employees, bills and expenses, and creates vendors, bills, expenses, vendor credits and journal entries.',
+    'Looks up accounts, vendors, customers, employees, bills, expenses, vendor credits and journal entries, and creates vendors, bills, expenses, vendor credits and journal entries.',
   );
 });
 

@@ -207,6 +207,41 @@ test('employees this connection cannot read — a 403, an AuthorizationFault —
   });
 });
 
+test('a body that is no query answer: the similar-names list goes on past it with its failed line; the employee check fails with the unexpected-answer sentence (N5)', async () => {
+  const similar = await routeRun({
+    answer: bill(),
+    bare: true,
+    company: (sim) =>
+      sim.script('query.run', [...before(3), { status: 200, body: { Vendor: [] } }]),
+  });
+  assert.deepEqual(
+    lines(similar.platform).find(([stepId]) => stepId === 'find-similar-vendors'),
+    [
+      'find-similar-vendors',
+      'failed',
+      'Similar vendor names could not be looked up; check QuickBooks for this vendor before approving',
+    ],
+  );
+  assert.ok(reported(similar).includes('find-customer-name'), 'the run went on');
+  assert.equal(similar.result.outcome, 'held', 'held as a new vendor, not failed');
+  const employee = await routeRun({
+    answer: bill(),
+    bare: true,
+    company: (sim) =>
+      sim.script('query.run', [...before(5), { status: 200, body: { Employee: [] } }]),
+  });
+  assert.deepEqual(employee.result, {
+    outcome: 'failed',
+    failureReason:
+      'QuickBooks answered in an unexpected way. Run it again; if it repeats, reconnect QuickBooks.',
+  });
+  assert.deepEqual(lines(employee.platform).at(-1), [
+    'find-employee-name',
+    'failed',
+    'Employee names not checked (unexpected_answer)',
+  ]);
+});
+
 test("QuickBooks refusing the customer query fails with its sentence, the code in the line and never Intuit's words", async () => {
   const world = await routeRun({
     answer: bill(),

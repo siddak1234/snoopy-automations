@@ -61,6 +61,13 @@ export const LOOKUP_SENTENCES = {
     'QuickBooks could not search for a record this one relates to. Enter it by hand in QuickBooks. Nothing was created.',
   other_record_refused:
     'QuickBooks could not search for this purchase recorded another way. Enter it by hand in QuickBooks. Nothing was created.',
+  /** A statement's: it is compared with QuickBooks, never entered (D26). */
+  statement_vendor_refused:
+    "QuickBooks could not search for this statement's vendor. Compare the statement in QuickBooks. Nothing was created.",
+  statement_number_refused:
+    "QuickBooks could not search this vendor's bills for the invoices the statement lists. Compare the statement in QuickBooks. Nothing was created.",
+  statement_amount_refused:
+    "QuickBooks could not search this vendor's open bills. Compare the statement in QuickBooks. Nothing was created.",
   /** A guard that should never fire: a key an earlier step writes is missing or malformed. */
   state_incomplete:
     'Bills & Receipts could not finish its checks. Run it again. Nothing was created.',

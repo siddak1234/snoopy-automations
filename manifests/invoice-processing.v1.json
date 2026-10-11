@@ -41,7 +41,7 @@
     {
       "providerId": "quickbooks",
       "displayName": "QuickBooks Online",
-      "purpose": "Looks up accounts, vendors, employees, bills and expenses, and creates vendors, bills, expenses, vendor credits and journal entries.",
+      "purpose": "Looks up accounts, vendors, customers, employees, bills, expenses, vendor credits and journal entries, and creates vendors, bills, expenses, vendor credits and journal entries.",
       "scopes": ["com.intuit.quickbooks.accounting"]
     }
   ],

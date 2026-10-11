@@ -3,16 +3,12 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import {
-  LOOKUP_KEYS,
-  readDecideState,
-  requiredLookups,
-  type VendorState,
-} from '../src/decide/contract.js';
+import { LOOKUP_KEYS, readDecideState, type VendorState } from '../src/decide/contract.js';
+import { requiredLookups } from '../src/decide/lookup-uses.js';
 import type { ExpenseSearch } from '../src/lookups/expense-search.js';
 import type { DocumentState } from '../src/state.js';
 import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
-import { PAID, routeRun, stateOf, type RouteRun } from './lookups-world.js';
+import { PAID, routeRun, sampleVendor, stateOf, type RouteRun } from './lookups-world.js';
 
 /**
  * decide's whole input, per path (the plan's §2.9): the state the real steps 1–17 leave on the
@@ -36,6 +32,39 @@ const PATHS: readonly [string, RouteRun][] = [
   ['contractor', { answer: receipt(), ...PAID.contractor }],
   ['statement', { answer: statement() }],
   ['statement, the vendor not in QuickBooks', { answer: statement(), bare: true }],
+  [
+    'company receipt, the seller an inactive vendor’s name: not linked',
+    {
+      answer: receipt(),
+      bare: true,
+      company: (sim) =>
+        sim.company.vendors.push(sampleVendor('9', 'Tidewell Hardware', { Active: false })),
+    },
+  ],
+  [
+    'card refund, the seller two vendors’ name: not linked',
+    {
+      answer: sampleAnswer('card-refund'),
+      bare: true,
+      company: (sim) =>
+        sim.company.vendors.push(
+          sampleVendor('9', 'Tidewell Hardware'),
+          sampleVendor('19', 'TIDEWELL HARDWARE'),
+        ),
+    },
+  ],
+  [
+    'vendor credit, its original number past 21 characters',
+    { answer: creditNote({ originalInvoiceNumber: 'O'.repeat(22) }) },
+  ],
+  [
+    'statement, every listed number past 21 characters',
+    {
+      answer: statement({
+        listedItems: [{ reference: 'L'.repeat(22), amount: 686.54, kind: 'invoice' }],
+      }),
+    },
+  ],
 ];
 
 /** The keys the steps before decide write, besides the lookups and the name checks. */

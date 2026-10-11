@@ -4,13 +4,13 @@ import { test } from 'node:test';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import type { VendorState } from '../src/decide/contract.js';
+import { listedInvoiceNumbers } from '../src/decide/lookup-uses.js';
 import {
   MAX_RESULTS,
   amountSearch,
   customerByName,
   employeeByName,
   feedWindow,
-  listedInvoiceNumbers,
   numberSearch,
   otherRecordSearch,
   relatedSearch,
@@ -184,7 +184,7 @@ test('a card refund: vendor credits with its number, the card feed (D21; S4), an
   );
 });
 
-test('a vendor credit: its number and its total and date among vendor credits — the vendor compared in code — and the original bill from the vendor, even a long number', () => {
+test("a vendor credit: its number and its total and date among vendor credits — the vendor compared in code — and the original bill from the vendor, by a number a bill's could be", () => {
   const document = doc(creditNote());
   assert.equal(
     numberSearch(document, VENDOR).query,
@@ -198,13 +198,11 @@ test('a vendor credit: its number and its total and date among vendor credits �
     relatedSearch(document, VENDOR, 'amount').query,
     "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' AND VendorRef = '7' MAXRESULTS 3",
   );
-  const long = 'L'.repeat(30);
-  assert.ok(
-    relatedSearch(
-      doc(creditNote({ originalInvoiceNumber: long })),
-      VENDOR,
-      'amount',
-    ).query.includes(`DocNumber = '${long}'`),
+  // 21 characters, the most a bill's number holds; a longer one is never searched (`lookupUses`).
+  const most = 'L'.repeat(21);
+  assert.equal(
+    relatedSearch(doc(creditNote({ originalInvoiceNumber: most })), VENDOR, 'amount').query,
+    `SELECT * FROM Bill WHERE DocNumber = '${most}' AND VendorRef = '7' MAXRESULTS 3`,
   );
 });
 
@@ -258,6 +256,24 @@ test("a statement: this vendor's bills among the listed invoice numbers, each on
     total: 380,
   });
   assert.deepEqual(listedInvoiceNumbers(doc(twice)), ['HOS-1031']);
+  assert.equal(
+    numberSearch(doc(twice), VENDOR).query,
+    "SELECT * FROM Bill WHERE DocNumber IN ('HOS-1031') AND VendorRef = '7' MAXRESULTS 2",
+  );
+  // A listed number longer than a bill's 21 characters is left out: no bill can have it.
+  const long = `HOS-${'0'.repeat(18)}42`;
+  const withLong = statement({
+    listedItems: [
+      { reference: 'HOS-1031', amount: 380, kind: 'invoice' },
+      { reference: long, amount: 10, kind: 'invoice' },
+      { reference: 'O'.repeat(21), amount: 10, kind: 'invoice' },
+    ],
+    total: 400,
+  });
+  assert.equal(
+    numberSearch(doc(withLong), VENDOR).query,
+    `SELECT * FROM Bill WHERE DocNumber IN ('HOS-1031', '${'O'.repeat(21)}') AND VendorRef = '7' MAXRESULTS 3`,
+  );
   // Forty listed invoices: forty numbers and 41 rows, within one answer (sandbox S9).
   const forty = statement({
     listedItems: Array.from({ length: 40 }, (_, index) => ({

@@ -12,7 +12,7 @@ import { RecordingPlatform, invokeFixture, refusalFixture } from '@autom8x/autom
 import { TEMPLATE_ID, pipelineSteps } from '../src/automation.js';
 import { THROWN_SENTENCES, sentenceFor, withFixedSentences } from '../src/failures.js';
 import { LOOKUP_SENTENCES, type LookupSentence } from '../src/lookups/read.js';
-import { bill } from './check-world.js';
+import { bill, creditNote, statement } from './check-world.js';
 import { callsOf, everythingSaid, lines } from './fixtures.js';
 import { LOOKUP_STEPS, reported, routeRun, stateOf } from './lookups-world.js';
 
@@ -160,6 +160,53 @@ test('a 429 is waited out twice and a 5xx repeated once inside the step, each th
     assert.deepEqual(erred.waits, [], 'a 5xx is repeated at once');
     assert.equal(callsOf(erred.platform, erred.request, stepId).length, 2, stepId);
   }
+});
+
+test("QuickBooks refusing a statement's lookup ends with the statement's own sentence — it searches the vendor and its bills, and is compared, never entered by hand (N2)", async () => {
+  const cases: [string, boolean, number, LookupSentence, string][] = [
+    ['find-vendor', false, 1, 'statement_vendor_refused', 'Vendor not looked up'],
+    [
+      'find-vendor-company',
+      true,
+      2,
+      'statement_vendor_refused',
+      'Vendor not looked up by company name',
+    ],
+    ['find-duplicate-number', false, 2, 'statement_number_refused', 'Number not searched'],
+    ['find-duplicate-amount', false, 3, 'statement_amount_refused', 'Amount not searched'],
+  ];
+  for (const [stepId, bare, before, sentence, what] of cases) {
+    const world = await routeRun({
+      answer: statement(),
+      bare,
+      company: (sim) =>
+        sim.script('query.run', [
+          ...Array.from({ length: before }, () => ({ status: 200 })),
+          { status: 400 },
+        ]),
+    });
+    assert.deepEqual(
+      world.result,
+      { outcome: 'failed', failureReason: LOOKUP_SENTENCES[sentence] },
+      stepId,
+    );
+    assert.deepEqual(lines(world.platform).at(-1), [stepId, 'failed', `${what} (qb_error 400)`]);
+    assert.ok(!LOOKUP_SENTENCES[sentence].includes('by hand'), sentence);
+  }
+  assert.equal(
+    LOOKUP_SENTENCES.statement_amount_refused,
+    "QuickBooks could not search this vendor's open bills. Compare the statement in QuickBooks. Nothing was created.",
+  );
+  // Any other document is entered by hand: a credit note's same lookup keeps its sentence.
+  const credit = await routeRun({
+    answer: creditNote(),
+    company: (sim) =>
+      sim.script('query.run', [{ status: 200 }, { status: 200 }, { status: 200 }, { status: 400 }]),
+  });
+  assert.deepEqual(credit.result, {
+    outcome: 'failed',
+    failureReason: LOOKUP_SENTENCES.amount_refused,
+  });
 });
 
 test('the similar-names list and the employee check go on past what QuickBooks cannot answer, and fail on what the person must fix', async () => {

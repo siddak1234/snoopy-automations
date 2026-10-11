@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { lookupUses, requiredLookups, type VendorState } from '../src/decide/contract.js';
+import type { VendorState } from '../src/decide/contract.js';
+import { lookupUses, requiredLookups } from '../src/decide/lookup-uses.js';
 import { decideRun } from '../src/decide/decide.js';
 import { DECIDE_SENTENCES } from '../src/decide/fails.js';
 import {
@@ -20,10 +21,10 @@ import { RUN_ID, VENDOR, decideState } from './decide-world.js';
 
 /**
  * The lookups' table, shared by the steps and decide (`lookupUses`, Group 4's change to the
- * contract): per route, each lookup runs, says "Not checked" (no number QuickBooks could hold:
- * G4-4), or is skipped; a vendor credit's or a statement's vendor not in QuickBooks skips them
- * all, so decide reaches F5 or F6 rather than "could not finish its checks"; S4's fallback drops a
- * bill's D32 lookup.
+ * contract): per route, each lookup runs, says "Not checked" (no number QuickBooks could hold —
+ * the document's own, a credit's original, or every one a statement lists: G4-4), or is skipped; a
+ * vendor credit's or a statement's vendor not in QuickBooks skips them all, so decide reaches F5 or
+ * F6 rather than "could not finish its checks"; S4's fallback drops a bill's D32 lookup.
  */
 
 const doc = (answer: JsonObject, options = {}) => documentOf(check(answer, options));
@@ -80,6 +81,69 @@ test('per route, under D21: run, "Not checked" for a number QuickBooks could not
   );
   assert.deepEqual(
     lookupUses('statement', doc(statement()), VENDOR),
+    uses('run', 'run', 'skip', 'skip'),
+  );
+});
+
+test('a number QuickBooks could not hold is never sent: a credit\'s original invoice number past 21 characters is "Not checked", and a statement whose every listed number is says so too (G4-4)', () => {
+  for (const [length, use] of [
+    [21, 'run'],
+    [22, 'not_checked'],
+  ] as const) {
+    const original = 'O'.repeat(length);
+    assert.deepEqual(
+      lookupUses('vendor_credit', doc(creditNote({ originalInvoiceNumber: original })), VENDOR),
+      uses('run', 'run', use, 'skip'),
+      `vendor credit, ${length}`,
+    );
+    const refund = doc(sampleAnswer('card-refund', { originalInvoiceNumber: original }));
+    assert.deepEqual(
+      lookupUses('card_refund', refund, VENDOR),
+      uses('run', 'run', use, 'skip'),
+      `card refund, ${length}`,
+    );
+    // No vendor to search: skipped, whatever its length.
+    assert.deepEqual(lookupUses('card_refund', refund, NEW), uses('run', 'run', 'skip', 'skip'));
+  }
+  assert.deepEqual(
+    requiredLookups(
+      'vendor_credit',
+      doc(creditNote({ originalInvoiceNumber: 'O'.repeat(22) })),
+      VENDOR,
+    ),
+    ['amountLookup', 'numberLookup'],
+  );
+  const listing = (...references: string[]) =>
+    doc(
+      statement({
+        listedItems: references.map((reference) => ({ reference, amount: 10, kind: 'invoice' })),
+        total: 10 * references.length,
+      }),
+    );
+  // One a bill's number could be is enough to search: the longer ones are left out of it.
+  assert.deepEqual(
+    lookupUses('statement', listing('L'.repeat(22), 'HOS-1031'), VENDOR),
+    uses('run', 'run', 'skip', 'skip'),
+  );
+  assert.deepEqual(
+    lookupUses('statement', listing('L'.repeat(22), 'M'.repeat(30)), VENDOR),
+    uses('not_checked', 'run', 'skip', 'skip'),
+  );
+  assert.deepEqual(requiredLookups('statement', listing('L'.repeat(22)), VENDOR), ['amountLookup']);
+});
+
+test("a seller not linked is a seller with no vendor: a receipt's number lookup and a card refund's original bill are skipped", () => {
+  const notLinked: VendorState = {
+    status: 'not_linked',
+    reason: 'ambiguous',
+    matchedBy: 'display name',
+  };
+  assert.deepEqual(
+    lookupUses('company_receipt', doc(receipt()), notLinked),
+    lookupUses('company_receipt', doc(receipt()), NEW),
+  );
+  assert.deepEqual(
+    lookupUses('card_refund', doc(sampleAnswer('card-refund')), notLinked),
     uses('run', 'run', 'skip', 'skip'),
   );
 });

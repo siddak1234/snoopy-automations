@@ -294,6 +294,8 @@ export function straightSummary(
   const limit = formatLimit(limitCentsOf(config));
   const vendor = state.vendor;
   const why = `No reason to hold: ${amount} within the ${limit} limit, `;
+  // A seller left unlinked has a vendor's name — an inactive one's, or two's — so it is not "none".
+  const unlinked = vendor?.status === 'not_linked' ? 'vendor not linked' : 'no vendor to link';
   let line: LinePiece[] =
     vendor?.status === 'matched'
       ? [
@@ -301,7 +303,7 @@ export function straightSummary(
           { name: shorten(vendor.displayName, 40) },
           ` matched by ${vendor.matchedBy}, no duplicate`,
         ]
-      : [`${why}no vendor to link, so no payee, no duplicate`];
+      : [`${why}${unlinked}, so no payee, no duplicate`];
   const end: LinePiece[] = ['; ', ...notes.category];
   for (const part of [CREATING[plan.record], ...notes.others]) {
     const longer = [...line, `; ${part}`];

@@ -1,12 +1,8 @@
 import { QUICKBOOKS_SENTENCES, type Clock } from '@autom8x/automation-kit/quickbooks';
 import type { JsonObject, Step } from '@autom8x/automation-sdk';
 
-import {
-  lookupUses,
-  type LookupKey,
-  type LookupState,
-  type VendorState,
-} from '../decide/contract.js';
+import type { LookupKey, LookupState, VendorState } from '../decide/contract.js';
+import { lookupUses } from '../decide/lookup-uses.js';
 import type { ExpenseSearch } from '../lookups/expense-search.js';
 import {
   amountLine,
@@ -59,6 +55,8 @@ interface RecordLookup {
   readonly what: string;
   readonly purpose: string;
   readonly refused: LookupSentence;
+  /** A statement's, for the lookups one runs: it searches the vendor's bills, and is never entered. */
+  readonly statementRefused?: LookupSentence;
   readonly search: (
     document: DocumentState,
     vendor: VendorState | null,
@@ -78,7 +76,9 @@ function recordLookup(lookup: RecordLookup, clock: Clock, how: ExpenseSearch): S
     }
     const use = lookupUses(document.route, document, vendor, how)[lookup.key];
     if (use === 'skip') return { outcome: 'skipped' };
-    if (use === 'not_checked') return { outcome: 'ok', summary: notCheckedLine(document) };
+    if (use === 'not_checked') {
+      return { outcome: 'ok', summary: notCheckedLine(document, lookup.key) };
+    }
     const search = lookup.search(document, vendor, how);
     const read = await lookupRows({
       context,
@@ -87,7 +87,10 @@ function recordLookup(lookup: RecordLookup, clock: Clock, how: ExpenseSearch): S
       entity: search.entity,
       what: lookup.what,
       purpose: lookup.purpose,
-      refused: lookup.refused,
+      refused:
+        document.route === 'statement'
+          ? (lookup.statementRefused ?? lookup.refused)
+          : lookup.refused,
     });
     if (!read.ok) return read.result;
     const records = recordsOf(search.entity, read.rows);
@@ -110,6 +113,7 @@ export const findDuplicateNumber = (clock: Clock, how: ExpenseSearch): Step =>
       what: 'Number not searched',
       purpose: 'looking for records with this number',
       refused: 'number_refused',
+      statementRefused: 'statement_number_refused',
       search: numberSearch,
       line: numberLine,
     },
@@ -124,6 +128,7 @@ export const findDuplicateAmount = (clock: Clock, how: ExpenseSearch): Step =>
       what: 'Amount not searched',
       purpose: 'looking for records with this amount',
       refused: 'amount_refused',
+      statementRefused: 'statement_amount_refused',
       search: amountSearch,
       line: amountLine,
     },

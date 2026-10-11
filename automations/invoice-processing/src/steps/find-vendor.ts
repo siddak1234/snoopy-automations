@@ -31,6 +31,11 @@ import type { DocumentState } from '../state.js';
  * CompanyName. A seller nobody has is `{ status: 'new' }` — a new vendor for a bill (a hold), no
  * payee for a receipt or a card refund (D20), and for a credit note or a statement decide's F5 or
  * F6. A person nobody has is V1, once both lookups have found nobody.
+ *
+ * A company receipt's or a card refund's seller is looked up only to link an existing vendor
+ * (D20), so an inactive vendor with its name, or two, fail nothing: the seller is `not_linked` —
+ * no payee, the seller in the memo and the line text — and the line says why; step 10 then has
+ * nothing to look for.
  */
 
 const VENDOR_WHAT = 'Vendor not looked up';
@@ -59,14 +64,34 @@ function searchedOf(state: JsonObject): Searched | 'skipped' | 'incomplete' {
 
 const incomplete = (what: string) => refused(what, 'state_incomplete');
 
-/** One vendor row, matched: the vendor, or why it cannot be used. */
+type Matched = Extract<VendorState, { status: 'matched' }>;
+type NotLinked = Extract<VendorState, { status: 'not_linked' }>;
+
+/** The seller looked up only to link an existing vendor (D20): a company receipt's, a card refund's. */
+const linkOnly = (searched: Searched) =>
+  searched.document.route === 'company_receipt' || searched.document.route === 'card_refund';
+
+/** The sentence a vendor lookup QuickBooks refuses ends with: a statement is compared, never entered. */
+function refusedSentence(searched: Searched, by: 'display name' | 'company name'): LookupSentence {
+  if (searched.person) return 'payer_refused';
+  if (searched.document.route === 'statement') return 'statement_vendor_refused';
+  return by === 'company name' ? 'vendor_company_refused' : 'vendor_refused';
+}
+
+/** One vendor row, matched: the vendor, a seller left unlinked, or why it cannot be used. */
 function matchedOf(
   kept: readonly JsonObject[],
   searched: Searched,
   by: 'display name' | 'company name',
-): Extract<VendorState, { status: 'matched' }> | StepResult {
+): Matched | NotLinked | StepResult {
   const company = by === 'company name';
-  if (kept.length > 1) {
+  const [row] = kept as [JsonObject];
+  // A missing Active is Intuit's default, true.
+  const unusable = kept.length > 1 ? 'ambiguous' : row.Active === false ? 'inactive' : null;
+  if (unusable !== null && linkOnly(searched)) {
+    return { status: 'not_linked', reason: unusable, matchedBy: by };
+  }
+  if (unusable === 'ambiguous') {
     const reason: LookupSentence = searched.person
       ? 'payer_ambiguous'
       : company
@@ -74,9 +99,7 @@ function matchedOf(
         : 'vendor_ambiguous';
     return refused(ACCEPT_WHAT, reason);
   }
-  const [row] = kept as [JsonObject];
-  // A missing Active is Intuit's default, true.
-  if (row.Active === false) {
+  if (unusable === 'inactive') {
     const reason: LookupSentence = searched.person
       ? 'payer_inactive'
       : company
@@ -93,6 +116,21 @@ function matchedOf(
       QUICKBOOKS_SENTENCES.unexpected_answer,
     )
   );
+}
+
+/**
+ * Why a seller is not linked, as its line says it: "An inactive vendor has the name 'Tidewell
+ * Hardware' in QuickBooks, so it is not linked: no payee".
+ */
+function notLinkedLine(vendor: NotLinked, name: string, ignored = ''): string {
+  const which = vendor.matchedBy === 'company name' ? 'the company name' : 'the name';
+  return fitLine([
+    vendor.reason === 'inactive'
+      ? `An inactive vendor has ${which} '`
+      : `Two vendors have ${which} '`,
+    { name },
+    `' in QuickBooks, so it is not linked: no payee${ignored}`,
+  ]);
 }
 
 /** What a seller nobody has means, per route: a hold, no payee, or decide's F5 or F6. */
@@ -119,7 +157,7 @@ export function findVendor(clock: Clock): Step {
       entity: 'Vendor',
       what: VENDOR_WHAT,
       purpose: 'looking up the vendor',
-      refused: searched.person ? 'payer_refused' : 'vendor_refused',
+      refused: refusedSentence(searched, 'display name'),
     });
     if (!read.ok) return read.result;
     const kept = read.rows.filter((row) => sameName(row.DisplayName, searched.name));
@@ -138,6 +176,13 @@ export function findVendor(clock: Clock): Step {
     }
     const vendor = matchedOf(kept, searched, 'display name');
     if ('outcome' in vendor) return vendor;
+    if (vendor.status === 'not_linked') {
+      return {
+        outcome: 'ok',
+        summary: notLinkedLine(vendor, searched.name, ignored),
+        state: { ...context.state, vendor: vendor as unknown as JsonObject },
+      };
+    }
     const id = shorten(vendor.id, 20);
     return {
       outcome: 'ok',
@@ -163,7 +208,8 @@ export function findVendorCompany(clock: Clock): Step {
     if (searched === 'skipped') return { outcome: 'skipped' };
     const vendor = lookupVendorOf(context.state);
     if (searched === 'incomplete' || !vendor) return incomplete(COMPANY_WHAT);
-    if (vendor.status === 'matched') return { outcome: 'skipped' };
+    // Found by its name, or a seller left unlinked there: nothing more to look for.
+    if (vendor.status !== 'new') return { outcome: 'skipped' };
     // No vendor can have a company name longer than QuickBooks allows: nothing to search.
     if (searched.name.length > COMPANY_NAME_LENGTH) {
       return searched.person ? refused(ACCEPT_WHAT, 'payer_not_found') : { outcome: 'skipped' };
@@ -175,7 +221,7 @@ export function findVendorCompany(clock: Clock): Step {
       entity: 'Vendor',
       what: COMPANY_WHAT,
       purpose: "looking up the vendor's company name",
-      refused: searched.person ? 'payer_refused' : 'vendor_company_refused',
+      refused: refusedSentence(searched, 'company name'),
     });
     if (!read.ok) return read.result;
     const kept = read.rows.filter((row) => sameName(row.CompanyName, searched.name));
@@ -193,6 +239,13 @@ export function findVendorCompany(clock: Clock): Step {
     }
     const matched = matchedOf(kept, searched, 'company name');
     if ('outcome' in matched) return matched;
+    if (matched.status === 'not_linked') {
+      return {
+        outcome: 'ok',
+        summary: notLinkedLine(matched, searched.name),
+        state: { ...context.state, vendor: matched as unknown as JsonObject },
+      };
+    }
     return {
       outcome: 'ok',
       summary: fitLine([

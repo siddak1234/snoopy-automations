@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { LOOKUP_SENTENCES } from '../src/lookups/read.js';
-import { bill, receipt } from './check-world.js';
+import { bill, creditNote, receipt, statement } from './check-world.js';
 import { lines } from './fixtures.js';
 import {
   PAID,
@@ -19,8 +19,9 @@ import {
 /**
  * find-vendor and find-vendor-company (steps 9–10): the seller by its exact name, active or not,
  * then by company name; a contractor who paid, the same way; the fails — an inactive vendor, two
- * with the name, V1 — each its sentence with nothing after it; a near-miss ignored; and names
- * escaped as Intuit reads them.
+ * with the name, V1 — each its sentence with nothing after it, but for a company receipt's or a
+ * card refund's seller, which is then not linked (D20; unlinked-seller.test.ts); a near-miss
+ * ignored; and names escaped as Intuit reads them.
  */
 
 const THROUGH = 'find-vendor-company';
@@ -101,7 +102,7 @@ test('no vendor by name: one by company name is matched; none at all is a new ve
   assert.match(lineOf(seller, 'find-vendor-company') ?? '', /either: no vendor to link$/u);
 });
 
-test('an inactive vendor fails "reactivate it", and two vendors with the name fail; by company name too; nothing after the step runs', async () => {
+test("a bill's, a credit note's or a statement's vendor: an inactive one fails \"reactivate it\", and two with the name fail; by company name too; nothing after the step runs", async () => {
   const cases: [
     string,
     (sim: Parameters<NonNullable<Parameters<typeof routeRun>[0]['company']>>[0]) => void,
@@ -152,6 +153,24 @@ test('an inactive vendor fails "reactivate it", and two vendors with the name fa
     assert.match(lines(world.platform).at(-1)?.[2] ?? '', /^Vendor not accepted \(vendor_/u);
     assert.ok(sentence.endsWith('then run it again. Nothing was created.'), label);
   }
+  // A credit note's and a statement's vendor must be QuickBooks' own: they fail the same way.
+  const inactive = await routeRun({
+    answer: creditNote(),
+    bare: true,
+    company: (sim) =>
+      sim.company.vendors.push(sampleVendor('7', 'Harrowgate Office Supply', { Active: false })),
+  });
+  assert.deepEqual(inactive.result, failed(LOOKUP_SENTENCES.vendor_inactive));
+  const two = await routeRun({
+    answer: statement(),
+    bare: true,
+    company: (sim) =>
+      sim.company.vendors.push(
+        sampleVendor('7', 'Harrowgate Office Supply'),
+        sampleVendor('8', 'HARROWGATE OFFICE SUPPLY'),
+      ),
+  });
+  assert.deepEqual(two.result, failed(LOOKUP_SENTENCES.vendor_ambiguous));
 });
 
 test('a row QuickBooks returns under another name is a near-miss, ignored: the vendor is new', async () => {

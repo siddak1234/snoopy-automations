@@ -31,16 +31,9 @@ export interface DecideInput {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/**
- * A statement compared, as the run's output carries it: with (c)'s flag beside (b)'s
- * `listedCheckable` — false when the open-bills lookup reached its maximum, so the vendor may have
- * more open bills the statement does not list than (c) counts (D6).
- */
-export type Comparison = StatementResult & { readonly openBillsCheckable: boolean };
-
 export type Decision =
   | { readonly outcome: 'failed'; readonly failure: DecideFailure; readonly sentence: string }
-  | { readonly outcome: 'compared'; readonly summary: string; readonly result: Comparison }
+  | { readonly outcome: 'compared'; readonly summary: string; readonly result: StatementResult }
   | { readonly outcome: 'ok'; readonly summary: string; readonly saved: SavedState }
   | {
       readonly outcome: 'held';
@@ -64,10 +57,7 @@ export function decideRun(input: DecideInput): Decision {
   const rule = failRuleOf(state);
   if (rule !== undefined) return failed(rule);
   if (state.document.route === 'statement') {
-    const result: Comparison = {
-      ...statementResult(state, input.switchOn),
-      openBillsCheckable: state.amountLookup?.reachedMax !== true,
-    };
+    const result = statementResult(state, input.switchOn);
     return { outcome: 'compared', summary: statementLine(result), result };
   }
   const matches = matchesOf(state);

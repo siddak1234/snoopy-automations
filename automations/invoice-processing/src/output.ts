@@ -1,10 +1,9 @@
 import { fitLine, formatMoney, type LinePiece } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
-import type { Comparison } from './decide/decide.js';
 import type { Payee, RecordPlan } from './decide/plan.js';
 import type { SavedState } from './decide/saved.js';
-import { statementLine } from './decide/statement.js';
+import { statementLine, type StatementResult } from './decide/statement.js';
 
 /**
  * The run's result once its pipeline ends — decide's outcome, which replaced the run's state (the
@@ -37,7 +36,7 @@ function isSaved(state: JsonObject): boolean {
   return state.v === 1 && typeof state.route === 'string' && isObject(state.plan);
 }
 
-function compared(result: Comparison): { output: JsonObject; summary: string } {
+function compared(result: StatementResult): { output: JsonObject; summary: string } {
   return {
     output: {
       outcome: 'compared',
@@ -119,7 +118,7 @@ function planned(saved: SavedState): { output: JsonObject; summary: string } {
 
 /** The run's output and summary from decide's outcome; a state decide did not leave is a fault. */
 export function runResult(state: JsonObject): { output: JsonObject; summary: string } {
-  if (isComparison(state)) return compared(state as unknown as Comparison);
+  if (isComparison(state)) return compared(state as unknown as StatementResult);
   if (isSaved(state)) return planned(state as unknown as SavedState);
   throw new Error('the run ended without a decision');
 }

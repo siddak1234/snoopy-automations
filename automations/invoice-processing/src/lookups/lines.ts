@@ -8,10 +8,12 @@ import {
 } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
-import type { ExpenseRow, FoundRecord, VendorState } from '../decide/contract.js';
+import type { ExpenseRow, FoundRecord, LookupKey, VendorState } from '../decide/contract.js';
+import { listedInvoiceNumbers } from '../decide/lookup-uses.js';
+import { listedNotFound } from '../decide/statement.js';
 import type { DocumentState } from '../state.js';
 import type { ExpenseSearch } from './expense-search.js';
-import { feedWindow, listedInvoiceNumbers } from './queries.js';
+import { feedWindow } from './queries.js';
 
 /**
  * The record lookups' timeline lines (steps 14–17), each at most 200 characters: what was searched,
@@ -101,25 +103,37 @@ function paymentPieces(record: ExpenseRow, row: JsonObject): LinePiece[] {
   ];
 }
 
+/** The fewest characters pieces take with their words whole: each name cut down to one character. */
+const leastLength = (pieces: readonly LinePiece[]) =>
+  pieces.reduce((total, piece) => total + (typeof piece === 'string' ? piece.length : 1), 0);
+
 /**
  * "<head>: none in QuickBooks", or the first three records, "+N more", and "maybe more" when full;
- * `payment` lists expenses by how each was paid and to whom.
+ * `payment` lists expenses by how each was paid and to whom. As a statement's line keeps its
+ * ending, "+N more" and "maybe more" — a full answer's mark (D6) — always end the line whole: the
+ * records are fitted to the room they leave, names shortened first, and a record whose words do not
+ * fit is left out from the end and counted in "+N more" — the first always shown, and cut only when
+ * it alone is too long.
  */
 function listLine(
   head: string,
   found: Found,
   { full = 'maybe more', payment = false }: { full?: string; payment?: boolean } = {},
 ): string {
-  if (found.records.length === 0) return `${head}: none in QuickBooks`;
-  const pieces: LinePiece[] = [`${head}: `];
-  found.records.slice(0, 3).forEach((record, index) => {
-    if (index > 0) pieces.push('; ');
-    pieces.push(...recordPieces(record, found.rows[index] ?? {}, found.vendor, payment));
-  });
-  const more = found.records.length - 3;
-  if (more > 0) pieces.push(`; +${more} more`);
-  if (found.reachedMax) pieces.push(`; ${full}`);
-  return fitLine(pieces);
+  const { records } = found;
+  if (records.length === 0) return `${head}: none in QuickBooks`;
+  const marker = found.reachedMax ? `; ${full}` : '';
+  for (let shown = Math.min(records.length, 3); ; shown -= 1) {
+    const pieces: LinePiece[] = [`${head}: `];
+    records.slice(0, shown).forEach((record, index) => {
+      if (index > 0) pieces.push('; ');
+      pieces.push(...recordPieces(record, found.rows[index] ?? {}, found.vendor, payment));
+    });
+    const more = records.length - shown;
+    const tail = `${more > 0 ? `; +${more} more` : ''}${marker}`;
+    const room = LINE_MAXIMUM - tail.length;
+    if (shown === 1 || leastLength(pieces) <= room) return `${fitLine(pieces, room)}${tail}`;
+  }
 }
 
 /** The bank-feed expenses' line: by amount (D21), or under S4's fallback the window read in code. */
@@ -152,17 +166,14 @@ export function numberLine(found: Found): string {
 }
 
 /**
- * A statement's listed invoice numbers that are not among this vendor's bills, as many as fit in
- * 200 characters, then "+N more" (the plan's §2.6); the full list is in the run's output.
+ * A statement's listed invoice numbers that are not among this vendor's bills — decide's (b), each
+ * once — as many as fit in 200 characters, then "+N more" (the plan's §2.6); the full list is in
+ * the run's output.
  */
 function missingLine(found: Found): string {
-  const known = new Set(
-    found.records.map((record) =>
-      record.kind === 'bill' ? (record.docNumber ?? '').toLowerCase() : '',
-    ),
-  );
+  const vendorId = found.vendor?.status === 'matched' ? found.vendor.id : '';
   const listed = listedInvoiceNumbers(found.document);
-  const missing = listed.filter((number) => !known.has(cleanText(number)?.toLowerCase() ?? ''));
+  const missing = listedNotFound(found.document, found, vendorId);
   const full = found.reachedMax ? '; too many bills to check' : '';
   if (missing.length === 0) {
     return `All ${listed.length} listed invoice numbers are on this vendor's bills in QuickBooks${full}`;
@@ -243,8 +254,18 @@ export function otherRecordLine(found: Found): string {
   return listLine(`Expenses for ${money(document.amountCents ?? 0)} near this bill's dates`, found);
 }
 
-/** A lookup that applies but has no number QuickBooks could hold to search for (G4-4). */
-export function notCheckedLine(document: DocumentState): string {
+/**
+ * A lookup that applies but has no number QuickBooks could hold to search for (G4-4): the
+ * document's own number, a credit's original invoice number (its category then is not the original
+ * bill's, D25), or every invoice number a statement lists (each then not in QuickBooks).
+ */
+export function notCheckedLine(document: DocumentState, key: LookupKey): string {
+  if (document.route === 'statement') {
+    return 'Not checked by number: every invoice number the statement lists is longer than the 21 characters QuickBooks holds, so none is in QuickBooks';
+  }
+  if (key === 'relatedLookup' && document.type === 'credit_note') {
+    return 'Original bill not checked: its number is longer than the 21 characters QuickBooks holds';
+  }
   return document.number === null
     ? 'Not checked by number: no number was read'
     : 'Not checked by number: the number is longer than the 21 characters QuickBooks holds';

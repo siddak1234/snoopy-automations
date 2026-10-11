@@ -450,20 +450,26 @@ follow (steps 9–17), each ONE `query.run` per document type, as the plan's §5
 or skipped (`src/lookups/queries.ts` builds every text, and fixed-text tests hold each):
 `find-vendor` and `find-vendor-company` find the seller — or the contractor who paid — by the
 exact name, then by company name, active or not, each row re-checked in code (an inactive
-vendor fails "reactivate it", two fail, a person nobody has is V1); for a bill's new vendor,
-`find-similar-vendors` lists up to three vendors with its distinctive word for the approver,
-inactive ones marked, and `find-customer-name` and `find-employee-name` check the name is
-free (employees a connection cannot read go on as unreadable — sandbox S7); then
-`find-duplicate-number`, `find-duplicate-amount`, `find-related` and `find-other-record`
-gather the records decide weighs — a number QuickBooks could not hold (none, or over 21
-characters) says "Not checked", a full answer is a possible duplicate (D6), and a statement's
-listed invoice numbers and open bills are this vendor's. The bank-feed check (D21) searches
+vendor fails "reactivate it" and two fail — but a company receipt's or a card refund's seller,
+looked up only to link an existing vendor (D20), is then not linked: no payee, its line saying
+why — and a person nobody has is V1); for a bill's new vendor, `find-similar-vendors` lists up
+to three vendors with its distinctive word for the approver, inactive ones marked, and
+`find-customer-name` and `find-employee-name` check the name is free (employees a connection
+cannot read go on as unreadable — sandbox S7); then `find-duplicate-number`,
+`find-duplicate-amount`, `find-related` and `find-other-record` gather the records decide
+weighs — a number QuickBooks could not hold (none, or over 21 characters: the document's own,
+a credit's original invoice number, every one a statement lists) says "Not checked" and is
+never sent, a full answer is a possible duplicate (D6) whose line always keeps "maybe more",
+a statement's listed invoice numbers — each once, whatever its case, one past 21 characters
+counted as not in QuickBooks — and open bills are this vendor's, and a statement's lookup
+QuickBooks refuses ends "Compare the statement in QuickBooks". The bank-feed check (D21) searches
 expenses by amount in its window, or, set from sandbox S4 before v1 registers
 (`src/lookups/expense-search.ts`), the window alone, newest first, 50 at most, a bill's D32
 check dropped. `decide` (`src/decide/`, step 18) makes one result: a fixed sentence, one hold
 with every reason (the SDK's held outcome, an approval resuming after it), a statement
-compared, or the record planned; its whole input is `src/decide/contract.ts`, whose
-`lookupUses` table the lookups and decide share. The writes are the plan's Group 5: until
+compared, or the record planned; its whole input is `src/decide/contract.ts`, and the
+lookups and decide share one table of which lookups run (`lookupUses`,
+`src/decide/lookup-uses.ts`). The writes are the plan's Group 5: until
 then a run decided straight through, or approved, writes nothing, and its result
 (`src/output.ts`) says so — the record planned, or a statement's comparison with the full
 list of the invoice numbers it lists that QuickBooks lacks.

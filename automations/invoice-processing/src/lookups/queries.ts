@@ -9,6 +9,7 @@ import {
 import { addDays, queryAmount } from '@autom8x/automation-kit/values';
 
 import type { VendorState } from '../decide/contract.js';
+import { listedInvoiceNumbers, searchableNumber } from '../decide/lookup-uses.js';
 import { FEED_WINDOW } from '../decide/matches.js';
 import type { DocumentState } from '../state.js';
 import type { ExpenseSearch } from './expense-search.js';
@@ -122,16 +123,6 @@ function vendorIdOf(vendor: VendorState | null): string {
   return vendor.id;
 }
 
-/** The invoice numbers a statement lists, each once: Intuit compares without case, and IN refuses a repeat. */
-export function listedInvoiceNumbers(document: DocumentState): string[] {
-  const numbers = new Map<string, string>();
-  for (const row of document.statement?.rows ?? []) {
-    const folded = row.reference.toLowerCase();
-    if (row.kind === 'invoice' && !numbers.has(folded)) numbers.set(folded, row.reference);
-  }
-  return [...numbers.values()];
-}
-
 /** find-duplicate-number's search per route (§5): by the document's number, or a statement's listed numbers. */
 export function numberSearch(document: DocumentState, vendor: VendorState | null): Search {
   const number = document.number ?? '';
@@ -148,8 +139,10 @@ export function numberSearch(document: DocumentState, vendor: VendorState | null
       // VendorRef cannot be searched on a vendor credit: decide compares the vendor.
       return search('VendorCredit', [equals('DocNumber', number)], MAX_RESULTS.records);
     case 'statement': {
-      // One more row than numbers: a full answer means a number on two bills, and more unseen.
-      const numbers = listedInvoiceNumbers(document);
+      // Each listed number once, whatever its case, and only one a bill's number could be: a longer
+      // one is left out, and decide counts it as not in QuickBooks. One more row than numbers: a
+      // full answer means a number on two bills, and more unseen.
+      const numbers = listedInvoiceNumbers(document).filter(searchableNumber);
       return search(
         'Bill',
         [
@@ -226,7 +219,7 @@ export function relatedSearch(
       );
     case 'card_refund':
     case 'vendor_credit':
-      // The original bill, for its category (D25) — even a number too long for one: it finds nothing.
+      // The original bill, for its category (D25): only by a number a bill's could be (`lookupUses`).
       return search(
         'Bill',
         [
