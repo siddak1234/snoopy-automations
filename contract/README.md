@@ -1,13 +1,11 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `7086e5e`, re-pinned 2026-10-11 — the platform's
-`main` after its #197 — but for one file taken from a branch not yet merged,
-`automation-model-request.json`, which the last refresh note below names. The platform emits
-them with `npm run schemas:emit` and verifies the committed files against its TypeScript
-types byte for byte, so this copy is the contract it publishes to external automation
-authors. To refresh: copy the directory again and update the commit above in the same
-change.
+(`snoopy-backend`, private) at commit `df4bbad`, re-pinned 2026-10-11 — the platform's
+`main` after its #198 and #199. The platform emits them with `npm run schemas:emit` and
+verifies the committed files against its TypeScript types byte for byte, so this copy is the
+contract it publishes to external automation authors. To refresh: copy the directory again
+and update the commit above in the same change.
 
 They are copied rather than fetched because a public repository's CI cannot read a
 private one, and copied rather than imported because the boundary is the **wire
@@ -140,6 +138,14 @@ branch `round-17/model-author-exclusion` was rebased onto `7086e5e`, and its hea
 (its BUILD-PLAN 25.2.29 and 25.2.30) carries the same bytes (`cmp`-equal) and the same rule and
 samples; it is re-pinned to the merge commit when that pull request merges. Until then and a
 promotion, the live platform answers `excludeModelAuthors` with a 400.
+
+Re-pinned 2026-10-11 at `df4bbad`, the platform's `main` after #198 squash-merged
+`round-17/model-author-exclusion` as `c2d6c6b` (its BUILD-PLAN 25.2.29 and 25.2.30) and #199
+squash-merged `round-17/quickbooks-writes` (25.2.31): all eight files are `cmp`-equal to
+`df4bbad`'s, so `automation-model-request.json`, copied from `e25fd74`, is the merged one and
+only the commit above moves. Between `7086e5e` and `df4bbad` only that file changed; the
+platform's `test/wire-schema.test.ts` and `manifest-validation.ts` did not. Until a promotion
+carries `c2d6c6b`, the live platform answers `excludeModelAuthors` with a 400.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
