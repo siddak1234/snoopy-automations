@@ -38,7 +38,7 @@ export type {
 export { isManifest, readManifest, readManifests } from './manifest.js';
 export type { Manifest } from './manifest.js';
 export { isUnanswered, isUnsent } from './marks.js';
-export { artifactIdProblem, modelAuthor } from './model-request.js';
+export { artifactIdProblem, excludeModelAuthorsProblem, modelAuthor } from './model-request.js';
 export { DEFAULT_MODEL_TIMEOUT_MS, PlatformClient, boundedResult, clientFor } from './platform.js';
 export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
 export {

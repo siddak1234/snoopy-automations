@@ -68,7 +68,7 @@ test('the switch off and no name: skipped, no line, no call, no payer — the co
     assert.equal(line, undefined);
     assert.deepEqual(sent, []);
     assert.equal(payer, undefined);
-    assert.equal(platform.modelCalls.length, 1);
+    assert.equal(platform.modelCalls.length, 2, 'both reads');
   }
 });
 

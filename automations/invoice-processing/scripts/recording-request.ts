@@ -1,5 +1,4 @@
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
-import { recordingRequest } from '../test/recordings.js';
+import { FIRST_READ, SECOND_READ, recordingRequest } from '../test/recordings.js';
 import { SAMPLES } from '../test/sample-maker/samples.js';
 
 /**
@@ -9,11 +8,22 @@ import { SAMPLES } from '../test/sample-maker/samples.js';
  * to — and where its answer is saved, in the shape `test/recordings.ts` loads. Each agent sees
  * its block and nothing else: not `expected.json`, not this repository.
  *
- *   npx tsx automations/invoice-processing/scripts/recording-request.ts [--json] [sample ...]
+ * Each sample is recorded twice, by two agents blind to each other: read 1 (`extract`, the
+ * default) and, with `--read 2`, read 2 (`verify-read`), whose answer goes in its own directory.
+ * The read-2 agent is never shown read 1's recording, as `verify-read` is never shown read 1.
+ *
+ *   npx tsx automations/invoice-processing/scripts/recording-request.ts [--json] [--read 1|2] [sample ...]
  */
 
 const args = process.argv.slice(2);
-const names = args.filter((arg) => arg !== '--json');
+const at = args.indexOf('--read');
+const which = at === -1 ? '1' : args[at + 1];
+if (which !== '1' && which !== '2') {
+  console.error('--read takes 1 (extract-document) or 2 (verify-document)');
+  process.exit(2);
+}
+const read = which === '2' ? SECOND_READ : FIRST_READ;
+const names = args.filter((arg, index) => arg !== '--json' && index !== at && index !== at + 1);
 const unknown = names.filter((name) => !SAMPLES.some((sample) => sample.name === name));
 if (unknown.length > 0) {
   const known = SAMPLES.map((sample) => sample.name).join(', ');
@@ -21,16 +31,20 @@ if (unknown.length > 0) {
   process.exit(2);
 }
 const requests = SAMPLES.filter((sample) => names.length === 0 || names.includes(sample.name)).map(
-  recordingRequest,
+  (sample) => recordingRequest(sample, read),
 );
 
 if (args.includes('--json')) {
   console.log(JSON.stringify(requests, null, 2));
 } else {
+  const blind =
+    read === SECOND_READ
+      ? `DO NOT READ test/samples/${'<sample>'}/expected.json, any recording under test/recordings/, or anything else in the repository.`
+      : '';
   for (const [index, each] of requests.entries()) {
     console.log(
       [
-        `=== ${index + 1}/${requests.length} ${each.sample} (prompt ${EXTRACT_DOCUMENT_V1.id} v${EXTRACT_DOCUMENT_V1.version}) ===`,
+        `=== ${index + 1}/${requests.length} ${each.sample} (prompt ${read.prompt.id} v${read.prompt.version}) ===`,
         'FILE, attached to the user message — read it as a model reads a PDF or an image:',
         `  ${each.file}  (${each.contentType}, ${each.sizeBytes} bytes, sha256 ${each.recording.fileSha256})`,
         'SYSTEM INSTRUCTION, verbatim between the rules:',
@@ -44,7 +58,9 @@ if (args.includes('--json')) {
         `ANSWER WITH ${each.answerWith}.`,
         `SAVE AS ${each.saveAs}:`,
         JSON.stringify(each.recording, null, 2),
-        `DO NOT READ test/samples/${each.sample}/expected.json or anything else in the repository.`,
+        blind === ''
+          ? `DO NOT READ test/samples/${each.sample}/expected.json or anything else in the repository.`
+          : blind.replace('<sample>', each.sample),
         '',
       ].join('\n'),
     );

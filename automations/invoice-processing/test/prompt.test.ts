@@ -12,7 +12,7 @@ import {
   PAYMENT_METHODS,
   REFUND_METHODS,
 } from '../src/document.js';
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 import { SPEND_TYPES } from '../src/spend-types.js';
 
 /**
@@ -76,9 +76,10 @@ const NULLABLE = [
 
 test("the prompt file loads, passes the platform's keyword check, names no model, has no placeholder, and holds the 27 decided fields", () => {
   // `loadPrompts` holds each file to `definePrompt`: the platform's keyword set, no model.
-  const [loaded, ...others] = loadPrompts(PROMPTS);
-  assert.deepEqual(others, [], 'one prompt file');
+  const [loaded, second, ...others] = loadPrompts(PROMPTS);
+  assert.deepEqual(others, [], "two prompt files: read 1's and read 2's");
   assert.deepEqual(loaded, EXTRACT_DOCUMENT_V1);
+  assert.deepEqual(second, VERIFY_DOCUMENT_V1);
   assert.deepEqual(
     [loaded?.id, loaded?.version, loaded?.capability],
     ['extract-document', 1, 'document-extraction'],

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { UNANSWERED_REASON, isUnanswered, isUnsent } from '@autom8x/automation-sdk';
 import { refusalFixture, type RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
-import { completion, everythingSaid, lines, setUp } from './fixtures.js';
+import { everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
 import { droppedConnection, proxyPage, refusedConnection, timedOut } from './wire.js';
 
 /**
@@ -15,14 +15,22 @@ import { droppedConnection, proxyPage, refusedConnection, timedOut } from './wir
  * Each failure comes from the SDK's own client on a local socket, so its marks are the SDK's.
  */
 
-/** The model fails the first `failures.length` calls with each failure in turn, then reads the document. */
+/**
+ * The model fails the first read's first `failures.length` calls with each failure in turn, then
+ * reads the document; the second read is answered.
+ */
 function failing(platform: RecordingPlatform, failures: readonly unknown[]): void {
   let calls = 0;
-  platform.model = (_call, model) => {
+  platform.model = (call, model) => {
+    if (isSecondRead(call)) return reads()(call, model);
     const failure = failures[calls];
     calls += 1;
-    return failure === undefined ? Promise.resolve(completion(model)) : Promise.reject(failure);
+    return failure === undefined ? reads()(call, model) : Promise.reject(failure);
   };
+}
+
+function extractLine(world: ReturnType<typeof setUp>) {
+  return lines(world.platform).find(([stepId]) => stepId === 'extract');
 }
 
 test('repeated once, 10 s later, when nothing reached the platform: a refused connection, a page in front of it; twice is the end', async () => {
@@ -61,8 +69,8 @@ test('repeated once, 10 s later, when nothing reached the platform: a refused co
     [paged, pagedResult],
   ] as const) {
     assert.equal(result.outcome, 'success');
-    assert.equal(world.platform.modelCalls.length, 2, 'the same call, made once more');
-    assert.deepEqual(lines(world.platform).at(-1), [
+    assert.equal(world.platform.modelCalls.length, 3, 'the same call, made once more; then read 2');
+    assert.deepEqual(extractLine(world), [
       'extract',
       'ok',
       'Read the document with anthropic/claude-haiku-4.5: 2 lines, 0 unclear (after 2 attempts)',

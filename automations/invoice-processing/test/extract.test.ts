@@ -13,7 +13,7 @@ import { ANSWER_FIELDS } from '../src/document.js';
 import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
 import { EXTRACT_INPUT, MODELS } from '../src/steps/extract.js';
 import { SEEDED_STATE, extractWorld } from './extract-world.js';
-import { FILE_ID, GOOD_ANSWER, completion, lines, setUp } from './fixtures.js';
+import { FILE_ID, GOOD_ANSWER, completion, isSecondRead, lines, reads, setUp } from './fixtures.js';
 
 /**
  * `extract` when an answer comes: the one request it sends, the platform's fallback to the
@@ -25,7 +25,7 @@ function extractLine(world: ReturnType<typeof setUp>) {
   return lines(world.platform).find(([stepId]) => stepId === 'extract');
 }
 
-test("it sends one model request: the registered extract-document v1, the fixed task, MODELS and the run's file, nothing else", async () => {
+test("it sends one model request: the registered extract-document v1, the fixed task, MODELS and the run's file, nothing else; the second read is verify-read's", async () => {
   const world = setUp({
     config: {
       expenseAccount: 'Utilities:Electric',
@@ -35,16 +35,20 @@ test("it sends one model request: the registered extract-document v1, the fixed 
     input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Pat Owner' },
   });
   assert.equal((await world.run()).outcome, 'success');
-  assert.deepEqual(world.platform.modelCalls, [
-    {
-      capability: 'document-extraction',
-      prompt: EXTRACT_DOCUMENT_V1.template,
-      input: { task: 'Extract the fields of the attached document.' },
-      outputSchema: EXTRACT_DOCUMENT_V1.outputSchema,
-      models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
-      artifactId: FILE_ID,
-    },
-  ]);
+  const [first, ...rest] = world.platform.modelCalls;
+  assert.deepEqual(first, {
+    capability: 'document-extraction',
+    prompt: EXTRACT_DOCUMENT_V1.template,
+    input: { task: 'Extract the fields of the attached document.' },
+    outputSchema: EXTRACT_DOCUMENT_V1.outputSchema,
+    models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
+    artifactId: FILE_ID,
+  });
+  assert.deepEqual(
+    rest.map((call) => isSecondRead(call)),
+    [true],
+    'the one other call is the second read',
+  );
   // The template is sent as it is: it has no placeholder, so no input can change it, and
   // "Who paid" never reaches the model.
   assert.equal(
@@ -124,16 +128,16 @@ test('the line names the model that served and two counts; the state keeps the a
 
 test('fallback: the first model answers off the schema, the second reads it, and the line names the second', async () => {
   const world = setUp();
-  world.platform.model = (_call, model) =>
-    Promise.resolve(
-      model === MODELS[0]
-        ? completion(model, { ...GOOD_ANSWER, total: 'twelve' })
-        : completion(model),
-    );
+  world.platform.model = (call, model) =>
+    !isSecondRead(call) && model === MODELS[0]
+      ? Promise.resolve(completion(model, { ...GOOD_ANSWER, total: 'twelve' }))
+      : reads()(call, model);
   assert.equal((await world.run()).outcome, 'success');
+  // Then the second read, by the maker the first read's model was not.
   assert.deepEqual(world.platform.modelAttempts, [
     { model: 'anthropic/claude-haiku-4.5', outcome: 'refused' },
     { model: 'google/gemini-3.1-flash-lite', outcome: 'ok' },
+    { model: 'anthropic/claude-haiku-4.5', outcome: 'ok' },
   ]);
   assert.deepEqual(extractLine(world), [
     'extract',
@@ -144,12 +148,12 @@ test('fallback: the first model answers off the schema, the second reads it, and
 
 test('fallback: the first model gets no answer in time, and the second reads it', async () => {
   const world = setUp();
-  world.platform.model = (_call, model) =>
-    Promise.resolve(model === MODELS[0] ? NO_ANSWER : completion(model));
+  world.platform.model = (call, model) =>
+    !isSecondRead(call) && model === MODELS[0] ? Promise.resolve(NO_ANSWER) : reads()(call, model);
   assert.equal((await world.run()).outcome, 'success');
   assert.deepEqual(
     world.platform.modelAttempts.map((attempt) => attempt.outcome),
-    ['unanswered', 'ok'],
+    ['unanswered', 'ok', 'ok'],
   );
 });
 
@@ -235,11 +239,11 @@ function continuing(request: InvokeRequest, stepId: string, state: JsonObject): 
 
 test('a continuation after approval never calls the model', async () => {
   // An approval resumes after the step that held, and every step that can hold comes after
-  // this one: here, after the last step of the pipeline as it stands.
+  // the two reads: here, after the last step of the pipeline as it stands.
   const world = setUp();
-  const state = { ...SEEDED_STATE, extraction: GOOD_ANSWER, modelServed: MODELS[0] };
+  const state = { ...SEEDED_STATE, modelServed: MODELS[0] };
   const result = await world.automation.execute(
-    continuing(world.request, 'extract', state),
+    continuing(world.request, 'verify-read', state),
     world.platform,
   );
   assert.equal(result.outcome, 'success');

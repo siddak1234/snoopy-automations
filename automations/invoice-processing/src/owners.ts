@@ -1,5 +1,6 @@
+import { MAXIMUM_NAME_LENGTH, cleanText } from '@autom8x/automation-kit/values';
+
 import { accountNameOf } from './account-settings.js';
-import { MAXIMUM_NAME_LENGTH, cleanText } from './text.js';
 
 /**
  * The reading of "Owners and partners" (the owner's D15): one entry per person, separated by

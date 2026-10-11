@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { MAXIMUM_NAME_LENGTH, cleanText } from '@autom8x/automation-kit/values';
+
 import { MAXIMUM_OWNERS, readOwners } from '../src/owners.js';
-import { MAXIMUM_NAME_LENGTH, cleanText } from '../src/text.js';
 
 /** The reading of "Owners and partners", and the cleaning a name gets before it is compared. */
 

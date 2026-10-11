@@ -48,7 +48,7 @@ Four rules follow, and the tests enforce them:
 ```
 contract/schemas/            the wire contract — JSON Schemas vendored from the platform
 packages/automation-sdk/     the step runner, prompt modules, the six callbacks, the serving shell, test doubles
-packages/automation-kit/     a library automations build with: QuickBooks reads, and a QuickBooks simulator
+packages/automation-kit/     a library automations build with: QuickBooks calls, value cleaning, a QuickBooks simulator
 automations/<name>/          one automation per directory, with its own Dockerfile and lockfile
 templates/automation/        the template directory: a copyable automation on the runner, tested by the gate
 manifests/<name>.v<n>.json   what the platform registers, validated here first and shipped in the image
@@ -367,8 +367,8 @@ defineAutomation({
   the attempts, so a held step is never run twice.
 
 `invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract`, its
-model call. Neither older automation declares a policy:
+reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract` and
+`verify-read`, its two model calls. Neither older automation declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
 `receive` only reads the file its run was given and is the one safe candidate. The
@@ -429,7 +429,24 @@ answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
 its id; it starts no call with less than 260 seconds to the deadline, repeats one only when
 nothing reached the platform, and passes the answer on whole in `state.extraction`, beside
 `state.modelServed`, for the next step to check — its timeline line names the model and
-counts, never a value.
+counts, never a value. `check-document` (code only) cleans that answer once — text, whole
+cents, real dates from 2000 on, ISO 4217 codes, a receipt's tip and card digits, a credit's
+signs, a statement's rows — routes it (a bill, an expense from "Paid from", a card refund, a
+vendor credit, a statement compared only, or what an employee, an owner or a contractor paid
+personally), holds it to the 28 fail rules in the plan's order, each a fixed sentence, runs
+the arithmetic in whole cents within 1¢, and keeps `state.document` with what decide is to
+hold on; the raw answer leaves the state there. `verify-read`, the second model call, sends
+`prompts/verify-document.v1.json` — read 1's own definitions for the type and the 13 fields
+that go into QuickBooks, 14 fields of which 8 nullable — blind to the first read, with
+`excludeModelAuthors` set to the maker of the model that served it; without a maker to leave
+out, or answered `no_model_left`, it is not made, never made without the exclusion. It
+compares the fields the route writes, exact after the same cleaning and the seller roughly,
+records the second total only when it alone adds up (and runs the arithmetic again), and
+keeps `state.verification` for decide: a difference holds, a statement's disputed type fails
+(F7), a second read not made holds; out of time and the platform's faults fail. `decide`,
+the plan's approval wording and the data saved for after approval are built and tested in
+`src/decide/` and join the pipeline with the lookups they read (Group 4); its input contract
+is `src/decide/contract.ts`.
 Every failure ends the run with a fixed sentence, a run that ends on a thrown error
 included — never the error's message. The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
@@ -449,11 +466,14 @@ two invoices in one file, a page missing, and instructions to the model printed 
 each drawn by `test/sample-maker/` beside its `expected.json`, with a marker printed in a
 line's text or a notes box, never in the seller's name or the document number, that no
 answer, timeline line or reason may carry; `npm run samples` (in the automation) makes them
-again and rewrites a file only when what it draws changes. Recordings — an agent acting as
-the model, given exactly what `npm run recording-request` prints for a sample — go in
-`test/recordings/extract-document.v1/<sample>.json`; the loader refuses one made for
-another prompt version or other prompt or sample bytes, and the tests over them are
-skipped, saying why, until they exist.
+again and rewrites a file only when what it draws changes. Each sample is recorded twice, by
+two agents blind to each other: read 1 — an agent acting as the model, given exactly what
+`npm run recording-request` prints for a sample — in
+`test/recordings/extract-document.v1/<sample>.json`, and read 2, given what
+`npm run recording-request -- --read 2` prints, in `test/recordings/verify-document.v1/`;
+the loader refuses one made for another prompt or version, or other prompt or sample bytes,
+and the tests over them — each recorded answer run through check-document, and read 2's
+compared with read 1's — are skipped, saying why, until they exist.
 
 ## The kit
 
@@ -484,6 +504,12 @@ only what an automation here uses:
   credits and journal entries, conditions joined by AND, no Active condition, each value
   quoted with every backslash doubled, then every apostrophe escaped — and readers for
   Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+- `@autom8x/automation-kit/values` — the one cleaning of a value read from a document:
+  `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
+  marked), `parseDate` (a real day from 2000 on), `cleanCurrency` against ISO 4217 List One
+  of 2026-09-17 (155 codes), `formatMoney`, `fitLine` and `fitReasonLine` (a line of at most
+  200 characters, names shortened first with '…'), and the receipt and credit rules:
+  `cardDigits`, `tipRule`, `creditSignRule`.
 - `@autom8x/automation-kit/testing` — `QuickBooksSimulator`, plugged in as
   `RecordingPlatform.provider`: QuickBooks answering from a made-up company, behind
   Connections' rules — a final answer replayed for the same request under its key, a

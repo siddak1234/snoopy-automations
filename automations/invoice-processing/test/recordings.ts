@@ -1,37 +1,64 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-import { isObject, renderPrompt, type JsonObject } from '@autom8x/automation-sdk';
+import {
+  isObject,
+  renderPrompt,
+  type JsonObject,
+  type PromptModule,
+} from '@autom8x/automation-sdk';
 
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 import { EXTRACT_INPUT } from '../src/steps/extract.js';
+import { VERIFY_INPUT } from '../src/steps/verify-read.js';
 import type { Sample } from './sample-maker/catalog.js';
 import { SAMPLES, samplePath, sha256 } from './sample-maker/samples.js';
 
 /**
  * The recordings: for each made-up sample, the answer of an agent that acted as the model —
  * given exactly the prompt's instruction, the fixed user text, the schema and the file, and
- * nothing else (`scripts/recording-request.ts` prints what) — saved verbatim as
- * `test/recordings/extract-document.v1/<sample>.json`.
+ * nothing else (`scripts/recording-request.ts` prints what) — saved verbatim, each read in its
+ * own directory: read 1 (`extract`) as `test/recordings/extract-document.v1/<sample>.json`, read 2
+ * (`verify-read`) as `test/recordings/verify-document.v1/<sample>.json`. Each sample is recorded
+ * twice, by separate agents blind to each other, as the two reads are blind to each other.
  *
  * A recording names what it was made for, and the loader refuses one made for anything else:
  * another prompt id or version, other bytes of the prompt file (a word changed without a new
  * version), or other bytes of the sample. Such a recording is made again, never edited.
  */
 
-export const PROMPT_ID = 'extract-document';
-export const PROMPT_VERSION = 1;
-export const PROMPT_FILE = resolve(
-  import.meta.dirname,
-  '..',
-  'prompts',
-  `${PROMPT_ID}.v${PROMPT_VERSION}.json`,
-);
-export const RECORDINGS_DIRECTORY = resolve(
-  import.meta.dirname,
-  'recordings',
-  `${PROMPT_ID}.v${PROMPT_VERSION}`,
-);
+/** One of the two reads a sample is recorded for: its prompt, its fixed input, its directory. */
+export interface Read {
+  readonly name: 'read 1' | 'read 2';
+  readonly prompt: PromptModule;
+  readonly input: JsonObject;
+  /** The prompt's file. */
+  readonly promptFile: string;
+  /** Where its recordings are kept. */
+  readonly directory: string;
+}
+
+function readOf(name: Read['name'], prompt: PromptModule, input: JsonObject): Read {
+  const versioned = `${prompt.id}.v${prompt.version}`;
+  return {
+    name,
+    prompt,
+    input,
+    promptFile: resolve(import.meta.dirname, '..', 'prompts', `${versioned}.json`),
+    directory: resolve(import.meta.dirname, 'recordings', versioned),
+  };
+}
+
+/** `extract`'s read: extract-document v1. */
+export const FIRST_READ: Read = readOf('read 1', EXTRACT_DOCUMENT_V1, EXTRACT_INPUT);
+/** `verify-read`'s: verify-document v1, blind to the first. */
+export const SECOND_READ: Read = readOf('read 2', VERIFY_DOCUMENT_V1, VERIFY_INPUT);
+export const READS: readonly Read[] = [FIRST_READ, SECOND_READ];
+
+export const PROMPT_ID = FIRST_READ.prompt.id;
+export const PROMPT_VERSION = FIRST_READ.prompt.version;
+export const PROMPT_FILE = FIRST_READ.promptFile;
+export const RECORDINGS_DIRECTORY = FIRST_READ.directory;
 
 export interface Recording {
   readonly promptId: string;
@@ -53,11 +80,11 @@ export interface MadeFor {
   readonly fileSha256: string;
 }
 
-export function madeFor(sample: Sample): MadeFor {
+export function madeFor(sample: Sample, read: Read = FIRST_READ): MadeFor {
   return {
-    promptId: PROMPT_ID,
-    promptVersion: PROMPT_VERSION,
-    promptSha256: sha256(readFileSync(PROMPT_FILE)),
+    promptId: read.prompt.id,
+    promptVersion: read.prompt.version,
+    promptSha256: sha256(readFileSync(read.promptFile)),
     fileSha256: sha256(readFileSync(samplePath(sample))),
   };
 }
@@ -95,9 +122,9 @@ export function readRecording(value: unknown, expected: MadeFor, label: string):
   return value as unknown as Recording;
 }
 
-/** The recording of `sample`, refused unless it was made for it; undefined when none was made. */
-export function recordingOf(sample: Sample): Recording | undefined {
-  const path = join(RECORDINGS_DIRECTORY, `${sample.name}.json`);
+/** The recording of `sample` for `read`, refused unless it was made for it; undefined when none was made. */
+export function recordingOf(sample: Sample, read: Read = FIRST_READ): Recording | undefined {
+  const path = join(read.directory, `${sample.name}.json`);
   if (!existsSync(path)) return undefined;
   let parsed: unknown;
   try {
@@ -105,25 +132,25 @@ export function recordingOf(sample: Sample): Recording | undefined {
   } catch {
     throw new Error(`${path} is not JSON`);
   }
-  return readRecording(parsed, madeFor(sample), path);
+  return readRecording(parsed, madeFor(sample, read), path);
 }
 
-/** The recording files there are, read for nothing but their names. */
-export function recordingFiles(): string[] {
-  return existsSync(RECORDINGS_DIRECTORY)
-    ? readdirSync(RECORDINGS_DIRECTORY).filter((file) => file.endsWith('.json'))
+/** The recording files there are for `read`, read for nothing but their names. */
+export function recordingFiles(read: Read = FIRST_READ): string[] {
+  return existsSync(read.directory)
+    ? readdirSync(read.directory).filter((file) => file.endsWith('.json'))
     : [];
 }
 
-/** Every recording there is, each refused unless made for its sample; a file naming no sample is refused too. */
-export function recordings(): { sample: Sample; recording: Recording }[] {
-  for (const file of recordingFiles()) {
+/** Every recording there is for `read`, each refused unless made for its sample; a file naming no sample is refused too. */
+export function recordings(read: Read = FIRST_READ): { sample: Sample; recording: Recording }[] {
+  for (const file of recordingFiles(read)) {
     if (!SAMPLES.some((sample) => `${sample.name}.json` === file)) {
       throw new Error(`${file} records no sample: name it after one in test/samples/`);
     }
   }
   return SAMPLES.flatMap((sample) => {
-    const recording = recordingOf(sample);
+    const recording = recordingOf(sample, read);
     return recording ? [{ sample, recording }] : [];
   });
 }
@@ -150,9 +177,9 @@ export interface RecordingRequest {
   readonly recording: Recording;
 }
 
-/** Exactly what the platform sends the model for `sample` (`renderPrompt`, the step's input). */
-export function recordingRequest(sample: Sample): RecordingRequest {
-  const rendered = renderPrompt(EXTRACT_DOCUMENT_V1, EXTRACT_INPUT);
+/** Exactly what the platform sends the model for `sample` on `read` (`renderPrompt`, the step's input). */
+export function recordingRequest(sample: Sample, read: Read = FIRST_READ): RecordingRequest {
+  const rendered = renderPrompt(read.prompt, read.input);
   return {
     sample: sample.name,
     file: relative(REPOSITORY, samplePath(sample)),
@@ -162,9 +189,9 @@ export function recordingRequest(sample: Sample): RecordingRequest {
     userText: JSON.stringify(rendered.input),
     responseSchema: rendered.outputSchema,
     answerWith: 'the JSON object alone: no other text and no code fences',
-    saveAs: relative(REPOSITORY, join(RECORDINGS_DIRECTORY, `${sample.name}.json`)),
+    saveAs: relative(REPOSITORY, join(read.directory, `${sample.name}.json`)),
     recording: {
-      ...madeFor(sample),
+      ...madeFor(sample, read),
       recordedBy: '<your model id> acting as the model, <date>',
       finishReason: 'stop',
       text: '<your answer, verbatim, as one JSON string>',

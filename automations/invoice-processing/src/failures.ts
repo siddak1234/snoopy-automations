@@ -32,8 +32,9 @@ export const THROWN_SENTENCES = {
     'The document file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
   quickbooks: QUICKBOOKS_SENTENCES.qb_unreachable,
   /**
-   * `extract`: no answer reached the step — a timeout, a reset, a cut connection — or its one
-   * repeat never reached the platform either. The SDK's own sentence for an answer that never came.
+   * `extract` or `verify-read`: no answer reached the step — a timeout, a reset, a cut connection —
+   * or its one repeat never reached the platform either. The SDK's own sentence for an answer that
+   * never came.
    */
   unanswered: UNANSWERED_REASON,
   other:
@@ -47,6 +48,9 @@ export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'find-accounts',
   'find-payer',
 ]);
+
+/** The steps that call a model: a throw there that got no answer ends with the SDK's sentence. */
+export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read']);
 
 /** Each step, noting the step id against anything it throws, then throwing it on unchanged. */
 export function noteThrows(steps: Readonly<Record<string, Step>>): Record<string, Step> {
@@ -90,7 +94,7 @@ export function sentenceFor(stepId: string | undefined, error: unknown): string 
   if (error instanceof CallbackRefusedError && error.status === 429) return THROWN_SENTENCES.busy;
   if (stepId === 'receive') return THROWN_SENTENCES.receive;
   if (stepId !== undefined && QUICKBOOKS_STEPS.has(stepId)) return THROWN_SENTENCES.quickbooks;
-  if (stepId === 'extract' && (isUnanswered(error) || isUnsent(error))) {
+  if (stepId !== undefined && MODEL_STEPS.has(stepId) && (isUnanswered(error) || isUnsent(error))) {
     return THROWN_SENTENCES.unanswered;
   }
   return THROWN_SENTENCES.other;

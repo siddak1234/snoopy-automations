@@ -4,9 +4,10 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
+import { CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
 import { FILE_LIMITS } from '../src/file.js';
 import { extractWorld } from './extract-world.js';
-import { completion, everythingSaid, lines, setUp } from './fixtures.js';
+import { completion, everythingSaid, lines, reads, setUp } from './fixtures.js';
 import { measure, referenceOf } from './measure.js';
 import {
   SAMPLES,
@@ -170,17 +171,35 @@ test('a text PDF prints every name, number and amount its answer gives, and its 
   }
 });
 
+/** The samples check-document stops, each with its rule (the rest go on to be recorded or compared). */
+const STOPPED: Readonly<Record<string, keyof typeof CHECK_DOCUMENT_SENTENCES>> = {
+  'two-invoices': 'C5',
+  'missing-page': 'C6',
+  'card-slip-tip-only': 'C28',
+  'cash-back-receipt': 'C16',
+  'bank-card-statement': 'C1',
+};
+
 test("each sample's expected answer passes extract whole, and its marker never reaches a line or a reason", async () => {
   for (const sample of SAMPLES) {
     const world = extractWorld();
     world.platform.model = (_call, model) => Promise.resolve(completion(model, sample.answer));
     assert.deepEqual((await world.state())?.extraction, sample.answer, sample.name);
 
-    // The whole run, on the sample's own measurements; then an unusable answer carrying it.
-    const run = setUp({ file: referenceOf(measure(readFileSync(samplePath(sample)))) });
-    run.platform.model = (_call, model) => Promise.resolve(completion(model, sample.answer));
+    // The whole run, on the sample's own measurements, the company card as Paid from; then an
+    // unusable answer carrying the marker.
+    const run = setUp({
+      file: referenceOf(measure(readFileSync(samplePath(sample)))),
+      config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
+    });
+    run.platform.model = reads(sample.answer);
     const result = await run.run();
-    assert.equal(result.outcome, 'success', sample.name);
+    const rule = STOPPED[sample.name];
+    assert.deepEqual(
+      result.outcome === 'failed' ? result.failureReason : result.outcome,
+      rule === undefined ? 'success' : CHECK_DOCUMENT_SENTENCES[rule],
+      sample.name,
+    );
     assert.ok(!everythingSaid(run.platform, result).includes(sample.marker), sample.name);
     const unusable = setUp();
     unusable.platform.model = (_call, model) =>

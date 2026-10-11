@@ -16,6 +16,13 @@ export const PROMPTS: readonly PromptModule[] = loadPrompts(
 /** `extract`'s instruction and answer schema: 17 rules, 27 fields (the owner's plan of 2026-10-11, §4). */
 export const EXTRACT_DOCUMENT_V1: PromptModule = promptOf('extract-document', 1);
 
+/**
+ * `verify-read`'s: read 1's own definitions for the 13 fields it re-reads — its rules 1–9, 12–15
+ * and 17, with what names a field it does not ask for left out — and `uncertainFields`, 14 fields
+ * of which 8 may be empty (the plan's §4, verify-read).
+ */
+export const VERIFY_DOCUMENT_V1: PromptModule = promptOf('verify-document', 1);
+
 function promptOf(id: string, version: number): PromptModule {
   const found = PROMPTS.find((prompt) => prompt.id === id && prompt.version === version);
   if (!found) throw new Error(`prompts/${id}.v${version}.json is missing`);

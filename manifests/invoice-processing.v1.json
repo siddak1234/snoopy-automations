@@ -243,6 +243,18 @@
       "kicker": "AI STEP",
       "title": "Read the document",
       "description": "The AI reads the document: its type, the seller, its number, dates, amounts and lines."
+    },
+    {
+      "id": "check-document",
+      "kicker": "ACTION",
+      "title": "Check what the AI read",
+      "description": "Cleans what the AI read, chooses the record the document becomes, and stops when none can be recorded correctly, before anything else is spent."
+    },
+    {
+      "id": "verify-read",
+      "kicker": "AI STEP",
+      "title": "Read it a second time",
+      "description": "A second AI, by another maker, reads the type and what will be recorded without seeing the first reading; code compares the two."
     }
   ],
   "service": {

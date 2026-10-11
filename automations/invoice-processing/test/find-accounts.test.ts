@@ -36,7 +36,7 @@ test('the default category alone: the exact IN text is sent, and the run continu
     ownerInvestment: null,
     owners: [],
   });
-  assert.equal(platform.modelCalls.length, 1);
+  assert.equal(platform.modelCalls.length, 2, 'both reads');
 });
 
 test('every account setting in one query, each name once, two rows a name; each kept by its role', async () => {

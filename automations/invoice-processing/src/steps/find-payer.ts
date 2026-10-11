@@ -5,11 +5,11 @@ import {
   readQuickBooks,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
+import { MAXIMUM_NAME_LENGTH, cleanText } from '@autom8x/automation-kit/values';
 import { isObject, truncateText, type JsonObject, type Step } from '@autom8x/automation-sdk';
 
 import { failedWith, quickBooksFailed } from '../outcome.js';
 import type { AccountRef, AccountsState, PayerState } from '../state.js';
-import { MAXIMUM_NAME_LENGTH, cleanText } from '../text.js';
 
 /**
  * `find-payer` — who paid, when someone paid with their own money (the owner's D13–D15),
