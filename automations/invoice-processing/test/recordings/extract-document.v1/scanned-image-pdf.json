@@ -1,0 +1,9 @@
+{
+  "fileSha256": "082a5f452fe231ceeceb70569e31fd77fd71ca54f48bd9bd697a6513235f11b3",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Pinecrest Janitorial Services\",\"documentNumber\":\"PJS-0388\",\"documentDate\":\"2026-09-22\",\"dueDate\":null,\"paymentTermsDays\":0,\"currency\":null,\"subtotal\":1171.80,\"tax\":null,\"shipping\":null,\"discount\":56.25,\"total\":1115.55,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"repairs_and_maintenance\",\"lineItems\":[{\"amount\":840.00},{\"amount\":165.00},{\"amount\":120.00},{\"amount\":46.80}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

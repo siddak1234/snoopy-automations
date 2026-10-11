@@ -1,0 +1,9 @@
+{
+  "fileSha256": "f16ee036d64b227c5ff13048f8efb4fe7c130228a2d880714d30838544961804",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"vendorName\":\"Fernhill Linen Service\",\"documentNumber\":\"FLS-4470\",\"documentDate\":\"2026-09-25\",\"dueDate\":\"2026-10-25\",\"currency\":null,\"total\":null,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[\"total\"]}"
+}

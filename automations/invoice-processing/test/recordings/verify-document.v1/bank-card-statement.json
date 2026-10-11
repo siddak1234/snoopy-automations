@@ -1,0 +1,9 @@
+{
+  "fileSha256": "0bcf84b90c518cc1416ec585f24d94c470dd4f46010d172b3a89f8ff6dcee234",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bank_statement\",\"vendorName\":\"Larkspur Example Bank\",\"documentNumber\":\"QZ7BNK\",\"documentDate\":\"2026-09-25\",\"dueDate\":null,\"currency\":null,\"total\":null,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[]}"
+}

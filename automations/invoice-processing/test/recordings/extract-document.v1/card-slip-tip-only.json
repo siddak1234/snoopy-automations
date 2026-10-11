@@ -1,0 +1,9 @@
+{
+  "fileSha256": "cf0c17137966b2a519733316864249c0dbad4cac71eb4bad8f734f73b568abcf",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"COPPERVANE CAFE\",\"documentNumber\":\"771203\",\"documentDate\":\"2026-09-25\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":38.50,\"amountDue\":null,\"tip\":7.00,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"5521\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"meals\",\"lineItems\":[],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}
