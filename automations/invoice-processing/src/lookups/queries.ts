@@ -43,6 +43,10 @@ export const MAX_RESULTS = {
   /**
    * Journal entries on a day, or in the bank-feed window — their `TotalAmt` is always 0, so lines
    * are compared in code: 10 rows of up to 19.6 KB each, a journal entry of some 75 lines.
+   * PROVISIONAL, a trade-off owed a measured answer size or the owner's choice before v1 freezes:
+   * a company receipt whose 22-day window holds 10 entries of any kind — the reimbursements this
+   * automation records among them — is held "too many to check" (D6), and a larger bound lets
+   * larger entries make an answer over 192 KiB, which fails the run.
    */
   journalEntries: 10,
   /**

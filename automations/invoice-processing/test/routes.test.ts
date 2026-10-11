@@ -197,6 +197,7 @@ test("a statement: compared, never held — the vendor's bills among its numbers
       listedNotInQuickBooks: ['HOS-1031', 'HOS-1050'],
       listedCheckable: true,
       openBillsNotListed: { count: 1, totalCents: 5000 },
+      openBillsCheckable: true,
       quickBooksOpenCents: 98000,
       differenceCents: -29346,
     },
@@ -211,6 +212,33 @@ test("a statement: compared, never held — the vendor's bills among its numbers
     world.platform.steps.some((step) => step.outcome === 'held'),
     false,
   );
+});
+
+test("a statement whose vendor has 41 open bills it does not list, the lookup reading 40: the output's count says it may be short (D6)", async () => {
+  const { world } = await route({
+    answer: statement(),
+    company: (sim) => {
+      for (let index = 0; index < 41; index += 1) {
+        sim.company.bills.push(
+          sampleBill(String(500 + index), REF.harrowgate, {
+            DocNumber: `X-${index}`,
+            TotalAmt: 10,
+          }),
+        );
+      }
+    },
+  });
+  assert.equal(
+    world.platform.steps.find((step) => step.stepId === 'find-duplicate-amount')?.summary,
+    'Open bills from this vendor: 40, $400.00 open in all; maybe more',
+  );
+  assert.ok(world.result.outcome === 'success');
+  const compared = (world.result.output as { statement: JsonObject }).statement;
+  assert.deepEqual(
+    [compared.openBillsNotListed, compared.openBillsCheckable, compared.listedCheckable],
+    [{ count: 40, totalCents: 40_000 }, false, true],
+  );
+  assert.match(world.result.summary ?? '', /; 40 open bills not on it \(\$400\.00\)/u);
 });
 
 test('a bill whose number an expense already carries, whoever its payee, holds as a possible duplicate (decision 6, G4-5)', async () => {
@@ -229,8 +257,9 @@ test('a bill whose number an expense already carries, whoever its payee, holds a
   });
   const hold = held(world.result);
   assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
+  // The approver sees how it was paid and to whom: a check to someone else (the design's find-expense).
   assert.equal(
     world.platform.steps.find((step) => step.stepId === 'find-related')?.summary,
-    "Expenses with number 'HOS-1042': Id 139 (Checking, 2026-08-02, $1,200.00)",
+    "Expenses with number 'HOS-1042': Id 139 (Check to Pacific Gas, 2026-08-02, $1,200.00)",
   );
 });

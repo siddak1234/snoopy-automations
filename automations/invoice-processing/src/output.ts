@@ -1,9 +1,10 @@
 import { fitLine, formatMoney, type LinePiece } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
+import type { Comparison } from './decide/decide.js';
 import type { Payee, RecordPlan } from './decide/plan.js';
 import type { SavedState } from './decide/saved.js';
-import { statementLine, type StatementResult } from './decide/statement.js';
+import { statementLine } from './decide/statement.js';
 
 /**
  * The run's result once its pipeline ends — decide's outcome, which replaced the run's state (the
@@ -11,8 +12,9 @@ import { statementLine, type StatementResult } from './decide/statement.js';
  *
  * - **A statement compared** (`outcome: 'compared'`): what decide found — its own sum, the vendor's
  *   open bills it does not list, its balance against QuickBooks' — with the FULL list of the
- *   invoice numbers it lists that QuickBooks lacks, which neither app shows yet; the summary is
- *   decide's line, the totals and the counts.
+ *   invoice numbers it lists that QuickBooks lacks, which neither app shows yet, and whether each
+ *   lookup read all there was (`listedCheckable`, `openBillsCheckable`: false at its maximum, D6);
+ *   the summary is decide's line, the totals and the counts.
  * - **A record decided** (`outcome: 'planned'`), straight through or approved after a hold: the
  *   document's type and route, the record planned — its type, payment type, amount, date, payee,
  *   category and Paid from account — who paid, and why it was held, if it was. The writes (the
@@ -35,7 +37,7 @@ function isSaved(state: JsonObject): boolean {
   return state.v === 1 && typeof state.route === 'string' && isObject(state.plan);
 }
 
-function compared(result: StatementResult): { output: JsonObject; summary: string } {
+function compared(result: Comparison): { output: JsonObject; summary: string } {
   return {
     output: {
       outcome: 'compared',
@@ -50,6 +52,7 @@ function compared(result: StatementResult): { output: JsonObject; summary: strin
         listedCheckable: result.listedCheckable,
         openBillsNotListed:
           result.openBillsNotListed === null ? null : { ...result.openBillsNotListed },
+        openBillsCheckable: result.openBillsCheckable,
         quickBooksOpenCents: result.quickBooksOpenCents,
         differenceCents: result.differenceCents,
       },
@@ -116,7 +119,7 @@ function planned(saved: SavedState): { output: JsonObject; summary: string } {
 
 /** The run's output and summary from decide's outcome; a state decide did not leave is a fault. */
 export function runResult(state: JsonObject): { output: JsonObject; summary: string } {
-  if (isComparison(state)) return compared(state as unknown as StatementResult);
+  if (isComparison(state)) return compared(state as unknown as Comparison);
   if (isSaved(state)) return planned(state as unknown as SavedState);
   throw new Error('the run ended without a decision');
 }

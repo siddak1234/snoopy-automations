@@ -304,6 +304,52 @@ test("three bills with the number, none the vendor's: reachedMax, so decide hold
   assert.equal(two.result.outcome, 'success');
 });
 
+test("a bill's expenses with its number, by how each was paid and to whom — no payee, a card refund — three at most, 'maybe more' kept (decision 6, G4-5)", async () => {
+  const check = samplePurchase('139', REF.checking, {
+    PaymentType: 'Check',
+    DocNumber: 'HOS-1042',
+    TxnDate: '2026-08-02',
+    TotalAmt: 1200,
+    EntityRef: { type: 'Vendor', ...REF.other },
+  });
+  const cash = samplePurchase('140', REF.checking, {
+    PaymentType: 'Cash',
+    DocNumber: 'HOS-1042',
+    TxnDate: '2026-08-03',
+    TotalAmt: 413.34,
+  });
+  const refund = samplePurchase('141', REF.visa, {
+    DocNumber: 'hos-1042',
+    TxnDate: '2026-08-04',
+    TotalAmt: 20,
+    Credit: true,
+    EntityRef: { type: 'Vendor', ...REF.tidewell },
+  });
+  const relatedLine = async (purchases: JsonObject[]) =>
+    lineOf(
+      await routeRun({
+        answer: bill(),
+        through: 'find-related',
+        company: (sim) => sim.company.purchases.push(...purchases),
+      }),
+      'find-related',
+    );
+  assert.equal(
+    await relatedLine([cash, refund]),
+    "Expenses with number 'HOS-1042': Id 140 (Cash, no payee, 2026-08-03, $413.34); Id 141 (CreditCard refund from Tidewell Hardware, 2026-08-04, $20.00)",
+  );
+  // A payment type Intuit does not list is not shown as given.
+  assert.equal(
+    await relatedLine([{ ...check, PaymentType: 'Wire' }]),
+    "Expenses with number 'HOS-1042': Id 139 (Expense to Pacific Gas, 2026-08-02, $1,200.00)",
+  );
+  // A full answer: the payees shortened first, so the line keeps 200 characters and "maybe more".
+  assert.equal(
+    await relatedLine([check, cash, refund]),
+    "Expenses with number 'HOS-1042': Id 139 (Check to Pacifi…, 2026-08-02, $1,200.00); Id 140 (Cash, no payee, 2026-08-03, $413.34); Id 141 (CreditCard refund from Tidewe…, 2026-08-04, $20.00); maybe more",
+  );
+});
+
 test('a row decide could not weigh — a bill without its vendor — fails as an unexpected answer', async () => {
   const world = await routeRun({
     answer: bill(),

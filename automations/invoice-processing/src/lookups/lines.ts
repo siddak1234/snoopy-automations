@@ -8,15 +8,16 @@ import {
 } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
-import type { FoundRecord, VendorState } from '../decide/contract.js';
+import type { ExpenseRow, FoundRecord, VendorState } from '../decide/contract.js';
 import type { DocumentState } from '../state.js';
 import type { ExpenseSearch } from './expense-search.js';
 import { feedWindow, listedInvoiceNumbers } from './queries.js';
 
 /**
  * The record lookups' timeline lines (steps 14–17), each at most 200 characters: what was searched,
- * then what QuickBooks has — each record by its Id, the vendor or account QuickBooks names, its
- * date and amount — or "none in QuickBooks". They inform the approver; decide weighs the records.
+ * then what QuickBooks has — each record by its Id, the vendor or account QuickBooks names (a
+ * bill's expenses with its number: how each was paid, and to whom), its date and amount — or "none
+ * in QuickBooks". They inform the approver; decide weighs the records.
  * Never a line item or a memo: the document's number, the amounts, the dates and QuickBooks' own
  * names alone.
  */
@@ -41,11 +42,15 @@ function refName(value: unknown): string | null {
   return isObject(value) ? cleanText(value.name) : null;
 }
 
-/** One record, as a line lists it: "Id 145 (this vendor, 2026-09-14, $412.50, open)". */
+/**
+ * One record, as a line lists it: "Id 145 (this vendor, 2026-09-14, $412.50, open)" — an expense by
+ * the account it was paid from, or with `payment` by how it was paid and to whom.
+ */
 function recordPieces(
   record: FoundRecord,
   row: JsonObject,
   vendor: VendorState | null,
+  payment: boolean,
 ): LinePiece[] {
   const ownVendor = vendor?.status === 'matched' ? vendor.id : null;
   const vendorOf = (vendorId: string): LinePiece =>
@@ -58,6 +63,7 @@ function recordPieces(
         `, ${record.txnDate}, ${money(record.totalCents)}, ${record.balanceCents === 0 ? 'paid' : 'open'})`,
       ];
     case 'expense':
+      if (payment) return paymentPieces(record, row);
       return [
         `Id ${shorten(record.id, 20)} (`,
         { name: refName(row.AccountRef) ?? 'an account' },
@@ -74,13 +80,41 @@ function recordPieces(
   }
 }
 
-/** "<head>: none in QuickBooks", or the first three records, "+N more", and "maybe more" when full. */
-function listLine(head: string, found: Found, full = 'maybe more'): string {
+/** Intuit's `Purchase.PaymentType`: "Type can be Cash, Check, or CreditCard." */
+const PAYMENT_TYPES: ReadonlySet<unknown> = new Set(['Cash', 'Check', 'CreditCard']);
+
+/**
+ * An expense by how it was paid and to whom — "Id 139 (Check to Pacific Gas, 2026-08-02,
+ * $1,200.00)", "(Cash, no payee, …)", "(CreditCard refund from …, …)" — for a bill's expenses with
+ * its number (decision 6): any payee's is held (G4-5), so the approver sees a check to someone else
+ * that only shares the number (ip-review design-quickbooks-lookups.json steps[7] logic[7]).
+ */
+function paymentPieces(record: ExpenseRow, row: JsonObject): LinePiece[] {
+  const how = `${PAYMENT_TYPES.has(row.PaymentType) ? String(row.PaymentType) : 'Expense'}${
+    record.credit ? ' refund' : ''
+  }`;
+  const payee = refName(row.EntityRef);
+  return [
+    `Id ${shorten(record.id, 20)} (${how}`,
+    ...(payee === null ? [', no payee'] : [record.credit ? ' from ' : ' to ', { name: payee }]),
+    `, ${record.txnDate}, ${money(record.totalCents)})`,
+  ];
+}
+
+/**
+ * "<head>: none in QuickBooks", or the first three records, "+N more", and "maybe more" when full;
+ * `payment` lists expenses by how each was paid and to whom.
+ */
+function listLine(
+  head: string,
+  found: Found,
+  { full = 'maybe more', payment = false }: { full?: string; payment?: boolean } = {},
+): string {
   if (found.records.length === 0) return `${head}: none in QuickBooks`;
   const pieces: LinePiece[] = [`${head}: `];
   found.records.slice(0, 3).forEach((record, index) => {
     if (index > 0) pieces.push('; ');
-    pieces.push(...recordPieces(record, found.rows[index] ?? {}, found.vendor));
+    pieces.push(...recordPieces(record, found.rows[index] ?? {}, found.vendor, payment));
   });
   const more = found.records.length - 3;
   if (more > 0) pieces.push(`; +${more} more`);
@@ -183,7 +217,9 @@ export function relatedLine(found: Found): string {
   const { document } = found;
   switch (document.route) {
     case 'bill':
-      return listLine(`Expenses with number ${numberOf(document.number)}`, found);
+      return listLine(`Expenses with number ${numberOf(document.number)}`, found, {
+        payment: true,
+      });
     case 'company_receipt':
       return listLine(`Bills for ${money(document.amountCents ?? 0)}, newest first`, found);
     case 'card_refund':

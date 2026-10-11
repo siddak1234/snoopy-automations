@@ -149,12 +149,41 @@ test("a statement's output holds every listed invoice number QuickBooks lacks, i
       listedNotInQuickBooks: ['HOS-1031', 'HOS-1050'],
       listedCheckable: true,
       openBillsNotListed: { count: 0, totalCents: 0 },
+      openBillsCheckable: true,
       quickBooksOpenCents: 68654,
       differenceCents: 0,
     },
     secondCheck: 'made',
     switchIgnored: true,
   });
+});
+
+test("a statement's open-bills lookup at its maximum: the output keeps the count and says it may be short (D6)", () => {
+  const output = (reachedMax: boolean) => {
+    const decision = decideRun({
+      state: decideState({
+        answer: statement(),
+        lookups: {
+          amountLookup: {
+            reachedMax,
+            records: [billRow({ id: '9', docNumber: 'HOS-0999', balanceCents: 1_000 })],
+          },
+        },
+      }),
+      config: {},
+      switchOn: false,
+      runId: RUN_ID,
+    });
+    assert.ok(decision.outcome === 'compared');
+    return runResult(decision.result as unknown as JsonObject).output.statement as JsonObject;
+  };
+  for (const reachedMax of [false, true]) {
+    const { openBillsNotListed, openBillsCheckable, listedCheckable } = output(reachedMax);
+    assert.deepEqual(
+      [openBillsNotListed, openBillsCheckable, listedCheckable],
+      [{ count: 1, totalCents: 1_000 }, !reachedMax, true],
+    );
+  }
 });
 
 test('a state decide did not leave is a fault — the run fails with the general sentence, never a made-up output', async () => {
