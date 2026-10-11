@@ -3,17 +3,25 @@
   "file": "invoice.pdf",
   "contentType": "application/pdf",
   "marker": "QZ7TYP",
-  "made": "A one-page invoice typed into a PDF: a text layer in Courier, a quantity and unit price on each line, dates written out, the currency printed as USD.",
-  "decisive": ["vendorName", "invoiceNumber", "invoiceDate", "total"],
+  "markerIn": "line",
+  "made": "A one-page supplier invoice typed into a PDF: a text layer in Courier, a quantity and unit price on each line, dates written out, the currency printed as USD, a PO number beside the invoice number.",
+  "decisive": [
+    "documentType",
+    "vendorName",
+    "documentNumber",
+    "documentDate",
+    "total",
+    "spendType"
+  ],
   "extract": "ok: passed on whole in state.extraction",
-  "next": "An ordinary invoice: it passes the checks that need no QuickBooks data.",
+  "next": "A bill: recorded as an unpaid bill on the office supplies category, or the default category when that setting is empty.",
   "answer": {
-    "documentType": "invoice",
-    "invoiceCount": 1,
+    "documentType": "bill",
+    "documentCount": 1,
     "pagesMissing": false,
     "vendorName": "Harrowgate Office Supply",
-    "invoiceNumber": "HOS-QZ7TYP-1042",
-    "invoiceDate": "2026-09-14",
+    "documentNumber": "HOS-1042",
+    "documentDate": "2026-09-14",
     "dueDate": "2026-10-14",
     "paymentTermsDays": 30,
     "currency": "USD",
@@ -23,29 +31,33 @@
     "discount": null,
     "total": 413.34,
     "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "office_supplies",
     "lineItems": [
       {
-        "description": "Copy paper, letter, 10 reams",
         "amount": 99
       },
       {
-        "description": "Toner cartridge, black, HL-200",
         "amount": 189
       },
       {
-        "description": "Ballpoint pens, blue, box of 50",
         "amount": 38.25
       },
       {
-        "description": "Sticky notes, 3 x 3 in, 12 pack",
         "amount": 19.6
       },
       {
-        "description": "Desk organizer, mesh",
         "amount": 24.9
       }
     ],
     "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
     "uncertainFields": []
   }
 }

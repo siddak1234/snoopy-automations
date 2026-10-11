@@ -36,7 +36,8 @@ import { faultOf } from './answers.js';
  * can see a transient one (no answer, a reasonless 502/503/504) and the run's own
  * wrapper can give its sentence when the attempts are spent: `qb_unreachable` below.
  *
- * READS ONLY: a repeated write could create a second record. The wait is the injected
+ * READS ONLY: a repeated write could create a second record — a write goes through
+ * `writeQuickBooks` (`write.ts`), which never repeats one. The wait is the injected
  * `clock`'s, so a suite never waits a minute.
  */
 
@@ -231,7 +232,9 @@ function platformRefusal(error: unknown): QuickBooksRead | undefined {
  * class. The SDK names the error and records the callback, the status and the
  * platform's reason on it.
  */
-function refusalOf(error: unknown): { status: number; reason: string | undefined } | undefined {
+export function refusalOf(
+  error: unknown,
+): { status: number; reason: string | undefined } | undefined {
   if (!(error instanceof Error) || error.name !== 'CallbackRefusedError') return undefined;
   const { callback, status, reason } = error as Partial<
     Pick<CallbackRefusedError, 'callback' | 'status' | 'reason'>

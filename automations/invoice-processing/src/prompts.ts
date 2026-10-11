@@ -13,8 +13,8 @@ export const PROMPTS: readonly PromptModule[] = loadPrompts(
   fileURLToPath(new URL('../prompts/', import.meta.url)),
 );
 
-/** `extract`'s instruction and answer schema: 13 rules, 18 fields. */
-export const EXTRACT_INVOICE_V1: PromptModule = promptOf('extract-invoice', 1);
+/** `extract`'s instruction and answer schema: 17 rules, 27 fields (the owner's plan of 2026-10-11, §4). */
+export const EXTRACT_DOCUMENT_V1: PromptModule = promptOf('extract-document', 1);
 
 function promptOf(id: string, version: number): PromptModule {
   const found = PROMPTS.find((prompt) => prompt.id === id && prompt.version === version);

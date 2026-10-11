@@ -34,7 +34,7 @@ const longInvoice: Invoice = {
     'orders@marlowe.example',
   ],
   details: [
-    ['Invoice #', 'MFS-QZ7LNG-7781'],
+    ['Invoice #', 'MFS-7781'],
     ['Invoice date', '09/08/2026'],
     ['Due date', '10/08/2026'],
     ['Terms', 'Net 30'],
@@ -47,7 +47,7 @@ const longInvoice: Invoice = {
     ['Freight', money(4_500)],
     ['Total', money(longSubtotal + longTax + 4_500)],
   ],
-  notes: ['All amounts in USD.'],
+  notes: ['All amounts in USD.', 'Picked and packed by team QZ7LNG.'],
 };
 
 export const longInvoicePdf: Sample = {
@@ -55,13 +55,14 @@ export const longInvoicePdf: Sample = {
   file: 'invoice.pdf',
   contentType: 'application/pdf',
   marker: 'QZ7LNG',
+  markerIn: 'notes',
   made: 'A seven-page text PDF of 300 charged lines, numbered "Page n of 7", the totals on the last page.',
   decisive: ['lineItems', 'lineItemsComplete', 'subtotal', 'total'],
-  next: 'More than 40 lines: the lines are not checked (lineItemsComplete false); the total is checked against the subtotal, tax and freight.',
+  next: 'A bill of more than 40 lines: the lines are not checked (lineItemsComplete false), the total is checked against the subtotal, tax and freight; recorded as a bill on the materials category.',
   answer: answer({
     vendorName: 'Marlowe Fastener Supply',
-    invoiceNumber: 'MFS-QZ7LNG-7781',
-    invoiceDate: '2026-09-08',
+    documentNumber: 'MFS-7781',
+    documentDate: '2026-09-08',
     dueDate: '2026-10-08',
     paymentTermsDays: 30,
     currency: 'USD',
@@ -69,6 +70,7 @@ export const longInvoicePdf: Sample = {
     tax: amount(longTax),
     shipping: 45,
     total: amount(longSubtotal + longTax + 4_500),
+    spendType: 'materials',
     lineItems: longLines.slice(0, 40),
     lineItemsComplete: false,
   }),
@@ -76,7 +78,7 @@ export const longInvoicePdf: Sample = {
     const lines = layout(longInvoice, 78);
     const header = lines.findIndex((line) => line.text.startsWith('Description'));
     const continued: Line[] = [
-      { text: 'Marlowe Fastener Supply - Invoice MFS-QZ7LNG-7781 (continued)', bold: true },
+      { text: 'Marlowe Fastener Supply - Invoice MFS-7781 (continued)', bold: true },
       { text: '' },
       ...lines.slice(header, header + 2),
     ];
@@ -111,7 +113,7 @@ const courier = (
   ],
 });
 const firstRuns: [string, number][] = [
-  ['Same-day courier, 6 runs', 13_200],
+  ['Same-day courier, 6 runs, route QZ7TWO', 13_200],
   ['Fuel surcharge', 1_100],
 ];
 
@@ -120,26 +122,28 @@ export const twoInvoicesPdf: Sample = {
   file: 'invoices.pdf',
   contentType: 'application/pdf',
   marker: 'QZ7TWO',
+  markerIn: 'line',
   made: 'Two one-page invoices from one courier in one text PDF; the answer reads the first.',
-  decisive: ['invoiceCount'],
-  next: "More than one invoice: the next step fails it with 'Upload one invoice per run.'",
+  decisive: ['documentCount'],
+  next: 'More than one document in the file: check-document fails it (C5), asking for one document per run.',
   answer: answer({
-    invoiceCount: 2,
+    documentCount: 2,
     vendorName: 'Kestrel Courier Co',
-    invoiceNumber: 'KCC-QZ7TWO-301',
-    invoiceDate: '2026-09-10',
+    documentNumber: 'KCC-301',
+    documentDate: '2026-09-10',
     dueDate: '2026-09-25',
     paymentTermsDays: 15,
     currency: 'USD',
     subtotal: amount(14_300),
     total: amount(14_300),
+    spendType: 'other',
     lineItems: firstRuns,
   }),
   make: () =>
     textPdf([
-      layout(courier('KCC-QZ7TWO-301', 'September 10, 2026', 'September 25, 2026', firstRuns), 78),
+      layout(courier('KCC-301', 'September 10, 2026', 'September 25, 2026', firstRuns), 78),
       layout(
-        courier('KCC-QZ7TWO-302', 'September 17, 2026', 'October 2, 2026', [
+        courier('KCC-302', 'September 17, 2026', 'October 2, 2026', [
           ['Same-day courier, 4 runs', 8_800],
           ['Weekend delivery', 3_500],
         ]),
@@ -158,17 +162,19 @@ export const missingPagePdf: Sample = {
   file: 'invoice.pdf',
   contentType: 'application/pdf',
   marker: 'QZ7MSP',
+  markerIn: 'notes',
   made: 'The first page of a two-page text PDF alone: "Page 1 of 2", the lines continued, no totals.',
   decisive: ['pagesMissing'],
-  next: 'Pages are missing: the next step fails it.',
+  next: 'Pages are missing: check-document fails it (C6), asking for the whole document.',
   answer: answer({
     pagesMissing: true,
     vendorName: 'Fernhill Linen Service',
-    invoiceNumber: 'FLS-QZ7MSP-4470',
-    invoiceDate: '2026-09-25',
+    documentNumber: 'FLS-4470',
+    documentDate: '2026-09-25',
     dueDate: '2026-10-25',
     paymentTermsDays: 30,
     total: null,
+    spendType: 'other',
     lineItems: linenLines,
     lineItemsComplete: false,
     uncertainFields: ['total'],
@@ -184,7 +190,7 @@ export const missingPagePdf: Sample = {
           'ar@fernhill.example',
         ],
         details: [
-          ['Invoice #', 'FLS-QZ7MSP-4470'],
+          ['Invoice #', 'FLS-4470'],
           ['Invoice date', '09/25/2026'],
           ['Due date', '10/25/2026'],
           ['Terms', 'Net 30'],
@@ -192,7 +198,7 @@ export const missingPagePdf: Sample = {
         billTo: BILL_TO,
         items: linenLines.map(([description, cents]) => ({ description, amount: money(cents) })),
         totals: [],
-        notes: ['Continued on page 2.'],
+        notes: ['Continued on page 2.', 'Delivery route QZ7MSP.'],
       },
       78,
     );

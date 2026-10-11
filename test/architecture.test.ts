@@ -167,11 +167,27 @@ test('the SDK and the kit are consumable through their published entries', async
     string,
     unknown
   >;
-  for (const name of ['readQuickBooks', 'lookupQuery', 'queryRowsOf', 'QUICKBOOKS_SENTENCES']) {
+  for (const name of [
+    'readQuickBooks',
+    'lookupQuery',
+    'lookupInQuery',
+    'transactionQuery',
+    'dateRange',
+    'queryRowsOf',
+    'QUICKBOOKS_SENTENCES',
+    'writeQuickBooks',
+    'writeSentences',
+    'QUICKBOOKS_WRITES',
+  ]) {
     assert.ok(name in quickbooks, `@autom8x/automation-kit/quickbooks exports no ${name}`);
   }
   const kitTesting = (await import('@autom8x/automation-kit/testing')) as Record<string, unknown>;
-  for (const name of ['QuickBooksSimulator', 'PROVIDER_REFUSALS', 'sampleAccount']) {
+  for (const name of [
+    'QuickBooksSimulator',
+    'PROVIDER_REFUSALS',
+    'sampleAccount',
+    'sampleEmployee',
+  ]) {
     assert.ok(name in kitTesting, `@autom8x/automation-kit/testing exports no ${name}`);
   }
 });

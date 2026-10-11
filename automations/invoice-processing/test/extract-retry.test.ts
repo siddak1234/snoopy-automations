@@ -15,7 +15,7 @@ import { droppedConnection, proxyPage, refusedConnection, timedOut } from './wir
  * Each failure comes from the SDK's own client on a local socket, so its marks are the SDK's.
  */
 
-/** The model fails the first `failures.length` calls with each failure in turn, then reads the invoice. */
+/** The model fails the first `failures.length` calls with each failure in turn, then reads the document. */
 function failing(platform: RecordingPlatform, failures: readonly unknown[]): void {
   let calls = 0;
   platform.model = (_call, model) => {
@@ -65,7 +65,7 @@ test('repeated once, 10 s later, when nothing reached the platform: a refused co
     assert.deepEqual(lines(world.platform).at(-1), [
       'extract',
       'ok',
-      'Read the invoice with anthropic/claude-haiku-4.5: 2 lines, 0 unclear (after 2 attempts)',
+      'Read the document with anthropic/claude-haiku-4.5: 2 lines, 0 unclear (after 2 attempts)',
     ]);
   }
 
@@ -133,7 +133,7 @@ test('never repeated after an answer that may have been made: a timeout, a dropp
     assert.deepEqual(await world.run(), {
       outcome: 'failed',
       failureReason:
-        'No model could read the invoice just now, and nothing was created. Start the run again with the invoice in a few minutes.',
+        'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
     });
     assert.equal(world.platform.modelCalls.length, 1, 'made once, never again');
   }

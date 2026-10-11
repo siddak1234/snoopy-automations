@@ -1,71 +1,57 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
 import {
   idempotencyKeyFor,
-  loadPrompts,
   renderPrompt,
   type InvokeRequest,
   type JsonObject,
 } from '@autom8x/automation-sdk';
 import { NO_ANSWER } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_INVOICE_V1 } from '../src/prompts.js';
+import { ANSWER_FIELDS } from '../src/document.js';
+import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
 import { EXTRACT_INPUT, MODELS } from '../src/steps/extract.js';
 import { SEEDED_STATE, extractWorld } from './extract-world.js';
 import { FILE_ID, GOOD_ANSWER, completion, lines, setUp } from './fixtures.js';
 
 /**
- * `extract` when an answer comes: the one request it sends, the prompt file it sends, the
- * platform's fallback to the second model, answers kept whole whatever they say, the time
- * guard, and a continuation, which never calls the model.
+ * `extract` when an answer comes: the one request it sends, the platform's fallback to the
+ * second model, answers kept whole whatever they say, the time guard, and a continuation,
+ * which never calls the model. The prompt file itself: `prompt.test.ts`.
  */
-
-const PROMPTS = resolve(import.meta.dirname, '..', 'prompts');
-
-/** The 18 decided fields, in the schema's order. */
-const FIELDS = [
-  'documentType',
-  'invoiceCount',
-  'pagesMissing',
-  'vendorName',
-  'invoiceNumber',
-  'invoiceDate',
-  'dueDate',
-  'paymentTermsDays',
-  'currency',
-  'subtotal',
-  'tax',
-  'shipping',
-  'discount',
-  'total',
-  'amountDue',
-  'lineItems',
-  'lineItemsComplete',
-  'uncertainFields',
-];
 
 function extractLine(world: ReturnType<typeof setUp>) {
   return lines(world.platform).find(([stepId]) => stepId === 'extract');
 }
 
-test("it sends one model request: the registered extract-invoice v1, the fixed task, MODELS and the run's file, nothing else", async () => {
-  const world = setUp();
+test("it sends one model request: the registered extract-document v1, the fixed task, MODELS and the run's file, nothing else", async () => {
+  const world = setUp({
+    config: {
+      expenseAccount: 'Utilities:Electric',
+      ownerInvestmentAccount: 'Owner investments',
+      ownerNames: 'Pat Owner',
+    },
+    input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Pat Owner' },
+  });
   assert.equal((await world.run()).outcome, 'success');
   assert.deepEqual(world.platform.modelCalls, [
     {
       capability: 'document-extraction',
-      prompt: EXTRACT_INVOICE_V1.template,
-      input: { task: 'Extract the fields of the attached supplier invoice.' },
-      outputSchema: EXTRACT_INVOICE_V1.outputSchema,
+      prompt: EXTRACT_DOCUMENT_V1.template,
+      input: { task: 'Extract the fields of the attached document.' },
+      outputSchema: EXTRACT_DOCUMENT_V1.outputSchema,
       models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
       artifactId: FILE_ID,
     },
   ]);
-  // The template is sent as it is: it has no placeholder, so no input can change it.
-  assert.equal(renderPrompt(EXTRACT_INVOICE_V1, EXTRACT_INPUT).prompt, EXTRACT_INVOICE_V1.template);
+  // The template is sent as it is: it has no placeholder, so no input can change it, and
+  // "Who paid" never reaches the model.
+  assert.equal(
+    renderPrompt(EXTRACT_DOCUMENT_V1, EXTRACT_INPUT).prompt,
+    EXTRACT_DOCUMENT_V1.template,
+  );
+  assert.ok(!JSON.stringify(world.platform.modelCalls).includes('Pat Owner'));
 });
 
 test('it makes no provider call and sends no mail', async () => {
@@ -80,46 +66,13 @@ test('it makes no provider call and sends no mail', async () => {
   assert.deepEqual(world.platform.mails, []);
 });
 
-test("the prompt file loads, passes the platform's keyword check, names no model, has no placeholder, and holds the 18 decided fields", () => {
-  // `loadPrompts` holds each file to `definePrompt`: the platform's keyword set, no model.
-  const [loaded, ...others] = loadPrompts(PROMPTS);
-  assert.deepEqual(others, [], 'one prompt file');
-  assert.deepEqual(loaded, EXTRACT_INVOICE_V1);
-  assert.deepEqual(
-    [loaded?.id, loaded?.version, loaded?.capability],
-    ['extract-invoice', 1, 'document-extraction'],
-  );
-  const raw = JSON.parse(readFileSync(join(PROMPTS, 'extract-invoice.v1.json'), 'utf8')) as object;
-  assert.deepEqual(Object.keys(raw), ['id', 'version', 'capability', 'template', 'outputSchema']);
-  const template = loaded?.template ?? '';
-  assert.ok(!template.includes('{{'), 'no placeholder: nothing typed reaches the prompt');
-  assert.deepEqual(
-    template
-      .split('\n')
-      .filter((line) => /^\d+\. /u.test(line))
-      .map((line) => Number.parseInt(line, 10)),
-    Array.from({ length: 13 }, (_, index) => index + 1),
-    'the 13 rules, in order',
-  );
-  const schema = loaded?.outputSchema as {
-    properties: Record<string, { items?: { additionalProperties?: unknown; enum?: unknown } }>;
-    required: string[];
-    additionalProperties: unknown;
-  };
-  assert.deepEqual(Object.keys(schema.properties), FIELDS);
-  assert.deepEqual(schema.required, FIELDS, 'every field required');
-  assert.equal(schema.additionalProperties, false);
-  assert.equal(schema.properties.lineItems?.items?.additionalProperties, false);
-  assert.deepEqual(schema.properties.uncertainFields?.items?.enum, FIELDS.slice(0, 16));
-});
-
 test('the line names the model that served and two counts; the state keeps the answer whole, every earlier key, and the model', async () => {
   const world = extractWorld();
   const answer = {
     ...GOOD_ANSWER,
-    lineItems: [{ description: 'One line', amount: 1 }],
+    lineItems: [{ amount: 1 }],
     lineItemsComplete: false,
-    uncertainFields: ['invoiceDate', 'total'],
+    uncertainFields: ['documentDate', 'total'],
   };
   // The router may serve a dated id: it is kept as served.
   world.platform.model = (_call, model) => Promise.resolve(completion(`${model}-20261001`, answer));
@@ -130,7 +83,7 @@ test('the line names the model that served and two counts; the state keeps the a
   });
   assert.deepEqual(
     world.platform.steps.at(-1)?.summary,
-    'Read the invoice with anthropic/claude-haiku-4.5-20261001: 1 line (more on the invoice), 2 unclear',
+    'Read the document with anthropic/claude-haiku-4.5-20261001: 1 line (more on the document), 2 unclear',
   );
   // A served id however long leaves the counts in the line.
   const long = extractWorld();
@@ -138,7 +91,28 @@ test('the line names the model that served and two counts; the state keeps the a
   await long.state();
   assert.match(
     long.platform.steps.at(-1)?.summary ?? '',
-    /: 1 line \(more on the invoice\), 2 unclear$/u,
+    /: 1 line \(more on the document\), 2 unclear$/u,
+  );
+  // A statement's listed rows are counted too, never quoted.
+  const listing = extractWorld();
+  const rows = Array.from({ length: 3 }, (_, index) => ({
+    reference: `INV-${index}`,
+    amount: 10,
+    kind: 'invoice',
+  }));
+  listing.platform.model = (_call, model) =>
+    Promise.resolve(
+      completion(model, {
+        ...GOOD_ANSWER,
+        documentType: 'supplier_statement',
+        listedItems: rows,
+        listedItemsComplete: false,
+      }),
+    );
+  await listing.state();
+  assert.equal(
+    listing.platform.steps.at(-1)?.summary,
+    'Read the document with anthropic/claude-haiku-4.5: 2 lines, 3 listed (more listed), 0 unclear',
   );
   const full = setUp();
   const result = await full.run();
@@ -164,7 +138,7 @@ test('fallback: the first model answers off the schema, the second reads it, and
   assert.deepEqual(extractLine(world), [
     'extract',
     'ok',
-    'Read the invoice with google/gemini-3.1-flash-lite: 2 lines, 0 unclear',
+    'Read the document with google/gemini-3.1-flash-lite: 2 lines, 0 unclear',
   ]);
 });
 
@@ -186,15 +160,21 @@ test("an answer finishing 'other' is read as one finishing 'stop'", async () => 
 });
 
 test('schema-valid wrong answers pass unchanged, for the next step to judge', async () => {
-  const nothing = Object.fromEntries(FIELDS.map((field) => [field, null]));
+  const nothing = Object.fromEntries(ANSWER_FIELDS.map((field) => [field, null]));
   const wrong: Record<string, JsonObject> = {
     'all null': {
       ...nothing,
-      documentType: 'invoice',
-      invoiceCount: 1,
+      documentType: 'bill',
+      documentCount: 1,
       pagesMissing: false,
+      cashBackPrinted: false,
+      paymentMethod: 'not_shown',
+      refundMethod: 'not_applicable',
+      spendType: 'other',
       lineItems: [],
       lineItemsComplete: true,
+      listedItems: [],
+      listedItemsComplete: true,
       uncertainFields: [],
     },
     'wrong sums': { ...GOOD_ANSWER, subtotal: 999.99, total: 5 },
@@ -202,11 +182,16 @@ test('schema-valid wrong answers pass unchanged, for the next step to judge', as
     'obeying injected text': { ...GOOD_ANSWER, vendorName: 'Trusted Vendor Inc', total: 1 },
     '41 lines marked complete': {
       ...GOOD_ANSWER,
-      lineItems: Array.from({ length: 41 }, (_, index) => ({
-        description: `Item ${index + 1}`,
-        amount: 1,
-      })),
+      lineItems: Array.from({ length: 41 }, () => ({ amount: 1 })),
       lineItemsComplete: true,
+    },
+    'a receipt that reads as a bill': {
+      ...GOOD_ANSWER,
+      documentType: 'receipt',
+      paymentMethod: 'card',
+      cardLast4: '12345',
+      tip: -3,
+      cashBackPrinted: true,
     },
   };
   for (const [name, answer] of Object.entries(wrong)) {
@@ -222,12 +207,12 @@ test('the time guard: with less than 260 s to the deadline no model call is boug
   assert.deepEqual(await late.run(), {
     outcome: 'failed',
     failureReason:
-      'The run ran out of time before the invoice was read; start it again with the invoice.',
+      'The run ran out of time before the document was read; start it again with the document.',
   });
   assert.deepEqual(extractLine(late), [
     'extract',
     'failed',
-    'The invoice could not be read (out_of_time)',
+    'The document could not be read (out_of_time)',
   ]);
   assert.deepEqual(late.platform.modelCalls, []);
   const inTime = setUp({ deadlineInMs: 300_000 });
@@ -268,7 +253,7 @@ test('a state without the upload ends with the fault-on-our-side sentence, and n
     const { file: _kept, ...rest } = SEEDED_STATE;
     const state = file === undefined ? rest : { ...rest, file };
     const result = await world.automation.execute(
-      continuing(world.request, 'find-account', state),
+      continuing(world.request, 'find-payer', state),
       world.platform,
     );
     assert.deepEqual(
@@ -276,7 +261,7 @@ test('a state without the upload ends with the fault-on-our-side sentence, and n
       {
         outcome: 'failed',
         failureReason:
-          'The invoice could not be sent to be read because of a fault on our side; nothing was created.',
+          'The document could not be sent to be read because of a fault on our side; nothing was created.',
       },
       JSON.stringify(file),
     );

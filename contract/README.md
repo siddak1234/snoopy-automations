@@ -1,9 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `4875579`, taken 2026-10-10 — the platform's `main`
-after its #195 — but for two files taken since from branches not yet merged, which the last
-refresh note below names. The platform emits
+(`snoopy-backend`, private) at commit `7086e5e`, re-pinned 2026-10-11 — the platform's
+`main` after its #197 — but for one file taken from a branch not yet merged,
+`automation-model-request.json`, which the last refresh note below names. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -130,6 +130,17 @@ merge and are promoted, the live platform answers `excludeModelAuthors` with a 4
 schema at its `main` refuses a manifest declaring either limit; each file is re-pinned to its
 merge commit then, its bytes unchanged unless a review changed them.
 
+Re-pinned 2026-10-11 at `7086e5e`, the platform's `main` after #197 squash-merged
+`round-17/upload-file-measurement` (its BUILD-PLAN 25.2.28): `automation-manifest.json` is
+`cmp`-equal to `7086e5e`'s, so the bytes copied from `550663f` are the merged ones and only the
+commit above moves; the other six files the platform's `main` carries are `cmp`-equal too, and
+its `test/wire-schema.test.ts` samples and `manifest-validation.ts` did not change between
+`550663f` and `7086e5e`. `automation-model-request.json` stays as copied from `e25fd74`: the
+branch `round-17/model-author-exclusion` was rebased onto `7086e5e`, and its head `2482a2c`
+(its BUILD-PLAN 25.2.29 and 25.2.30) carries the same bytes (`cmp`-equal) and the same rule and
+samples; it is re-pinned to the merge commit when that pull request merges. Until then and a
+promotion, the live platform answers `excludeModelAuthors` with a 400.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -184,7 +195,7 @@ empty list "must declare at least one media type — omit `artifacts` entirely t
 files"; `maximumSizeBytes` "must be a positive integer" and at most 100 MiB. In the schema
 as well since the platform's 25.2.21 (2026-10-10), from the same constants: until then a
 manifest declaring `artifacts` passed the validator and failed this copy of the schema.
-Since its 25.2.28 (2026-10-10, not yet merged) two optional limits, measured from the file's
+Since its 25.2.28 (2026-10-10, merged 2026-10-11 as `7086e5e`) two optional limits, measured from the file's
 bytes when its upload is sealed: `maximumPdfPages` and `maximumImageSidePixels` each "must
 be an integer from 1 to N" (1,000 and 20,000); beside either, every accepted type "must be
 application/pdf, image/jpeg or image/png when a page or pixel limit is declared" (the types

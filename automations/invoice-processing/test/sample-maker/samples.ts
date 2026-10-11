@@ -7,12 +7,32 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 import type { Sample } from './catalog.js';
 import { handwrittenPng, phonePhotoJpeg, scannedImagePdf, screenshotPng } from './image-samples.js';
 import { longInvoicePdf, missingPagePdf, twoInvoicesPdf } from './paged-samples.js';
+import { cardSlipJpeg, longThermalJpeg, storeReceiptJpeg } from './photo-receipt-samples.js';
 import { pngScanlines } from './png.js';
+import {
+  cardRefundPdf,
+  cashBackReceipt,
+  creditMemoPdf,
+  paidInvoicePdf,
+} from './receipt-samples.js';
+import {
+  cardSlipTipOnlyPng,
+  handwrittenCashPng,
+  restaurantTipUnderTotalPng,
+  restaurantWrittenTotalPng,
+} from './slip-samples.js';
+import {
+  bankStatementPdf,
+  supplierStatementPdf,
+  utilityAccountPng,
+  utilityStatementPdf,
+} from './statement-samples.js';
 import { injectedPdf, receiptPdf, typedTextPdf } from './text-samples.js';
 
 /**
- * The made-up sample invoices, committed under `test/samples/<name>/` beside their
- * `expected.json`, and made again from this code by `scripts/make-samples.ts`.
+ * The made-up sample documents, committed under `test/samples/<name>/` beside their
+ * `expected.json`, and made again from this code by `scripts/make-samples.ts`: the ten of
+ * Group 2, then the owner's plan of 2026-10-11's new ones, in §4's order.
  */
 
 export const SAMPLES_DIRECTORY = resolve(import.meta.dirname, '..', 'samples');
@@ -28,6 +48,21 @@ export const SAMPLES: readonly Sample[] = [
   twoInvoicesPdf,
   missingPagePdf,
   injectedPdf,
+  storeReceiptJpeg,
+  restaurantWrittenTotalPng,
+  restaurantTipUnderTotalPng,
+  cardSlipTipOnlyPng,
+  cardSlipJpeg,
+  handwrittenCashPng,
+  longThermalJpeg,
+  cashBackReceipt,
+  paidInvoicePdf,
+  creditMemoPdf,
+  cardRefundPdf,
+  utilityStatementPdf,
+  utilityAccountPng,
+  supplierStatementPdf,
+  bankStatementPdf,
 ];
 
 export function samplePath(sample: Sample): string {
@@ -49,6 +84,7 @@ export function expectedOf(sample: Sample): JsonObject {
     file: sample.file,
     contentType: sample.contentType,
     marker: sample.marker,
+    markerIn: sample.markerIn,
     made: sample.made,
     decisive: [...sample.decisive],
     extract: 'ok: passed on whole in state.extraction',

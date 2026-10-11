@@ -27,6 +27,7 @@ test('the company settings are kept and named in the line', async () => {
     homeCurrency: 'USD',
     multiCurrencyEnabled: false,
     customTxnNumbers: false,
+    purchaseCustomTxnNumbers: null,
     warnDuplicateBillNumber: false,
     bookCloseDate: '2025-12-31',
   });
@@ -101,10 +102,10 @@ test('a home currency that is missing or not three letters fails; one in lower c
     assert.deepEqual(result, {
       outcome: 'failed',
       failureReason:
-        "QuickBooks did not return this company's home currency, so the bill cannot be checked. Run it again; if it repeats, contact support.",
+        "QuickBooks did not return this company's home currency, so the document cannot be checked. Run it again; if it repeats, contact support.",
     });
     assert.equal(line?.[2], 'QuickBooks settings not read (home_currency_missing)');
-    assert.equal(platform.steps.length, 3, 'find-account does not run');
+    assert.equal(platform.steps.length, 3, 'find-accounts does not run');
   }
   const lower = await readWith((prefs) => (prefs.CurrencyPrefs!.HomeCurrency = { value: ' cad ' }));
   assert.equal((lower.preferences as { homeCurrency: unknown }).homeCurrency, 'CAD');
@@ -137,6 +138,29 @@ test('WarnDuplicateBillNumber reads true, false or nothing; CustomTxnNumbers onl
     null,
   );
   assert.equal((await read((prefs) => delete prefs.SalesFormsPrefs)).customTxnNumbers, null);
+});
+
+test("VendorAndPurchasesPrefs.UseCustomTxnNumbers is kept from OtherPrefs: 'true' or 'false', null otherwise", async () => {
+  const read = async (edit: (prefs: Prefs) => void) =>
+    ((await readWith(edit)).preferences as { purchaseCustomTxnNumbers: unknown })
+      .purchaseCustomTxnNumbers;
+  const named = (value: unknown) => (prefs: Prefs) => {
+    prefs.OtherPrefs!.NameValue = [
+      { Name: 'WarnDuplicateBillNumber', Value: 'true' },
+      { Name: 'VendorAndPurchasesPrefs.UseCustomTxnNumbers', Value: value },
+    ];
+  };
+  assert.equal(await read(named('true')), true);
+  assert.equal(await read(named('false')), false);
+  for (const value of ['True', true, '1', null]) {
+    assert.equal(await read(named(value)), null, String(value));
+  }
+  // Absent, as Intuit may leave it — a sandbox question — or no OtherPrefs at all.
+  assert.equal(await read(() => undefined), null);
+  assert.equal(await read((prefs) => delete prefs.OtherPrefs), null);
+  // The sales side's setting is another one, kept apart.
+  const both = (await readWith(named('true'))).preferences as Record<string, unknown>;
+  assert.deepEqual([both.customTxnNumbers, both.purchaseCustomTxnNumbers], [false, true]);
 });
 
 test('an answer without a Preferences object, or a body that was not JSON, is unexpected', async () => {

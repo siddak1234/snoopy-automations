@@ -29,7 +29,7 @@ export const THROWN_SENTENCES = {
   /** The Edge's flood valve: a callback refused 429. */
   busy: 'Autom8x is busy; run it again in a few minutes.',
   receive:
-    'The invoice file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
+    'The document file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
   quickbooks: QUICKBOOKS_SENTENCES.qb_unreachable,
   /**
    * `extract`: no answer reached the step — a timeout, a reset, a cut connection — or its one
@@ -37,13 +37,15 @@ export const THROWN_SENTENCES = {
    */
   unanswered: UNANSWERED_REASON,
   other:
-    "Invoice Processing stopped before it finished. Check the run's timeline before running it again.",
+    "Bills & Receipts stopped before it finished. Check the run's timeline before running it again.",
 } as const;
 
-const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
+/** Every step that calls QuickBooks: a throw there ends with QuickBooks' sentence. */
+export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-company',
   'read-preferences',
-  'find-account',
+  'find-accounts',
+  'find-payer',
 ]);
 
 /** Each step, noting the step id against anything it throws, then throwing it on unchanged. */

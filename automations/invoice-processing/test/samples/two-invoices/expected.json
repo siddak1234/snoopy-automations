@@ -3,17 +3,18 @@
   "file": "invoices.pdf",
   "contentType": "application/pdf",
   "marker": "QZ7TWO",
+  "markerIn": "line",
   "made": "Two one-page invoices from one courier in one text PDF; the answer reads the first.",
-  "decisive": ["invoiceCount"],
+  "decisive": ["documentCount"],
   "extract": "ok: passed on whole in state.extraction",
-  "next": "More than one invoice: the next step fails it with 'Upload one invoice per run.'",
+  "next": "More than one document in the file: check-document fails it (C5), asking for one document per run.",
   "answer": {
-    "documentType": "invoice",
-    "invoiceCount": 2,
+    "documentType": "bill",
+    "documentCount": 2,
     "pagesMissing": false,
     "vendorName": "Kestrel Courier Co",
-    "invoiceNumber": "KCC-QZ7TWO-301",
-    "invoiceDate": "2026-09-10",
+    "documentNumber": "KCC-301",
+    "documentDate": "2026-09-10",
     "dueDate": "2026-09-25",
     "paymentTermsDays": 15,
     "currency": "USD",
@@ -23,17 +24,24 @@
     "discount": null,
     "total": 143,
     "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "other",
     "lineItems": [
       {
-        "description": "Same-day courier, 6 runs",
         "amount": 132
       },
       {
-        "description": "Fuel surcharge",
         "amount": 11
       }
     ],
     "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
     "uncertainFields": []
   }
 }

@@ -1,0 +1,50 @@
+{
+  "sample": "restaurant-tip-under-total",
+  "file": "receipt.png",
+  "contentType": "image/png",
+  "marker": "QZ7RTU",
+  "markerIn": "notes",
+  "made": "A diner receipt scanned as a grayscale PNG: three items, tax and a printed TOTAL, then a tip written by hand under the total and no final amount; paid by Visa ending 3346.",
+  "decisive": ["total", "tip", "subtotal", "tax"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A tip written under a total printed before it: the parts add up only without the tip, so the expense is 32.48 plus the 6.00 tip, and the run holds ('tip of $6.00 added to the printed total').",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Saltmarsh Lane Diner",
+    "documentNumber": "7713",
+    "documentDate": "2026-09-23",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 30,
+    "tax": 2.48,
+    "shipping": null,
+    "discount": null,
+    "total": 32.48,
+    "amountDue": null,
+    "tip": 6,
+    "cashBackPrinted": false,
+    "paymentMethod": "card",
+    "cardLast4": "3346",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "meals",
+    "lineItems": [
+      {
+        "amount": 14.5
+      },
+      {
+        "amount": 6.5
+      },
+      {
+        "amount": 9
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

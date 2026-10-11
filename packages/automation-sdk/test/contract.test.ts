@@ -228,7 +228,8 @@ test('a manifest may declare the files its runs accept, in the published block',
 
 test("the artifacts block may limit a PDF's pages and an image's sides, within the published bounds", () => {
   // The platform's BUILD-PLAN 25.2.28, measured when an upload is sealed; its verdicts
-  // (snoopy-backend `test/wire-schema.test.ts` at `550663f`, not yet merged), copied as data.
+  // (snoopy-backend `test/wire-schema.test.ts` at `550663f`, merged unchanged as `7086e5e`),
+  // copied as data.
   const validate = validator('automation-manifest');
   const reference = JSON.parse(
     readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),

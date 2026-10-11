@@ -3,17 +3,18 @@
   "file": "scan.pdf",
   "contentType": "application/pdf",
   "marker": "QZ7SCN",
+  "markerIn": "notes",
   "made": "A scanner's PDF: one grayscale JPEG of a page, turned 0.6 degrees, softened and speckled, with no text layer; \"Due on receipt\", a discount, a bare $.",
-  "decisive": ["invoiceDate", "paymentTermsDays", "discount", "total", "currency"],
+  "decisive": ["documentDate", "paymentTermsDays", "discount", "total", "currency"],
   "extract": "ok: passed on whole in state.extraction",
-  "next": "It passes the checks that need no QuickBooks data; with no printed currency, the vendor's is used.",
+  "next": "A bill due on receipt: recorded as a bill; with no currency printed, USD is used (a new vendor holds, saying so).",
   "answer": {
-    "documentType": "invoice",
-    "invoiceCount": 1,
+    "documentType": "bill",
+    "documentCount": 1,
     "pagesMissing": false,
     "vendorName": "Pinecrest Janitorial Services",
-    "invoiceNumber": "PJS-QZ7SCN-0388",
-    "invoiceDate": "2026-09-22",
+    "documentNumber": "PJS-0388",
+    "documentDate": "2026-09-22",
     "dueDate": null,
     "paymentTermsDays": 0,
     "currency": null,
@@ -23,25 +24,30 @@
     "discount": 56.25,
     "total": 1115.55,
     "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "repairs_and_maintenance",
     "lineItems": [
       {
-        "description": "Office cleaning, September (12 visits)",
         "amount": 840
       },
       {
-        "description": "Carpet shampoo, conference room",
         "amount": 165
       },
       {
-        "description": "Window washing, ground floor",
         "amount": 120
       },
       {
-        "description": "Supplies: liners, soap, towels",
         "amount": 46.8
       }
     ],
     "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
     "uncertainFields": []
   }
 }

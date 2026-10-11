@@ -3,17 +3,18 @@
   "file": "photo.jpg",
   "contentType": "image/jpeg",
   "marker": "QZ7PHO",
+  "markerIn": "line",
   "made": "A colour JPEG like a phone photo: the page turned 2.5 degrees on a dark table, lit unevenly, warm, grainy; dates as month/day/year, one final \"AMOUNT DUE\".",
-  "decisive": ["invoiceDate", "dueDate", "total", "amountDue"],
+  "decisive": ["documentDate", "dueDate", "total", "amountDue", "spendType"],
   "extract": "ok: passed on whole in state.extraction",
-  "next": "It passes the checks that need no QuickBooks data.",
+  "next": "A bill: recorded as a bill on the advertising category.",
   "answer": {
-    "documentType": "invoice",
-    "invoiceCount": 1,
+    "documentType": "bill",
+    "documentCount": 1,
     "pagesMissing": false,
     "vendorName": "Bluefinch Print & Sign",
-    "invoiceNumber": "BPS-QZ7PHO-2207",
-    "invoiceDate": "2026-09-03",
+    "documentNumber": "BPS-2207",
+    "documentDate": "2026-09-03",
     "dueDate": "2026-10-03",
     "paymentTermsDays": 30,
     "currency": null,
@@ -23,21 +24,27 @@
     "discount": null,
     "total": 301.48,
     "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "advertising",
     "lineItems": [
       {
-        "description": "Vinyl banner 3 x 8 ft, full color",
         "amount": 128
       },
       {
-        "description": "Business cards, 500, matte",
         "amount": 64
       },
       {
-        "description": "A-frame sign insert, 2 sided",
         "amount": 86.5
       }
     ],
     "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
     "uncertainFields": []
   }
 }

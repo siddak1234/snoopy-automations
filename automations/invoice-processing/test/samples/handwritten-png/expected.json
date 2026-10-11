@@ -3,17 +3,18 @@
   "file": "handwritten.png",
   "contentType": "image/png",
   "marker": "QZ7HND",
+  "markerIn": "line",
   "made": "A hand-printed invoice in capitals on ruled paper, each letter shifted and slanted by a seeded hand, as a grayscale PNG; a date in words, a total only, terms in days.",
-  "decisive": ["vendorName", "invoiceDate", "total", "paymentTermsDays"],
+  "decisive": ["vendorName", "documentDate", "total", "paymentTermsDays"],
   "extract": "ok: passed on whole in state.extraction",
-  "next": "No subtotal: the total is checked against the three lines; it passes the checks that need no QuickBooks data.",
+  "next": "A bill with no subtotal: the total is checked against the three lines; recorded as a bill on the repairs and maintenance category.",
   "answer": {
-    "documentType": "invoice",
-    "invoiceCount": 1,
+    "documentType": "bill",
+    "documentCount": 1,
     "pagesMissing": false,
     "vendorName": "NORTHGATE MOWER REPAIR",
-    "invoiceNumber": "QZ7HND-0417",
-    "invoiceDate": "2026-09-03",
+    "documentNumber": "0417",
+    "documentDate": "2026-09-03",
     "dueDate": null,
     "paymentTermsDays": 15,
     "currency": null,
@@ -23,21 +24,27 @@
     "discount": null,
     "total": 155.5,
     "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "repairs_and_maintenance",
     "lineItems": [
       {
-        "description": "TUNE-UP, RIDING MOWER",
         "amount": 95
       },
       {
-        "description": "NEW BLADES (2)",
         "amount": 38
       },
       {
-        "description": "OIL + FILTER",
         "amount": 22.5
       }
     ],
     "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
     "uncertainFields": []
   }
 }

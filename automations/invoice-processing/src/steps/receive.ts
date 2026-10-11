@@ -5,7 +5,7 @@ import { failedWith, grouped } from '../outcome.js';
 import type { FileState } from '../state.js';
 
 /**
- * `receive` — check the invoice file, before anything is spent.
+ * `receive` — check the document's file, before anything is spent.
  *
  * The run's input names the upload; the artifact callback answers with its reference
  * and the platform's measurements, which are held to `FILE_LIMITS`: the declared type
@@ -17,16 +17,16 @@ import type { FileState } from '../state.js';
  */
 
 export const RECEIVE_SENTENCES = {
-  no_file: 'No invoice file was given. Start the run again with the invoice.',
-  file_gone: 'The invoice file is no longer available. Upload it again and start a new run.',
+  no_file: 'No document file was given. Start the run again with the document.',
+  file_gone: 'The document file is no longer available. Upload it again and start a new run.',
   file_unchecked: 'This file could not be checked; upload it again.',
   unsupported_type:
-    'The invoice must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
+    'The document must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
   content_mismatch:
-    'This file is not a real PDF, JPEG or PNG. Save the invoice again as a PDF, or take a photo of it.',
+    'This file is not a real PDF, JPEG or PNG. Save the document again as a PDF, or take a photo of it.',
   file_too_large:
-    'The invoice file is larger than 3.5 MB. Upload a smaller file or a photo of the invoice.',
-  too_many_pages: 'This PDF has more than 10 pages. Upload only the invoice pages, at most 10.',
+    'The document file is larger than 3.5 MB. Upload a smaller file or a photo of the document.',
+  too_many_pages: 'This PDF has more than 10 pages. Upload only the document pages, at most 10.',
   image_too_large:
     'This image is more than 8,000 pixels on a side. Upload a smaller photo or the PDF.',
 } as const;
@@ -34,7 +34,7 @@ export const RECEIVE_SENTENCES = {
 type Refusal = keyof typeof RECEIVE_SENTENCES;
 
 function refused(reason: Refusal) {
-  return failedWith('Invoice file not accepted', reason, RECEIVE_SENTENCES[reason]);
+  return failedWith('Document file not accepted', reason, RECEIVE_SENTENCES[reason]);
 }
 
 export const receive: Step = async ({ request, state, platform }) => {

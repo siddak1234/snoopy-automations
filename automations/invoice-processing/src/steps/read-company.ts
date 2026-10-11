@@ -1,6 +1,7 @@
 import {
   QUICKBOOKS_SENTENCES,
   entityOf,
+  nameValueOf,
   readQuickBooks,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
@@ -11,16 +12,18 @@ import type { CompanyState } from '../state.js';
 
 /**
  * `read-company` — prove the workspace's QuickBooks connection works and that the
- * company is a US company (v1 serves US companies only: a bill elsewhere needs tax
+ * company is a US company (v1 serves US companies only: a record elsewhere needs tax
  * settings this automation does not send), and keep its names for the later checks
- * that compare them. One `companyInfo.get`.
+ * that compare them, and whether it runs QuickBooks Payroll: CompanyInfo's
+ * `PayrollFeature`, in Intuit's sample, for the note that an employee is repaid through a
+ * Reimbursement pay item. One `companyInfo.get`.
  */
 
 export const READ_COMPANY_SENTENCES = {
   company_not_us:
-    'Invoice Processing works only with US QuickBooks companies, and this company is set up for another country.',
+    'Bills & Receipts works only with US QuickBooks companies, and this company is set up for another country.',
   company_country_unknown:
-    'QuickBooks did not say which country this company is in, so Invoice Processing cannot use it. Nothing was created.',
+    'QuickBooks did not say which country this company is in, so Bills & Receipts cannot use it. Nothing was created.',
 } as const;
 
 /** `CompanyInfo.Country` for a US company: Intuit's samples show `USA` and `US`. */
@@ -57,10 +60,12 @@ export function readCompany(clock: Clock): Step {
       return failedWith(WHAT, 'company_not_us', READ_COMPANY_SENTENCES.company_not_us);
     }
     const legalName = info.LegalName;
+    const payroll = nameValueOf(info.NameValue, 'PayrollFeature');
     const company: CompanyState = {
       name,
       legalName: typeof legalName === 'string' && legalName.trim() !== '' ? legalName : null,
       country,
+      payrollFeature: payroll === 'true' ? true : payroll === 'false' ? false : null,
     };
     return {
       outcome: 'ok',

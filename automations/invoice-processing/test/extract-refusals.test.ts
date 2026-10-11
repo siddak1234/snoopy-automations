@@ -30,7 +30,7 @@ function assertEndsWith(
   assert.deepEqual(outcome.result, { outcome: 'failed', failureReason: sentence }, label);
   assert.deepEqual(
     outcome.line,
-    ['extract', 'failed', `The invoice could not be read (${reason})`],
+    ['extract', 'failed', `The document could not be read (${reason})`],
     label,
   );
   assert.equal(outcome.world.platform.modelCalls.length, 1, `${label}: one call, never repeated`);
@@ -41,8 +41,8 @@ const refusing = (problem: ProblemInput) => () => Promise.reject(refusalFixture(
 test('every model off the schema, not JSON or cut off: the could-not-be-read sentence', async () => {
   for (const [label, text, finish] of [
     ['off the schema', JSON.stringify({ ...GOOD_ANSWER, extra: 1 }), 'stop'],
-    ['not JSON', 'The invoice total is 461.53', 'stop'],
-    ['cut off at the cap', '{"documentType":"invoice","lineItems":[', 'length'],
+    ['not JSON', 'The document total is 461.53', 'stop'],
+    ['cut off at the cap', '{"documentType":"bill","lineItems":[', 'length'],
   ] as const) {
     const outcome = await ended((model) => Promise.resolve(completion(model, text, finish)));
     assertEndsWith(outcome, 'answer_unusable', EXTRACT_SENTENCES.answer_unusable, label);
@@ -50,7 +50,7 @@ test('every model off the schema, not JSON or cut off: the could-not-be-read sen
   }
   assert.equal(
     EXTRACT_SENTENCES.answer_unusable,
-    'The invoice could not be read; try a clearer photo or the PDF.',
+    'The document could not be read; try a clearer photo or the PDF.',
   );
 });
 
@@ -72,7 +72,7 @@ test('every model empty or silent (a reasonless 502): the no-answer sentence', a
     assertEndsWith(
       await ended(answer),
       'no_answer',
-      'No model could read the invoice just now, and nothing was created. Start the run again with the invoice in a few minutes.',
+      'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
       label,
     );
   }
@@ -110,7 +110,7 @@ test("the plan's refusals on the first attempt, each after one model call", asyn
     [
       forbidden('entitlements_not_configured', { used: 3 }),
       'plan_check_unavailable',
-      "Model calls could not be checked against this workspace's plan just now; start the run again with the invoice later.",
+      "Model calls could not be checked against this workspace's plan just now; start the run again with the document later.",
     ],
   ] as const) {
     const outcome = await ended(answer);
@@ -148,17 +148,17 @@ test("each of the run's file refusals, and a file the run was not given, has its
     [
       fileRefusal(422, 'content_type_not_accepted'),
       'file_type',
-      'The invoice must be a PDF, JPEG or PNG file.',
+      'The document must be a PDF, JPEG or PNG file.',
     ],
     [
       fileRefusal(422, 'file_too_large'),
       'file_too_large',
-      'The invoice file is larger than 3.5 MB.',
+      'The document file is larger than 3.5 MB.',
     ],
     [
       fileRefusal(422, 'file_content_mismatch'),
       'file_mismatch',
-      'The invoice file is not the type it says it is; upload the PDF or photo again.',
+      'The document file is not the type it says it is; upload the PDF or photo again.',
     ],
     [
       fileRefusal(422, 'file_encrypted'),
@@ -168,12 +168,12 @@ test("each of the run's file refusals, and a file the run was not given, has its
     [
       fileRefusal(502, 'file_integrity'),
       'file_integrity',
-      'The invoice file could not be read back from storage; start the run again with the invoice.',
+      'The document file could not be read back from storage; start the run again with the document.',
     ],
     [
       refusing({ status: 404, code: 'NOT_FOUND', detail: 'The requested resource was not found' }),
       'file_gone',
-      'The invoice file is no longer available; start the run again with the invoice.',
+      'The document file is no longer available; start the run again with the document.',
     ],
   ] as const) {
     assertEndsWith(await ended(answer), reason, sentence, reason);
@@ -184,7 +184,8 @@ test("each of the run's file refusals, and a file the run was not given, has its
   world.platform.artifacts = [];
   assert.deepEqual(await world.run(), {
     outcome: 'failed',
-    failureReason: 'The invoice file is no longer available; start the run again with the invoice.',
+    failureReason:
+      'The document file is no longer available; start the run again with the document.',
   });
   assert.deepEqual(world.platform.modelCalls, [], 'refused before the call was made');
 });
@@ -201,7 +202,7 @@ test("OpenRouter refusing the platform's key or credit (a 502 with its upstream 
         }),
       ),
       'model_account_refused',
-      'Model calls are unavailable on the platform right now; start the run again with the invoice later.',
+      'Model calls are unavailable on the platform right now; start the run again with the document later.',
       upstreamStatus,
     );
   }
@@ -223,7 +224,7 @@ test("OpenRouter refusing the platform's key or credit (a 502 with its upstream 
 
 test('a refusal of the request itself is a fault on our side; the deadline, out of time; the flood valve, busy', async () => {
   const fault =
-    'The invoice could not be sent to be read because of a fault on our side; nothing was created.';
+    'The document could not be sent to be read because of a fault on our side; nothing was created.';
   for (const [problem, reason, sentence] of [
     [
       { status: 400, code: 'BAD_REQUEST', detail: 'outputSchema uses pattern' },
@@ -274,7 +275,7 @@ test('a refusal of the request itself is a fault on our side; the deadline, out 
         details: { reason: 'deadline_exceeded' },
       },
       'out_of_time',
-      'The run ran out of time before the invoice was read; start it again with the invoice.',
+      'The run ran out of time before the document was read; start it again with the document.',
     ],
     [
       { status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' },
@@ -296,18 +297,30 @@ test('a refusal of the request itself is a fault on our side; the deadline, out 
   }
 });
 
-test('an answer a platform should have refused — not JSON, not an object, the wrong shape, cut off — still ends as unusable', async () => {
+test('an answer a platform should have refused — not JSON, not an object, the wrong shape, a value off its list, cut off — still ends as unusable', async () => {
   const wrongShape = { ...GOOD_ANSWER, lineItems: 'none' };
+  const off = (change: Record<string, unknown>) => JSON.stringify({ ...GOOD_ANSWER, ...change });
   for (const [label, text, finish] of [
     ['not JSON', 'Total: 413.34', 'stop'],
     ['not an object', '[1, 2]', 'stop'],
-    ['no document type', JSON.stringify({ ...GOOD_ANSWER, documentType: 7 }), 'stop'],
+    ['no document type', off({ documentType: 7 }), 'stop'],
+    ["the old schema's invoice", off({ documentType: 'invoice' }), 'stop'],
+    ['a type off the list', off({ documentType: 'statement' }), 'stop'],
     ['lines not a list', JSON.stringify(wrongShape), 'stop'],
+    ['listed rows not a list', off({ listedItems: {} }), 'stop'],
+    ['listed rows missing', off({ listedItems: undefined }), 'stop'],
+    ['a listed row that is not one', off({ listedItems: ['INV-1'] }), 'stop'],
     [
-      'unclear fields not a list',
-      JSON.stringify({ ...GOOD_ANSWER, uncertainFields: 'total' }),
+      'a listed row of an unknown kind',
+      off({ listedItems: [{ reference: 'INV-1', amount: 1, kind: 'refund' }] }),
       'stop',
     ],
+    ['a payment method off the list', off({ paymentMethod: 'paypal' }), 'stop'],
+    ['no payment method', off({ paymentMethod: null }), 'stop'],
+    ['a refund method off the list', off({ refundMethod: 'store_credit' }), 'stop'],
+    ['a spend type off the list', off({ spendType: 'fuel' }), 'stop'],
+    ['no spend type', off({ spendType: undefined }), 'stop'],
+    ['unclear fields not a list', off({ uncertainFields: 'total' }), 'stop'],
     ['cut off', JSON.stringify(GOOD_ANSWER), 'length'],
   ] as const) {
     const world = setUp();

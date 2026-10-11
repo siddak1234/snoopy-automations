@@ -6,17 +6,25 @@ import { test } from 'node:test';
 import { PROVIDER_REFUSALS } from '@autom8x/automation-kit/testing';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
+import { QUICKBOOKS_STEPS } from '../src/failures.js';
+import { DEFAULT_ACCOUNTS } from './extract-world.js';
 import { FILE_ID, callsOf, everythingSaid, lines, manifestsRoot, setUp } from './fixtures.js';
 
 /**
- * The five steps as one run: their order, the state they leave, the retry they
+ * The six steps as one run: their order, the state they leave, the retry they
  * declare, and a fixed sentence for a run that ends on a thrown error.
  */
+
+/** A run where an employee paid with their own money. */
+const EMPLOYEE_PAID = {
+  config: { expenseAccount: 'Utilities:Electric', teamOwedAccount: 'Owed to Team Members' },
+  input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Robin Example' },
+};
 
 /** Too close to the deadline for the SDK's 10-second retry: the first throw is the last. */
 const NO_RETRY_MS = 5_000;
 
-test('the five steps run in order, each under its own key, and leave the whole state', async () => {
+test('the six steps run in order, each under its own key, and leave the whole state; find-payer is skipped when the company paid', async () => {
   const world = setUp();
   const result = await world.run();
   assert.deepEqual(lines(world.platform), [
@@ -27,8 +35,8 @@ test('the five steps run in order, each under its own key, and leave the whole s
       'ok',
       'Home currency USD; multicurrency off; books closed through 2025-12-31',
     ],
-    ['find-account', 'ok', 'Expense account: Utilities:Electric (QuickBooks Id 57)'],
-    ['extract', 'ok', 'Read the invoice with anthropic/claude-haiku-4.5: 2 lines, 0 unclear'],
+    ['find-accounts', 'ok', 'Default category: Utilities:Electric (QuickBooks Id 57)'],
+    ['extract', 'ok', 'Read the document with anthropic/claude-haiku-4.5: 2 lines, 0 unclear'],
   ]);
   assert.deepEqual(result, {
     outcome: 'success',
@@ -40,24 +48,30 @@ test('the five steps run in order, each under its own key, and leave the whole s
         pages: 2,
         sha256: 'ab'.repeat(32),
       },
-      company: { name: 'Sample Bakery', legalName: 'Sample Bakery LLC', country: 'USA' },
+      company: {
+        name: 'Sample Bakery',
+        legalName: 'Sample Bakery LLC',
+        country: 'USA',
+        payrollFeature: false,
+      },
       preferences: {
         homeCurrency: 'USD',
         multiCurrencyEnabled: false,
         customTxnNumbers: false,
+        purchaseCustomTxnNumbers: null,
         warnDuplicateBillNumber: false,
         bookCloseDate: '2025-12-31',
       },
-      account: { id: '57', fullyQualifiedName: 'Utilities:Electric' },
+      accounts: DEFAULT_ACCOUNTS,
       modelServed: 'anthropic/claude-haiku-4.5',
     },
     summary:
-      'Checked the invoice file, the QuickBooks company, its settings and the expense account, and read the invoice',
+      "Checked the file, the QuickBooks company, its settings and the accounts in this flow's settings, and read the document",
   });
   for (const [stepId, operation] of [
     ['read-company', 'companyInfo.get'],
     ['read-preferences', 'preferences.get'],
-    ['find-account', 'query.run'],
+    ['find-accounts', 'query.run'],
   ] as const) {
     assert.deepEqual(
       callsOf(world.platform, world.request, stepId).map((call) => call.operation),
@@ -69,37 +83,82 @@ test('the five steps run in order, each under its own key, and leave the whole s
   assert.equal(world.platform.modelCalls.length, 1, 'one model call, by extract');
 });
 
-test('the v1 manifest declares the five steps in order, extract the AI step as the design words it', () => {
+test('an employee who paid: find-payer runs after find-accounts and before the document is read, and the result names them', async () => {
+  const world = setUp(EMPLOYEE_PAID);
+  const result = await world.run();
+  assert.deepEqual(
+    lines(world.platform).map(([stepId]) => stepId),
+    ['receive', 'read-company', 'read-preferences', 'find-accounts', 'find-payer', 'extract'],
+  );
+  assert.ok(result.outcome === 'success');
+  assert.deepEqual(result.output?.payer, {
+    route: 'employee',
+    name: 'Robin Example',
+    employeeId: '55',
+    account: {
+      id: '120',
+      fullyQualifiedName: 'Owed to Team Members',
+      accountType: 'Other Current Liability',
+    },
+  });
+  assert.equal(world.platform.providerCalls.length, 4);
+});
+
+test('the v1 manifest declares the six steps in order, with neutral words, extract the AI step', () => {
   const manifest = JSON.parse(
     readFileSync(join(manifestsRoot, 'invoice-processing.v1.json'), 'utf8'),
   ) as { pipeline: { id: string; kicker: string; title: string; description: string }[] };
   assert.deepEqual(
-    manifest.pipeline.map((step) => step.id),
-    ['receive', 'read-company', 'read-preferences', 'find-account', 'extract'],
+    manifest.pipeline.map((step) => [step.id, step.kicker, step.title]),
+    [
+      ['receive', 'TRIGGER', 'Document received'],
+      ['read-company', 'ACTION', 'Check the QuickBooks company'],
+      ['read-preferences', 'ACTION', 'Read QuickBooks settings'],
+      ['find-accounts', 'ACTION', "Find the accounts in this flow's settings"],
+      ['find-payer', 'ACTION', 'Find who paid'],
+      ['extract', 'AI STEP', 'Read the document'],
+    ],
   );
   assert.deepEqual(manifest.pipeline.at(-1), {
     id: 'extract',
     kicker: 'AI STEP',
-    title: 'Read the invoice',
-    description: 'The AI reads the invoice: vendor, invoice number, dates, amounts and lines.',
+    title: 'Read the document',
+    description:
+      'The AI reads the document: its type, the seller, its number, dates, amounts and lines.',
   });
+  for (const step of manifest.pipeline) {
+    assert.ok(!/invoice|bill\b/iu.test(`${step.title} ${step.description}`), step.id);
+  }
 });
 
-test("the four reads repeat a transient failure at the SDK's floor and ceilings; the model call only what never reached the platform", () => {
+test("the reads repeat a transient failure at the SDK's floor and ceilings; the model call only what never reached the platform", () => {
   const policy = { attempts: 3, backoffMs: 10_000 };
   assert.deepEqual(setUp().automation.retry, {
     receive: policy,
     'read-company': policy,
     'read-preferences': policy,
-    'find-account': policy,
+    'find-accounts': policy,
+    'find-payer': policy,
     extract: { attempts: 2, backoffMs: 10_000, when: 'unsent' },
   });
+  // A throw at every step that calls QuickBooks ends with QuickBooks' sentence.
+  assert.deepEqual(
+    [...QUICKBOOKS_STEPS],
+    ['read-company', 'read-preferences', 'find-accounts', 'find-payer'],
+  );
 });
 
 test('a reasonless 502 thrown at a QuickBooks step ends with the could-not-reach sentence, and the raw problem nowhere', async () => {
-  for (const operation of ['companyInfo.get', 'preferences.get', 'query.run']) {
-    const world = setUp({ deadlineInMs: NO_RETRY_MS });
-    world.simulator.script(operation, [{ refuse: PROVIDER_REFUSALS.noAnswer() }]);
+  const throwing = [
+    ['companyInfo.get', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]],
+    ['preferences.get', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]],
+    ['query.run', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]],
+    // find-accounts answered, then find-payer's employee lookup.
+    ['query.run', [{ status: 200 }, { refuse: PROVIDER_REFUSALS.noAnswer() }]],
+  ] as const;
+  for (const [operation, script] of throwing) {
+    const world = setUp({ deadlineInMs: NO_RETRY_MS, ...EMPLOYEE_PAID });
+    world.simulator.script(operation, script);
     const result = await world.run();
     assert.deepEqual(result, {
       outcome: 'failed',
@@ -142,7 +201,7 @@ test("a throw at receive ends with the file sentence; past the deadline at a rea
     assert.deepEqual(await world.run(), {
       outcome: 'failed',
       failureReason:
-        'The invoice file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
+        'The document file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
     });
     assert.deepEqual(world.platform.providerCalls, []);
     // The error's name, and for a refusal its status, code and reason: never its message.
@@ -202,7 +261,7 @@ test('a throw outside any step ends with the general sentence', async () => {
   assert.deepEqual(await world.run(), {
     outcome: 'failed',
     failureReason:
-      "Invoice Processing stopped before it finished. Check the run's timeline before running it again.",
+      "Bills & Receipts stopped before it finished. Check the run's timeline before running it again.",
   });
   assert.equal(world.logs[0]?.[2]?.stepId, null);
 });

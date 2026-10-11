@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { EXTRACT_INVOICE_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
 import { SEEDED_STATE, extractWorld } from './extract-world.js';
 import { completion } from './fixtures.js';
 import {
@@ -65,12 +65,11 @@ test('each request gives the agent what the platform gives the model, and a reco
   const repository = resolve(import.meta.dirname, '..', '..', '..');
   for (const sample of SAMPLES) {
     const request = recordingRequest(sample);
-    assert.equal(request.systemInstruction, EXTRACT_INVOICE_V1.template);
-    assert.equal(
-      request.userText,
-      '{"task":"Extract the fields of the attached supplier invoice."}',
-    );
-    assert.deepEqual(request.responseSchema, EXTRACT_INVOICE_V1.outputSchema);
+    assert.equal(request.systemInstruction, EXTRACT_DOCUMENT_V1.template);
+    assert.equal(request.userText, '{"task":"Extract the fields of the attached document."}');
+    assert.deepEqual(request.responseSchema, EXTRACT_DOCUMENT_V1.outputSchema);
+    assert.equal(request.recording.promptId, 'extract-document');
+    assert.match(request.saveAs, /test\/recordings\/extract-document\.v1\//u);
     assert.equal(
       request.file,
       `automations/invoice-processing/test/samples/${sample.name}/${sample.file}`,

@@ -15,14 +15,17 @@ import {
   type StepResult,
 } from '@autom8x/automation-sdk';
 
+import { DOCUMENT_TYPES, LISTED_KINDS, PAYMENT_METHODS, REFUND_METHODS } from '../document.js';
 import { THROWN_SENTENCES } from '../failures.js';
 import { failedWith, grouped } from '../outcome.js';
+import { SPEND_TYPES } from '../spend-types.js';
 import type { ExtractionState } from '../state.js';
 
 /**
- * `extract` — the platform's model reads the invoice into the 18 fields of
- * `prompts/extract-invoice.v1.json`, so the next steps can check them. It reads nothing else,
- * decides nothing and writes nothing to QuickBooks (the owner's design of 2026-10-10).
+ * `extract` — the platform's model reads the document — a bill, a receipt, a credit note or a
+ * statement — into the 27 fields of `prompts/extract-document.v1.json`, so the next steps can
+ * check them. It reads nothing else, decides nothing and writes nothing to QuickBooks (the
+ * owner's design of 2026-10-10, and the plan of 2026-10-11, §4).
  *
  * One call through the platform's model callback: the registered prompt, a fixed user message,
  * `MODELS`, and the run's file by the id `receive` kept — never its bytes, which the platform
@@ -46,34 +49,37 @@ export const MODELS: readonly string[] = [
   'google/gemini-3.1-flash-lite',
 ];
 
-/** The user message, fixed: nothing a person typed and nothing read from the invoice is in it. */
+/**
+ * The user message, fixed: nothing a person typed and nothing read from the document is in
+ * it — "Who paid" included, which never reaches the model.
+ */
 export const EXTRACT_INPUT: JsonObject = {
-  task: 'Extract the fields of the attached supplier invoice.',
+  task: 'Extract the fields of the attached document.',
 };
 
 /** Each refusal's sentence: the run's reason, at most 200 characters, never the model's text. */
 export const EXTRACT_SENTENCES = {
-  answer_unusable: 'The invoice could not be read; try a clearer photo or the PDF.',
+  answer_unusable: 'The document could not be read; try a clearer photo or the PDF.',
   content_filtered: 'The model provider declined to read this document.',
   plan_without_model_calls: "This workspace's plan does not include model calls.",
   plan_check_unavailable:
-    "Model calls could not be checked against this workspace's plan just now; start the run again with the invoice later.",
+    "Model calls could not be checked against this workspace's plan just now; start the run again with the document later.",
   model_calls_off: 'Model calls are not switched on yet.',
   no_answer:
-    'No model could read the invoice just now, and nothing was created. Start the run again with the invoice in a few minutes.',
+    'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
   model_account_refused:
-    'Model calls are unavailable on the platform right now; start the run again with the invoice later.',
-  file_type: 'The invoice must be a PDF, JPEG or PNG file.',
-  file_too_large: 'The invoice file is larger than 3.5 MB.',
-  file_mismatch: 'The invoice file is not the type it says it is; upload the PDF or photo again.',
+    'Model calls are unavailable on the platform right now; start the run again with the document later.',
+  file_type: 'The document must be a PDF, JPEG or PNG file.',
+  file_too_large: 'The document file is larger than 3.5 MB.',
+  file_mismatch: 'The document file is not the type it says it is; upload the PDF or photo again.',
   file_encrypted: 'The PDF is password-protected; upload a copy without a password.',
   file_integrity:
-    'The invoice file could not be read back from storage; start the run again with the invoice.',
-  file_gone: 'The invoice file is no longer available; start the run again with the invoice.',
+    'The document file could not be read back from storage; start the run again with the document.',
+  file_gone: 'The document file is no longer available; start the run again with the document.',
   out_of_time:
-    'The run ran out of time before the invoice was read; start it again with the invoice.',
+    'The run ran out of time before the document was read; start it again with the document.',
   platform_fault:
-    'The invoice could not be sent to be read because of a fault on our side; nothing was created.',
+    'The document could not be sent to be read because of a fault on our side; nothing was created.',
 } as const;
 
 type Reason = keyof typeof EXTRACT_SENTENCES;
@@ -105,7 +111,7 @@ const MODEL_REFUSALS: Readonly<Record<ModelRefusalReason, Reason | 'allowance_us
   no_model_left: 'platform_fault',
 };
 
-const WHAT = 'The invoice could not be read';
+const WHAT = 'The document could not be read';
 
 function failed(reason: Reason): StepResult {
   return failedWith(WHAT, reason, EXTRACT_SENTENCES[reason]);
@@ -135,23 +141,38 @@ export function extract(prompt: PromptModule): Step {
     }
     // The shape only, never a value: the platform held the answer to the schema, and every
     // check of a value is the next step's.
-    const { documentType, lineItems, lineItemsComplete, uncertainFields } = answer;
+    const { lineItems, lineItemsComplete, listedItems, listedItemsComplete, uncertainFields } =
+      answer;
     if (
-      typeof documentType !== 'string' ||
       !Array.isArray(lineItems) ||
-      !Array.isArray(uncertainFields)
+      !Array.isArray(listedItems) ||
+      !Array.isArray(uncertainFields) ||
+      !listedItems.every((row) => isObject(row) && isOneOf(row.kind, LISTED_KINDS)) ||
+      !isOneOf(answer.documentType, DOCUMENT_TYPES) ||
+      !isOneOf(answer.paymentMethod, PAYMENT_METHODS) ||
+      !isOneOf(answer.refundMethod, REFUND_METHODS) ||
+      !isOneOf(answer.spendType, SPEND_TYPES)
     ) {
       return failed('answer_unusable');
     }
     const lines = `${lineItems.length} ${lineItems.length === 1 ? 'line' : 'lines'}`;
-    const more = lineItemsComplete === false ? ' (more on the invoice)' : '';
+    const more = lineItemsComplete === false ? ' (more on the document)' : '';
+    const listed =
+      listedItems.length === 0
+        ? ''
+        : `, ${listedItems.length} listed${listedItemsComplete === false ? ' (more listed)' : ''}`;
     const extracted: ExtractionState = { extraction: answer, modelServed: completion.model };
     return {
       outcome: 'ok',
-      summary: `Read the invoice with ${truncateText(completion.model, 100)}: ${lines}${more}, ${uncertainFields.length} unclear`,
+      summary: `Read the document with ${truncateText(completion.model, 100)}: ${lines}${more}${listed}, ${uncertainFields.length} unclear`,
       state: { ...state, ...extracted },
     };
   };
+}
+
+/** One of a list's values: the shape check of a field the prompt gives a list. */
+function isOneOf(value: unknown, values: readonly string[]): boolean {
+  return typeof value === 'string' && values.includes(value);
 }
 
 /** The upload `receive` kept, in the platform's id shape; anything else is no file to send. */

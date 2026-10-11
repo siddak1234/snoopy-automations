@@ -22,7 +22,7 @@ import { TEMPLATE_ID, define } from '../src/automation.js';
 /**
  * The suite's world: the repository's own v1 manifest, a run started with one upload,
  * QuickBooks behind the platform (the kit's simulator, holding Connections to its
- * rules), a model that reads every invoice as `GOOD_ANSWER`, and a clock that records
+ * rules), a model that reads every document as `GOOD_ANSWER`, and a clock that records
  * QuickBooks' 60-second waits instead of waiting.
  */
 
@@ -85,14 +85,14 @@ export function png(overrides: Overrides = {}): ArtifactReference {
   });
 }
 
-/** A whole answer as the platform hands it over: every one of the prompt's 18 fields. */
+/** A whole answer as the platform hands it over: every one of the prompt's 27 fields. */
 export const GOOD_ANSWER: JsonObject = {
-  documentType: 'invoice',
-  invoiceCount: 1,
+  documentType: 'bill',
+  documentCount: 1,
   pagesMissing: false,
   vendorName: 'Harrowgate Office Supply',
-  invoiceNumber: 'HOS-1042',
-  invoiceDate: '2026-09-14',
+  documentNumber: 'HOS-1042',
+  documentDate: '2026-09-14',
   dueDate: '2026-10-14',
   paymentTermsDays: 30,
   currency: 'USD',
@@ -102,11 +102,17 @@ export const GOOD_ANSWER: JsonObject = {
   discount: null,
   total: 461.53,
   amountDue: null,
-  lineItems: [
-    { description: 'A4 copy paper, 10 reams', amount: 189.5 },
-    { description: 'Toner cartridge, black', amount: 223 },
-  ],
+  tip: null,
+  cashBackPrinted: false,
+  paymentMethod: 'not_shown',
+  cardLast4: null,
+  refundMethod: 'not_applicable',
+  originalInvoiceNumber: null,
+  spendType: 'office_supplies',
+  lineItems: [{ amount: 189.5 }, { amount: 223 }],
   lineItemsComplete: true,
+  listedItems: [],
+  listedItemsComplete: true,
   uncertainFields: [],
 };
 

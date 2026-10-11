@@ -7,7 +7,7 @@ import { drawLines, scannedPdf } from './render.js';
 
 /**
  * The samples with no text layer, drawn in the bitmap font: a scan in a PDF, a phone photo, a
- * portal screenshot, and a hand-printed invoice. A model reads them as pictures.
+ * portal screenshot, and a hand-printed invoice — all bills. A model reads them as pictures.
  */
 
 const scanLines: [string, number][] = [
@@ -25,17 +25,19 @@ export const scannedImagePdf: Sample = {
   file: 'scan.pdf',
   contentType: 'application/pdf',
   marker: 'QZ7SCN',
+  markerIn: 'notes',
   made: 'A scanner\'s PDF: one grayscale JPEG of a page, turned 0.6 degrees, softened and speckled, with no text layer; "Due on receipt", a discount, a bare $.',
-  decisive: ['invoiceDate', 'paymentTermsDays', 'discount', 'total', 'currency'],
-  next: "It passes the checks that need no QuickBooks data; with no printed currency, the vendor's is used.",
+  decisive: ['documentDate', 'paymentTermsDays', 'discount', 'total', 'currency'],
+  next: 'A bill due on receipt: recorded as a bill; with no currency printed, USD is used (a new vendor holds, saying so).',
   answer: answer({
     vendorName: 'Pinecrest Janitorial Services',
-    invoiceNumber: 'PJS-QZ7SCN-0388',
-    invoiceDate: '2026-09-22',
+    documentNumber: 'PJS-0388',
+    documentDate: '2026-09-22',
     paymentTermsDays: 0,
     subtotal: amount(scanSubtotal),
     discount: amount(scanDiscount),
     total: amount(scanSubtotal - scanDiscount),
+    spendType: 'repairs_and_maintenance',
     lineItems: scanLines,
   }),
   make: () => {
@@ -52,7 +54,7 @@ export const scannedImagePdf: Sample = {
             '(555) 010-2277',
           ],
           details: [
-            ['Invoice No.', 'PJS-QZ7SCN-0388'],
+            ['Invoice No.', 'PJS-0388'],
             ['Date', '09/22/2026'],
             ['Terms', 'Due on receipt'],
           ],
@@ -66,7 +68,10 @@ export const scannedImagePdf: Sample = {
             ['Discount 5%', money(-scanDiscount, '$')],
             ['TOTAL DUE', money(scanSubtotal - scanDiscount, '$')],
           ],
-          notes: ['Please make checks payable to Pinecrest Janitorial Services.'],
+          notes: [
+            'Please make checks payable to Pinecrest Janitorial Services.',
+            'Crew sheet QZ7SCN on file.',
+          ],
         },
         64,
       ),
@@ -84,7 +89,7 @@ export const scannedImagePdf: Sample = {
 };
 
 const photoLines: [string, number][] = [
-  ['Vinyl banner 3 x 8 ft, full color', 12_800],
+  ['Vinyl banner 3 x 8 ft, full color, QZ7PHO', 12_800],
   ['Business cards, 500, matte', 6_400],
   ['A-frame sign insert, 2 sided', 8_650],
 ];
@@ -96,18 +101,20 @@ export const phonePhotoJpeg: Sample = {
   file: 'photo.jpg',
   contentType: 'image/jpeg',
   marker: 'QZ7PHO',
+  markerIn: 'line',
   made: 'A colour JPEG like a phone photo: the page turned 2.5 degrees on a dark table, lit unevenly, warm, grainy; dates as month/day/year, one final "AMOUNT DUE".',
-  decisive: ['invoiceDate', 'dueDate', 'total', 'amountDue'],
-  next: 'It passes the checks that need no QuickBooks data.',
+  decisive: ['documentDate', 'dueDate', 'total', 'amountDue', 'spendType'],
+  next: 'A bill: recorded as a bill on the advertising category.',
   answer: answer({
     vendorName: 'Bluefinch Print & Sign',
-    invoiceNumber: 'BPS-QZ7PHO-2207',
-    invoiceDate: '2026-09-03',
+    documentNumber: 'BPS-2207',
+    documentDate: '2026-09-03',
     dueDate: '2026-10-03',
     paymentTermsDays: 30,
     subtotal: amount(photoSubtotal),
     tax: amount(photoTax),
     total: amount(photoSubtotal + photoTax),
+    spendType: 'advertising',
     lineItems: photoLines,
   }),
   make: () => {
@@ -124,7 +131,7 @@ export const phonePhotoJpeg: Sample = {
             'hello@bluefinch.example',
           ],
           details: [
-            ['Invoice', 'BPS-QZ7PHO-2207'],
+            ['Invoice', 'BPS-2207'],
             ['Date', '09/03/2026'],
             ['Due', '10/03/2026'],
             ['Terms', 'Net 30'],
@@ -157,7 +164,7 @@ export const phonePhotoJpeg: Sample = {
 };
 
 const portalLines: [string, number][] = [
-  ['Lunch catering, 25 guests', 56_250],
+  ['Lunch catering, 25 guests, event QZ7SCR', 56_250],
   ['Coffee service, half day', 9_500],
   ['Dessert tray, large', 4_800],
 ];
@@ -170,13 +177,14 @@ export const screenshotPng: Sample = {
   file: 'screenshot.png',
   contentType: 'image/png',
   marker: 'QZ7SCR',
+  markerIn: 'line',
   made: 'A grayscale PNG screenshot of a billing portal: a header bar, the invoice in a card, a Pay now button; US$ amounts, and the amount due printed beside the total.',
   decisive: ['currency', 'shipping', 'total', 'amountDue', 'paymentTermsDays'],
-  next: 'It passes the checks that need no QuickBooks data; the amount due equals the total.',
+  next: 'A bill whose amount due equals its total: recorded as a bill on the meals category.',
   answer: answer({
     vendorName: 'Copperleaf Catering',
-    invoiceNumber: 'CLC-QZ7SCR-0915',
-    invoiceDate: '2026-09-18',
+    documentNumber: 'CLC-0915',
+    documentDate: '2026-09-18',
     dueDate: '2026-10-02',
     paymentTermsDays: 14,
     currency: 'USD',
@@ -185,6 +193,7 @@ export const screenshotPng: Sample = {
     shipping: 40,
     total: amount(portalTotal),
     amountDue: amount(portalTotal),
+    spendType: 'meals',
     lineItems: portalLines,
   }),
   make: () => {
@@ -195,7 +204,7 @@ export const screenshotPng: Sample = {
       light: true,
       scale: 3,
     });
-    screen.text(30, 88, 'Invoices > CLC-QZ7SCR-0915', { ink: 90 });
+    screen.text(30, 88, 'Invoices > CLC-0915', { ink: 90 });
     screen.fill(26, 120, 848, 2, 200);
     screen.fill(26, 120, 2, 820, 200);
     screen.fill(872, 120, 2, 820, 200);
@@ -211,7 +220,7 @@ export const screenshotPng: Sample = {
           'accounts@copperleaf.example',
         ],
         details: [
-          ['Invoice', 'CLC-QZ7SCR-0915'],
+          ['Invoice', 'CLC-0915'],
           ['Issued', '2026-09-18'],
           ['Due', '2026-10-02'],
           ['Terms', 'Net 14'],
@@ -240,7 +249,7 @@ export const screenshotPng: Sample = {
 };
 
 const handLines: [string, number][] = [
-  ['TUNE-UP, RIDING MOWER', 9_500],
+  ['TUNE-UP, RIDING MOWER QZ7HND', 9_500],
   ['NEW BLADES (2)', 3_800],
   ['OIL + FILTER', 2_250],
 ];
@@ -251,15 +260,17 @@ export const handwrittenPng: Sample = {
   file: 'handwritten.png',
   contentType: 'image/png',
   marker: 'QZ7HND',
+  markerIn: 'line',
   made: 'A hand-printed invoice in capitals on ruled paper, each letter shifted and slanted by a seeded hand, as a grayscale PNG; a date in words, a total only, terms in days.',
-  decisive: ['vendorName', 'invoiceDate', 'total', 'paymentTermsDays'],
-  next: 'No subtotal: the total is checked against the three lines; it passes the checks that need no QuickBooks data.',
+  decisive: ['vendorName', 'documentDate', 'total', 'paymentTermsDays'],
+  next: 'A bill with no subtotal: the total is checked against the three lines; recorded as a bill on the repairs and maintenance category.',
   answer: answer({
     vendorName: 'NORTHGATE MOWER REPAIR',
-    invoiceNumber: 'QZ7HND-0417',
-    invoiceDate: '2026-09-03',
+    documentNumber: '0417',
+    documentDate: '2026-09-03',
     paymentTermsDays: 15,
     total: amount(handTotal),
+    spendType: 'repairs_and_maintenance',
     lineItems: handLines,
   }),
   make: () => {
@@ -269,7 +280,7 @@ export const handwrittenPng: Sample = {
     const written = [
       'NORTHGATE MOWER REPAIR',
       '18 HILL RD, MILLBROOK NY 12545',
-      spread('', 'INVOICE NO. QZ7HND-0417', 44),
+      spread('', 'INVOICE NO. 0417', 44),
       spread('', 'DATE: SEPT 3, 2026', 44),
       'TO: SAMPLE BAKERY LLC',
       '    12 EXAMPLE LANE, SPRINGFIELD IL',

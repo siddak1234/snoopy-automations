@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path';
 
 import { isObject, renderPrompt, type JsonObject } from '@autom8x/automation-sdk';
 
-import { EXTRACT_INVOICE_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
 import { EXTRACT_INPUT } from '../src/steps/extract.js';
 import type { Sample } from './sample-maker/catalog.js';
 import { SAMPLES, samplePath, sha256 } from './sample-maker/samples.js';
@@ -12,16 +12,21 @@ import { SAMPLES, samplePath, sha256 } from './sample-maker/samples.js';
  * The recordings: for each made-up sample, the answer of an agent that acted as the model —
  * given exactly the prompt's instruction, the fixed user text, the schema and the file, and
  * nothing else (`scripts/recording-request.ts` prints what) — saved verbatim as
- * `test/recordings/extract-invoice.v1/<sample>.json`.
+ * `test/recordings/extract-document.v1/<sample>.json`.
  *
  * A recording names what it was made for, and the loader refuses one made for anything else:
  * another prompt id or version, other bytes of the prompt file (a word changed without a new
  * version), or other bytes of the sample. Such a recording is made again, never edited.
  */
 
-export const PROMPT_ID = 'extract-invoice';
+export const PROMPT_ID = 'extract-document';
 export const PROMPT_VERSION = 1;
-export const PROMPT_FILE = resolve(import.meta.dirname, '..', 'prompts', 'extract-invoice.v1.json');
+export const PROMPT_FILE = resolve(
+  import.meta.dirname,
+  '..',
+  'prompts',
+  `${PROMPT_ID}.v${PROMPT_VERSION}.json`,
+);
 export const RECORDINGS_DIRECTORY = resolve(
   import.meta.dirname,
   'recordings',
@@ -147,7 +152,7 @@ export interface RecordingRequest {
 
 /** Exactly what the platform sends the model for `sample` (`renderPrompt`, the step's input). */
 export function recordingRequest(sample: Sample): RecordingRequest {
-  const rendered = renderPrompt(EXTRACT_INVOICE_V1, EXTRACT_INPUT);
+  const rendered = renderPrompt(EXTRACT_DOCUMENT_V1, EXTRACT_INPUT);
   return {
     sample: sample.name,
     file: relative(REPOSITORY, samplePath(sample)),

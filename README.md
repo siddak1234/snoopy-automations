@@ -367,7 +367,7 @@ defineAutomation({
   the attempts, so a held step is never run twice.
 
 `invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-four reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract`, its
+reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract`, its
 model call. Neither older automation declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
@@ -405,40 +405,55 @@ a run already recorded (platform §12.1 #220).
 
 ## Invoice processing
 
-`invoice-processing` reads a supplier invoice from a PDF or photo and creates an unpaid
-bill in QuickBooks Online (the platform's BUILD-PLAN 25.4.1, the owner's design of
-2026-10-10). It is built in groups, each appending its steps to
-`manifests/invoice-processing.v1.json` before that version is registered; the first four
+`invoice-processing` — shown to people as **Bills & Receipts** — records a bill, a receipt
+or a credit note from a PDF or photo in QuickBooks Online, and compares a supplier's
+statement with it (the platform's BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and
+plan of 2026-10-11). It is built in groups, each appending its steps to
+`manifests/invoice-processing.v1.json` before that version is registered; the first five
 spend nothing. `receive` holds the platform's measurements of the upload — its real kind,
 its size, a PDF's pages, an image's pixels, taken once when the upload was sealed — to the
 owner's limits (a PDF, JPEG or PNG, measured as the type it declares; 3,500,000 bytes; 10
 pages; 8,000 px a side), fails closed when one is missing, and never downloads the file;
-`read-company` proves QuickBooks is connected and the company is in the US;
-`read-preferences` keeps the home currency, the multicurrency flag and the books' closing
-date; `find-account` turns the Expense account setting into exactly one active Expense
-account. `extract`, the one model call, sends `prompts/extract-invoice.v1.json` — 13 rules
-and an 18-field answer schema — with a fixed task, `MODELS` (`anthropic/claude-haiku-4.5`,
-then `google/gemini-3.1-flash-lite`) and the run's file by its id; it starts no call with
-less than 260 seconds to the deadline, repeats one only when nothing reached the platform,
-and passes the answer on whole in `state.extraction`, beside `state.modelServed`, for the
-next step to check — its timeline line names the model and two counts, never a value.
+`read-company` proves QuickBooks is connected and the company is in the US, and keeps
+whether it runs QuickBooks Payroll; `read-preferences` keeps the home currency, the
+multicurrency flag, the books' closing date and whether a vendor credit may carry its own
+number; `find-accounts` resolves every account the flow's settings name — the default
+category, Paid from, Owed to team members, Owner's investment account, each owner's own
+account and one category per spend type — in one `FullyQualifiedName IN (…)` query, each
+held to the kinds its role accepts and, with multicurrency on, to USD; `find-payer`, when a
+person switched on "I paid for this with my own money", finds who paid among the flow's
+owners and partners, or as an employee in QuickBooks, before anything is read. `extract`,
+the one model call, sends `prompts/extract-document.v1.json` — 17 rules and a 27-field
+answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
+(`anthropic/claude-haiku-4.5`, then `google/gemini-3.1-flash-lite`) and the run's file by
+its id; it starts no call with less than 260 seconds to the deadline, repeats one only when
+nothing reached the platform, and passes the answer on whole in `state.extraction`, beside
+`state.modelServed`, for the next step to check — its timeline line names the model and
+counts, never a value.
 Every failure ends the run with a fixed sentence, a run that ends on a thrown error
 included — never the error's message. The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
-platform's pull request before it merged (its BUILD-PLAN 25.2.28, re-checked at its
-`550663f`), and `measurementsOf` in `src/file.ts` is the one place that reads them; the
-manifest declares the page and pixel limits, without which the platform measures nothing.
+platform's pull request before it merged (its BUILD-PLAN 25.2.28, merged unchanged as its
+`main` `7086e5e`), and `measurementsOf` in `src/file.ts` is the one place that reads them;
+the manifest declares the page and pixel limits, without which the platform measures
+nothing.
 
-Its tests need no model key. `test/samples/` holds ten made-up invoices — a typed PDF, a
-scan, a phone photo, a portal screenshot, a hand-printed page, 300 lines, a receipt, two
-invoices in one file, a page missing, and instructions to the model printed on one — each
-drawn by `test/sample-maker/` beside its `expected.json`, with a marker in its invoice
-number that no timeline line or reason may carry; `npm run samples` (in the automation)
-makes them again and rewrites a file only when what it draws changes. Recordings — an
-agent acting as the model, given exactly what `npm run recording-request` prints for a
-sample — go in `test/recordings/extract-invoice.v1/<sample>.json`; the loader refuses one
-made for another prompt version or other prompt or sample bytes, and the tests over them
-are skipped, saying why, until they exist.
+Its tests need no model key. `test/samples/` holds 25 made-up documents — bills (typed,
+scanned, photographed, a portal screenshot, hand-printed, 300 lines, a utility bill with an
+earlier balance, one whose largest print is its account number), receipts (a till roll, a
+store receipt and a fuel slip photographed, restaurant receipts with a tip and total
+written in and with a tip under a printed total, a card slip with only a tip written in, a
+hand-written cash receipt, a 60-line thermal roll at 2,576 px, cash back, an invoice
+stamped PAID), a credit memo, a refund to a card, a supplier statement, a card statement,
+two invoices in one file, a page missing, and instructions to the model printed on one —
+each drawn by `test/sample-maker/` beside its `expected.json`, with a marker printed in a
+line's text or a notes box, never in the seller's name or the document number, that no
+answer, timeline line or reason may carry; `npm run samples` (in the automation) makes them
+again and rewrites a file only when what it draws changes. Recordings — an agent acting as
+the model, given exactly what `npm run recording-request` prints for a sample — go in
+`test/recordings/extract-document.v1/<sample>.json`; the loader refuses one made for
+another prompt version or other prompt or sample bytes, and the tests over them are
+skipped, saying why, until they exist.
 
 ## The kit
 
@@ -460,16 +475,27 @@ only what an automation here uses:
   cause end with a fixed sentence (`QUICKBOOKS_SENTENCES`); a Fault is named by its
   number alone; any other failure is thrown on unchanged, so the SDK's step retry can
   repeat it. The waits use an injected `Clock`, so a suite never waits a minute. Reads
-  only: a repeated write could create a second record. Beside it, `lookupQuery` —
-  the value quoted with every backslash doubled, then every apostrophe escaped — and
-  readers for Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+  only: a repeated write could create a second record. Beside it, `writeQuickBooks` —
+  one WRITE of a bill, an expense, a vendor credit or a journal entry, never repeated,
+  the request id left to the platform: a failure says whether a record may exist, in a
+  fixed sentence — no record was created, or QuickBooks did not confirm it — with a Fault
+  named by its number; the query text — `lookupQuery` and `lookupInQuery` for a name list,
+  active or not, and `transactionQuery` with `dateRange` for bills, expenses, vendor
+  credits and journal entries, conditions joined by AND, no Active condition, each value
+  quoted with every backslash doubled, then every apostrophe escaped — and readers for
+  Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
 - `@autom8x/automation-kit/testing` — `QuickBooksSimulator`, plugged in as
   `RecordingPlatform.provider`: QuickBooks answering from a made-up company, behind
   Connections' rules — a final answer replayed for the same request under its key, a
   different request under a used key refused 409, nothing recorded for a 5xx, 401, 403,
   408, 425 or 429, an answer over 192 KiB a 502 naming no reason, an input naming
-  `accountId` refused. It throws each refusal through the SDK's `refusalFixture`, which
-  the suite hands it, so the kit imports nothing at run time.
+  `accountId` refused. Its company holds accounts, employees, expenses, vendor credits and
+  journal entries: it answers only the query text the kit's builders write, by Intuit's
+  documented rules (filterable and sortable fields from Intuit's model file; an expense's
+  amount behind a switch until the sandbox settles it), and creates an expense, a vendor
+  credit or a journal entry as Intuit documents, each kept for the queries after it. It
+  throws each refusal through the SDK's `refusalFixture`, which the suite hands it, so the
+  kit imports nothing at run time.
 
 ## Adding an automation
 

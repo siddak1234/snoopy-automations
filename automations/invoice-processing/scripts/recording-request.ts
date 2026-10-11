@@ -1,4 +1,4 @@
-import { EXTRACT_INVOICE_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
 import { recordingRequest } from '../test/recordings.js';
 import { SAMPLES } from '../test/sample-maker/samples.js';
 
@@ -30,7 +30,7 @@ if (args.includes('--json')) {
   for (const [index, each] of requests.entries()) {
     console.log(
       [
-        `=== ${index + 1}/${requests.length} ${each.sample} (prompt ${EXTRACT_INVOICE_V1.id} v${EXTRACT_INVOICE_V1.version}) ===`,
+        `=== ${index + 1}/${requests.length} ${each.sample} (prompt ${EXTRACT_DOCUMENT_V1.id} v${EXTRACT_DOCUMENT_V1.version}) ===`,
         'FILE, attached to the user message — read it as a model reads a PDF or an image:',
         `  ${each.file}  (${each.contentType}, ${each.sizeBytes} bytes, sha256 ${each.recording.fileSha256})`,
         'SYSTEM INSTRUCTION, verbatim between the rules:',

@@ -9,24 +9,27 @@ import {
 } from '@autom8x/automation-sdk';
 
 import { noteThrows, withFixedSentences } from './failures.js';
-import { EXTRACT_INVOICE_V1 } from './prompts.js';
+import { EXTRACT_DOCUMENT_V1 } from './prompts.js';
 import { extract } from './steps/extract.js';
-import { findAccount } from './steps/find-account.js';
+import { findAccounts } from './steps/find-accounts.js';
+import { findPayer } from './steps/find-payer.js';
 import { readCompany } from './steps/read-company.js';
 import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing — reads a supplier invoice from a PDF or photo and creates an
- * unpaid bill in QuickBooks Online (platform BUILD-PLAN 25.4.1, the owner's design of
- * 2026-10-10). Built in groups, each appending its steps to the v1 manifest before it
- * is registered. The first four spend nothing; the fifth is the one model call:
+ * Bills & Receipts (template `invoice-processing`) — records a bill, a receipt or a credit
+ * note from a PDF or photo in QuickBooks Online, and compares a supplier's statement with it
+ * (platform BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and plan of 2026-10-11).
+ * Built in groups, each appending its steps to the v1 manifest before it is registered. The
+ * first five spend nothing; the sixth is the one model call so far:
  *
  * - `receive` checks the file against the platform's measurements of it;
  * - `read-company` proves QuickBooks is connected and the company is in the US;
  * - `read-preferences` keeps the settings later steps read;
- * - `find-account` turns the Expense account setting into a QuickBooks account;
- * - `extract` has the platform's model read the invoice into its fields.
+ * - `find-accounts` turns every account the flow's settings name into a QuickBooks account;
+ * - `find-payer` finds who paid, when someone paid with their own money;
+ * - `extract` has the platform's model read the document into its fields.
  *
  * One container serves v1 and nothing else (the platform's D2: one container per
  * manifest version for everything new).
@@ -34,7 +37,7 @@ import { receive } from './steps/receive.js';
 export const TEMPLATE_ID = 'invoice-processing';
 
 /**
- * The four reads, each repeated after a TRANSIENT failure — no answer, or a 502/503/504
+ * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a 502/503/504
  * naming no reason — at the SDK's floor and ceilings: three attempts, 10 s then 20 s,
  * never past the deadline. A repeat sends the same request under the step's one key,
  * which the platform answers from its record when it has one.
@@ -62,33 +65,37 @@ export function define(
   const automation = defineAutomation({
     templateId: TEMPLATE_ID,
     manifests,
-    prompts: [EXTRACT_INVOICE_V1],
+    prompts: [EXTRACT_DOCUMENT_V1],
     steps: noteThrows({
       receive,
       'read-company': readCompany(clock),
       'read-preferences': readPreferences(clock),
-      'find-account': findAccount(clock),
-      extract: extract(EXTRACT_INVOICE_V1),
+      'find-accounts': findAccounts(clock),
+      'find-payer': findPayer(clock),
+      extract: extract(EXTRACT_DOCUMENT_V1),
     }),
     retry: {
       receive: READ_RETRY,
       'read-company': READ_RETRY,
       'read-preferences': READ_RETRY,
-      'find-account': READ_RETRY,
+      'find-accounts': READ_RETRY,
+      'find-payer': READ_RETRY,
       extract: EXTRACT_RETRY,
     },
-    // Until the groups that create the bill: what the steps found — and of the reading, only
-    // the model that served. The answer itself restates the invoice and is never an output.
+    // Until the groups that record the document: what the steps found — and of the reading,
+    // only the model that served. The answer itself restates the document and is never an
+    // output. `payer` is absent when the company paid.
     result: (state) => ({
       output: {
         file: state.file,
         company: state.company,
         preferences: state.preferences,
-        account: state.account,
+        accounts: state.accounts,
+        ...(state.payer === undefined ? {} : { payer: state.payer }),
         modelServed: state.modelServed,
       },
       summary:
-        'Checked the invoice file, the QuickBooks company, its settings and the expense account, and read the invoice',
+        "Checked the file, the QuickBooks company, its settings and the accounts in this flow's settings, and read the document",
     }),
   });
   return withFixedSentences(automation, dependencies.log ?? jsonLogger(TEMPLATE_ID));
