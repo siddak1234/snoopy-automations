@@ -1,0 +1,53 @@
+{
+  "sample": "scanned-image-pdf",
+  "file": "scan.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7SCN",
+  "markerIn": "notes",
+  "made": "A scanner's PDF: one grayscale JPEG of a page, turned 0.6 degrees, softened and speckled, with no text layer; \"Due on receipt\", a discount, a bare $.",
+  "decisive": ["documentDate", "paymentTermsDays", "discount", "total", "currency"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill due on receipt: recorded as a bill; with no currency printed, USD is used (a new vendor holds, saying so).",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Pinecrest Janitorial Services",
+    "documentNumber": "PJS-0388",
+    "documentDate": "2026-09-22",
+    "dueDate": null,
+    "paymentTermsDays": 0,
+    "currency": null,
+    "subtotal": 1171.8,
+    "tax": null,
+    "shipping": null,
+    "discount": 56.25,
+    "total": 1115.55,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "repairs_and_maintenance",
+    "lineItems": [
+      {
+        "amount": 840
+      },
+      {
+        "amount": 165
+      },
+      {
+        "amount": 120
+      },
+      {
+        "amount": 46.8
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

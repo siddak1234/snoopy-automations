@@ -1,0 +1,9 @@
+{
+  "fileSha256": "6444537f059a4dabdd98f9abe96ef509e41b0f347033a5b33c9fa3127604a87e",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Wrenfield & Pike Bookkeeping\",\"documentNumber\":\"LH-2609\",\"documentDate\":\"2026-09-30\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":480.00,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":480.00,\"amountDue\":0.00,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"check\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"professional_services\",\"lineItems\":[{\"amount\":350.00},{\"amount\":130.00}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

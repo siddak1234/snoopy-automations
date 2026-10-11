@@ -1,6 +1,9 @@
 import { QUICKBOOKS_SENTENCES } from '@autom8x/automation-kit/quickbooks';
 import {
   CallbackRefusedError,
+  UNANSWERED_REASON,
+  isUnanswered,
+  isUnsent,
   type Automation,
   type Logger,
   type Step,
@@ -26,17 +29,28 @@ export const THROWN_SENTENCES = {
   /** The Edge's flood valve: a callback refused 429. */
   busy: 'Autom8x is busy; run it again in a few minutes.',
   receive:
-    'The invoice file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
+    'The document file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
   quickbooks: QUICKBOOKS_SENTENCES.qb_unreachable,
+  /**
+   * `extract` or `verify-read`: no answer reached the step — a timeout, a reset, a cut connection —
+   * or its one repeat never reached the platform either. The SDK's own sentence for an answer that
+   * never came.
+   */
+  unanswered: UNANSWERED_REASON,
   other:
-    "Invoice Processing stopped before it finished. Check the run's timeline before running it again.",
+    "Bills & Receipts stopped before it finished. Check the run's timeline before running it again.",
 } as const;
 
-const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
+/** Every step that calls QuickBooks: a throw there ends with QuickBooks' sentence. */
+export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-company',
   'read-preferences',
-  'find-account',
+  'find-accounts',
+  'find-payer',
 ]);
+
+/** The steps that call a model: a throw there that got no answer ends with the SDK's sentence. */
+export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read']);
 
 /** Each step, noting the step id against anything it throws, then throwing it on unchanged. */
 export function noteThrows(steps: Readonly<Record<string, Step>>): Record<string, Step> {
@@ -80,6 +94,9 @@ export function sentenceFor(stepId: string | undefined, error: unknown): string 
   if (error instanceof CallbackRefusedError && error.status === 429) return THROWN_SENTENCES.busy;
   if (stepId === 'receive') return THROWN_SENTENCES.receive;
   if (stepId !== undefined && QUICKBOOKS_STEPS.has(stepId)) return THROWN_SENTENCES.quickbooks;
+  if (stepId !== undefined && MODEL_STEPS.has(stepId) && (isUnanswered(error) || isUnsent(error))) {
+    return THROWN_SENTENCES.unanswered;
+  }
   return THROWN_SENTENCES.other;
 }
 

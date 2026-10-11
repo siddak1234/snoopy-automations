@@ -12,14 +12,16 @@ import type { PreferencesState } from '../state.js';
 
 /**
  * `read-preferences` — the company settings later steps need: the home currency and
- * the multicurrency flag (the currency rules and the bill's `CurrencyRef`), the books'
- * closing date when QuickBooks returns one, and the two duplicate-number settings, kept
- * as information only. One `preferences.get`.
+ * the multicurrency flag (the currency rules and each record's `CurrencyRef`), the books'
+ * closing date when QuickBooks returns one, the two duplicate-number settings, kept as
+ * information only, and — from the same answer, OtherPrefs — whether a vendor credit may
+ * carry its own number (`VendorAndPurchasesPrefs.UseCustomTxnNumbers`; Intuit's advice is to
+ * check it before sending one). One `preferences.get`.
  */
 
 export const READ_PREFERENCES_SENTENCES = {
   home_currency_missing:
-    "QuickBooks did not return this company's home currency, so the bill cannot be checked. Run it again; if it repeats, contact support.",
+    "QuickBooks did not return this company's home currency, so the document cannot be checked. Run it again; if it repeats, contact support.",
 } as const;
 
 const WHAT = 'QuickBooks settings not read';
@@ -51,16 +53,17 @@ export function readPreferences(clock: Clock): Step {
       );
     }
     const customTxnNumbers = objectAt(prefs, 'SalesFormsPrefs')?.CustomTxnNumbers;
-    const warning = nameValueOf(
-      objectAt(prefs, 'OtherPrefs')?.NameValue,
-      'WarnDuplicateBillNumber',
-    );
+    const other = objectAt(prefs, 'OtherPrefs')?.NameValue;
+    const warning = nameValueOf(other, 'WarnDuplicateBillNumber');
+    const purchaseNumbers = nameValueOf(other, 'VendorAndPurchasesPrefs.UseCustomTxnNumbers');
     const closing = objectAt(prefs, 'AccountingInfoPrefs')?.BookCloseDate;
     const preferences: PreferencesState = {
       homeCurrency,
       // Off unless QuickBooks says on: Intuit's default, and a wrong guess fails at the bill.
       multiCurrencyEnabled: currency?.MultiCurrencyEnabled === true,
       customTxnNumbers: typeof customTxnNumbers === 'boolean' ? customTxnNumbers : null,
+      purchaseCustomTxnNumbers:
+        purchaseNumbers === 'true' ? true : purchaseNumbers === 'false' ? false : null,
       warnDuplicateBillNumber: warning === 'true' ? true : warning === 'false' ? false : null,
       bookCloseDate: isCalendarDate(closing) ? closing : null,
     };

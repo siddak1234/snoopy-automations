@@ -1,0 +1,9 @@
+{
+  "fileSha256": "11142429515836d085e62779702a5771e0a1d81d7ae0461174dc33be7fbd5709",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"vendorName\":\"Juniperwick Bistro\",\"documentNumber\":\"0451\",\"documentDate\":\"2026-09-19\",\"dueDate\":null,\"currency\":null,\"total\":54.47,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"8812\",\"refundMethod\":\"not_applicable\",\"spendType\":\"meals\",\"uncertainFields\":[]}"
+}

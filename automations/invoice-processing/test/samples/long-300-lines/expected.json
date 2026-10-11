@@ -1,0 +1,161 @@
+{
+  "sample": "long-300-lines",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7LNG",
+  "markerIn": "notes",
+  "made": "A seven-page text PDF of 300 charged lines, numbered \"Page n of 7\", the totals on the last page.",
+  "decisive": ["lineItems", "lineItemsComplete", "subtotal", "total"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill of more than 40 lines: the lines are not checked (lineItemsComplete false), the total is checked against the subtotal, tax and freight; recorded as a bill on the materials category.",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Marlowe Fastener Supply",
+    "documentNumber": "MFS-7781",
+    "documentDate": "2026-09-08",
+    "dueDate": "2026-10-08",
+    "paymentTermsDays": 30,
+    "currency": "USD",
+    "subtotal": 7917.5,
+    "tax": 574.02,
+    "shipping": 45,
+    "discount": null,
+    "total": 8536.52,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "materials",
+    "lineItems": [
+      {
+        "amount": 3.13
+      },
+      {
+        "amount": 35.32
+      },
+      {
+        "amount": 20.51
+      },
+      {
+        "amount": 5.7
+      },
+      {
+        "amount": 37.89
+      },
+      {
+        "amount": 23.08
+      },
+      {
+        "amount": 8.27
+      },
+      {
+        "amount": 40.46
+      },
+      {
+        "amount": 25.65
+      },
+      {
+        "amount": 10.84
+      },
+      {
+        "amount": 43.03
+      },
+      {
+        "amount": 28.22
+      },
+      {
+        "amount": 13.41
+      },
+      {
+        "amount": 45.6
+      },
+      {
+        "amount": 30.79
+      },
+      {
+        "amount": 15.98
+      },
+      {
+        "amount": 48.17
+      },
+      {
+        "amount": 33.36
+      },
+      {
+        "amount": 18.55
+      },
+      {
+        "amount": 3.74
+      },
+      {
+        "amount": 35.93
+      },
+      {
+        "amount": 21.12
+      },
+      {
+        "amount": 6.31
+      },
+      {
+        "amount": 38.5
+      },
+      {
+        "amount": 23.69
+      },
+      {
+        "amount": 8.88
+      },
+      {
+        "amount": 41.07
+      },
+      {
+        "amount": 26.26
+      },
+      {
+        "amount": 11.45
+      },
+      {
+        "amount": 43.64
+      },
+      {
+        "amount": 28.83
+      },
+      {
+        "amount": 14.02
+      },
+      {
+        "amount": 46.21
+      },
+      {
+        "amount": 31.4
+      },
+      {
+        "amount": 16.59
+      },
+      {
+        "amount": 48.78
+      },
+      {
+        "amount": 33.97
+      },
+      {
+        "amount": 19.16
+      },
+      {
+        "amount": 4.35
+      },
+      {
+        "amount": 36.54
+      }
+    ],
+    "lineItemsComplete": false,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

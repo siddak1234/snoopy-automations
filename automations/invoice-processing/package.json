@@ -2,7 +2,7 @@
   "name": "@autom8x/invoice-processing",
   "version": "0.1.0",
   "private": true,
-  "description": "Reads a supplier invoice from a PDF or photo and creates an unpaid bill in QuickBooks Online. Built in groups: this one checks the file, the QuickBooks company, its settings and the expense account.",
+  "description": "Bills & Receipts: records a bill, receipt or credit note from a PDF or photo in QuickBooks Online, and compares a supplier's statement with it. Built in groups: so far it checks the file, the QuickBooks company, its settings, the accounts in the flow's settings and who paid, has the platform's model read the document, checks and routes what it read, and has another maker's model read it again.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -11,7 +11,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "tsx --test \"test/**/*.test.ts\"",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "samples": "tsx scripts/make-samples.ts",
+    "recording-request": "tsx scripts/recording-request.ts"
   },
   "dependencies": {
     "@autom8x/automation-kit": "file:../../packages/automation-kit",

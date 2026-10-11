@@ -1,0 +1,50 @@
+{
+  "sample": "bank-card-statement",
+  "file": "statement.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7BNK",
+  "markerIn": "notes",
+  "made": "The company's own business card statement typed into a PDF: the card ending 4417, three purchases, a payment, the previous and new balances and a minimum payment.",
+  "decisive": ["documentType"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "The company's own card statement: check-document fails it (C1), asking for each receipt or bill on its own and the statement to reconcile in QuickBooks (D31).",
+  "answer": {
+    "documentType": "bank_statement",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Larkspur Example Bank",
+    "documentNumber": null,
+    "documentDate": "2026-09-25",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": null,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": 520.71,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "other",
+    "lineItems": [
+      {
+        "amount": 60.63
+      },
+      {
+        "amount": 298.53
+      },
+      {
+        "amount": 49.15
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

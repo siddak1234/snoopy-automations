@@ -1,0 +1,50 @@
+{
+  "sample": "phone-photo-jpeg",
+  "file": "photo.jpg",
+  "contentType": "image/jpeg",
+  "marker": "QZ7PHO",
+  "markerIn": "line",
+  "made": "A colour JPEG like a phone photo: the page turned 2.5 degrees on a dark table, lit unevenly, warm, grainy; dates as month/day/year, one final \"AMOUNT DUE\".",
+  "decisive": ["documentDate", "dueDate", "total", "amountDue", "spendType"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill: recorded as a bill on the advertising category.",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Bluefinch Print & Sign",
+    "documentNumber": "BPS-2207",
+    "documentDate": "2026-09-03",
+    "dueDate": "2026-10-03",
+    "paymentTermsDays": 30,
+    "currency": null,
+    "subtotal": 278.5,
+    "tax": 22.98,
+    "shipping": null,
+    "discount": null,
+    "total": 301.48,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "advertising",
+    "lineItems": [
+      {
+        "amount": 128
+      },
+      {
+        "amount": 64
+      },
+      {
+        "amount": 86.5
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

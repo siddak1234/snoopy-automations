@@ -1,0 +1,9 @@
+{
+  "fileSha256": "1918802d5a83a9f1493753b6951dac2400b5a8e1c3d3b4dd4cfd99931f815df4",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"receipt\",\"vendorName\":\"GLIMMERFIELD GLASS & GLAZING\",\"documentNumber\":\"0412\",\"documentDate\":\"2026-09-18\",\"dueDate\":null,\"currency\":null,\"total\":150.00,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"cash\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"repairs_and_maintenance\",\"uncertainFields\":[]}"
+}

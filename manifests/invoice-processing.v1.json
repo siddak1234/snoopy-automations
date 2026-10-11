@@ -2,8 +2,8 @@
   "templateId": "invoice-processing",
   "version": 1,
   "display": {
-    "name": "Invoice Processing",
-    "description": "Reads a supplier invoice from a PDF or photo and creates an unpaid bill in QuickBooks Online. New vendors, possible duplicates and bills over your limit wait for approval.",
+    "name": "Bills & Receipts",
+    "description": "Records a bill, receipt or credit note from a PDF or photo in QuickBooks Online: a bill as a bill, a receipt as an expense, a credit note as a vendor credit. Statements are compared, not recorded.",
     "category": "Accounting",
     "icon": "Receipt"
   },
@@ -15,9 +15,24 @@
     "input": [
       {
         "key": "invoiceFile",
-        "title": "Invoice",
-        "description": "The supplier invoice: a PDF, or a JPEG or PNG photo.",
+        "title": "Document",
+        "description": "A bill, receipt, credit note or statement: a PDF, or a JPEG or PNG photo.",
         "control": "artifact",
+        "required": false
+      },
+      {
+        "key": "paidPersonally",
+        "title": "I paid for this with my own money",
+        "description": "Turn on when a team member or an owner paid for this personally, so it is recorded against the person who paid.",
+        "control": "toggle",
+        "defaultValue": false,
+        "required": false
+      },
+      {
+        "key": "paidBy",
+        "title": "Who paid",
+        "description": "Your name as QuickBooks shows it, or as this flow's Owners and partners setting writes it. Only with the switch above on.",
+        "control": "text",
         "required": false
       }
     ]
@@ -26,21 +41,23 @@
     {
       "providerId": "quickbooks",
       "displayName": "QuickBooks Online",
-      "purpose": "Looks up vendors, accounts and bills, and creates vendors and unpaid bills.",
+      "purpose": "Looks up accounts, vendors, employees, bills and expenses, and creates vendors, bills, expenses, vendor credits and journal entries.",
       "scopes": ["com.intuit.quickbooks.accounting"]
     }
   ],
   "requiredCapabilities": ["document-extraction"],
   "artifacts": {
     "acceptedContentTypes": ["application/pdf", "image/jpeg", "image/png"],
-    "maximumSizeBytes": 3500000
+    "maximumSizeBytes": 3500000,
+    "maximumPdfPages": 10,
+    "maximumImageSidePixels": 8000
   },
   "setup": [
     {
       "section": "rules",
       "key": "holdAboveAmount",
       "title": "Approval limit",
-      "description": "Bills over this amount wait for an owner or admin to approve. 500 when left empty.",
+      "description": "Records over this amount wait for an owner or admin to approve. 500 when left empty.",
       "control": "money",
       "defaultValue": 500,
       "required": false
@@ -48,16 +65,144 @@
     {
       "section": "rules",
       "key": "expenseAccount",
-      "title": "Expense account",
-      "description": "The QuickBooks expense account for these bills, as QuickBooks shows it, without its number. For a sub-account: Parent:Child.",
+      "title": "Default category",
+      "description": "The QuickBooks category used when no category below applies, as QuickBooks shows it, without its number. For a sub-account: Parent:Child.",
       "control": "text",
       "required": true
+    },
+    {
+      "section": "rules",
+      "key": "paidFromAccount",
+      "title": "Paid from",
+      "description": "The bank or credit card account the company pays receipts from, as QuickBooks shows it. Needed for receipts and card refunds.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "companyCardLast4",
+      "title": "Company card's last four digits",
+      "description": "The last four digits of the company card, such as 4417: exactly four digits, or left empty. A receipt that shows another card waits for approval.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "teamOwedAccount",
+      "title": "Owed to team members",
+      "description": "A liability account, not Accounts Payable or a credit card, for what the company owes an employee who paid with their own money.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "ownerInvestmentAccount",
+      "title": "Owner's investment account",
+      "description": "The equity account, such as Owner investments, for a purchase an owner or partner paid with their own money.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "ownerNames",
+      "title": "Owners and partners",
+      "description": "One entry per person, separated by semicolons. Add = and an equity account for a person's own account, for example: Jane Doe = Partner investments:Jane; Sam Lee",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryMeals",
+      "title": "Category for meals",
+      "description": "The QuickBooks category for meals. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryTravel",
+      "title": "Category for travel",
+      "description": "The QuickBooks category for travel. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryVehicleAndFuel",
+      "title": "Category for vehicle and fuel",
+      "description": "The QuickBooks category for vehicle and fuel. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryOfficeSupplies",
+      "title": "Category for office supplies",
+      "description": "The QuickBooks category for office supplies. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categorySoftwareAndSubscriptions",
+      "title": "Category for software and subscriptions",
+      "description": "The QuickBooks category for software and subscriptions. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryUtilitiesAndPhone",
+      "title": "Category for utilities and phone",
+      "description": "The QuickBooks category for utilities and phone. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryRent",
+      "title": "Category for rent",
+      "description": "The QuickBooks category for rent. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryRepairsAndMaintenance",
+      "title": "Category for repairs and maintenance",
+      "description": "The QuickBooks category for repairs and maintenance. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryProfessionalServices",
+      "title": "Category for professional services",
+      "description": "The QuickBooks category for professional services. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryMaterials",
+      "title": "Category for materials",
+      "description": "The QuickBooks category for materials. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "categoryAdvertising",
+      "title": "Category for advertising",
+      "description": "The QuickBooks category for advertising. The default category is used when this is left empty.",
+      "control": "text",
+      "required": false
     },
     {
       "section": "notifications",
       "key": "notifyEmail",
       "title": "Also email",
-      "description": "An address outside your workspace, such as your bookkeeper, that gets a short summary of each bill.",
+      "description": "An address outside your workspace, such as your bookkeeper, that gets a short summary of each record.",
       "control": "email",
       "required": false
     }
@@ -66,26 +211,50 @@
     {
       "id": "receive",
       "kicker": "TRIGGER",
-      "title": "Invoice received",
-      "description": "A person starts the run with a PDF or photo of the invoice. The file is checked before anything is spent."
+      "title": "Document received",
+      "description": "A person starts the run with a PDF or photo of the document. The file is checked before anything is spent."
     },
     {
       "id": "read-company",
       "kicker": "ACTION",
       "title": "Check the QuickBooks company",
-      "description": "Confirms QuickBooks is connected and the company is a US company."
+      "description": "Confirms QuickBooks is connected and the company is a US company, and whether it runs QuickBooks Payroll."
     },
     {
       "id": "read-preferences",
       "kicker": "ACTION",
       "title": "Read QuickBooks settings",
-      "description": "Reads the home currency, the multicurrency setting and the closing date of the books."
+      "description": "Reads the home currency, the multicurrency setting, the closing date of the books and how vendor credits are numbered."
     },
     {
-      "id": "find-account",
+      "id": "find-accounts",
       "kicker": "ACTION",
-      "title": "Find the expense account",
-      "description": "Finds the expense account named in this flow's settings."
+      "title": "Find the accounts in this flow's settings",
+      "description": "Finds every account this flow's settings name, in one lookup, and checks each is the right kind."
+    },
+    {
+      "id": "find-payer",
+      "kicker": "ACTION",
+      "title": "Find who paid",
+      "description": "When someone paid with their own money: finds them among this flow's owners and partners, or as an employee in QuickBooks."
+    },
+    {
+      "id": "extract",
+      "kicker": "AI STEP",
+      "title": "Read the document",
+      "description": "The AI reads the document: its type, the seller, its number, dates, amounts and lines."
+    },
+    {
+      "id": "check-document",
+      "kicker": "ACTION",
+      "title": "Check what the AI read",
+      "description": "Cleans what the AI read, chooses the record the document becomes, and stops when none can be recorded correctly, before anything else is spent."
+    },
+    {
+      "id": "verify-read",
+      "kicker": "AI STEP",
+      "title": "Read it a second time",
+      "description": "A second AI, by another maker, reads the type and what will be recorded without seeing the first reading; code compares the two."
     }
   ],
   "service": {

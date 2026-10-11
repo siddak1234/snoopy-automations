@@ -6,21 +6,25 @@ import { test } from 'node:test';
 import type { ModelRequest } from '../src/contract.js';
 import {
   ARTIFACT_ID_PATTERN,
+  MODEL_AUTHOR_PATTERN,
   MODEL_ID_PATTERN,
   MODEL_REQUEST_LIMITS,
   artifactIdProblem,
+  excludeModelAuthorsProblem,
+  modelAuthor,
   modelIdProblem,
   modelsProblem,
 } from '../src/model-request.js';
 import { assertValid, schemas, validator } from './published-schemas.js';
 
 /**
- * The model request's two copied rules against the published schema
+ * The model request's three copied rules against the published schema
  * (`contract/schemas/automation-model-request.json`): the model-id rule
- * (`models`, the platform's BUILD-PLAN 25.2.16) and the file-id rule (`artifactId`,
- * its 25.2.18). Each copy must carry the schema's own pattern and give the platform's
- * answer for every one of the platform's samples, so a refresh that moves either rule
- * fails here before an automation is refused for it.
+ * (`models`, the platform's BUILD-PLAN 25.2.16), the file-id rule (`artifactId`,
+ * its 25.2.18) and the maker rule (`excludeModelAuthors`, its 25.2.29). Each copy must
+ * carry the schema's own pattern and give the platform's answer for every one of the
+ * platform's samples, so a refresh that moves a rule fails here before an automation is
+ * refused for it.
  */
 
 test('a model request naming its models validates, and one naming the singular model does not', () => {
@@ -152,5 +156,93 @@ test("a model request may name the run's file, by the published schema's rule, w
   ] as const) {
     assert.equal(artifactIdProblem(id) === undefined, expected, JSON.stringify(id));
     assert.equal(validate({ ...request, artifactId: id }), expected, JSON.stringify(id));
+  }
+});
+
+test("a model request may leave out up to three makers, by the published schema's rule, which is the SDK's", () => {
+  // The platform's BUILD-PLAN 25.2.29; its samples (snoopy-backend
+  // `test/model-request.test.ts` at `e25fd74`), copied as data.
+  const validate = validator('automation-model-request');
+  const schema = JSON.parse(
+    readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
+  ) as {
+    required: string[];
+    properties: {
+      excludeModelAuthors: {
+        type: string;
+        minItems: number;
+        maxItems: number;
+        uniqueItems: boolean;
+        items: { type: string; minLength: number; maxLength: number; pattern: string };
+      };
+    };
+  };
+  const field = schema.properties.excludeModelAuthors;
+  assert.ok(!schema.required.includes('excludeModelAuthors'), 'optional: most calls exclude none');
+  assert.deepEqual(
+    [field.type, field.minItems, field.maxItems, field.uniqueItems],
+    ['array', 1, MODEL_REQUEST_LIMITS.excludeModelAuthors, true],
+  );
+  assert.equal(field.items.pattern, MODEL_AUTHOR_PATTERN.source);
+  assert.equal(field.items.maxLength, MODEL_REQUEST_LIMITS.modelIdLength);
+
+  const request: ModelRequest = {
+    capability: 'document-extraction',
+    prompt: 'Read the invoice again.',
+    input: {},
+    outputSchema: { type: 'object' },
+    models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
+    excludeModelAuthors: ['anthropic'],
+  };
+  assertValid(validate, request, 'a model request leaving out a maker');
+  for (const [value, takes] of [
+    [['anthropic'], true],
+    [['google', 'openai', 'x-ai'], true],
+    [['meta-llama', 'ai21.labs', 'under_score'], true],
+    [['x'.repeat(128)], true],
+    [[], false],
+    [['a', 'b', 'c', 'd'], false],
+    ['google', false],
+    [null, false],
+    [[42], false],
+    [['Google'], false],
+    [['anthropic/claude-sonnet-4.5'], false],
+    [['~anthropic'], false],
+    [['openai:beta'], false],
+    [[''], false],
+    [['x'.repeat(129)], false],
+    [['google', 'google'], false],
+    [['goo gle'], false],
+    [['modèle'], false],
+  ] as [unknown, boolean][]) {
+    assert.equal(excludeModelAuthorsProblem(value) === undefined, takes, JSON.stringify(value));
+    assert.equal(
+      validate({ ...request, excludeModelAuthors: value }),
+      takes,
+      `the schema on ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+test("a model's maker is the part of its id before the '/', an alias's after its '~', and none without a '/'", () => {
+  // The platform's samples (snoopy-backend `test/model-request.test.ts` at `e25fd74`).
+  for (const [id, author] of [
+    ['anthropic/claude-sonnet-4.5', 'anthropic'],
+    ['~anthropic/claude-sonnet-latest', 'anthropic'],
+    ['meta-llama/llama-3.3-70b-instruct:free', 'meta-llama'],
+    ['x-ai/grok-4.6', 'x-ai'],
+    // A completion's served model reads the same: a dated version is still its maker's.
+    ['google/gemini-3.5-flash-20261001', 'google'],
+    ['gemini-2.5-flash', undefined],
+    ['', undefined],
+    ['/claude-sonnet-4.5', undefined],
+    ['~/claude-sonnet-latest', undefined],
+  ] as const) {
+    assert.equal(modelAuthor(id), author, id);
+  }
+  // Every sendable sample with a maker names one an exclusion can name.
+  for (const id of ACCEPTED_MODEL_IDS) {
+    const author = modelAuthor(id);
+    if (author !== undefined) assert.ok(MODEL_AUTHOR_PATTERN.test(author), id);
   }
 });

@@ -1,0 +1,9 @@
+{
+  "fileSha256": "232a3fc5ebab60a631aeb454bc8cec63f7c7c7f4a0a124b95ec916163b12d323",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"vendorName\":\"Sample Valley Electric Cooperative\",\"documentNumber\":\"4471-0926\",\"documentDate\":\"2026-09-24\",\"dueDate\":\"2026-10-15\",\"currency\":null,\"total\":149.5,\"amountDue\":207.9,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"utilities_and_phone\",\"uncertainFields\":[]}"
+}

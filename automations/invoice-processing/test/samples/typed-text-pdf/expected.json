@@ -1,0 +1,63 @@
+{
+  "sample": "typed-text-pdf",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7TYP",
+  "markerIn": "line",
+  "made": "A one-page supplier invoice typed into a PDF: a text layer in Courier, a quantity and unit price on each line, dates written out, the currency printed as USD, a PO number beside the invoice number.",
+  "decisive": [
+    "documentType",
+    "vendorName",
+    "documentNumber",
+    "documentDate",
+    "total",
+    "spendType"
+  ],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A bill: recorded as an unpaid bill on the office supplies category, or the default category when that setting is empty.",
+  "answer": {
+    "documentType": "bill",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Harrowgate Office Supply",
+    "documentNumber": "HOS-1042",
+    "documentDate": "2026-09-14",
+    "dueDate": "2026-10-14",
+    "paymentTermsDays": 30,
+    "currency": "USD",
+    "subtotal": 370.75,
+    "tax": 30.59,
+    "shipping": 12,
+    "discount": null,
+    "total": 413.34,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "not_shown",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "office_supplies",
+    "lineItems": [
+      {
+        "amount": 99
+      },
+      {
+        "amount": 189
+      },
+      {
+        "amount": 38.25
+      },
+      {
+        "amount": 19.6
+      },
+      {
+        "amount": 24.9
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

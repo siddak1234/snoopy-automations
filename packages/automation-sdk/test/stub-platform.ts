@@ -139,6 +139,16 @@ export async function startStubPlatform(): Promise<StubPlatform> {
   return stub;
 }
 
+/** An origin nobody listens on: a port taken, then given back. */
+export async function closedOrigin(): Promise<string> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return `http://127.0.0.1:${port}`;
+}
+
 /** Polls until the predicate holds, or fails the test after `timeoutMs`. */
 export async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;

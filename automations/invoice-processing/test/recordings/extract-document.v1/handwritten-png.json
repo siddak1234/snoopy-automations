@@ -1,0 +1,9 @@
+{
+  "fileSha256": "3ce84791a7562d98a3432753fb1a120e1ac9826e7f2e655b930468a39dbe5fed",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"NORTHGATE MOWER REPAIR\",\"documentNumber\":\"0417\",\"documentDate\":\"2026-09-03\",\"dueDate\":null,\"paymentTermsDays\":15,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":155.50,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"repairs_and_maintenance\",\"lineItems\":[{\"amount\":95.00},{\"amount\":38.00},{\"amount\":22.50}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
+}

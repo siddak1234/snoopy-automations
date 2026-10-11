@@ -1,0 +1,47 @@
+{
+  "sample": "paid-invoice",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7PAI",
+  "markerIn": "notes",
+  "made": "An invoice typed into a PDF, its payment by check printed below the total, a balance due of 0.00 and PAID IN FULL across its notes; terms and a due date still printed.",
+  "decisive": ["documentType", "paymentMethod", "amountDue", "dueDate"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "An invoice marked PAID with nothing left to pay is a receipt: recorded as an expense from 'Paid from', unless a bill for it is already in QuickBooks, which holds it (D22).",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Wrenfield & Pike Bookkeeping",
+    "documentNumber": "LH-2609",
+    "documentDate": "2026-09-30",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 480,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": 480,
+    "amountDue": 0,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "check",
+    "cardLast4": null,
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "professional_services",
+    "lineItems": [
+      {
+        "amount": 350
+      },
+      {
+        "amount": 130
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

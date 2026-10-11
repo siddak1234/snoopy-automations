@@ -209,6 +209,16 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 104857600
+        },
+        "maximumPdfPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "maximumImageSidePixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
         }
       }
     },

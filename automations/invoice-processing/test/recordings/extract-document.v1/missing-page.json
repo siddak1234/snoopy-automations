@@ -1,0 +1,9 @@
+{
+  "fileSha256": "f16ee036d64b227c5ff13048f8efb4fe7c130228a2d880714d30838544961804",
+  "finishReason": "stop",
+  "promptId": "extract-document",
+  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
+  "promptVersion": 1,
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":true,\"vendorName\":\"Fernhill Linen Service\",\"documentNumber\":\"FLS-4470\",\"documentDate\":\"2026-09-25\",\"dueDate\":\"2026-10-25\",\"paymentTermsDays\":30,\"currency\":null,\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":null,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"other\",\"lineItems\":[{\"amount\":18.00},{\"amount\":21.50},{\"amount\":25.00},{\"amount\":28.50},{\"amount\":32.00},{\"amount\":35.50},{\"amount\":39.00},{\"amount\":42.50},{\"amount\":46.00},{\"amount\":49.50},{\"amount\":53.00},{\"amount\":56.50}],\"lineItemsComplete\":false,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[\"total\"]}"
+}

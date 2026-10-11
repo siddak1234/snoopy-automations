@@ -1,0 +1,9 @@
+{
+  "fileSha256": "0c42968be0927a27bb4642da33bd6015c29ccb7a6e2fc904d2a453960b22e568",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"vendorName\":\"Marlowe Fastener Supply\",\"documentNumber\":\"MFS-7781\",\"documentDate\":\"2026-09-08\",\"dueDate\":\"2026-10-08\",\"currency\":\"USD\",\"total\":8536.52,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"materials\",\"uncertainFields\":[]}"
+}

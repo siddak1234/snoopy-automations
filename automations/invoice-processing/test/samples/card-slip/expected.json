@@ -1,0 +1,44 @@
+{
+  "sample": "card-slip",
+  "file": "photo.jpg",
+  "contentType": "image/jpeg",
+  "marker": "QZ7CRD",
+  "markerIn": "notes",
+  "made": "A phone photo of a fuel stop's card slip on a dark table, turned 2.2 degrees: one fuel line and the total, paid by Mastercard ending 6604.",
+  "decisive": ["documentType", "cardLast4", "total", "spendType"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A card slip: recorded as an expense on vehicle and fuel from 'Paid from'; the card check compares 6604.",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "RIDGEWICK FUEL STOP",
+    "documentNumber": "091842",
+    "documentDate": "2026-09-21",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": null,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": 49.15,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "card",
+    "cardLast4": "6604",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "vehicle_and_fuel",
+    "lineItems": [
+      {
+        "amount": 49.15
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

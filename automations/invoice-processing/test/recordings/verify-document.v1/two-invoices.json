@@ -1,0 +1,9 @@
+{
+  "fileSha256": "6ba73332fe6d2e972947dae06d8fb40e21696cc152e45b5cfe9e99666fe70387",
+  "finishReason": "stop",
+  "promptId": "verify-document",
+  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
+  "promptVersion": 1,
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
+  "text": "{\"documentType\":\"bill\",\"vendorName\":\"Kestrel Courier Co\",\"documentNumber\":\"KCC-301\",\"documentDate\":\"2026-09-10\",\"dueDate\":\"2026-09-25\",\"currency\":\"USD\",\"total\":143,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[\"documentNumber\",\"documentDate\",\"dueDate\",\"total\"]}"
+}

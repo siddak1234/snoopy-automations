@@ -1,0 +1,53 @@
+{
+  "sample": "store-receipt",
+  "file": "photo.jpg",
+  "contentType": "image/jpeg",
+  "marker": "QZ7STR",
+  "markerIn": "notes",
+  "made": "A phone photo of an office store's thermal receipt on a dark table, turned 1.8 degrees: four items, tax, paid by debit card ending 2291.",
+  "decisive": ["documentType", "paymentMethod", "cardLast4", "total"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "A store receipt paid by card: recorded as an expense on office supplies from 'Paid from'; the card check compares 2291 with the company card's digits.",
+  "answer": {
+    "documentType": "receipt",
+    "documentCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Brightquill Office Mart",
+    "documentNumber": "448190",
+    "documentDate": "2026-09-29",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 97.52,
+    "tax": 6.34,
+    "shipping": null,
+    "discount": null,
+    "total": 103.86,
+    "amountDue": null,
+    "tip": null,
+    "cashBackPrinted": false,
+    "paymentMethod": "card",
+    "cardLast4": "2291",
+    "refundMethod": "not_applicable",
+    "originalInvoiceNumber": null,
+    "spendType": "office_supplies",
+    "lineItems": [
+      {
+        "amount": 52.99
+      },
+      {
+        "amount": 11.49
+      },
+      {
+        "amount": 18.75
+      },
+      {
+        "amount": 14.29
+      }
+    ],
+    "lineItemsComplete": true,
+    "listedItems": [],
+    "listedItemsComplete": true,
+    "uncertainFields": []
+  }
+}

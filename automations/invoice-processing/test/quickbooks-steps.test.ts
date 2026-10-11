@@ -3,15 +3,22 @@ import { test } from 'node:test';
 
 import { PROVIDER_REFUSALS, type ScriptedAnswer } from '@autom8x/automation-kit/testing';
 
-import { callsOf, lines, setUp } from './fixtures.js';
+import { FILE_ID, callsOf, lines, setUp, type SetUp } from './fixtures.js';
 
 /**
- * The connection and busy cases, the same at each of the three QuickBooks steps: each
+ * The connection and busy cases, the same at each of the four QuickBooks steps: each
  * ends with the kit's sentence, nothing after the step runs, no model call is made, and
  * every call the step made is its one request under its one key.
  */
 
-const STEPS = [
+const STEPS: {
+  stepId: string;
+  operation: string;
+  what: string;
+  /** The answers before the step's own: find-accounts' lookup, before find-payer's. */
+  before?: ScriptedAnswer[];
+  world?: SetUp;
+}[] = [
   { stepId: 'read-company', operation: 'companyInfo.get', what: 'QuickBooks company not checked' },
   {
     stepId: 'read-preferences',
@@ -19,11 +26,21 @@ const STEPS = [
     what: 'QuickBooks settings not read',
   },
   {
-    stepId: 'find-account',
+    stepId: 'find-accounts',
     operation: 'query.run',
-    what: 'Expense account "Utilities:Electric" not resolved',
+    what: "The accounts in this flow's settings were not looked up",
   },
-] as const;
+  {
+    stepId: 'find-payer',
+    operation: 'query.run',
+    what: 'Who paid not accepted',
+    before: [{ status: 200 }],
+    world: {
+      config: { expenseAccount: 'Utilities:Electric', teamOwedAccount: 'Owed to Team Members' },
+      input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Robin Example' },
+    },
+  },
+];
 
 const RECONNECT = 'Reconnect QuickBooks in Connections, then run it again.';
 const BUSY = 'QuickBooks is busy; run it again in a few minutes.';
@@ -107,11 +124,11 @@ const CASES: {
   },
 ];
 
-for (const { stepId, operation, what } of STEPS) {
+for (const { stepId, operation, what, before = [], world: options = {} } of STEPS) {
   test(`${stepId}: every connection and busy case ends with its sentence`, async () => {
     for (const { name, script, sentence, reason, calls, waits } of CASES) {
-      const world = setUp();
-      world.simulator.script(operation, script(operation));
+      const world = setUp(options);
+      world.simulator.script(operation, [...before, ...script(operation)]);
       const result = await world.run();
       assert.deepEqual(
         result,
@@ -131,16 +148,21 @@ for (const { stepId, operation, what } of STEPS) {
   });
 
   test(`${stepId}: 429, 429, then an answer continues after two minute-long waits`, async () => {
-    const world = setUp();
-    world.simulator.script(operation, [{ status: 429 }, { status: 429 }, { status: 200 }]);
+    const world = setUp(options);
+    world.simulator.script(operation, [
+      ...before,
+      { status: 429 },
+      { status: 429 },
+      { status: 200 },
+    ]);
     assert.equal((await world.run()).outcome, 'success');
     assert.deepEqual(world.waits, [60_000, 60_000]);
     assert.equal(callsOf(world.platform, world.request, stepId).length, 3);
   });
 
   test(`${stepId}: a 429 with less than six minutes left fails at once`, async () => {
-    const world = setUp({ deadlineInMs: 5 * 60_000 });
-    world.simulator.script(operation, [{ status: 429 }, { status: 200 }]);
+    const world = setUp({ ...options, deadlineInMs: 5 * 60_000 });
+    world.simulator.script(operation, [...before, { status: 429 }, { status: 200 }]);
     assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: BUSY });
     assert.deepEqual(world.waits, []);
     assert.equal(callsOf(world.platform, world.request, stepId).length, 1);

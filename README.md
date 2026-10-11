@@ -48,7 +48,7 @@ Four rules follow, and the tests enforce them:
 ```
 contract/schemas/            the wire contract — JSON Schemas vendored from the platform
 packages/automation-sdk/     the step runner, prompt modules, the six callbacks, the serving shell, test doubles
-packages/automation-kit/     a library automations build with: QuickBooks reads, and a QuickBooks simulator
+packages/automation-kit/     a library automations build with: QuickBooks calls, value cleaning, a QuickBooks simulator
 automations/<name>/          one automation per directory, with its own Dockerfile and lockfile
 templates/automation/        the template directory: a copyable automation on the runner, tested by the gate
 manifests/<name>.v<n>.json   what the platform registers, validated here first and shipped in the image
@@ -113,8 +113,11 @@ capability; a prompt names no model — the step names the models on the call ("
 a model", below). The shell answers the probe, acknowledges an invoke before working, refuses
 above capacity or while draining, reports the result (or the failure) for you, and
 logs ids and outcomes only — an error's message becomes the run's `failureReason`,
-so never build one from the document. A test hands the automation a
-`RecordingPlatform` from `@autom8x/automation-sdk/testing` instead.
+so never build one from the document; an answer that never came (a callback refused,
+reset, timed out or cut off, which the client marks — `isUnanswered`) becomes one fixed
+sentence instead, `UNANSWERED_REASON`: "The platform did not answer in time, so the run
+stopped." A test hands the automation a `RecordingPlatform` from
+`@autom8x/automation-sdk/testing` instead.
 
 ## Model calls
 
@@ -138,8 +141,10 @@ the completion's text, so a step can branch on a word:
 | 403    | `over_plan_limit`             | the workspace's plan allows no more completions this month; `used` and `limit`                                                                                                                                                    |
 | 403    | `capability_not_in_plan`      | the plan grants no model calls at all; `used`                                                                                                                                                                                     |
 | 403    | `entitlements_not_configured` | the platform could not ask entitlements and refused rather than guess; `used`                                                                                                                                                     |
+| 422    | `no_model_left`               | every model that would serve the call is by a maker its `excludeModelAuthors` leaves out ("Pick a model", below); refused before the file is read                                                                                 |
 
-The 422s spent tokens and are ledger rows; the 403s spent nothing. Uncaught, a
+The first three 422s spent tokens and are ledger rows; `no_model_left` and the 403s spent
+nothing. Uncaught, a
 `ModelRefusedError` fails the run with a `failureReason` that names the reason
 (`the model call was refused with 422: truncated (finish reason length)`), and the
 runner's timeline line for the step says `the model call was refused (truncated)`.
@@ -165,16 +170,29 @@ reads.
 ## Pick a model
 
 A step names the models its call asks for, or none, and — when the model must read the
-run's own file — the file. In the template that is one constant beside the step that calls
-the model, and a new automation needs nothing else:
+run's own file — the file. That is one constant beside the step that calls the model, and a
+new automation needs nothing else. The template's is `undefined`, the platform's default,
+which it passes alone; in the options object a list must be a list, since
+`exactOptionalPropertyTypes` refuses `models: undefined` — `invoice-processing`'s is typed
+`readonly string[]`:
 
 ```ts
-// Primary first, then up to two fallbacks, from at least two providers.
-export const MODELS: readonly string[] | undefined = undefined; // the platform's default
+// Primary first, then up to two fallbacks, by at least two makers.
+export const MODELS: readonly string[] = [
+  'anthropic/claude-haiku-4.5',
+  'google/gemini-3.1-flash-lite',
+];
 
 const completion = await platform.callModel(extractFields, input, MODELS);
 // With the run's file, which the platform reads and sends; this container never does:
 await platform.callModel(extractFields, input, { models: MODELS, artifactId: fileId });
+// A second read that must be another maker's than the model that served the first:
+const maker = modelAuthor(completion.model);
+await platform.callModel(extractFields, input, {
+  models: MODELS,
+  ...(maker === undefined ? {} : { excludeModelAuthors: [maker] }),
+  artifactId: fileId,
+});
 ```
 
 - **The primary, then up to two fallbacks, one model per attempt.** The platform asks
@@ -190,6 +208,15 @@ await platform.callModel(extractFields, input, { models: MODELS, artifactId: fil
   block and its own leading bytes and sends it with every attempt, a PDF as a file and a
   JPEG or PNG as an image; a type the manifest or a model does not take, a file over the
   bound and an encrypted PDF are 422s naming the reason, before anything is spent.
+- **Leaving out a maker.** `excludeModelAuthors` names up to three makers — a maker is the
+  part of a model id before its `/`, `modelAuthor` reads it (an alias's after its `~`) —
+  whose models the platform removes from whichever list serves the call, the owner's
+  setting, `models` or its default, keeping the rest in order (its BUILD-PLAN 25.2.29, the
+  owner's "Approve group 2" of 2026-10-10). A list left with no model is a 422
+  `no_model_left`, before the file is read and with nothing spent; an id with no `/` names
+  no maker and stays. The client and `RecordingPlatform` refuse a list outside the rule —
+  one to three distinct makers of 1–128 lowercase letters, digits and `. _ -` — before
+  anything is sent, in the words of the platform's 400.
 - **The owner's setting wins.** The owner switches any automation's model on the
   platform at once, with no restart and nothing released here (the platform's
   `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
@@ -221,9 +248,10 @@ await platform.callModel(extractFields, input, { models: MODELS, artifactId: fil
   `structured_outputs`, `response_format`, `temperature` and `max_tokens`, whose
   `pricing` (US dollars per token) is within the ceiling, whose model reads images and
   files when the step sends one, and which is not about to expire. On 2026-10-10
-  `anthropic/claude-haiku-4.5` qualified with no setting, and `google/gemini-3.5-flash`
-  needed the owner's `@low`; `google/gemini-2.5-flash` and `openai/gpt-4.1-mini` did not
-  (no US endpoint).
+  `anthropic/claude-haiku-4.5` (Amazon Bedrock in the US) and `google/gemini-3.1-flash-lite`
+  (Google Vertex in the US) qualified with no setting, and `google/gemini-3.5-flash` needed
+  the owner's `@low`; `google/gemini-2.5-flash` and `openai/gpt-4.1-mini` did not (no US
+  endpoint).
 - **One key, on the platform only.** The platform holds the one OpenRouter key and
   makes every call with it. Nothing in this repository, its images or a running
   container holds a key; a container presents its run token and nothing else.
@@ -236,7 +264,10 @@ built and tested against a simulated model (`RecordingPlatform`, which answers a
 the platform does: one model per attempt, `NO_ANSWER` for an attempt that times out, the
 platform's refusals in its order), and the template leaves `MODELS` undefined. The
 fallbacks, the cap, the run's file, one model per attempt, the reasoning settings and US
-routing (its 25.2.17–25.2.25) go live with its next platform promotion.
+routing (its 25.2.17–25.2.25) go live with its next platform promotion; `excludeModelAuthors`
+(its 25.2.29) and the measured uploads `receive` reads (its 25.2.28) are pull requests not
+yet merged, so until they are promoted the platform answers `excludeModelAuthors` with a 400
+and sends no measurements.
 
 ## Retrying a step
 
@@ -277,11 +308,16 @@ defineAutomation({
   retry lets the platform's error through as it came.
 - **Or only what never left: `when: 'unsent'`.** A policy with
   `retry: { extract: { attempts: 2, backoffMs: 10_000, when: 'unsent' } }` repeats the
-  step only when a callback provably never left the container — the connection was
+  step only when a callback provably never reached the platform — the connection was
   refused, or the platform's name did not resolve (`ECONNREFUSED`, `ENOTFOUND`,
   `EAI_AGAIN` on the error's `cause`, the split the platform makes for its own vendor
-  calls). A timeout, a reset, a cut answer and every status the platform answers are
-  not repeated, because the call may have reached the platform. It is the policy for
+  calls) — or, the owner's D8 of 2026-10-10, it was answered 503 naming no code: every
+  refusal the platform writes names one, and the Edge's own relay failure is a 502, so a
+  codeless 503 is a page from in front of it (the load balancer, or the proxy with no Edge
+  up behind it). A timeout, a reset, a cut answer, a 502 and every status the platform
+  writes are not repeated, because the call may have reached the platform. `isUnsent`
+  (exported) is the test: a step that turns the platform's refusals into sentences lets
+  such a failure through as it came, or the runner never sees it. It is the policy for
   a step that calls the model (the platform's BUILD-PLAN 25.3.13, the owner's
   decision of 2026-10-10: after a restart, one retry only if nothing was sent); see
   Model below for why any other repeat of a model call costs.
@@ -331,7 +367,8 @@ defineAutomation({
   the attempts, so a held step is never run twice.
 
 `invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-four steps, which only read. Neither older automation declares a policy:
+reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract` and
+`verify-read`, its two model calls. Neither older automation declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
 `receive` only reads the file its run was given and is the one safe candidate. The
@@ -368,22 +405,83 @@ a run already recorded (platform §12.1 #220).
 
 ## Invoice processing
 
-`invoice-processing` reads a supplier invoice from a PDF or photo and creates an unpaid
-bill in QuickBooks Online (the platform's BUILD-PLAN 25.4.1, the owner's design of
-2026-10-10). It is built in groups, each appending its steps to
-`manifests/invoice-processing.v1.json` before that version is registered; the first four
+`invoice-processing` — shown to people as **Bills & Receipts** — records a bill, a receipt
+or a credit note from a PDF or photo in QuickBooks Online, and compares a supplier's
+statement with it (the platform's BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and
+plan of 2026-10-11). It is built in groups, each appending its steps to
+`manifests/invoice-processing.v1.json` before that version is registered; the first five
 spend nothing. `receive` holds the platform's measurements of the upload — its real kind,
 its size, a PDF's pages, an image's pixels, taken once when the upload was sealed — to the
 owner's limits (a PDF, JPEG or PNG, measured as the type it declares; 3,500,000 bytes; 10
 pages; 8,000 px a side), fails closed when one is missing, and never downloads the file;
-`read-company` proves QuickBooks is connected and the company is in the US;
-`read-preferences` keeps the home currency, the multicurrency flag and the books' closing
-date; `find-account` turns the Expense account setting into exactly one active Expense
-account. Every failure ends the run with a fixed sentence, a run that ends on a thrown
-error included — never the error's message. The measurements — `measuredKind`,
-`pageCount`, `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference`
-from the platform's pull request before it merged (its BUILD-PLAN 25.2.28), and
-`measurementsOf` in `src/file.ts` is the one place that reads them.
+`read-company` proves QuickBooks is connected and the company is in the US, and keeps
+whether it runs QuickBooks Payroll; `read-preferences` keeps the home currency, the
+multicurrency flag, the books' closing date and whether a vendor credit may carry its own
+number; `find-accounts` resolves every account the flow's settings name — the default
+category, Paid from, Owed to team members, Owner's investment account, each owner's own
+account and one category per spend type — in one `FullyQualifiedName IN (…)` query, each
+held to the kinds its role accepts and, with multicurrency on, to USD, and before that query
+fails the run on a "Company card's last four digits" filled in but not exactly four digits,
+which would otherwise turn the card check off unseen; `find-payer`, when a
+person switched on "I paid for this with my own money", finds who paid among the flow's
+owners and partners, or as an employee in QuickBooks, before anything is read. `extract`,
+the one model call, sends `prompts/extract-document.v1.json` — 17 rules and a 27-field
+answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
+(`anthropic/claude-haiku-4.5`, then `google/gemini-3.1-flash-lite`) and the run's file by
+its id; it starts no call with less than 260 seconds to the deadline, repeats one only when
+nothing reached the platform, and passes the answer on whole in `state.extraction`, beside
+`state.modelServed`, for the next step to check — its timeline line names the model and
+counts, never a value. `check-document` (code only) cleans that answer once — text, whole
+cents, real dates from 2000 on, ISO 4217 codes, a receipt's tip and card digits, a credit's
+signs, a statement's rows — routes it (a bill, an expense from "Paid from", a card refund, a
+vendor credit, a statement compared only, or what an employee, an owner or a contractor paid
+personally), holds it to the 28 fail rules in the plan's order, each a fixed sentence, runs
+the arithmetic in whole cents within 1¢, and keeps `state.document` with what decide is to
+hold on; the raw answer leaves the state there. `verify-read`, the second model call, sends
+`prompts/verify-document.v1.json` — read 1's own definitions for the type and the 13 fields
+that go into QuickBooks, 14 fields of which 8 nullable — blind to the first read, with
+`excludeModelAuthors` set to the maker of the model that served it; without a maker to leave
+out, or answered `no_model_left`, it is not made, never made without the exclusion. It
+compares the fields the route writes, exact after the same cleaning and the seller roughly,
+records the second total only when it alone adds up (and runs the arithmetic again), and
+keeps `state.verification` for decide: a difference holds, a statement's disputed type fails
+(F7), a second read not made holds; out of time and the platform's faults fail. `decide`,
+the plan's approval wording and the data saved for after approval are built and tested in
+`src/decide/` and join the pipeline with the lookups they read (Group 4); its input contract
+is `src/decide/contract.ts`.
+Every failure ends the run with a fixed sentence, a run that ends on a thrown error
+included — never the error's message. The measurements — `measuredKind`, `pageCount`,
+`widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
+platform's pull request before it merged (its BUILD-PLAN 25.2.28, merged unchanged as its
+`main` `7086e5e`), and `measurementsOf` in `src/file.ts` is the one place that reads them;
+the manifest declares the page and pixel limits, without which the platform measures
+nothing.
+
+Its tests need no model key. `test/samples/` holds 25 made-up documents — bills (typed,
+scanned, photographed, a portal screenshot, hand-printed, 300 lines, a utility bill with an
+earlier balance, one whose largest print is its account number), receipts (a till roll, a
+store receipt and a fuel slip photographed, restaurant receipts with a tip and total
+written in and with a tip under a printed total, a card slip with only a tip written in, a
+hand-written cash receipt, a 60-line thermal roll at 2,576 px, cash back, an invoice
+stamped PAID), a credit memo, a refund to a card, a supplier statement, a card statement,
+two invoices in one file, a page missing, and instructions to the model printed on one —
+each drawn by `test/sample-maker/` beside its `expected.json`, with a marker printed in a
+line's text or a notes box, never in the seller's name or the document number, that no
+answer, timeline line or reason may carry; `npm run samples` (in the automation) makes them
+again and rewrites a file only when what it draws changes. Each sample is recorded twice, by
+two agents blind to each other: read 1 — an agent acting as the model, given exactly what
+`npm run recording-request` prints for a sample — in
+`test/recordings/extract-document.v1/<sample>.json`, and read 2, given what
+`npm run recording-request -- --read 2` prints, in `test/recordings/verify-document.v1/`;
+the loader refuses one made for another prompt or version, or other prompt or sample bytes.
+All 50 are recorded — read 1 by agents on `claude-opus-5-5`, read 2 on `claude-sonnet-5-5`,
+each given only its read's request and the document under a neutral file name — and the tests
+over them run each pair through steps 1–8 with the model answering as recorded, check-document,
+read 2's comparison and decide (the vendor matched, nothing found): the sample's marker reaches
+no line, sentence, reason or saved data. `test/planted-marker.test.ts` plants each marker in
+every field the code reads but never passes on — read 1's currency, card digits, dates and
+listed references (not a statement's, which are carried), read 2's currency, card digits and
+dates — on every path, held and straight through.
 
 ## The kit
 
@@ -405,16 +503,34 @@ only what an automation here uses:
   cause end with a fixed sentence (`QUICKBOOKS_SENTENCES`); a Fault is named by its
   number alone; any other failure is thrown on unchanged, so the SDK's step retry can
   repeat it. The waits use an injected `Clock`, so a suite never waits a minute. Reads
-  only: a repeated write could create a second record. Beside it, `lookupQuery` —
-  the value quoted with every backslash doubled, then every apostrophe escaped — and
-  readers for Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+  only: a repeated write could create a second record. Beside it, `writeQuickBooks` —
+  one WRITE of a bill, an expense, a vendor credit or a journal entry, never repeated,
+  the request id left to the platform: a failure says whether a record may exist, in a
+  fixed sentence — no record was created, or QuickBooks did not confirm it — with a Fault
+  named by its number; the query text — `lookupQuery` and `lookupInQuery` for a name list,
+  active or not, and `transactionQuery` with `dateRange` for bills, expenses, vendor
+  credits and journal entries, conditions joined by AND, no Active condition, each value
+  quoted with every backslash doubled, then every apostrophe escaped — and readers for
+  Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+- `@autom8x/automation-kit/values` — the one cleaning of a value read from a document:
+  `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
+  marked), `parseDate` (a real day from 2000 on), `cleanCurrency` against ISO 4217 List One
+  of 2026-09-17 (155 codes), `formatMoney`, `fitLine` and `fitReasonLine` (a line of at most
+  200 characters, names shortened first with '…'; `phrasesKept` says how many phrases a reason
+  line keeps before '+N more'), and the receipt and credit rules: `cardDigits`, `tipRule`,
+  `creditSignRule`.
 - `@autom8x/automation-kit/testing` — `QuickBooksSimulator`, plugged in as
   `RecordingPlatform.provider`: QuickBooks answering from a made-up company, behind
   Connections' rules — a final answer replayed for the same request under its key, a
   different request under a used key refused 409, nothing recorded for a 5xx, 401, 403,
   408, 425 or 429, an answer over 192 KiB a 502 naming no reason, an input naming
-  `accountId` refused. It throws each refusal through the SDK's `refusalFixture`, which
-  the suite hands it, so the kit imports nothing at run time.
+  `accountId` refused. Its company holds accounts, employees, expenses, vendor credits and
+  journal entries: it answers only the query text the kit's builders write, by Intuit's
+  documented rules (filterable and sortable fields from Intuit's model file; an expense's
+  amount behind a switch until the sandbox settles it), and creates an expense, a vendor
+  credit or a journal entry as Intuit documents, each kept for the queries after it. It
+  throws each refusal through the SDK's `refusalFixture`, which the suite hands it, so the
+  kit imports nothing at run time.
 
 ## Adding an automation
 

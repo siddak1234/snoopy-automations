@@ -1,0 +1,78 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 1511 >>
+stream
+BT /F2 10 Tf 72 732 Td (Kestrel Courier Co                                                     INVOICE) Tj ET
+BT /F1 10 Tf 72 719 Td (45 Depot Street                               Invoice #     KCC-301           ) Tj ET
+BT /F1 10 Tf 72 706 Td (Lakeport, MI 48059                            Date          September 10, 2026) Tj ET
+BT /F1 10 Tf 72 693 Td (billing@kestrel.example                       Terms         Net 15            ) Tj ET
+BT /F1 10 Tf 72 680 Td (                                              Due date      September 25, 2026) Tj ET
+BT /F2 10 Tf 72 654 Td (Bill to:) Tj ET
+BT /F1 10 Tf 72 641 Td (Sample Bakery LLC) Tj ET
+BT /F1 10 Tf 72 628 Td (12 Example Lane) Tj ET
+BT /F1 10 Tf 72 615 Td (Springfield, IL 62701) Tj ET
+BT /F2 10 Tf 72 589 Td (Description                                                             Amount) Tj ET
+BT /F1 10 Tf 72 576 Td (------------------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 563 Td (Same-day courier, 6 runs, route QZ7TWO                                  132.00) Tj ET
+BT /F1 10 Tf 72 550 Td (Fuel surcharge                                                           11.00) Tj ET
+BT /F1 10 Tf 72 537 Td (------------------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 524 Td (                                                Subtotal                143.00) Tj ET
+BT /F2 10 Tf 72 511 Td (                                                Total \(USD\)             143.00) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 1511 >>
+stream
+BT /F2 10 Tf 72 732 Td (Kestrel Courier Co                                                     INVOICE) Tj ET
+BT /F1 10 Tf 72 719 Td (45 Depot Street                               Invoice #     KCC-302           ) Tj ET
+BT /F1 10 Tf 72 706 Td (Lakeport, MI 48059                            Date          September 17, 2026) Tj ET
+BT /F1 10 Tf 72 693 Td (billing@kestrel.example                       Terms         Net 15            ) Tj ET
+BT /F1 10 Tf 72 680 Td (                                              Due date      October 2, 2026   ) Tj ET
+BT /F2 10 Tf 72 654 Td (Bill to:) Tj ET
+BT /F1 10 Tf 72 641 Td (Sample Bakery LLC) Tj ET
+BT /F1 10 Tf 72 628 Td (12 Example Lane) Tj ET
+BT /F1 10 Tf 72 615 Td (Springfield, IL 62701) Tj ET
+BT /F2 10 Tf 72 589 Td (Description                                                             Amount) Tj ET
+BT /F1 10 Tf 72 576 Td (------------------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 563 Td (Same-day courier, 4 runs                                                 88.00) Tj ET
+BT /F1 10 Tf 72 550 Td (Weekend delivery                                                         35.00) Tj ET
+BT /F1 10 Tf 72 537 Td (------------------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 524 Td (                                                Subtotal                123.00) Tj ET
+BT /F2 10 Tf 72 511 Td (                                                Total \(USD\)             123.00) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000222 00000 n 
+0000000322 00000 n 
+0000001884 00000 n 
+0000002020 00000 n 
+0000003582 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+3718
+%%EOF

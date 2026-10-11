@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { UNANSWERED_REASON, isUnanswered, isUnsent } from '@autom8x/automation-sdk';
+import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
+
+import { everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
+import { proxyPage, refusedConnection, timedOut } from './wire.js';
+
+/**
+ * The second read's one retry, as `extract`'s, on a real wire: `{ attempts: 2, backoffMs: 10_000,
+ * when: 'unsent' }` repeats the step once, 10 s later in real time, only when the call provably
+ * never reached the platform; twice, or an answer that never came, is the platform's fault, and
+ * fails the run in the SDK's one sentence (Group 2's D6, D8).
+ */
+
+/** The second read fails its first `failures.length` calls in turn; the first read is answered. */
+function failingSecond(platform: RecordingPlatform, failures: readonly unknown[]): void {
+  let calls = 0;
+  platform.model = (call, model) => {
+    if (!isSecondRead(call)) return reads()(call, model);
+    const failure = failures[calls];
+    calls += 1;
+    return failure === undefined ? reads()(call, model) : Promise.reject(failure);
+  };
+}
+
+const verifyLine = (platform: RecordingPlatform) =>
+  lines(platform).find(([stepId]) => stepId === 'verify-read');
+
+test('repeated once, 10 s later, when nothing reached the platform; twice, the run fails in one sentence', async () => {
+  const [refused, page, again, twice, timeout] = await Promise.all([
+    refusedConnection(),
+    proxyPage(503),
+    refusedConnection(),
+    refusedConnection(),
+    timedOut(),
+  ]);
+  assert.ok(isUnsent(refused) && isUnsent(page) && isUnsent(again));
+  assert.ok(isUnanswered(timeout) && !isUnsent(timeout));
+
+  const once = setUp();
+  failingSecond(once.platform, [refused]);
+  const paged = setUp();
+  failingSecond(paged.platform, [page]);
+  const both = setUp();
+  failingSecond(both.platform, [again, twice]);
+  const unanswered = setUp();
+  failingSecond(unanswered.platform, [timeout]);
+
+  const started = Date.now();
+  const [onceResult, pagedResult, bothResult, unansweredResult] = await Promise.all([
+    once.run(),
+    paged.run(),
+    both.run(),
+    unanswered.run(),
+  ]);
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed >= 10_000 && elapsed < 15_000, `one 10-second wait each: ${elapsed} ms`);
+
+  for (const [world, result] of [
+    [once, onceResult],
+    [paged, pagedResult],
+  ] as const) {
+    assert.equal(result.outcome, 'success');
+    assert.equal(world.platform.modelCalls.length, 3, 'read 1, then read 2 twice');
+    assert.deepEqual(verifyLine(world.platform), [
+      'verify-read',
+      'ok',
+      'Read again by google/gemini-3.1-flash-lite: the 9 fields compared agree (after 2 attempts)',
+    ]);
+  }
+  // Twice unsent: the platform is not there — a fault, not a hold.
+  assert.deepEqual(bothResult, { outcome: 'failed', failureReason: UNANSWERED_REASON });
+  assert.equal(both.platform.modelCalls.length, 3);
+  assert.deepEqual(verifyLine(both.platform), [
+    'verify-read',
+    'failed',
+    'The verify-read step failed (after 2 attempts)',
+  ]);
+  assert.ok(!everythingSaid(both.platform, bothResult).includes('127.0.0.1'));
+  // No answer after it was sent: never repeated — it may have been made and billed.
+  assert.deepEqual(unansweredResult, { outcome: 'failed', failureReason: UNANSWERED_REASON });
+  assert.equal(unanswered.platform.modelCalls.length, 2, 'read 1 and one read 2');
+  assert.deepEqual(unanswered.logs.at(-1)?.[2], {
+    runId: unanswered.request.runId,
+    stepId: 'verify-read',
+    error: 'TimeoutError',
+  });
+});
