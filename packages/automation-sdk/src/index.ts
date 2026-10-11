@@ -37,7 +37,9 @@ export type {
 } from './contract.js';
 export { isManifest, readManifest, readManifests } from './manifest.js';
 export type { Manifest } from './manifest.js';
-export { PlatformClient, boundedResult, clientFor } from './platform.js';
+export { isUnanswered, isUnsent } from './marks.js';
+export { artifactIdProblem, modelAuthor } from './model-request.js';
+export { DEFAULT_MODEL_TIMEOUT_MS, PlatformClient, boundedResult, clientFor } from './platform.js';
 export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
 export {
   CallbackRefusedError,
@@ -67,5 +69,5 @@ export type {
   StepPlatform,
   StepResult,
 } from './steps.js';
-export { jsonLogger, serve } from './serve.js';
+export { UNANSWERED_REASON, jsonLogger, serve } from './serve.js';
 export type { Logger, RunningAutomation, ServeOptions } from './serve.js';

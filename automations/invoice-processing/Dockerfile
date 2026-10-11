@@ -52,7 +52,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chown=node:node automations/invoice-processing/package.json ./
 COPY --chown=node:node --from=build /workspace/automations/invoice-processing/dist ./dist
 COPY --chown=node:node --from=production-dependencies /workspace/automations/invoice-processing/node_modules ./node_modules
-# The prompts the steps send, loaded from beside dist/ (none yet: the AI step's group adds it).
+# The prompts the steps send, loaded from beside dist/ (src/prompts.ts): extract-invoice v1.
 COPY --chown=node:node automations/invoice-processing/prompts ./prompts
 # The manifest versions this container serves: the runner runs the pipeline each
 # one declares and refuses a run pinned to any other (src/main.ts reads this dir).

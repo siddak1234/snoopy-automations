@@ -52,11 +52,12 @@ export interface RetryPolicy {
   readonly backoffMs: number;
   /**
    * Which failures are repeated. `'transient'`, the default, is `isTransient`.
-   * `'unsent'` is only a callback that provably never left (`isUnsent`: the
-   * connection was refused, or the platform's name did not resolve) — the policy
-   * for a step that calls a model (platform BUILD-PLAN 25.3.13, the owner's decision
-   * of 2026-10-10): a model call that reached the platform may have been made and
-   * billed, and repeating it makes it again.
+   * `'unsent'` is only a callback that provably never reached the platform
+   * (`isUnsent`: the connection was refused, the platform's name did not resolve, or —
+   * the owner's D8 — a 503 naming no code, a page from in front of the platform) —
+   * the policy for a step that calls a model (platform BUILD-PLAN 25.3.13, the owner's
+   * decision of 2026-10-10): a model call that reached the platform may have been made
+   * and billed, and repeating it makes it again.
    */
   readonly when?: 'transient' | 'unsent';
 }

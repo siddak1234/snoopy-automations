@@ -1,0 +1,43 @@
+{
+  "sample": "receipt",
+  "file": "receipt.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7RCP",
+  "made": "A till receipt as a narrow text PDF: paid by card, no amount left to pay.",
+  "decisive": ["documentType"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "Not an invoice: the next step fails it, naming a receipt.",
+  "answer": {
+    "documentType": "receipt",
+    "invoiceCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Tidewell Hardware",
+    "invoiceNumber": "QZ7RCP-55120",
+    "invoiceDate": "2026-09-27",
+    "dueDate": null,
+    "paymentTermsDays": null,
+    "currency": null,
+    "subtotal": 57.47,
+    "tax": 3.16,
+    "shipping": null,
+    "discount": null,
+    "total": 60.63,
+    "amountDue": null,
+    "lineItems": [
+      {
+        "description": "Garden hose, 50 ft",
+        "amount": 34.99
+      },
+      {
+        "description": "Hose nozzle, 8 pattern",
+        "amount": 9.49
+      },
+      {
+        "description": "Work gloves, large",
+        "amount": 12.99
+      }
+    ],
+    "lineItemsComplete": true,
+    "uncertainFields": []
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "sample": "png-screenshot",
+  "file": "screenshot.png",
+  "contentType": "image/png",
+  "marker": "QZ7SCR",
+  "made": "A grayscale PNG screenshot of a billing portal: a header bar, the invoice in a card, a Pay now button; US$ amounts, and the amount due printed beside the total.",
+  "decisive": ["currency", "shipping", "total", "amountDue", "paymentTermsDays"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "It passes the checks that need no QuickBooks data; the amount due equals the total.",
+  "answer": {
+    "documentType": "invoice",
+    "invoiceCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Copperleaf Catering",
+    "invoiceNumber": "CLC-QZ7SCR-0915",
+    "invoiceDate": "2026-09-18",
+    "dueDate": "2026-10-02",
+    "paymentTermsDays": 14,
+    "currency": "USD",
+    "subtotal": 705.5,
+    "tax": 44.09,
+    "shipping": 40,
+    "discount": null,
+    "total": 789.59,
+    "amountDue": 789.59,
+    "lineItems": [
+      {
+        "description": "Lunch catering, 25 guests",
+        "amount": 562.5
+      },
+      {
+        "description": "Coffee service, half day",
+        "amount": 95
+      },
+      {
+        "description": "Dessert tray, large",
+        "amount": 48
+      }
+    ],
+    "lineItemsComplete": true,
+    "uncertainFields": []
+  }
+}

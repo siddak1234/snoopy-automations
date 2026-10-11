@@ -150,6 +150,12 @@ test('the SDK and the kit are consumable through their published entries', async
     'definePrompt',
     'held',
     'readManifests',
+    'isUnsent',
+    'isUnanswered',
+    'DEFAULT_MODEL_TIMEOUT_MS',
+    'UNANSWERED_REASON',
+    'modelAuthor',
+    'artifactIdProblem',
   ]) {
     assert.ok(name in sdk, `@autom8x/automation-sdk exports no ${name} — run npm run build first?`);
   }

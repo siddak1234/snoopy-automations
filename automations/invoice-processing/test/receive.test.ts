@@ -207,13 +207,17 @@ test('nothing said carries the filename or the download link', async () => {
   }
 });
 
-test("the limits' types and bytes are the manifest's artifacts block", () => {
+test("the limits are the manifest's artifacts block, the pages and pixels the platform measures among them", () => {
+  // Without a page or pixel limit the platform measures nothing (its BUILD-PLAN 25.2.28), and
+  // receive, failing closed, would refuse every file.
   const manifest = JSON.parse(
     readFileSync(join(manifestsRoot, 'invoice-processing.v1.json'), 'utf8'),
   ) as { artifacts: unknown };
   assert.deepEqual(manifest.artifacts, {
     acceptedContentTypes: FILE_LIMITS.acceptedContentTypes,
     maximumSizeBytes: FILE_LIMITS.maximumSizeBytes,
+    maximumPdfPages: FILE_LIMITS.maximumPdfPages,
+    maximumImageSidePixels: FILE_LIMITS.maximumImageSidePixels,
   });
   assert.equal(FILE_LIMITS.maximumPdfPages, 10);
   assert.equal(FILE_LIMITS.maximumImageSidePixels, 8_000);

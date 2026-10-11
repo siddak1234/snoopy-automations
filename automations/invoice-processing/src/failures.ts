@@ -1,6 +1,9 @@
 import { QUICKBOOKS_SENTENCES } from '@autom8x/automation-kit/quickbooks';
 import {
   CallbackRefusedError,
+  UNANSWERED_REASON,
+  isUnanswered,
+  isUnsent,
   type Automation,
   type Logger,
   type Step,
@@ -28,6 +31,11 @@ export const THROWN_SENTENCES = {
   receive:
     'The invoice file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
   quickbooks: QUICKBOOKS_SENTENCES.qb_unreachable,
+  /**
+   * `extract`: no answer reached the step — a timeout, a reset, a cut connection — or its one
+   * repeat never reached the platform either. The SDK's own sentence for an answer that never came.
+   */
+  unanswered: UNANSWERED_REASON,
   other:
     "Invoice Processing stopped before it finished. Check the run's timeline before running it again.",
 } as const;
@@ -80,6 +88,9 @@ export function sentenceFor(stepId: string | undefined, error: unknown): string 
   if (error instanceof CallbackRefusedError && error.status === 429) return THROWN_SENTENCES.busy;
   if (stepId === 'receive') return THROWN_SENTENCES.receive;
   if (stepId !== undefined && QUICKBOOKS_STEPS.has(stepId)) return THROWN_SENTENCES.quickbooks;
+  if (stepId === 'extract' && (isUnanswered(error) || isUnsent(error))) {
+    return THROWN_SENTENCES.unanswered;
+  }
   return THROWN_SENTENCES.other;
 }
 

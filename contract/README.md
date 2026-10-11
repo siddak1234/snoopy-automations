@@ -2,7 +2,8 @@
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
 (`snoopy-backend`, private) at commit `4875579`, taken 2026-10-10 — the platform's `main`
-after its #195; the last refresh note below says how. The platform emits
+after its #195 — but for two files taken since from branches not yet merged, which the last
+refresh note below names. The platform emits
 them with `npm run schemas:emit` and verifies the committed files against its TypeScript
 types byte for byte, so this copy is the contract it publishes to external automation
 authors. To refresh: copy the directory again and update the commit above in the same
@@ -106,6 +107,29 @@ its tree is `1137ac9`'s (`00713ed`), so all eight files are byte-identical (each
 `cmp` against `4875579`) and only the commit above moves. The platform serves `artifactId` once
 a promotion carries `4875579`; until then its live deployment answers it with a 400.
 
+Refreshed 2026-10-10, later, from two of the platform's branches, neither yet merged — as
+`dcb8ddb` and `1137ac9` were above, this repository's half built beside the platform's:
+
+- `automation-model-request.json` from `e25fd74`, the head of `round-17/model-author-exclusion`
+  (its BUILD-PLAN 25.2.29), gains the optional `excludeModelAuthors`: one to three distinct
+  model makers, each 1–128 lowercase letters, digits and `. _ -`, the part of a model id
+  before its `/`. The SDK's copy of the rule (`excludeModelAuthorsProblem`, `modelAuthor` in
+  `packages/automation-sdk/src/model-request.ts`) is held to it by
+  `packages/automation-sdk/test/contract-model-request.test.ts`, with the platform's samples.
+- `automation-manifest.json` from `550663f`, the head of `round-17/upload-file-measurement`
+  (its BUILD-PLAN 25.2.28): the `artifacts` block gains the optional `maximumPdfPages` (1 to
+  1,000) and `maximumImageSidePixels` (1 to 20,000), held by
+  `packages/automation-sdk/test/contract.test.ts` with the platform's samples. They are the
+  limits `manifests/invoice-processing.v1.json` now declares (10 and 8,000): the platform
+  measures an upload's pages and pixels only for a manifest declaring one, and without the
+  measurements `receive` refuses every file.
+
+The other six files are byte-identical to `4875579`'s (each checked with `cmp` against both
+branches, and each branch's copy of the other's file is `4875579`'s). Until those pull requests
+merge and are promoted, the live platform answers `excludeModelAuthors` with a 400 and the
+schema at its `main` refuses a manifest declaring either limit; each file is re-pinned to its
+merge commit then, its bytes unchanged unless a review changed them.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -160,6 +184,12 @@ empty list "must declare at least one media type — omit `artifacts` entirely t
 files"; `maximumSizeBytes` "must be a positive integer" and at most 100 MiB. In the schema
 as well since the platform's 25.2.21 (2026-10-10), from the same constants: until then a
 manifest declaring `artifacts` passed the validator and failed this copy of the schema.
+Since its 25.2.28 (2026-10-10, not yet merged) two optional limits, measured from the file's
+bytes when its upload is sealed: `maximumPdfPages` and `maximumImageSidePixels` each "must
+be an integer from 1 to N" (1,000 and 20,000); beside either, every accepted type "must be
+application/pdf, image/jpeg or image/png when a page or pixel limit is declared" (the types
+the platform measures, which the schema cannot say); and any other key "is not an artifacts
+property", as the schema's `additionalProperties: false` already refused it.
 
 **Arrays** — connections, capabilities, setup fields, pipeline steps and scopes per
 connection each "must contain at most N entries".

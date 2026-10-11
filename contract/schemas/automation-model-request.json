@@ -34,6 +34,18 @@
         "pattern": "^(?!~?openrouter\\/)(?!.*:online(?::|$))(?!.*:(?:nitro|floor)(?::|$))[a-z0-9._:/~-]{1,128}$"
       }
     },
+    "excludeModelAuthors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-z0-9._-]{1,128}$"
+      }
+    },
     "artifactId": {
       "type": "string",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"

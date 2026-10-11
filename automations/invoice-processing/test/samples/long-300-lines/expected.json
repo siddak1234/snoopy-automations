@@ -1,0 +1,191 @@
+{
+  "sample": "long-300-lines",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7LNG",
+  "made": "A seven-page text PDF of 300 charged lines, numbered \"Page n of 7\", the totals on the last page.",
+  "decisive": ["lineItems", "lineItemsComplete", "subtotal", "total"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "More than 40 lines: the lines are not checked (lineItemsComplete false); the total is checked against the subtotal, tax and freight.",
+  "answer": {
+    "documentType": "invoice",
+    "invoiceCount": 1,
+    "pagesMissing": false,
+    "vendorName": "Marlowe Fastener Supply",
+    "invoiceNumber": "MFS-QZ7LNG-7781",
+    "invoiceDate": "2026-09-08",
+    "dueDate": "2026-10-08",
+    "paymentTermsDays": 30,
+    "currency": "USD",
+    "subtotal": 7917.5,
+    "tax": 574.02,
+    "shipping": 45,
+    "discount": null,
+    "total": 8536.52,
+    "amountDue": null,
+    "lineItems": [
+      {
+        "description": "Hex bolt M3 x 10 mm, zinc, box of 25",
+        "amount": 3.13
+      },
+      {
+        "description": "Socket cap screw M4 x 15 mm, stainless, box of 50",
+        "amount": 35.32
+      },
+      {
+        "description": "Flat washer M5 x 20 mm, black oxide, box of 100",
+        "amount": 20.51
+      },
+      {
+        "description": "Nylon lock nut M6 x 25 mm, brass, box of 25",
+        "amount": 5.7
+      },
+      {
+        "description": "Wood screw M8 x 30 mm, zinc, box of 50",
+        "amount": 37.89
+      },
+      {
+        "description": "Blind rivet M10 x 35 mm, stainless, box of 100",
+        "amount": 23.08
+      },
+      {
+        "description": "Hex bolt M12 x 40 mm, black oxide, box of 25",
+        "amount": 8.27
+      },
+      {
+        "description": "Socket cap screw M3 x 45 mm, brass, box of 50",
+        "amount": 40.46
+      },
+      {
+        "description": "Flat washer M4 x 50 mm, zinc, box of 100",
+        "amount": 25.65
+      },
+      {
+        "description": "Nylon lock nut M5 x 10 mm, stainless, box of 25",
+        "amount": 10.84
+      },
+      {
+        "description": "Wood screw M6 x 15 mm, black oxide, box of 50",
+        "amount": 43.03
+      },
+      {
+        "description": "Blind rivet M8 x 20 mm, brass, box of 100",
+        "amount": 28.22
+      },
+      {
+        "description": "Hex bolt M10 x 25 mm, zinc, box of 25",
+        "amount": 13.41
+      },
+      {
+        "description": "Socket cap screw M12 x 30 mm, stainless, box of 50",
+        "amount": 45.6
+      },
+      {
+        "description": "Flat washer M3 x 35 mm, black oxide, box of 100",
+        "amount": 30.79
+      },
+      {
+        "description": "Nylon lock nut M4 x 40 mm, brass, box of 25",
+        "amount": 15.98
+      },
+      {
+        "description": "Wood screw M5 x 45 mm, zinc, box of 50",
+        "amount": 48.17
+      },
+      {
+        "description": "Blind rivet M6 x 50 mm, stainless, box of 100",
+        "amount": 33.36
+      },
+      {
+        "description": "Hex bolt M8 x 10 mm, black oxide, box of 25",
+        "amount": 18.55
+      },
+      {
+        "description": "Socket cap screw M10 x 15 mm, brass, box of 50",
+        "amount": 3.74
+      },
+      {
+        "description": "Flat washer M12 x 20 mm, zinc, box of 100",
+        "amount": 35.93
+      },
+      {
+        "description": "Nylon lock nut M3 x 25 mm, stainless, box of 25",
+        "amount": 21.12
+      },
+      {
+        "description": "Wood screw M4 x 30 mm, black oxide, box of 50",
+        "amount": 6.31
+      },
+      {
+        "description": "Blind rivet M5 x 35 mm, brass, box of 100",
+        "amount": 38.5
+      },
+      {
+        "description": "Hex bolt M6 x 40 mm, zinc, box of 25",
+        "amount": 23.69
+      },
+      {
+        "description": "Socket cap screw M8 x 45 mm, stainless, box of 50",
+        "amount": 8.88
+      },
+      {
+        "description": "Flat washer M10 x 50 mm, black oxide, box of 100",
+        "amount": 41.07
+      },
+      {
+        "description": "Nylon lock nut M12 x 10 mm, brass, box of 25",
+        "amount": 26.26
+      },
+      {
+        "description": "Wood screw M3 x 15 mm, zinc, box of 50",
+        "amount": 11.45
+      },
+      {
+        "description": "Blind rivet M4 x 20 mm, stainless, box of 100",
+        "amount": 43.64
+      },
+      {
+        "description": "Hex bolt M5 x 25 mm, black oxide, box of 25",
+        "amount": 28.83
+      },
+      {
+        "description": "Socket cap screw M6 x 30 mm, brass, box of 50",
+        "amount": 14.02
+      },
+      {
+        "description": "Flat washer M8 x 35 mm, zinc, box of 100",
+        "amount": 46.21
+      },
+      {
+        "description": "Nylon lock nut M10 x 40 mm, stainless, box of 25",
+        "amount": 31.4
+      },
+      {
+        "description": "Wood screw M12 x 45 mm, black oxide, box of 50",
+        "amount": 16.59
+      },
+      {
+        "description": "Blind rivet M3 x 50 mm, brass, box of 100",
+        "amount": 48.78
+      },
+      {
+        "description": "Hex bolt M4 x 10 mm, zinc, box of 25",
+        "amount": 33.97
+      },
+      {
+        "description": "Socket cap screw M5 x 15 mm, stainless, box of 50",
+        "amount": 19.16
+      },
+      {
+        "description": "Flat washer M6 x 20 mm, black oxide, box of 100",
+        "amount": 4.35
+      },
+      {
+        "description": "Nylon lock nut M8 x 25 mm, brass, box of 25",
+        "amount": 36.54
+      }
+    ],
+    "lineItemsComplete": false,
+    "uncertainFields": []
+  }
+}

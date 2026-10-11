@@ -18,7 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
-import { artifactIdProblem, modelsProblem } from './model-request.js';
+import { modelRequestProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
 import { unanswered, unsent } from './marks.js';
 
@@ -160,10 +160,11 @@ export class PlatformClient implements AutomationPlatform {
    * holds the call to zero data retention, to structured output for a declared
    * `outputSchema`, to the owner's price ceiling and to the workspace's allowance,
    * and the owner's setting for this automation, when there is one, wins over the
-   * list (platform ADR-0033 decision 1 as amended 2026-10-09). A list the platform
-   * would answer with a 400 — empty, longer than three, an id outside its rule, an
-   * id twice — is refused HERE, before anything is sent, in the platform's words
-   * (`model-request.ts`). The `capability` must appear in the manifest's
+   * list (platform ADR-0033 decision 1 as amended 2026-10-09). `excludeModelAuthors`
+   * leaves up to three makers out of whichever list serves (BUILD-PLAN 25.2.29). A list
+   * the platform would answer with a 400 — empty, longer than three, an id or a maker
+   * outside its rule, one named twice — is refused HERE, before anything is sent, in the
+   * platform's words (`model-request.ts`). The `capability` must appear in the manifest's
    * `requiredCapabilities`; the platform refuses one that does not before anything
    * is sent to a vendor. `outputSchema` is honoured, not merely counted — pass an
    * empty object for free text.
@@ -172,12 +173,11 @@ export class PlatformClient implements AutomationPlatform {
    * `ModelRefusedError`: 422 `output_schema_mismatch` (with `path` and `rule`),
    * `content_filtered` or `truncated` (each with the vendor's `finishReason`), and
    * 403 `over_plan_limit`, `capability_not_in_plan` or `entitlements_not_configured`
-   * (with `used` and, when the plan has one, `limit`). Never the completion's text.
+   * (with `used` and, when the plan has one, `limit`), and 422 `no_model_left` when the
+   * makers left out leave no model. Never the completion's text.
    */
   public async callModel(request: ModelRequest): Promise<ModelCompletion> {
-    const problem =
-      (request.models === undefined ? undefined : modelsProblem(request.models)) ??
-      (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId));
+    const problem = modelRequestProblem(request);
     if (problem) throw new Error(problem);
     const answer = await this.#post('model', request, this.#modelTimeoutMs);
     const completion = isObject(answer) ? answer.model : undefined;

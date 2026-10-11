@@ -113,8 +113,11 @@ capability; a prompt names no model — the step names the models on the call ("
 a model", below). The shell answers the probe, acknowledges an invoke before working, refuses
 above capacity or while draining, reports the result (or the failure) for you, and
 logs ids and outcomes only — an error's message becomes the run's `failureReason`,
-so never build one from the document. A test hands the automation a
-`RecordingPlatform` from `@autom8x/automation-sdk/testing` instead.
+so never build one from the document; an answer that never came (a callback refused,
+reset, timed out or cut off, which the client marks — `isUnanswered`) becomes one fixed
+sentence instead, `UNANSWERED_REASON`: "The platform did not answer in time, so the run
+stopped." A test hands the automation a `RecordingPlatform` from
+`@autom8x/automation-sdk/testing` instead.
 
 ## Model calls
 
@@ -138,8 +141,10 @@ the completion's text, so a step can branch on a word:
 | 403    | `over_plan_limit`             | the workspace's plan allows no more completions this month; `used` and `limit`                                                                                                                                                    |
 | 403    | `capability_not_in_plan`      | the plan grants no model calls at all; `used`                                                                                                                                                                                     |
 | 403    | `entitlements_not_configured` | the platform could not ask entitlements and refused rather than guess; `used`                                                                                                                                                     |
+| 422    | `no_model_left`               | every model that would serve the call is by a maker its `excludeModelAuthors` leaves out ("Pick a model", below); refused before the file is read                                                                                 |
 
-The 422s spent tokens and are ledger rows; the 403s spent nothing. Uncaught, a
+The first three 422s spent tokens and are ledger rows; `no_model_left` and the 403s spent
+nothing. Uncaught, a
 `ModelRefusedError` fails the run with a `failureReason` that names the reason
 (`the model call was refused with 422: truncated (finish reason length)`), and the
 runner's timeline line for the step says `the model call was refused (truncated)`.
@@ -165,16 +170,29 @@ reads.
 ## Pick a model
 
 A step names the models its call asks for, or none, and — when the model must read the
-run's own file — the file. In the template that is one constant beside the step that calls
-the model, and a new automation needs nothing else:
+run's own file — the file. That is one constant beside the step that calls the model, and a
+new automation needs nothing else. The template's is `undefined`, the platform's default,
+which it passes alone; in the options object a list must be a list, since
+`exactOptionalPropertyTypes` refuses `models: undefined` — `invoice-processing`'s is typed
+`readonly string[]`:
 
 ```ts
-// Primary first, then up to two fallbacks, from at least two providers.
-export const MODELS: readonly string[] | undefined = undefined; // the platform's default
+// Primary first, then up to two fallbacks, by at least two makers.
+export const MODELS: readonly string[] = [
+  'anthropic/claude-haiku-4.5',
+  'google/gemini-3.1-flash-lite',
+];
 
 const completion = await platform.callModel(extractFields, input, MODELS);
 // With the run's file, which the platform reads and sends; this container never does:
 await platform.callModel(extractFields, input, { models: MODELS, artifactId: fileId });
+// A second read that must be another maker's than the model that served the first:
+const maker = modelAuthor(completion.model);
+await platform.callModel(extractFields, input, {
+  models: MODELS,
+  ...(maker === undefined ? {} : { excludeModelAuthors: [maker] }),
+  artifactId: fileId,
+});
 ```
 
 - **The primary, then up to two fallbacks, one model per attempt.** The platform asks
@@ -190,6 +208,15 @@ await platform.callModel(extractFields, input, { models: MODELS, artifactId: fil
   block and its own leading bytes and sends it with every attempt, a PDF as a file and a
   JPEG or PNG as an image; a type the manifest or a model does not take, a file over the
   bound and an encrypted PDF are 422s naming the reason, before anything is spent.
+- **Leaving out a maker.** `excludeModelAuthors` names up to three makers — a maker is the
+  part of a model id before its `/`, `modelAuthor` reads it (an alias's after its `~`) —
+  whose models the platform removes from whichever list serves the call, the owner's
+  setting, `models` or its default, keeping the rest in order (its BUILD-PLAN 25.2.29, the
+  owner's "Approve group 2" of 2026-10-10). A list left with no model is a 422
+  `no_model_left`, before the file is read and with nothing spent; an id with no `/` names
+  no maker and stays. The client and `RecordingPlatform` refuse a list outside the rule —
+  one to three distinct makers of 1–128 lowercase letters, digits and `. _ -` — before
+  anything is sent, in the words of the platform's 400.
 - **The owner's setting wins.** The owner switches any automation's model on the
   platform at once, with no restart and nothing released here (the platform's
   `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
@@ -221,9 +248,10 @@ await platform.callModel(extractFields, input, { models: MODELS, artifactId: fil
   `structured_outputs`, `response_format`, `temperature` and `max_tokens`, whose
   `pricing` (US dollars per token) is within the ceiling, whose model reads images and
   files when the step sends one, and which is not about to expire. On 2026-10-10
-  `anthropic/claude-haiku-4.5` qualified with no setting, and `google/gemini-3.5-flash`
-  needed the owner's `@low`; `google/gemini-2.5-flash` and `openai/gpt-4.1-mini` did not
-  (no US endpoint).
+  `anthropic/claude-haiku-4.5` (Amazon Bedrock in the US) and `google/gemini-3.1-flash-lite`
+  (Google Vertex in the US) qualified with no setting, and `google/gemini-3.5-flash` needed
+  the owner's `@low`; `google/gemini-2.5-flash` and `openai/gpt-4.1-mini` did not (no US
+  endpoint).
 - **One key, on the platform only.** The platform holds the one OpenRouter key and
   makes every call with it. Nothing in this repository, its images or a running
   container holds a key; a container presents its run token and nothing else.
@@ -236,7 +264,10 @@ built and tested against a simulated model (`RecordingPlatform`, which answers a
 the platform does: one model per attempt, `NO_ANSWER` for an attempt that times out, the
 platform's refusals in its order), and the template leaves `MODELS` undefined. The
 fallbacks, the cap, the run's file, one model per attempt, the reasoning settings and US
-routing (its 25.2.17–25.2.25) go live with its next platform promotion.
+routing (its 25.2.17–25.2.25) go live with its next platform promotion; `excludeModelAuthors`
+(its 25.2.29) and the measured uploads `receive` reads (its 25.2.28) are pull requests not
+yet merged, so until they are promoted the platform answers `excludeModelAuthors` with a 400
+and sends no measurements.
 
 ## Retrying a step
 
@@ -277,11 +308,16 @@ defineAutomation({
   retry lets the platform's error through as it came.
 - **Or only what never left: `when: 'unsent'`.** A policy with
   `retry: { extract: { attempts: 2, backoffMs: 10_000, when: 'unsent' } }` repeats the
-  step only when a callback provably never left the container — the connection was
+  step only when a callback provably never reached the platform — the connection was
   refused, or the platform's name did not resolve (`ECONNREFUSED`, `ENOTFOUND`,
   `EAI_AGAIN` on the error's `cause`, the split the platform makes for its own vendor
-  calls). A timeout, a reset, a cut answer and every status the platform answers are
-  not repeated, because the call may have reached the platform. It is the policy for
+  calls) — or, the owner's D8 of 2026-10-10, it was answered 503 naming no code: every
+  refusal the platform writes names one, and the Edge's own relay failure is a 502, so a
+  codeless 503 is a page from in front of it (the load balancer, or the proxy with no Edge
+  up behind it). A timeout, a reset, a cut answer, a 502 and every status the platform
+  writes are not repeated, because the call may have reached the platform. `isUnsent`
+  (exported) is the test: a step that turns the platform's refusals into sentences lets
+  such a failure through as it came, or the runner never sees it. It is the policy for
   a step that calls the model (the platform's BUILD-PLAN 25.3.13, the owner's
   decision of 2026-10-10: after a restart, one retry only if nothing was sent); see
   Model below for why any other repeat of a model call costs.
@@ -331,7 +367,8 @@ defineAutomation({
   the attempts, so a held step is never run twice.
 
 `invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-four steps, which only read. Neither older automation declares a policy:
+four reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract`, its
+model call. Neither older automation declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
 `receive` only reads the file its run was given and is the one safe candidate. The
@@ -379,11 +416,29 @@ pages; 8,000 px a side), fails closed when one is missing, and never downloads t
 `read-company` proves QuickBooks is connected and the company is in the US;
 `read-preferences` keeps the home currency, the multicurrency flag and the books' closing
 date; `find-account` turns the Expense account setting into exactly one active Expense
-account. Every failure ends the run with a fixed sentence, a run that ends on a thrown
-error included — never the error's message. The measurements — `measuredKind`,
-`pageCount`, `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference`
-from the platform's pull request before it merged (its BUILD-PLAN 25.2.28), and
-`measurementsOf` in `src/file.ts` is the one place that reads them.
+account. `extract`, the one model call, sends `prompts/extract-invoice.v1.json` — 13 rules
+and an 18-field answer schema — with a fixed task, `MODELS` (`anthropic/claude-haiku-4.5`,
+then `google/gemini-3.1-flash-lite`) and the run's file by its id; it starts no call with
+less than 260 seconds to the deadline, repeats one only when nothing reached the platform,
+and passes the answer on whole in `state.extraction`, beside `state.modelServed`, for the
+next step to check — its timeline line names the model and two counts, never a value.
+Every failure ends the run with a fixed sentence, a run that ends on a thrown error
+included — never the error's message. The measurements — `measuredKind`, `pageCount`,
+`widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
+platform's pull request before it merged (its BUILD-PLAN 25.2.28, re-checked at its
+`550663f`), and `measurementsOf` in `src/file.ts` is the one place that reads them; the
+manifest declares the page and pixel limits, without which the platform measures nothing.
+
+Its tests need no model key. `test/samples/` holds ten made-up invoices — a typed PDF, a
+scan, a phone photo, a portal screenshot, a hand-printed page, 300 lines, a receipt, two
+invoices in one file, a page missing, and instructions to the model printed on one — each
+drawn by `test/sample-maker/` beside its `expected.json`, with a marker in its invoice
+number that no timeline line or reason may carry; `npm run samples` (in the automation)
+makes them again and rewrites a file only when what it draws changes. Recordings — an
+agent acting as the model, given exactly what `npm run recording-request` prints for a
+sample — go in `test/recordings/extract-invoice.v1/<sample>.json`; the loader refuses one
+made for another prompt version or other prompt or sample bytes, and the tests over them
+are skipped, saying why, until they exist.
 
 ## The kit
 

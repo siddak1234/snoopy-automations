@@ -1,3 +1,5 @@
+import type { JsonObject } from '@autom8x/automation-sdk';
+
 import type { FileKind } from './file.js';
 
 /**
@@ -42,4 +44,15 @@ export interface PreferencesState {
 export interface AccountState {
   readonly id: string;
   readonly fullyQualifiedName: string;
+}
+
+/**
+ * `extract`: the model's answer, whole — the 18 fields of `prompts/extract-invoice.v1.json`,
+ * held to its schema by the platform — kept only until the step that checks it replaces it
+ * with the fields it cleans, so a held state never carries a line's raw text; and the model
+ * that served, as the router reported it, which may differ from the id asked for.
+ */
+export interface ExtractionState {
+  readonly extraction: JsonObject;
+  readonly modelServed: string;
 }

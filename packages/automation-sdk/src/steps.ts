@@ -24,19 +24,21 @@ import type { RetryPolicy } from './retry.js';
 
 /**
  * What a model call names besides its prompt: its models, the primary then up to two
- * fallbacks (`ModelRequest.models`), and the run's own file (`ModelRequest.artifactId`,
- * platform BUILD-PLAN 25.2.18).
+ * fallbacks (`ModelRequest.models`), the makers it leaves out
+ * (`ModelRequest.excludeModelAuthors`, platform BUILD-PLAN 25.2.29), and the run's own
+ * file (`ModelRequest.artifactId`, platform BUILD-PLAN 25.2.18).
  */
 export interface ModelCallOptions {
   models?: readonly string[];
+  excludeModelAuthors?: readonly string[];
   artifactId?: string;
 }
 
 /** What a step may reach. The run token travels with every call; no key or grant exists here. */
 export interface StepPlatform {
   /**
-   * Sends a REGISTERED prompt, rendered from `input`, by its capability — to the models
-   * and with the file `options` names. A list alone is the models, as before.
+   * Sends a REGISTERED prompt, rendered from `input`, by its capability — to the models,
+   * less the makers, and with the file `options` names. A list alone is the models, as before.
    */
   callModel(
     prompt: PromptModule,

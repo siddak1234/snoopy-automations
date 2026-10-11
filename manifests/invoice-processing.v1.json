@@ -33,7 +33,9 @@
   "requiredCapabilities": ["document-extraction"],
   "artifacts": {
     "acceptedContentTypes": ["application/pdf", "image/jpeg", "image/png"],
-    "maximumSizeBytes": 3500000
+    "maximumSizeBytes": 3500000,
+    "maximumPdfPages": 10,
+    "maximumImageSidePixels": 8000
   },
   "setup": [
     {
@@ -86,6 +88,12 @@
       "kicker": "ACTION",
       "title": "Find the expense account",
       "description": "Finds the expense account named in this flow's settings."
+    },
+    {
+      "id": "extract",
+      "kicker": "AI STEP",
+      "title": "Read the invoice",
+      "description": "The AI reads the invoice: vendor, invoice number, dates, amounts and lines."
     }
   ],
   "service": {

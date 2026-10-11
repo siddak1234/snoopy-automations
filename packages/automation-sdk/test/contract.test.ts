@@ -226,6 +226,38 @@ test('a manifest may declare the files its runs accept, in the published block',
   }
 });
 
+test("the artifacts block may limit a PDF's pages and an image's sides, within the published bounds", () => {
+  // The platform's BUILD-PLAN 25.2.28, measured when an upload is sealed; its verdicts
+  // (snoopy-backend `test/wire-schema.test.ts` at `550663f`, not yet merged), copied as data.
+  const validate = validator('automation-manifest');
+  const reference = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  const limiting = (limits: Record<string, unknown>) => ({
+    ...reference,
+    artifacts: {
+      acceptedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'],
+      maximumSizeBytes: 3_500_000,
+      ...limits,
+    },
+  });
+  assertValid(
+    validate,
+    limiting({ maximumPdfPages: 10, maximumImageSidePixels: 8_000 }),
+    "Invoice Processing's block",
+  );
+  for (const [key, ceiling] of [
+    ['maximumPdfPages', 1_000],
+    ['maximumImageSidePixels', 20_000],
+  ] as const) {
+    for (const value of [0, 1, 10, ceiling, ceiling + 1, 2.5]) {
+      const takes = Number.isInteger(value) && value >= 1 && value <= ceiling;
+      assert.equal(validate(limiting({ [key]: value })), takes, `${key} ${value}`);
+    }
+  }
+  assert.equal(validate(limiting({ maximumPdfPage: 10 })), false, 'a misspelt limit is refused');
+});
+
 test('the answers the platform sends back are recognised in their real shapes', () => {
   assert.ok(isArtifactReference(artifactFixture()));
   assert.ok(isArtifactReference(artifactFixture({ sha256: 'abc' })));

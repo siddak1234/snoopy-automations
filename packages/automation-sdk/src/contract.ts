@@ -145,6 +145,14 @@ export interface ModelRequest {
    */
   models?: readonly string[];
   /**
+   * The makers this call leaves out (platform BUILD-PLAN 25.2.29): one to three, each the part
+   * of a model id before its `/` (`modelAuthor`, `excludeModelAuthorsProblem`). The platform
+   * removes every model by them from whichever list serves the call — the owner's setting,
+   * `models` or its default — keeping the rest in order, and refuses with 422 `no_model_left`,
+   * nothing spent, when none is left. Answered 400 by a platform without that change.
+   */
+  excludeModelAuthors?: readonly string[];
+  /**
    * The run's own file, by the id its upload was given (`artifactIdProblem` holds the
    * shape): the platform reads it, holds it to the pinned manifest's `artifacts` block
    * and its own leading bytes, and sends it with every attempt — a PDF as a file, a JPEG
@@ -203,11 +211,11 @@ export interface ArtifactReference {
   expiresAt: string;
   /*
    * COPIED from the platform's artifact answer as its pull request names it (BUILD-PLAN
-   * 25.2.28: snoopy-backend 023aa84 on `round-17/upload-file-measurement`, not yet
-   * merged), to be re-copied when it merges: what the file's bytes were measured to be
-   * when its upload was sealed — each null when nothing was measured, and absent from a
-   * platform without that change. Read only by `measurementsOf` in
-   * `automations/invoice-processing/src/file.ts`.
+   * 25.2.28: snoopy-backend 023aa84 on `round-17/upload-file-measurement`, re-checked
+   * unchanged at that branch's 550663f, not yet merged), to be re-copied when it merges:
+   * what the file's bytes were measured to be when its upload was sealed — each null when
+   * nothing was measured, and absent from a platform without that change. Read only by
+   * `measurementsOf` in `automations/invoice-processing/src/file.ts`.
    */
   /** The real kind, from the file's leading bytes. */
   measuredKind?: 'pdf' | 'jpeg' | 'png' | null;

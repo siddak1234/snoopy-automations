@@ -1,0 +1,79 @@
+{
+  "sample": "missing-page",
+  "file": "invoice.pdf",
+  "contentType": "application/pdf",
+  "marker": "QZ7MSP",
+  "made": "The first page of a two-page text PDF alone: \"Page 1 of 2\", the lines continued, no totals.",
+  "decisive": ["pagesMissing"],
+  "extract": "ok: passed on whole in state.extraction",
+  "next": "Pages are missing: the next step fails it.",
+  "answer": {
+    "documentType": "invoice",
+    "invoiceCount": 1,
+    "pagesMissing": true,
+    "vendorName": "Fernhill Linen Service",
+    "invoiceNumber": "FLS-QZ7MSP-4470",
+    "invoiceDate": "2026-09-25",
+    "dueDate": "2026-10-25",
+    "paymentTermsDays": 30,
+    "currency": null,
+    "subtotal": null,
+    "tax": null,
+    "shipping": null,
+    "discount": null,
+    "total": null,
+    "amountDue": null,
+    "lineItems": [
+      {
+        "description": "Table linen, week 1, laundered (20)",
+        "amount": 18
+      },
+      {
+        "description": "Napkins, week 2, laundered (25)",
+        "amount": 21.5
+      },
+      {
+        "description": "Aprons, week 3, laundered (30)",
+        "amount": 25
+      },
+      {
+        "description": "Kitchen towels, week 4, laundered (35)",
+        "amount": 28.5
+      },
+      {
+        "description": "Table linen, week 5, laundered (40)",
+        "amount": 32
+      },
+      {
+        "description": "Napkins, week 6, laundered (45)",
+        "amount": 35.5
+      },
+      {
+        "description": "Aprons, week 7, laundered (50)",
+        "amount": 39
+      },
+      {
+        "description": "Kitchen towels, week 8, laundered (55)",
+        "amount": 42.5
+      },
+      {
+        "description": "Table linen, week 9, laundered (60)",
+        "amount": 46
+      },
+      {
+        "description": "Napkins, week 10, laundered (65)",
+        "amount": 49.5
+      },
+      {
+        "description": "Aprons, week 11, laundered (70)",
+        "amount": 53
+      },
+      {
+        "description": "Kitchen towels, week 12, laundered (75)",
+        "amount": 56.5
+      }
+    ],
+    "lineItemsComplete": false,
+    "uncertainFields": ["total"]
+  }
+}

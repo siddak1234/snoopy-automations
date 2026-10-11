@@ -8,6 +8,7 @@ import {
   type InvokeRequest,
   type JsonObject,
   type Logger,
+  type ModelCompletion,
 } from '@autom8x/automation-sdk';
 import {
   RecordingPlatform,
@@ -21,7 +22,8 @@ import { TEMPLATE_ID, define } from '../src/automation.js';
 /**
  * The suite's world: the repository's own v1 manifest, a run started with one upload,
  * QuickBooks behind the platform (the kit's simulator, holding Connections to its
- * rules), and a clock that records QuickBooks' 60-second waits instead of waiting.
+ * rules), a model that reads every invoice as `GOOD_ANSWER`, and a clock that records
+ * QuickBooks' 60-second waits instead of waiting.
  */
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
@@ -83,6 +85,45 @@ export function png(overrides: Overrides = {}): ArtifactReference {
   });
 }
 
+/** A whole answer as the platform hands it over: every one of the prompt's 18 fields. */
+export const GOOD_ANSWER: JsonObject = {
+  documentType: 'invoice',
+  invoiceCount: 1,
+  pagesMissing: false,
+  vendorName: 'Harrowgate Office Supply',
+  invoiceNumber: 'HOS-1042',
+  invoiceDate: '2026-09-14',
+  dueDate: '2026-10-14',
+  paymentTermsDays: 30,
+  currency: 'USD',
+  subtotal: 412.5,
+  tax: 34.03,
+  shipping: 15,
+  discount: null,
+  total: 461.53,
+  amountDue: null,
+  lineItems: [
+    { description: 'A4 copy paper, 10 reams', amount: 189.5 },
+    { description: 'Toner cartridge, black', amount: 223 },
+  ],
+  lineItemsComplete: true,
+  uncertainFields: [],
+};
+
+/** One attempt's answer, as the platform's model callback hands it over. */
+export function completion(
+  model: string,
+  answer: unknown = GOOD_ANSWER,
+  finishReason: ModelCompletion['finishReason'] = 'stop',
+): ModelCompletion {
+  return {
+    text: typeof answer === 'string' ? answer : JSON.stringify(answer),
+    model,
+    finishReason,
+    usage: { inputTokens: 1_900, outputTokens: 400, totalTokens: 2_300 },
+  };
+}
+
 export interface SetUp {
   /** The upload the run was given; `null` for a run given none. */
   file?: ArtifactReference | null;
@@ -110,6 +151,7 @@ export function setUp(options: SetUp = {}) {
   const simulator = options.simulator ?? new QuickBooksSimulator({ refusal: refusalFixture });
   const platform = new RecordingPlatform();
   platform.provider = simulator.provider;
+  platform.model = (_call, model) => Promise.resolve(completion(model));
   platform.artifacts = options.file === null ? [] : [options.file ?? pdf()];
   const request: InvokeRequest = invokeFixture({
     ...(options.runId === undefined ? {} : { runId: options.runId }),

@@ -5,6 +5,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import type { ModelRequest } from '../src/contract.js';
 import { isUnanswered, isUnsent, unanswered, unsent } from '../src/marks.js';
 import { PlatformClient } from '../src/platform.js';
+import { CallbackRefusedError } from '../src/refusals.js';
 import { refusalFixture, RecordingPlatform } from '../src/testing.js';
 import type { Step } from '../src/steps.js';
 import { noAnswer, recordedWaits } from './retry-fixtures.js';
@@ -14,11 +15,12 @@ import { type StubPlatform, startStubPlatform } from './stub-platform.js';
 /**
  * One retry of a model call cut by a platform restart — the owner's decision of
  * 2026-10-10 (platform BUILD-PLAN 25.3.13): a step whose policy says `when: 'unsent'`
- * is repeated only when a callback provably never left this container — the
- * connection was refused, or the platform's name did not resolve. A model call that
- * reached the platform may have been made and billed, and repeating it makes it
- * again, so a timeout, a reset, a cut body and every answer the platform gave are
- * never repeated under it.
+ * is repeated only when a callback provably never reached the platform — the
+ * connection was refused, the platform's name did not resolve, or (the owner's D8 of
+ * the same day) a 503 naming no code came back, a page from in front of the platform. A
+ * model call that reached the platform may have been made and billed, and repeating it
+ * makes it again, so a timeout, a reset, a cut body, a 502 and every answer the platform
+ * wrote are never repeated under it.
  */
 
 const REQUEST: ModelRequest = {
@@ -114,13 +116,28 @@ test('a callback that provably never left is marked unsent; one that may have re
     await dropping.close();
   }
 
-  // Answered: a 503 is the platform's answer, not an unsent request.
-  stub.answers.model = () => ({
-    status: 503,
-    body: { code: 'DEPENDENCY_FAILURE', detail: 'unavailable' },
-  });
+  // Answered. A 503 the platform wrote names its code, and the call may have been made: not
+  // unsent. A 503 naming none is a page from in front of the platform — the balancer, or the
+  // proxy with no Edge up behind it — so the request went no further: unsent (D8), though it
+  // is an answer, not one that never came. A 502 never is: it can follow a request the
+  // platform had already started.
   const client = new PlatformClient(stub.origin, 'run-token');
-  await assert.rejects(client.callModel(REQUEST), (error: unknown) => !isUnsent(error));
+  for (const [status, body, verdict] of [
+    [503, { code: 'DEPENDENCY_FAILURE', detail: 'unavailable' }, false],
+    [503, { code: 'NOT_CONFIGURED', detail: 'model gateway is not configured' }, false],
+    [503, undefined, true],
+    [503, '<html>no upstreams available</html>', true],
+    [502, undefined, false],
+    [502, '<html>Bad Gateway</html>', false],
+  ] as const) {
+    stub.answers.model = () => ({ status, body });
+    await assert.rejects(client.callModel(REQUEST), (error: unknown) => {
+      assert.ok(error instanceof CallbackRefusedError);
+      assert.equal(isUnsent(error), verdict, `${status} ${JSON.stringify(body)}`);
+      assert.equal(isUnanswered(error), false, 'an answer came');
+      return true;
+    });
+  }
 });
 
 /** An automation whose first step calls the model, with the policy given. */
@@ -161,11 +178,21 @@ test("under when: 'unsent' a step is repeated only after a callback that never l
   assert.deepEqual(waited, [10_000]);
   assert.equal(repeated.steps[0]?.summary, 'Extracted by test-model (after 2 attempts)');
 
-  // Never repeated: a callback that may have reached the platform, and every answer.
+  // Repeated once: a 503 naming no code, a page from in front of the platform (D8).
+  waited.length = 0;
+  const paged = new RecordingPlatform();
+  failingOnce(paged, new CallbackRefusedError('model', 503, 'no upstreams available'));
+  assert.equal((await automation.execute(invoke(), paged)).outcome, 'success');
+  assert.equal(paged.modelCalls.length, 2, 'nothing reached the platform, so once more');
+  assert.deepEqual(waited, [10_000]);
+
+  // Never repeated: a callback that may have reached the platform, and every answer it wrote.
   for (const failure of [
     await noAnswer('The operation was aborted due to timeout'),
     refusalFixture('model', { status: 503, code: 'DEPENDENCY_FAILURE', detail: 'unavailable' }),
+    refusalFixture('model', { status: 503, code: 'NOT_CONFIGURED', detail: 'not configured' }),
     refusalFixture('model', { status: 502, code: 'DEPENDENCY_FAILURE', detail: 'unreachable' }),
+    new CallbackRefusedError('model', 502, 'Bad Gateway'),
   ]) {
     waited.length = 0;
     const once = new RecordingPlatform();
