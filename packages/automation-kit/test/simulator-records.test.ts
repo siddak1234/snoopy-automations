@@ -228,14 +228,8 @@ test('a field Intuit does not mark filterable, an order on one it does not mark 
     "SELECT * FROM Purchase WHERE DocNumber = 'R-1' AND Active IN (true, false) MAXRESULTS 3",
   );
   await refused("SELECT * FROM Account WHERE FullyQualifiedName = 'Checking' MAXRESULTS 2");
-  await refused(lookupQuery('Vendor', 'DisplayName', 'Acme', 2));
-  await refused(
-    transactionQuery({
-      entity: 'Bill',
-      where: [{ field: 'DocNumber', operator: '=', value: 'A' }],
-      maxResults: 3,
-    }),
-  );
+  // An entity the simulator does not hold is a Fault too: a test that sends one should fail.
+  await refused(lookupQuery('Item', 'Name', 'Widget', 2));
   await refused("SELECT * FROM Purchase WHERE TxnDate >= '2026-09-01' MAXRESULTS 3 ");
   await refused("select * from Purchase where DocNumber = 'R-1' MAXRESULTS 3");
   sim.expenseAmountSearchable = true;

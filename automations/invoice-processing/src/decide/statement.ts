@@ -1,13 +1,17 @@
 import { cleanText, formatMoney, withinOneCent } from '@autom8x/automation-kit/values';
 
-import type { DecideState } from './contract.js';
+import type { DocumentState } from '../state.js';
+import type { BillRow, DecideState, LookupState } from './contract.js';
+import { listedInvoiceNumbers } from './lookup-uses.js';
 import { joinWithin } from './words.js';
 
 /**
  * A supplier's statement, compared with QuickBooks (the plan's §2.5 "Statement" and §2.6; D26):
  * information only — nothing is written and the run never holds. decide reports:
  * (a) its own sum, when its list is complete, against its closing balance;
- * (b) the invoice numbers it lists that are not among the vendor's bills;
+ * (b) the invoice numbers it lists that are not among the vendor's bills — each once, whatever its
+ *     case, as the IN query sends it; one longer than the 21 characters a bill's number holds is
+ *     not searched, so it counts here;
  * (c) the vendor's open bills it does not list, only when its list is complete;
  * (d) its closing balance against what QuickBooks shows the company owes the vendor.
  */
@@ -39,6 +43,26 @@ export interface StatementResult {
 
 const fold = (value: string | null) => cleanText(value)?.toLowerCase() ?? null;
 
+/** The vendor's bills a lookup found. */
+const vendorBills = (lookup: LookupState | null, vendorId: string): BillRow[] =>
+  (lookup?.records ?? []).filter(
+    (record): record is BillRow => record.kind === 'bill' && record.vendorId === vendorId,
+  );
+
+/**
+ * (b): the invoice numbers the statement lists — each once, whatever its case — that are not among
+ * the vendor's bills its number lookup found; one too long to search is never found. decide's
+ * count, the run's output and find-duplicate-number's line all take it from here.
+ */
+export function listedNotFound(
+  document: DocumentState,
+  numberLookup: LookupState | null,
+  vendorId: string,
+): string[] {
+  const known = new Set(vendorBills(numberLookup, vendorId).map((bill) => fold(bill.docNumber)));
+  return listedInvoiceNumbers(document).filter((reference) => !known.has(fold(reference)));
+}
+
 export function statementResult(state: DecideState, switchOn: boolean): StatementResult {
   const { document, vendor, numberLookup, amountLookup, verification } = state;
   if (vendor?.status !== 'matched') throw new Error('a statement is compared only with a vendor');
@@ -54,16 +78,9 @@ export function statementResult(state: DecideState, switchOn: boolean): Statemen
       : withinOneCent(own, closing ?? own)
         ? 'adds_up'
         : 'differs';
-  const bills = (lookup: typeof numberLookup) =>
-    (lookup?.records ?? []).filter(
-      (record): record is Extract<typeof record, { kind: 'bill' }> =>
-        record.kind === 'bill' && record.vendorId === vendor.id,
-    );
-  const known = new Set(bills(numberLookup).map((bill) => fold(bill.docNumber)));
-  const listed = rows.filter((row) => row.kind === 'invoice').map((row) => row.reference);
-  const missing = listed.filter((reference) => !known.has(fold(reference)));
+  const missing = listedNotFound(document, numberLookup, vendor.id);
   const listedFolded = new Set(rows.map((row) => fold(row.reference)));
-  const open = bills(amountLookup).filter(
+  const open = vendorBills(amountLookup, vendor.id).filter(
     (bill) => bill.balanceCents > 0 && !listedFolded.has(fold(bill.docNumber)),
   );
   const quickBooksOpen = vendor.balanceCents;

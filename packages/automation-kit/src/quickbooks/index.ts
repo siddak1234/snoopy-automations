@@ -8,6 +8,7 @@ export {
   TRANSACTION_ENTITIES,
   dateRange,
   lookupInQuery,
+  lookupLikeQuery,
   lookupQuery,
   transactionQuery,
 } from './query.js';

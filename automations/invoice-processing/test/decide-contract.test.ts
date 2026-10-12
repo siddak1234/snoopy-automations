@@ -3,9 +3,10 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { readDecideState, requiredLookups } from '../src/decide/contract.js';
+import { readDecideState } from '../src/decide/contract.js';
 import { decideRun } from '../src/decide/decide.js';
 import { DECIDE_SENTENCES } from '../src/decide/fails.js';
+import { requiredLookups } from '../src/decide/lookup-uses.js';
 import {
   bill,
   check,
@@ -24,12 +25,20 @@ import { RUN_ID, VENDOR, decideState, found, type DecideSetUp } from './decide-w
  * checks" — never a guess.
  */
 
+/** A seller an inactive vendor's name leaves unlinked (D20). */
+const NOT_LINKED = { status: 'not_linked', reason: 'inactive', matchedBy: 'display name' } as const;
+
 const PATHS: readonly [string, DecideSetUp][] = [
   ['bill', { answer: bill() }],
   ['bill, a new vendor', { answer: bill(), vendor: { status: 'new' } }],
   ['company receipt', { answer: receipt() }],
   ['company receipt, the seller no vendor', { answer: receipt(), vendor: { status: 'new' } }],
+  ['company receipt, the seller not linked', { answer: receipt(), vendor: NOT_LINKED }],
   ['card refund', { answer: sampleAnswer('card-refund') }],
+  [
+    'card refund, the seller not linked',
+    { answer: sampleAnswer('card-refund'), vendor: NOT_LINKED },
+  ],
   ['vendor credit', { answer: creditNote() }],
   ['employee', { answer: receipt(), check: paidBy('employee', { paidFrom: null }) }],
   ['owner', { answer: receipt(), check: paidBy('owner', { paidFrom: null }) }],
@@ -142,6 +151,51 @@ test('the vendor: every route that has one needs it; an employee or owner has no
   const { customerNameClash: _gone, ...withoutClash } = newBill;
   assert.ok(incomplete(withoutClash));
   assert.notEqual(run(decideState({ answer: bill() })).outcome, 'failed');
+});
+
+test('a seller not linked is a company receipt\'s or a card refund\'s alone, with its reason and how it was found; anything else is "could not finish its checks"', () => {
+  const incomplete = (state: JsonObject) => {
+    const decision = run(state);
+    return decision.outcome === 'failed' && decision.failure === 'state_incomplete';
+  };
+  for (const answer of [receipt(), sampleAnswer('card-refund')]) {
+    for (const reason of ['inactive', 'ambiguous']) {
+      for (const matchedBy of ['display name', 'company name']) {
+        const state = decideState({
+          answer,
+          vendor: { ...NOT_LINKED, reason, matchedBy } as never,
+        });
+        assert.deepEqual(readDecideState(state)?.vendor, {
+          status: 'not_linked',
+          reason,
+          matchedBy,
+        });
+        assert.equal(run(state).outcome, 'ok', `${reason}, ${matchedBy}`);
+      }
+    }
+    for (const broken of [
+      { ...NOT_LINKED, reason: 'renamed' },
+      { ...NOT_LINKED, matchedBy: 'id' },
+      { status: 'not_linked' },
+    ]) {
+      assert.ok(
+        incomplete(decideState({ answer, state: { vendor: broken } })),
+        JSON.stringify(broken),
+      );
+    }
+  }
+  // A bill, a credit note, a statement and a contractor need QuickBooks' vendor itself.
+  for (const setUp of [
+    { answer: bill() },
+    { answer: creditNote() },
+    { answer: statement() },
+    { answer: receipt(), check: paidBy('not_employee', { paidFrom: null }) },
+  ] satisfies DecideSetUp[]) {
+    assert.ok(
+      incomplete(decideState({ ...setUp, vendor: NOT_LINKED })),
+      setUp.answer.documentType as string,
+    );
+  }
 });
 
 test("which lookups must have run, per route (the plan's §5): a number QuickBooks could hold, a linked seller, an original invoice", () => {

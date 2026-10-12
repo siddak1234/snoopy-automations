@@ -1,21 +1,36 @@
 import { systemClock, type Clock } from '@autom8x/automation-kit/quickbooks';
 import {
   defineAutomation,
-  isObject,
   jsonLogger,
   type Automation,
-  type JsonObject,
   type Logger,
   type Manifest,
+  type PromptModule,
   type RetryPolicy,
+  type Step,
 } from '@autom8x/automation-sdk';
 
+import { decide } from './decide/step.js';
 import { noteThrows, withFixedSentences } from './failures.js';
+import { EXPENSE_SEARCH, type ExpenseSearch } from './lookups/expense-search.js';
+import { runResult } from './output.js';
 import { EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1 } from './prompts.js';
 import { checkDocument } from './steps/check-document.js';
 import { extract } from './steps/extract.js';
 import { findAccounts } from './steps/find-accounts.js';
+import {
+  findCustomerName,
+  findEmployeeName,
+  findSimilarVendors,
+} from './steps/find-name-checks.js';
 import { findPayer } from './steps/find-payer.js';
+import {
+  findDuplicateAmount,
+  findDuplicateNumber,
+  findOtherRecord,
+  findRelated,
+} from './steps/find-records.js';
+import { findVendor, findVendorCompany } from './steps/find-vendor.js';
 import { readCompany } from './steps/read-company.js';
 import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
@@ -35,10 +50,16 @@ import { verifyRead } from './steps/verify-read.js';
  * - `find-payer` finds who paid, when someone paid with their own money;
  * - `extract` has the platform's model read the document into its fields;
  * - `check-document` cleans what it read, routes it, and stops what can never be recorded;
- * - `verify-read` has another maker's model read it again, blind, and compares the two.
+ * - `verify-read` has another maker's model read it again, blind, and compares the two;
+ * - the nine lookups (steps 9–17), one QuickBooks query each or skipped, per document type:
+ *   `find-vendor` and `find-vendor-company` (the seller, or a contractor who paid),
+ *   `find-similar-vendors`, `find-customer-name` and `find-employee-name` (a new vendor's checks),
+ *   `find-duplicate-number`, `find-duplicate-amount`, `find-related` and `find-other-record`;
+ * - `decide` (`src/decide/`) — one result: the record planned, one hold for every reason, a
+ *   statement compared, or a fixed sentence.
  *
- * `decide` (`src/decide/`) is built and tested, and joins the pipeline with the lookups it reads
- * (the plan's Group 4).
+ * The writes (steps 19–24) come with the plan's Group 5: until then a run decided straight
+ * through, or approved, writes nothing, and its result says so (`src/output.ts`).
  *
  * One container serves v1 and nothing else (the platform's D2: one container per
  * manifest version for everything new).
@@ -60,76 +81,82 @@ const READ_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
  */
 const MODEL_RETRY: RetryPolicy = { attempts: 2, backoffMs: 10_000, when: 'unsent' };
 
+/** The prompts the steps send, each registered with the runner. */
+export const PROMPTS: readonly PromptModule[] = [EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1];
+
+/**
+ * The steps repeated after a transient failure: every QuickBooks read and the file's, and each
+ * model call only when it never reached the platform. decide calls nothing, so it has none.
+ */
+export const RETRY: Readonly<Record<string, RetryPolicy>> = {
+  receive: READ_RETRY,
+  'read-company': READ_RETRY,
+  'read-preferences': READ_RETRY,
+  'find-accounts': READ_RETRY,
+  'find-payer': READ_RETRY,
+  extract: MODEL_RETRY,
+  'verify-read': MODEL_RETRY,
+  'find-vendor': READ_RETRY,
+  'find-vendor-company': READ_RETRY,
+  'find-similar-vendors': READ_RETRY,
+  'find-customer-name': READ_RETRY,
+  'find-employee-name': READ_RETRY,
+  'find-duplicate-number': READ_RETRY,
+  'find-duplicate-amount': READ_RETRY,
+  'find-related': READ_RETRY,
+  'find-other-record': READ_RETRY,
+};
+
+/**
+ * Every step v1's pipeline declares, in its order, each noting what it throws for the run's fixed
+ * sentence. `expenseSearch` is sandbox S4's answer (`src/lookups/expense-search.ts`).
+ */
+export function pipelineSteps(clock: Clock, expenseSearch: ExpenseSearch): Record<string, Step> {
+  return noteThrows({
+    receive,
+    'read-company': readCompany(clock),
+    'read-preferences': readPreferences(clock),
+    'find-accounts': findAccounts(clock),
+    'find-payer': findPayer(clock),
+    extract: extract(EXTRACT_DOCUMENT_V1),
+    'check-document': checkDocument(clock),
+    'verify-read': verifyRead(VERIFY_DOCUMENT_V1),
+    'find-vendor': findVendor(clock),
+    'find-vendor-company': findVendorCompany(clock),
+    'find-similar-vendors': findSimilarVendors(clock),
+    'find-customer-name': findCustomerName(clock),
+    'find-employee-name': findEmployeeName(clock),
+    'find-duplicate-number': findDuplicateNumber(clock, expenseSearch),
+    'find-duplicate-amount': findDuplicateAmount(clock, expenseSearch),
+    'find-related': findRelated(clock, expenseSearch),
+    'find-other-record': findOtherRecord(clock, expenseSearch),
+    decide: decide(expenseSearch),
+  });
+}
+
 export interface Dependencies {
   /** The QuickBooks reads' clock: a suite passes one that does not wait. */
   readonly clock?: Clock;
   readonly log?: Logger;
+  /** How expenses are searched (sandbox S4): `EXPENSE_SEARCH` unless a suite runs the other. */
+  readonly expenseSearch?: ExpenseSearch;
 }
 
 export function define(
   manifests: readonly Manifest[],
   dependencies: Dependencies = {},
 ): Automation {
-  const clock = dependencies.clock ?? systemClock;
   const automation = defineAutomation({
     templateId: TEMPLATE_ID,
     manifests,
-    prompts: [EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1],
-    steps: noteThrows({
-      receive,
-      'read-company': readCompany(clock),
-      'read-preferences': readPreferences(clock),
-      'find-accounts': findAccounts(clock),
-      'find-payer': findPayer(clock),
-      extract: extract(EXTRACT_DOCUMENT_V1),
-      'check-document': checkDocument(clock),
-      'verify-read': verifyRead(VERIFY_DOCUMENT_V1),
-    }),
-    retry: {
-      receive: READ_RETRY,
-      'read-company': READ_RETRY,
-      'read-preferences': READ_RETRY,
-      'find-accounts': READ_RETRY,
-      'find-payer': READ_RETRY,
-      extract: MODEL_RETRY,
-      'verify-read': MODEL_RETRY,
-    },
-    // Until the groups that record the document: what the steps found — of the readings, the
-    // models that served, the document's type and route, and whether the second read agreed.
-    // The values read restate the document and are never an output. `payer` is absent when the
-    // company paid.
-    result: (state) => ({
-      output: {
-        file: state.file,
-        company: state.company,
-        preferences: state.preferences,
-        accounts: state.accounts,
-        ...(state.payer === undefined ? {} : { payer: state.payer }),
-        modelServed: state.modelServed,
-        ...readingsOf(state),
-      },
-      summary:
-        "Checked the file, the QuickBooks company, its settings and the accounts in this flow's settings, and read the document twice",
-    }),
+    prompts: PROMPTS,
+    steps: pipelineSteps(
+      dependencies.clock ?? systemClock,
+      dependencies.expenseSearch ?? EXPENSE_SEARCH,
+    ),
+    retry: RETRY,
+    // decide's outcome: a statement compared, or the record planned (`src/output.ts`).
+    result: (state) => runResult(state),
   });
   return withFixedSentences(automation, dependencies.log ?? jsonLogger(TEMPLATE_ID));
-}
-
-/** The type and route the document took, and the second read's outcome, for the run's output. */
-function readingsOf(state: JsonObject): JsonObject {
-  const document = isObject(state.document) ? state.document : {};
-  const verification = isObject(state.verification) ? state.verification : {};
-  return {
-    documentType: document.type ?? null,
-    route: document.route ?? null,
-    secondRead:
-      verification.status === 'made'
-        ? {
-            status: 'made',
-            modelServed: verification.modelServed ?? null,
-            agreed:
-              Array.isArray(verification.differences) && verification.differences.length === 0,
-          }
-        : { status: 'not_made', reason: verification.reason ?? null },
-  };
 }

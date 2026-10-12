@@ -31,6 +31,7 @@ const manifest = JSON.parse(
   trigger: { input: Field[] };
   setup: Field[];
   requiredConnections: { purpose: string }[];
+  pipeline: { id: string; kicker: string; title: string; description: string }[];
 };
 
 test('Bills & Receipts, still the invoice-processing template, says what each document becomes', () => {
@@ -42,7 +43,7 @@ test('Bills & Receipts, still the invoice-processing template, says what each do
   );
   assert.equal(
     manifest.requiredConnections[0]?.purpose,
-    'Looks up accounts, vendors, employees, bills and expenses, and creates vendors, bills, expenses, vendor credits and journal entries.',
+    'Looks up accounts, vendors, customers, employees, bills, expenses, vendor credits and journal entries, and creates vendors, bills, expenses, vendor credits and journal entries.',
   );
 });
 
@@ -137,4 +138,33 @@ test('one category setting per spend type but other, titled "Category for <spend
       'Category for advertising',
     ],
   );
+});
+
+test('the pipeline: 18 of the 24 steps the platform allows — the trigger, two AI steps, then actions: the nine lookups and decide last', () => {
+  const kinds = manifest.pipeline.map((step) => step.kicker);
+  assert.equal(manifest.pipeline.length, 18);
+  assert.equal(kinds[0], 'TRIGGER');
+  assert.deepEqual(
+    manifest.pipeline.filter((step) => step.kicker === 'AI STEP').map((step) => step.id),
+    ['extract', 'verify-read'],
+  );
+  assert.deepEqual(
+    manifest.pipeline.slice(8).map((step) => [step.id, step.kicker]),
+    [
+      ['find-vendor', 'ACTION'],
+      ['find-vendor-company', 'ACTION'],
+      ['find-similar-vendors', 'ACTION'],
+      ['find-customer-name', 'ACTION'],
+      ['find-employee-name', 'ACTION'],
+      ['find-duplicate-number', 'ACTION'],
+      ['find-duplicate-amount', 'ACTION'],
+      ['find-related', 'ACTION'],
+      ['find-other-record', 'ACTION'],
+      ['decide', 'ACTION'],
+    ],
+  );
+  for (const step of manifest.pipeline) {
+    assert.match(step.id, /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u);
+    assert.ok(step.title.length <= 80 && step.description.length <= 200, step.id);
+  }
 });

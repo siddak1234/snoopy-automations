@@ -5,6 +5,7 @@ import {
   TRANSACTION_ENTITIES,
   dateRange,
   lookupInQuery,
+  lookupLikeQuery,
   lookupQuery,
   quoteQueryValue,
   transactionQuery,
@@ -207,4 +208,23 @@ test('a date range is two real days, the first not after the second', () => {
     assert.throws(() => dateRange('TxnDate', from ?? '', to ?? ''), /two YYYY-MM-DD days/u);
   }
   assert.throws(() => dateRange('TxnDate', '2026-10-02', '2026-10-01'), /must not end before/u);
+});
+
+test('a LIKE lookup searches one word inside a name, active or not, the word letters and digits alone', () => {
+  assert.equal(
+    lookupLikeQuery('Vendor', 'DisplayName', 'acme', 3),
+    "SELECT * FROM Vendor WHERE DisplayName LIKE '%acme%' AND Active IN (true, false) MAXRESULTS 3",
+  );
+  assert.equal(
+    lookupLikeQuery('Vendor', 'DisplayName', 'société', 3),
+    "SELECT * FROM Vendor WHERE DisplayName LIKE '%société%' AND Active IN (true, false) MAXRESULTS 3",
+  );
+  assert.ok(lookupLikeQuery('Vendor', 'DisplayName', '3m', 3).includes("LIKE '%3m%'"));
+  // A wildcard, a quote, a backslash or a space would change what is searched: refused.
+  for (const word of ['', 'ac%me', "o'brien", 'a\\b', 'two words', 'acme_']) {
+    assert.throws(() => lookupLikeQuery('Vendor', 'DisplayName', word, 3), /one word/u, word);
+  }
+  assert.throws(() => lookupLikeQuery('vendor', 'DisplayName', 'acme', 3), /entity/u);
+  assert.throws(() => lookupLikeQuery('Vendor', 'Display Name', 'acme', 3), /field/u);
+  assert.throws(() => lookupLikeQuery('Vendor', 'DisplayName', 'acme', 0), /MAXRESULTS/u);
 });

@@ -27,10 +27,11 @@ import { answerCreate } from './quickbooks-writes.js';
  * - **An input naming `accountId`** — the platform fills it — is refused 400 `reserved_parameter`.
  *
  * QuickBooks itself answers from `company`: `companyInfo.get`, `preferences.get`;
- * `query.run` for exactly the text the kit's builders write — a lookup of an account or an
- * employee, a search of expenses, vendor credits or journal entries — by Intuit's documented
- * query rules (`quickbooks-queries.ts`), any other text a 400 parser Fault, so a changed
- * query fails the suite that sent it; and the creates of an expense, a vendor credit and a
+ * `query.run` for exactly the text the kit's builders write — a lookup of an account, an
+ * employee, a vendor or a customer, by a name, several or a word in it; a search of bills,
+ * expenses, vendor credits or journal entries — by Intuit's documented query rules
+ * (`quickbooks-queries.ts`), any other text a 400 parser Fault, so a changed query fails the
+ * suite that sent it; and the creates of an expense, a vendor credit and a
  * journal entry, by the rules Intuit documents (`quickbooks-writes.ts`), each record kept for
  * the queries after it. `script` queues answers or refusals per operation ahead of the
  * company's.

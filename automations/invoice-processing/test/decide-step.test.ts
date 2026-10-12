@@ -11,9 +11,9 @@ import { RUN_ID, VENDOR, decideState, type DecideSetUp } from './decide-world.js
 import { manifests } from './fixtures.js';
 
 /**
- * decide as a step on the SDK's runner — not in v1's pipeline until Group 4's lookups are: one
- * held result at most, failed with the fixed sentence, a statement compared and done, and an
- * approval resuming after decide with the saved plan.
+ * decide as a step on the SDK's runner — step 18 of v1, after Group 4's lookups: one held result at
+ * most, failed with the fixed sentence, a statement compared and done, and an approval resuming
+ * after decide with the saved plan.
  */
 
 /** decide between a seed and the step after it, as the pipeline will hold it. */
@@ -136,21 +136,21 @@ test('a statement: compared, the run done with no approval, its comparison the s
   ]);
 });
 
-test('not in v1 yet: the manifest and the automation stop at verify-read, and decide is not a step the container runs', () => {
+test('in v1: decide is the last of the eighteen steps, after the nine lookups whose records it reads', () => {
   const automation = define(manifests);
-  assert.deepEqual(automation.steps.at(-1), 'verify-read');
-  assert.ok(!automation.steps.includes('decide'));
-  assert.deepEqual(
-    manifests[0]?.pipeline.map((step) => step.id),
-    [
-      'receive',
-      'read-company',
-      'read-preferences',
-      'find-accounts',
-      'find-payer',
-      'extract',
-      'check-document',
-      'verify-read',
-    ],
-  );
+  assert.deepEqual(automation.steps.at(-1), 'decide');
+  assert.deepEqual(manifests[0]?.pipeline.map((step) => step.id).slice(7), [
+    'verify-read',
+    'find-vendor',
+    'find-vendor-company',
+    'find-similar-vendors',
+    'find-customer-name',
+    'find-employee-name',
+    'find-duplicate-number',
+    'find-duplicate-amount',
+    'find-related',
+    'find-other-record',
+    'decide',
+  ]);
+  assert.equal(manifests[0]?.pipeline.length, 18);
 });

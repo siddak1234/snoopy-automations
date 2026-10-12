@@ -1,11 +1,14 @@
 import { resolve } from 'node:path';
 
+import type { Clock } from '@autom8x/automation-kit/quickbooks';
 import { QuickBooksSimulator } from '@autom8x/automation-kit/testing';
 import {
+  defineAutomation,
   idempotencyKeyFor,
   isObject,
   readManifests,
   type ArtifactReference,
+  type Automation,
   type InvokeRequest,
   type JsonObject,
   type Logger,
@@ -19,8 +22,10 @@ import {
   refusalFixture,
 } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, define } from '../src/automation.js';
+import { PROMPTS, RETRY, TEMPLATE_ID, define, pipelineSteps } from '../src/automation.js';
 import { SECOND_READ_FIELDS } from '../src/checks/answers.js';
+import { withFixedSentences } from '../src/failures.js';
+import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-search.js';
 import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 
 /**
@@ -29,6 +34,10 @@ import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
  * rules), a model that reads every document as `GOOD_ANSWER` — and, asked the second
  * read's prompt, gives the same document's 14 fields — and a clock that records
  * QuickBooks' 60-second waits instead of waiting.
+ *
+ * The run goes `through` one step of the manifest's pipeline: by default `verify-read`, the
+ * steps Groups 1–3's suites test, its result then the whole state those steps leave; `decide`
+ * runs v1 whole, with the automation's own result.
  */
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
@@ -171,6 +180,35 @@ export interface SetUp {
   deadlineInMs?: number;
   simulator?: QuickBooksSimulator;
   runId?: string;
+  /** The last step the run takes (default `verify-read`); `decide` is the whole of v1. */
+  through?: string;
+  /**
+   * Sandbox S4's answer for the run (default `EXPENSE_SEARCH`). A simulator made here searches an
+   * expense by amount only under `amount`, as D21 assumes Intuit does.
+   */
+  expenseSearch?: ExpenseSearch;
+}
+
+/** The automation as `define` builds it, its pipeline cut after `stepId`, its result the whole state. */
+function automationThrough(
+  stepId: string,
+  dependencies: { clock: Clock; log: Logger; expenseSearch: ExpenseSearch },
+): Automation {
+  const [manifest] = manifests;
+  const at = manifest?.pipeline.findIndex((step) => step.id === stepId) ?? -1;
+  if (!manifest || at < 0) throw new Error(`v1 declares no step ${stepId}`);
+  const pipeline = manifest.pipeline.slice(0, at + 1);
+  const ids = pipeline.map((step) => step.id);
+  const steps = pipelineSteps(dependencies.clock, dependencies.expenseSearch);
+  const automation = defineAutomation({
+    templateId: TEMPLATE_ID,
+    manifests: [{ ...manifest, pipeline }],
+    prompts: PROMPTS,
+    steps: Object.fromEntries(ids.map((id) => [id, steps[id]!])),
+    retry: Object.fromEntries(Object.entries(RETRY).filter(([id]) => ids.includes(id))),
+    result: (state) => ({ output: state }),
+  });
+  return withFixedSentences(automation, dependencies.log);
 }
 
 export function setUp(options: SetUp = {}) {
@@ -185,8 +223,15 @@ export function setUp(options: SetUp = {}) {
     },
   };
   const logs: Parameters<Logger>[] = [];
-  const automation = define(manifests, { clock, log: (...line) => logs.push(line) });
+  const log: Logger = (...line) => logs.push(line);
+  const expenseSearch = options.expenseSearch ?? EXPENSE_SEARCH;
+  const through = options.through ?? 'verify-read';
+  const automation =
+    through === 'decide'
+      ? define(manifests, { clock, log, expenseSearch })
+      : automationThrough(through, { clock, log, expenseSearch });
   const simulator = options.simulator ?? new QuickBooksSimulator({ refusal: refusalFixture });
+  if (!options.simulator) simulator.expenseAmountSearchable = expenseSearch === 'amount';
   const platform = new RecordingPlatform();
   platform.provider = simulator.provider;
   platform.model = reads();
