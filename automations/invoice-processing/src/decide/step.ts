@@ -23,7 +23,6 @@ export function decide(expenseSearch: ExpenseSearch = EXPENSE_SEARCH): Step {
       state,
       config: request.config,
       switchOn: request.input.paidPersonally === true,
-      runId: request.runId,
       expenseSearch,
     });
     switch (decision.outcome) {

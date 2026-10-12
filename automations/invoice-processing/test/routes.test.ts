@@ -16,9 +16,9 @@ import {
 } from './lookups-world.js';
 
 /**
- * Every route through steps 1–18 on the simulator (the plan's §2.6): the steps that report, in
- * order; the lookups that ask QuickBooks; and decide's outcome — the record planned straight
- * through, one hold, or a statement compared.
+ * Every route through v1 on the simulator (the plan's §2.6): the steps that report, in order; the
+ * lookups that ask QuickBooks; and the run's outcome — the record made straight through, one hold,
+ * or a statement compared. Each path held, then approved: `writes.test.ts`.
  */
 
 const FIRST = ['receive', 'read-company', 'read-preferences', 'find-accounts'];
@@ -40,7 +40,7 @@ const held = (result: RunResult) => {
   return (result as Extract<RunResult, { outcome: 'held' }>).held;
 };
 
-test('a bill from a vendor QuickBooks has: four record lookups, straight through, the bill planned', async () => {
+test('a bill from a vendor QuickBooks has: four record lookups, straight through, the bill created', async () => {
   const { world, steps, lookups } = await route({ answer: bill() });
   assert.deepEqual(steps, [
     ...FIRST,
@@ -49,13 +49,15 @@ test('a bill from a vendor QuickBooks has: four record lookups, straight through
     ...RECORDS,
     'find-other-record',
     'decide',
+    'create-record',
   ]);
   assert.deepEqual(lookups, ['find-vendor', ...RECORDS, 'find-other-record']);
   const output = planned(world.result);
   assert.deepEqual(
     [output.outcome, output.route, (output.record as JsonObject).type],
-    ['planned', 'bill', 'bill'],
+    ['recorded', 'bill', 'bill'],
   );
+  assert.equal(world.simulator.company.bills.length, 1);
 });
 
 test('a bill from a new vendor: every lookup, and one hold naming the new vendor', async () => {

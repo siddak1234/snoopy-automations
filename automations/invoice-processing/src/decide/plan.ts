@@ -7,7 +7,10 @@ import { originalBillAccount, type Matches } from './matches.js';
  * The record decide plans, built once, saved for after approval, and written exactly as it is
  * (the plan's §2.6 and §2.8): the operation, the payment type, the accounts by role, the payee,
  * the amount, the date, the memo, the number or none, and the currency rule. Approval writes from
- * this plan, never from the settings as they are by then.
+ * this plan, never from the settings as they are by then (create-record, `src/writes/bodies.ts`).
+ * The one thing the write adds is the run that writes it, first in the memo — after an approval
+ * the continuation's id, the run whose timeline shows the record (the design's open question, its
+ * recommended answer applied).
  */
 
 /** An account as the plan names it. */
@@ -58,6 +61,10 @@ export interface RecordPlan {
   readonly dueDate: string | null;
   /** The number QuickBooks is sent as the record's own; null keeps it in the memo. */
   readonly docNumber: string | null;
+  /**
+   * The memo's words after the sentence naming the run that writes it ("Created by Autom8x Bills &
+   * Receipts, run <id>.", which create-record puts first); empty when nothing follows it.
+   */
   readonly memo: string;
   readonly lineDescription: string;
   /** CurrencyRef USD when multicurrency is on (sandbox S13). */
@@ -95,8 +102,21 @@ const TYPE_WORDS = {
   supplier_statement: 'statement',
 } as const;
 
+/**
+ * Who paid, as the record names them: an employee as QuickBooks shows them, an owner as "Owners and
+ * partners" writes them, and a contractor as the vendor find-vendor matched — QuickBooks' name,
+ * never as typed in "Who paid", as decide's wording names them (Group 3's review fix; the owner's
+ * "complete all", 2026-10-11).
+ */
+export function payerNameOf(state: DecideState): string {
+  if (state.document.route === 'contractor' && state.vendor?.status === 'matched') {
+    return state.vendor.displayName;
+  }
+  return state.payer?.name ?? '';
+}
+
 /** The plan for a record that is written; a statement has none. */
-export function recordPlan(state: DecideState, runId: string, matches: Matches): RecordPlan {
+export function recordPlan(state: DecideState, matches: Matches): RecordPlan {
   const { document, accounts, vendor, payer, preferences } = state;
   const route = document.route;
   const typeWords = TYPE_WORDS[document.type];
@@ -110,7 +130,6 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
     vendor?.status === 'matched'
       ? { kind: 'vendor', id: vendor.id, name: vendor.displayName }
       : { kind: 'none' };
-  const created = `Created by Autom8x Bills & Receipts, run ${runId}.`;
   const base = {
     credit: false,
     printStatus: null,
@@ -143,7 +162,7 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
         payee,
         dueDate: document.dueDate,
         docNumber: sent,
-        memo: number !== null && sent === null ? `${created} Number ${number}.` : created,
+        memo: number !== null && sent === null ? `Number ${number}.` : '',
         lineDescription: `${number === null ? 'Bill' : `Bill ${number}`} from ${name}`,
       };
     }
@@ -169,7 +188,7 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
         printStatus: paymentType === 'Check' ? 'NotSet' : null,
         accounts: { ...base.accounts, paidFrom },
         payee: vendorPayee,
-        memo: `${created} ${words} from ${seller}.`,
+        memo: `${words} from ${seller}.`,
         lineDescription: `${words} from ${seller}`,
       };
     }
@@ -193,14 +212,14 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
         paymentType: null,
         payee: vendorPayee,
         docNumber: sent,
-        memo: [created, ...notes].join(' '),
+        memo: notes.join(' '),
         lineDescription: `${number === null ? 'Credit note' : `Credit note ${number}`} from ${vendorPayee.kind === 'vendor' ? vendorPayee.name : seller}`,
       };
     }
     case 'employee':
     case 'owner':
     case 'contractor': {
-      const name = payer?.name ?? '';
+      const name = payerNameOf(state);
       const paid = `${name} paid ${seller}, ${what}`;
       if (route === 'contractor') {
         return {
@@ -209,7 +228,7 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
           record: 'bill',
           paymentType: null,
           payee: vendorPayee,
-          memo: `${created} ${paid}.`,
+          memo: `${paid}.`,
           lineDescription: `${seller}, ${what}`,
         };
       }
@@ -228,7 +247,7 @@ export function recordPlan(state: DecideState, runId: string, matches: Matches):
           route === 'employee'
             ? { kind: 'employee', id: payer?.employeeId ?? '', name }
             : { kind: 'owner', name },
-        memo: `${created} ${paid}.`,
+        memo: `${paid}.`,
         lineDescription: route === 'owner' ? paid : `${seller}, ${what}`,
       };
     }

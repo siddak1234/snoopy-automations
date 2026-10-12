@@ -1,20 +1,24 @@
-import { addDays, cleanText, isWithin } from '@autom8x/automation-kit/values';
+import { addDays, isWithin } from '@autom8x/automation-kit/values';
 
-import type {
-  BillRow,
-  DecideState,
-  FoundRecord,
-  JournalEntryRow,
-  LookupState,
-} from './contract.js';
+import type { BillRow, DecideState, FoundRecord, LookupState } from './contract.js';
+import {
+  FEED_WINDOW,
+  creditsAmount,
+  duplicateFactsOf,
+  inFeedWindow,
+  isDuplicate,
+  sameNumber,
+  type DuplicateLookup,
+} from './duplicate-rule.js';
 
 /**
  * What the lookups found, compared in code as the plan leaves to it (§2.4 "Possible duplicate, per
- * type", hold 6, hold 7, §5): the vendor, the account, the window, a journal entry's lines.
+ * type", hold 6, hold 7, §5): the vendor, the account, the window, a journal entry's lines. What
+ * find-duplicate-number and find-duplicate-amount found is weighed by the one rule
+ * (`duplicate-rule.ts`) that confirm-no-duplicate repeats after an approval.
  */
 
-/** The bank-feed window (D21): from 1 day before the document's date to 20 days after it. */
-export const FEED_WINDOW = { before: 1, after: 20 } as const;
+export { FEED_WINDOW };
 
 /** A bill the receipt may pay (hold 6, D22). */
 export interface MatchedBill {
@@ -42,42 +46,12 @@ export interface Matches {
   };
 }
 
-const fold = (value: string | null) => cleanText(value)?.toLowerCase() ?? null;
-
 function rows<K extends FoundRecord['kind']>(
   lookup: LookupState | null,
   kind: K,
 ): Extract<FoundRecord, { kind: K }>[] {
   return (lookup?.records ?? []).filter(
     (record): record is Extract<FoundRecord, { kind: K }> => record.kind === kind,
-  );
-}
-
-function sameNumber(record: { readonly docNumber: string | null }, number: string | null): boolean {
-  const a = fold(record.docNumber);
-  return a !== null && a === fold(number);
-}
-
-/** The D21 window around a date. */
-function inFeedWindow(date: string, around: string): boolean {
-  return isWithin(date, addDays(around, -FEED_WINDOW.before), addDays(around, FEED_WINDOW.after));
-}
-
-/** A journal entry with a credit line of this amount, optionally to this account and this person. */
-function creditsAmount(
-  entry: JournalEntryRow,
-  amountCents: number,
-  accountId?: string,
-  employeeId?: string | null,
-): boolean {
-  return entry.lines.some(
-    (line) =>
-      line.postingType === 'Credit' &&
-      line.amountCents === amountCents &&
-      (accountId === undefined || line.accountId === accountId) &&
-      (employeeId === undefined ||
-        employeeId === null ||
-        (line.entity?.type === 'Employee' && line.entity.id === employeeId)),
   );
 }
 
@@ -96,7 +70,7 @@ function billPaidBy(candidates: readonly BillRow[], amountCents: number): Matche
 }
 
 export function matchesOf(state: DecideState): Matches {
-  const { document, vendor, accounts, payer } = state;
+  const { document, vendor } = state;
   const { numberLookup, amountLookup, relatedLookup, otherRecordLookup } = state;
   const amount = document.amountCents ?? 0;
   const date = document.date ?? '';
@@ -109,25 +83,18 @@ export function matchesOf(state: DecideState): Matches {
   const note = (found: boolean, words: string) => {
     if (found && !duplicates.includes(words)) duplicates.push(words);
   };
+  const facts = document.route === 'statement' ? null : duplicateFactsOf(state);
+  /** Whether the lookup found a record the one rule calls a duplicate of the planned record. */
+  const found = (lookup: DuplicateLookup) =>
+    facts !== null &&
+    (state[lookup]?.records ?? []).some((record) => isDuplicate(facts, lookup, record));
 
   switch (document.route) {
     case 'bill': {
-      const numbered = rows(numberLookup, 'bill').filter((bill) => sameNumber(bill, number));
-      numberTaken = numbered.length > 0;
+      numberTaken = rows(numberLookup, 'bill').some((bill) => sameNumber(bill, number));
       // The same vendor's bill with this number; for a new vendor, any bill with it (D5).
-      note(
-        numbered.some((bill) => vendorId === null || bill.vendorId === vendorId),
-        'a bill with this number',
-      );
-      note(
-        rows(amountLookup, 'bill').some(
-          (bill) =>
-            bill.totalCents === amount &&
-            bill.txnDate === date &&
-            (vendorId === null || bill.vendorId === vendorId),
-        ),
-        'a bill for this total and date',
-      );
+      note(found('numberLookup'), 'a bill with this number');
+      note(found('amountLookup'), 'a bill for this total and date');
       note(
         rows(relatedLookup, 'expense').some((expense) => sameNumber(expense, number)),
         'an expense with this number',
@@ -146,7 +113,6 @@ export function matchesOf(state: DecideState): Matches {
       break;
     }
     case 'company_receipt': {
-      const paidFrom = accounts.paidFrom?.id;
       // A bill from this seller with this number or for this amount, open or paid (hold 6).
       const sellers = [
         ...rows(numberLookup, 'bill').filter(
@@ -167,16 +133,7 @@ export function matchesOf(state: DecideState): Matches {
         "another vendor's bill for this amount",
       );
       // D21: the bank-feed check on the Paid from account.
-      note(
-        rows(amountLookup, 'expense').some(
-          (expense) =>
-            !expense.credit &&
-            expense.accountId === paidFrom &&
-            expense.totalCents === amount &&
-            inFeedWindow(expense.txnDate, date),
-        ),
-        'a charge for this amount on the Paid from account',
-      );
+      note(found('amountLookup'), 'a charge for this amount on the Paid from account');
       // D32: someone's reimbursement for the same purchase.
       note(
         rows(otherRecordLookup, 'journal_entry').some(
@@ -186,68 +143,27 @@ export function matchesOf(state: DecideState): Matches {
       );
       break;
     }
-    case 'card_refund': {
-      const card = accounts.paidFrom?.id;
-      const credits = rows(numberLookup, 'vendor_credit').filter((credit) =>
+    case 'card_refund':
+      note(found('numberLookup'), 'a vendor credit with this number');
+      note(found('amountLookup'), 'a refund for this amount on the card');
+      break;
+    case 'vendor_credit':
+      numberTaken = rows(numberLookup, 'vendor_credit').some((credit) =>
         sameNumber(credit, number),
       );
-      note(credits.length > 0, 'a vendor credit with this number');
-      note(
-        rows(amountLookup, 'expense').some(
-          (expense) =>
-            expense.credit &&
-            expense.accountId === card &&
-            expense.totalCents === amount &&
-            inFeedWindow(expense.txnDate, date),
-        ),
-        'a refund for this amount on the card',
-      );
+      note(found('numberLookup'), 'a vendor credit with this number');
+      note(found('amountLookup'), 'a vendor credit for this total and date');
       break;
-    }
-    case 'vendor_credit': {
-      const credits = rows(numberLookup, 'vendor_credit').filter((credit) =>
-        sameNumber(credit, number),
-      );
-      numberTaken = credits.length > 0;
-      note(
-        credits.some((credit) => credit.vendorId === vendorId),
-        'a vendor credit with this number',
-      );
-      note(
-        rows(amountLookup, 'vendor_credit').some(
-          (credit) =>
-            credit.vendorId === vendorId && credit.totalCents === amount && credit.txnDate === date,
-        ),
-        'a vendor credit for this total and date',
-      );
-      break;
-    }
     case 'employee':
     case 'owner':
     case 'contractor': {
+      note(document.type === 'bill' && found('numberLookup'), 'a bill with this number');
       note(
-        document.type === 'bill' &&
-          rows(numberLookup, 'bill').some((bill) => sameNumber(bill, number)),
-        'a bill with this number',
+        found('amountLookup'),
+        document.route === 'contractor'
+          ? 'a bill to them for this total and date'
+          : 'an entry owing them this amount',
       );
-      if (document.route === 'contractor') {
-        note(
-          rows(amountLookup, 'bill').some(
-            (bill) =>
-              bill.vendorId === vendorId && bill.totalCents === amount && bill.txnDate === date,
-          ),
-          'a bill to them for this total and date',
-        );
-      } else {
-        const account = payer?.account?.id;
-        const employee = document.route === 'employee' ? (payer?.employeeId ?? null) : undefined;
-        note(
-          rows(amountLookup, 'journal_entry').some(
-            (entry) => entry.txnDate === date && creditsAmount(entry, amount, account, employee),
-          ),
-          'an entry owing them this amount',
-        );
-      }
       companyCharges = rows(relatedLookup, 'expense').filter(
         (expense) =>
           !expense.credit && expense.totalCents === amount && inFeedWindow(expense.txnDate, date),

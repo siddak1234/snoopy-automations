@@ -469,12 +469,40 @@ check dropped. `decide` (`src/decide/`, step 18) makes one result: a fixed sente
 with every reason (the SDK's held outcome, an approval resuming after it), a statement
 compared, or the record planned; its whole input is `src/decide/contract.ts`, and the
 lookups and decide share one table of which lookups run (`lookupUses`,
-`src/decide/lookup-uses.ts`). The writes are the plan's Group 5: until
-then a run decided straight through, or approved, writes nothing, and its result
-(`src/output.ts`) says so — the record planned, or a statement's comparison with the full
-list of the invoice numbers it lists that QuickBooks lacks.
+`src/decide/lookup-uses.ts`). What decide saves — the record planned, the re-check an approval
+repeats, the company it checked — is the ONLY input of the six steps after it (24 of the 24 the
+platform allows): an approval resumes at `confirm-company`, which compares the company's names,
+country and file creation time with QuickBooks' again; `confirm-vendor` looks a new vendor up
+again by the name it would get, and links one added while the run waited; `create-vendor` adds it
+as the approver saw it named; `confirm-no-duplicate` repeats the path's own duplicate lookup —
+the very query, one row more, by the document's number only when the record will carry it, else by
+its total and date — and fails on a matching record added while the run waited ("A matching
+record was added in QuickBooks while this waited for approval, possibly from your bank feed."),
+by the one rule decide holds on (`src/decide/duplicate-rule.ts`): one the approver never saw,
+unless decide's lookup was full and QuickBooks created it before that answer, which the approved
+"too many to check" covered; a first run skips all four. `create-record` then makes the one
+record — a bill, an expense, a refund to the card, a vendor credit or a journal entry, through
+the platform's `bill.create`, `purchase.create`,
+`vendorCredit.create` or `journalEntry.create`, each with its `requestid` — from the saved plan
+alone, never the settings as they are by then, its memo naming the run that wrote it (after an
+approval the continuation); one request, never repeated (no write declares a retry until sandbox
+S6), so a 429, a 5xx or a lost answer is "did not confirm", and each Intuit code the plan maps
+(6140, 6240, 610, 2500, 6190, 6200, 6210, 2050, 2290, 2300, 6430) has its own sentence. Its line,
+which is also the run's summary, says what was recorded and the next step — "When this charge
+arrives in your bank feed, choose Match, not Add" for a receipt or a refund, how an employee, a
+contractor or an owner is repaid. `notify` mails a plain-text summary, built from QuickBooks'
+answer — the document's number on its line, "in the memo" when the record was not sent it, and
+the number QuickBooks gave an expense or a credit itself on its own — to the optional "Also email"
+address — a statement's counts and what QuickBooks shows open — and is skipped when it is empty;
+a mail that fails never fails the run. The run's result (`src/output.ts`, described by the
+manifest's `outputSchema`, which the tests hold every output
+to with Ajv) is the record made — its type and QuickBooks Id, payment type, payee, payer, Paid
+from account, the next step, why it was held — or a statement's comparison with the full list of
+the invoice numbers it lists that QuickBooks lacks.
 Every failure ends the run with a fixed sentence, a run that ends on a thrown error
-included — never the error's message. The measurements — `measuredKind`, `pageCount`,
+included — never the error's message; once the record exists, a run that cannot finish (the
+platform refusing a step's report, say) names it and says to check QuickBooks before running
+it again, never "run it again in a few minutes". The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
 platform's pull request before it merged (its BUILD-PLAN 25.2.28, merged unchanged as its
 `main` `7086e5e`), and `measurementsOf` in `src/file.ts` is the one place that reads them;
@@ -505,7 +533,9 @@ read 2's comparison and decide (the vendor matched, nothing found): the sample's
 no line, sentence, reason or saved data. `test/planted-marker.test.ts` plants each marker in
 every field the code reads but never passes on — read 1's currency, card digits, dates and
 listed references (not a statement's, which are carried), read 2's currency, card digits and
-dates — on every path, held and straight through.
+dates — on every path, held and straight through — and `test/writes-marker.test.ts` takes each
+sample's marker through every step on the simulator, approved when it held: no QuickBooks
+request, mail, line or result carries it.
 
 ## The kit
 
@@ -528,7 +558,7 @@ only what an automation here uses:
   number alone; any other failure is thrown on unchanged, so the SDK's step retry can
   repeat it. The waits use an injected `Clock`, so a suite never waits a minute. Reads
   only: a repeated write could create a second record. Beside it, `writeQuickBooks` —
-  one WRITE of a bill, an expense, a vendor credit or a journal entry, never repeated,
+  one WRITE of a bill, an expense, a vendor credit, a journal entry or a vendor, never repeated,
   the request id left to the platform: a failure says whether a record may exist, in a
   fixed sentence — no record was created, or QuickBooks did not confirm it — with a Fault
   named by its number; the query text — `lookupQuery`, `lookupInQuery` and
@@ -550,13 +580,18 @@ only what an automation here uses:
   Connections' rules — a final answer replayed for the same request under its key, a
   different request under a used key refused 409, nothing recorded for a 5xx, 401, 403,
   408, 425 or 429, an answer over 192 KiB a 502 naming no reason, an input naming
-  `accountId` refused. Its company holds accounts, employees, vendors, customers, bills,
+  `accountId` refused, and — as the platform's `4807959` refuses it (its BUILD-PLAN 25.2.33) — a
+  write naming `Id`, `SyncToken` or `sparse` at the top level, in any case, refused 400
+  `refused_field` before anything is written (`REFUSED_BODY_FIELDS`). A suite can script an
+  answer lost after QuickBooks acted, recorded first or not. Its company holds accounts, employees, vendors, customers, bills,
   expenses, vendor credits and journal entries (a `sample…` builder for each): it answers
   only the query text the kit's builders write, by Intuit's documented rules (IN, =, <, >,
   <=, >= and LIKE joined by AND, OR refused; filterable and sortable fields from Intuit's
   model file; an expense's amount behind a switch until the sandbox settles it), and
-  creates an expense, a vendor credit or a journal entry as Intuit documents, each kept
-  for the queries after it. It throws each refusal through the SDK's `refusalFixture`,
+  creates a vendor, a bill, an expense, a vendor credit or a journal entry as Intuit
+  documents — an expense or a vendor credit sent no number numbered by QuickBooks itself, the
+  last number plus 1, when the company's own numbers are off — each kept for the queries after
+  it. It throws each refusal through the SDK's `refusalFixture`,
   which the suite hands it, so the kit imports nothing at run time.
 
 ## Adding an automation

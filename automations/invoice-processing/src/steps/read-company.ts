@@ -5,7 +5,7 @@ import {
   readQuickBooks,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
-import { truncateText, type Step } from '@autom8x/automation-sdk';
+import { isObject, truncateText, type Step } from '@autom8x/automation-sdk';
 
 import { failedWith, quickBooksFailed } from '../outcome.js';
 import type { CompanyState } from '../state.js';
@@ -16,7 +16,9 @@ import type { CompanyState } from '../state.js';
  * settings this automation does not send), and keep its names for the later checks
  * that compare them, and whether it runs QuickBooks Payroll: CompanyInfo's
  * `PayrollFeature`, in Intuit's sample, for the note that an employee is repaid through a
- * Reimbursement pay item. One `companyInfo.get`.
+ * Reimbursement pay item — and, from the same answer, when the company file was created
+ * (`MetaData.CreateTime`), which confirm-company compares after an approval. One
+ * `companyInfo.get`.
  */
 
 export const READ_COMPANY_SENTENCES = {
@@ -61,11 +63,13 @@ export function readCompany(clock: Clock): Step {
     }
     const legalName = info.LegalName;
     const payroll = nameValueOf(info.NameValue, 'PayrollFeature');
+    const created = isObject(info.MetaData) ? info.MetaData.CreateTime : undefined;
     const company: CompanyState = {
       name,
       legalName: typeof legalName === 'string' && legalName.trim() !== '' ? legalName : null,
       country,
       payrollFeature: payroll === 'true' ? true : payroll === 'false' ? false : null,
+      createdAt: typeof created === 'string' && created.trim() !== '' ? created.trim() : null,
     };
     return {
       outcome: 'ok',

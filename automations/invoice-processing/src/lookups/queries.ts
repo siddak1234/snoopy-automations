@@ -10,7 +10,7 @@ import { addDays, queryAmount } from '@autom8x/automation-kit/values';
 
 import type { VendorState } from '../decide/contract.js';
 import { listedInvoiceNumbers, searchableNumber } from '../decide/lookup-uses.js';
-import { FEED_WINDOW } from '../decide/matches.js';
+import { FEED_WINDOW, type DuplicateLookup } from '../decide/duplicate-rule.js';
 import type { DocumentState } from '../state.js';
 import type { ExpenseSearch } from './expense-search.js';
 
@@ -66,7 +66,35 @@ export interface Search {
   readonly maxResults: number;
 }
 
+/** A search before it is written: kept apart so the re-check after approval asks the same, one row more. */
+interface Parts {
+  readonly entity: TransactionEntity;
+  readonly where: QueryCondition[];
+  readonly maxResults: number;
+  readonly newestFirst?: boolean;
+}
+
 const equals = (field: string, value: string): QueryCondition => ({ field, operator: '=', value });
+
+function parts(
+  entity: TransactionEntity,
+  where: QueryCondition[],
+  maxResults: number,
+  newestFirst = false,
+): Parts {
+  return { entity, where, maxResults, newestFirst };
+}
+
+/** The search's text, at its bound plus `extraRows`. */
+function written({ entity, where, maxResults, newestFirst }: Parts, extraRows = 0): Search {
+  const orderBy = newestFirst ? { orderBy: { field: 'TxnDate', descending: true } } : {};
+  const bound = maxResults + extraRows;
+  return {
+    entity,
+    maxResults: bound,
+    query: transactionQuery({ entity, where, ...orderBy, maxResults: bound }),
+  };
+}
 
 function search(
   entity: TransactionEntity,
@@ -74,8 +102,7 @@ function search(
   maxResults: number,
   newestFirst = false,
 ): Search {
-  const orderBy = newestFirst ? { orderBy: { field: 'TxnDate', descending: true } } : {};
-  return { entity, maxResults, query: transactionQuery({ entity, where, ...orderBy, maxResults }) };
+  return written(parts(entity, where, maxResults, newestFirst));
 }
 
 /** A vendor by the exact name printed, or typed in "Who paid": `SELECT * FROM Vendor WHERE DisplayName = '…' AND Active IN (true, false) MAXRESULTS 2`. */
@@ -103,18 +130,21 @@ export function feedWindow(date: string): { readonly from: string; readonly to: 
   return { from: addDays(date, -FEED_WINDOW.before), to: addDays(date, FEED_WINDOW.after) };
 }
 
-/** Expenses of an amount in the feed window (D21) — or, under S4's fallback, the window alone, newest first. */
-export function feedExpenses(amountCents: number, date: string, how: ExpenseSearch): Search {
+function feedParts(amountCents: number, date: string, how: ExpenseSearch): Parts {
   const { from, to } = feedWindow(date);
   const window = dateRange('TxnDate', from, to);
   return how === 'amount'
-    ? search(
+    ? parts(
         'Purchase',
         [equals('TotalAmt', queryAmount(amountCents)), ...window],
         MAX_RESULTS.records,
       )
-    : search('Purchase', window, MAX_RESULTS.windowExpenses, true);
+    : parts('Purchase', window, MAX_RESULTS.windowExpenses, true);
 }
+
+/** Expenses of an amount in the feed window (D21) — or, under S4's fallback, the window alone, newest first. */
+export const feedExpenses = (amountCents: number, date: string, how: ExpenseSearch): Search =>
+  written(feedParts(amountCents, date, how));
 
 /** The vendor's Id, which every lookup that names the vendor is only run with (`lookupUses`). */
 function vendorIdOf(vendor: VendorState | null): string {
@@ -123,13 +153,12 @@ function vendorIdOf(vendor: VendorState | null): string {
   return vendor.id;
 }
 
-/** find-duplicate-number's search per route (§5): by the document's number, or a statement's listed numbers. */
-export function numberSearch(document: DocumentState, vendor: VendorState | null): Search {
+function numberParts(document: DocumentState, vendor: VendorState | null): Parts {
   const number = document.number ?? '';
   switch (document.route) {
     case 'company_receipt':
       // A bill from the linked seller with this number, open or paid: an invoice stamped PAID.
-      return search(
+      return parts(
         'Bill',
         [equals('DocNumber', number), equals('VendorRef', vendorIdOf(vendor))],
         MAX_RESULTS.records,
@@ -137,13 +166,13 @@ export function numberSearch(document: DocumentState, vendor: VendorState | null
     case 'card_refund':
     case 'vendor_credit':
       // VendorRef cannot be searched on a vendor credit: decide compares the vendor.
-      return search('VendorCredit', [equals('DocNumber', number)], MAX_RESULTS.records);
+      return parts('VendorCredit', [equals('DocNumber', number)], MAX_RESULTS.records);
     case 'statement': {
       // Each listed number once, whatever its case, and only one a bill's number could be: a longer
       // one is left out, and decide counts it as not in QuickBooks. One more row than numbers: a
       // full answer means a number on two bills, and more unseen.
       const numbers = listedInvoiceNumbers(document).filter(searchableNumber);
-      return search(
+      return parts(
         'Bill',
         [
           { field: 'DocNumber', operator: 'IN', values: numbers },
@@ -154,16 +183,19 @@ export function numberSearch(document: DocumentState, vendor: VendorState | null
     }
     default:
       // A bill, and a bill document someone paid personally: any vendor's bill with the number.
-      return search('Bill', [equals('DocNumber', number)], MAX_RESULTS.records);
+      return parts('Bill', [equals('DocNumber', number)], MAX_RESULTS.records);
   }
 }
 
-/** find-duplicate-amount's search per route (§5), including the bank-feed check (D21). */
-export function amountSearch(
+/** find-duplicate-number's search per route (§5): by the document's number, or a statement's listed numbers. */
+export const numberSearch = (document: DocumentState, vendor: VendorState | null): Search =>
+  written(numberParts(document, vendor));
+
+function amountParts(
   document: DocumentState,
   vendor: VendorState | null,
   how: ExpenseSearch,
-): Search {
+): Parts {
   const amount = queryAmount(document.amountCents ?? 0);
   const date = document.date ?? '';
   switch (document.route) {
@@ -172,22 +204,22 @@ export function amountSearch(
       // The vendor's own bills when it is matched; any vendor's for a new one. A contractor is always matched.
       const where = [equals('TotalAmt', amount), equals('TxnDate', date)];
       if (vendor?.status === 'matched') where.push(equals('VendorRef', vendor.id));
-      return search('Bill', where, MAX_RESULTS.records);
+      return parts('Bill', where, MAX_RESULTS.records);
     }
     case 'company_receipt':
     case 'card_refund':
-      return feedExpenses(document.amountCents ?? 0, date, how);
+      return feedParts(document.amountCents ?? 0, date, how);
     case 'employee':
     case 'owner':
-      return search('JournalEntry', [equals('TxnDate', date)], MAX_RESULTS.journalEntries);
+      return parts('JournalEntry', [equals('TxnDate', date)], MAX_RESULTS.journalEntries);
     case 'vendor_credit':
-      return search(
+      return parts(
         'VendorCredit',
         [equals('TotalAmt', amount), equals('TxnDate', date)],
         MAX_RESULTS.records,
       );
     case 'statement':
-      return search(
+      return parts(
         'Bill',
         [
           { field: 'Balance', operator: '>', value: queryAmount(0) },
@@ -196,6 +228,30 @@ export function amountSearch(
         MAX_RESULTS.openBills,
       );
   }
+}
+
+/** find-duplicate-amount's search per route (§5), including the bank-feed check (D21). */
+export const amountSearch = (
+  document: DocumentState,
+  vendor: VendorState | null,
+  how: ExpenseSearch,
+): Search => written(amountParts(document, vendor, how));
+
+/**
+ * confirm-no-duplicate's one query after an approval (the plan's §5): the path's own duplicate
+ * lookup — find-duplicate-number's or find-duplicate-amount's, the search decide's run sent — with
+ * one row more, so a record added while the run waited shows beside every one the approver saw.
+ * decide builds it, and saves it with the plan (`src/decide/recheck.ts`).
+ */
+export function recheckSearch(
+  lookup: DuplicateLookup,
+  document: DocumentState,
+  vendor: VendorState | null,
+  how: ExpenseSearch,
+): Search {
+  const found =
+    lookup === 'numberLookup' ? numberParts(document, vendor) : amountParts(document, vendor, how);
+  return written(found, 1);
 }
 
 /** find-related's search per route (§5). */

@@ -7,7 +7,6 @@ import { SAVED_MAXIMUM_BYTES, savedBytes } from '../src/decide/saved.js';
 import type { Decision } from '../src/decide/decide.js';
 import { CHECKING, bill, creditNote, paidBy, receipt, sampleAnswer } from './check-world.js';
 import {
-  RUN_ID,
   VENDOR,
   agreed,
   billRow,
@@ -27,7 +26,6 @@ import { SAMPLES } from './sample-maker/samples.js';
  */
 
 const TIDEWELL = { ...VENDOR, id: '9', displayName: 'Tidewell Hardware' };
-const CREATED = `Created by Autom8x Bills & Receipts, run ${RUN_ID}.`;
 
 function saved(decision: Decision) {
   assert.ok(decision.outcome === 'ok' || decision.outcome === 'held', decision.outcome);
@@ -53,13 +51,13 @@ test('a bill: bill.create to the vendor, its due date, its number when QuickBook
     date: '2026-09-14',
     dueDate: '2026-10-14',
     docNumber: 'HOS-1042',
-    memo: CREATED,
+    memo: '',
     lineDescription: 'Bill HOS-1042 from Harrowgate Office Supply',
     currencyRef: null,
   });
   // Past 21 characters, or another vendor's bill has it: the number goes in the memo.
   const long = plan({ answer: bill({ documentNumber: 'N'.repeat(22) }) });
-  assert.deepEqual([long.docNumber, long.memo], [null, `${CREATED} Number ${'N'.repeat(22)}.`]);
+  assert.deepEqual([long.docNumber, long.memo], [null, `Number ${'N'.repeat(22)}.`]);
   const taken = plan({
     answer: bill(),
     lookups: { numberLookup: found(billRow({ vendorId: '88' })) },
@@ -93,7 +91,7 @@ test('a company receipt: an expense from Paid from — CreditCard from a card, C
     ['purchase.create', 'expense', 'CreditCard', null, { id: '41', name: 'Company Visa' }, null],
   );
   assert.deepEqual(card.payee, { kind: 'vendor', id: '9', name: 'Tidewell Hardware' });
-  assert.equal(card.memo, `${CREATED} Receipt 55120 from Tidewell Hardware.`);
+  assert.equal(card.memo, `Receipt 55120 from Tidewell Hardware.`);
   const check = plan({
     answer: receipt({ paymentMethod: 'check' }),
     vendor: TIDEWELL,
@@ -129,7 +127,7 @@ test('a card refund: an expense with Credit true on the card; a vendor credit: i
       true,
       'CreditCard',
       { kind: 'none' },
-      `${CREATED} Refund R-6603 from Tidewell Hardware.`,
+      `Refund R-6603 from Tidewell Hardware.`,
     ],
   );
   const credit = plan({ answer: creditNote() });
@@ -137,12 +135,9 @@ test('a card refund: an expense with Credit true on the card; a vendor credit: i
     [credit.operation, credit.record, credit.docNumber],
     ['vendorCredit.create', 'vendor_credit', null],
   );
-  assert.equal(credit.memo, `${CREATED} Number CM-0077. Credits invoice HOS-1042.`);
+  assert.equal(credit.memo, `Number CM-0077. Credits invoice HOS-1042.`);
   const numbered = plan({ answer: creditNote(), preferences: { purchaseCustomTxnNumbers: true } });
-  assert.deepEqual(
-    [numbered.docNumber, numbered.memo],
-    ['CM-0077', `${CREATED} Credits invoice HOS-1042.`],
-  );
+  assert.deepEqual([numbered.docNumber, numbered.memo], ['CM-0077', `Credits invoice HOS-1042.`]);
 });
 
 test("paid personally: a journal entry owing the employee, or to the owner's equity; a bill to the contractor; the seller and number in the text", () => {
@@ -164,7 +159,7 @@ test("paid personally: a journal entry owing the employee, or to the owner's equ
     ],
   );
   assert.equal(employee.lineDescription, 'Tidewell Hardware, receipt 55120');
-  assert.equal(employee.memo, `${CREATED} Robin Example paid Tidewell Hardware, receipt 55120.`);
+  assert.equal(employee.memo, `Robin Example paid Tidewell Hardware, receipt 55120.`);
   const owner = plan({ answer: receipt(), check: paidBy('owner', { paidFrom: null }) });
   assert.deepEqual(
     [owner.payee, owner.accounts.equity, owner.accounts.liability],
@@ -180,7 +175,7 @@ test("paid personally: a journal entry owing the employee, or to the owner's equ
     [contractor.operation, contractor.payee, contractor.docNumber, contractor.dueDate],
     ['bill.create', { kind: 'vendor', id: '31', name: 'Sam Lee' }, null, null],
   );
-  assert.equal(contractor.memo, `${CREATED} Sam Lee paid Harrowgate Office Supply, bill HOS-1042.`);
+  assert.equal(contractor.memo, `Sam Lee paid Harrowgate Office Supply, bill HOS-1042.`);
 });
 
 test("the category (D27): the setting for the spend type; the default when unset, other, unclear or disputed; a credit's original bill", () => {
@@ -262,17 +257,21 @@ test("the saved data: one shape held or straight through, never a line, a row or
     'v',
     'documentType',
     'route',
+    'seller',
+    'documentNumber',
     'plan',
     'payer',
     'receipt',
     'credit',
     'duplicates',
+    'recheck',
     'holdReasons',
     'company',
     'preferences',
     'artifactId',
     'modelServed',
   ]);
+
   assert.deepEqual(straight.modelServed, {
     first: 'anthropic/claude-haiku-4.5',
     second: 'google/gemini-3.1-flash-lite',
@@ -301,7 +300,7 @@ test("the saved data: one shape held or straight through, never a line, a row or
     decide({
       answer: receipt(),
       check: paidBy('not_employee', { paidFrom: null }),
-      vendor: { ...VENDOR, id: '31', vendor1099: true },
+      vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee', vendor1099: true },
     }),
   );
   assert.deepEqual(contractor.payer, {

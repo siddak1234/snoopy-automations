@@ -10,7 +10,7 @@ import {
   lookupQuery,
   transactionQuery,
 } from '../src/quickbooks/query.js';
-import { sampleAccount, sampleEmployee } from '../src/testing/quickbooks-company.js';
+import { sampleAccount, sampleEmployee, sampleVendor } from '../src/testing/quickbooks-company.js';
 import { QuickBooksSimulator } from '../src/testing/quickbooks-simulator.js';
 
 /**
@@ -148,6 +148,7 @@ test('a search finds created expenses, vendor credits and journal entries by the
     byNumber.map((row) => row.DocNumber),
     ['R-1'],
   );
+  sim.company.vendors.push(sampleVendor('9', 'Tidewell Hardware'));
   await sim.provider(
     call('vendorCredit.create', {
       VendorRef: { value: '9' },

@@ -44,9 +44,11 @@ import type { DocumentState } from '../state.js';
  * - `find-other-record` (D32): the same purchase recorded as another kind of record.
  *
  * `lookupUses` — the table decide's contract reads too — says, per route, whether each runs: it
- * writes `{ reachedMax, records }` under its key; a lookup with no number QuickBooks could hold
- * says "Not checked" and writes nothing (G4-4); one that does not apply is skipped. A full answer
- * sets `reachedMax`, which decide counts as a possible duplicate (D6).
+ * writes `{ reachedMax, records, answeredAt }` under its key; a lookup with no number QuickBooks
+ * could hold says "Not checked" and writes nothing (G4-4); one that does not apply is skipped. A
+ * full answer sets `reachedMax`, which decide counts as a possible duplicate (D6); `answeredAt`,
+ * QuickBooks' own time on the answer, lets the re-check after an approval tell a record past that
+ * bound from one added while the run waited (`src/decide/recheck.ts`).
  */
 
 interface RecordLookup {
@@ -97,7 +99,11 @@ function recordLookup(lookup: RecordLookup, clock: Clock, how: ExpenseSearch): S
     if (!records) {
       return failedWith(lookup.what, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer);
     }
-    const found: LookupState = { reachedMax: read.rows.length >= search.maxResults, records };
+    const found: LookupState = {
+      reachedMax: read.rows.length >= search.maxResults,
+      records,
+      answeredAt: read.answeredAt,
+    };
     return {
       outcome: 'ok',
       summary: lookup.line({ document, vendor, how, rows: read.rows, ...found }),

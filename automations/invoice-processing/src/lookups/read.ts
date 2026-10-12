@@ -16,6 +16,7 @@ import { vendorOf, type VendorState } from '../decide/contract.js';
 import { KEPT_TYPES, ROUTES } from '../document.js';
 import { failedWith, quickBooksFailed } from '../outcome.js';
 import type { DocumentState, PayerState } from '../state.js';
+import { instantOf } from './records.js';
 
 /**
  * What every lookup (steps 9–17) shares: its fixed sentences, the state it reads, and its one
@@ -131,7 +132,12 @@ export const lookupVendorOf = (state: JsonObject): VendorState | null | undefine
 
 /** A lookup's read: the rows, or the failure — its reason kept for the steps that carry on past one. */
 export type Rows =
-  | { readonly ok: true; readonly rows: JsonObject[] }
+  | {
+      readonly ok: true;
+      readonly rows: JsonObject[];
+      /** QuickBooks' own clock when it answered (the answer's `time`); null when it gave none. */
+      readonly answeredAt: string | null;
+    }
   | {
       readonly ok: false;
       readonly reason: QuickBooksFailureReason | 'unexpected_answer';
@@ -188,5 +194,10 @@ export async function lookupRows(read: LookupRead): Promise<Rows> {
       result: failedWith(read.what, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer),
     };
   }
-  return { ok: true, rows };
+  const time = isObject(answer.body) ? answer.body.time : undefined;
+  return {
+    ok: true,
+    rows,
+    answeredAt: typeof time === 'string' && instantOf(time) !== undefined ? time : null,
+  };
 }

@@ -16,6 +16,10 @@ import { EXPENSE_SEARCH, type ExpenseSearch } from './lookups/expense-search.js'
 import { runResult } from './output.js';
 import { EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1 } from './prompts.js';
 import { checkDocument } from './steps/check-document.js';
+import { confirmCompany } from './steps/confirm-company.js';
+import { confirmNoDuplicate } from './steps/confirm-no-duplicate.js';
+import { confirmVendor, createVendor } from './steps/confirm-vendor.js';
+import { createRecord } from './steps/create-record.js';
 import { extract } from './steps/extract.js';
 import { findAccounts } from './steps/find-accounts.js';
 import {
@@ -31,6 +35,7 @@ import {
   findRelated,
 } from './steps/find-records.js';
 import { findVendor, findVendorCompany } from './steps/find-vendor.js';
+import { notify } from './steps/notify.js';
 import { readCompany } from './steps/read-company.js';
 import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
@@ -40,8 +45,9 @@ import { verifyRead } from './steps/verify-read.js';
  * Bills & Receipts (template `invoice-processing`) — records a bill, a receipt or a credit
  * note from a PDF or photo in QuickBooks Online, and compares a supplier's statement with it
  * (platform BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and plan of 2026-10-11).
- * Built in groups, each appending its steps to the v1 manifest before it is registered. The
- * first five spend nothing; the sixth and the eighth are its two model calls:
+ * Built in groups, each appending its steps to the v1 manifest before it is registered: 24 of
+ * the 24 steps the platform allows. The first five spend nothing; the sixth and the eighth are
+ * its two model calls:
  *
  * - `receive` checks the file against the platform's measurements of it;
  * - `read-company` proves QuickBooks is connected and the company is in the US;
@@ -56,10 +62,13 @@ import { verifyRead } from './steps/verify-read.js';
  *   `find-similar-vendors`, `find-customer-name` and `find-employee-name` (a new vendor's checks),
  *   `find-duplicate-number`, `find-duplicate-amount`, `find-related` and `find-other-record`;
  * - `decide` (`src/decide/`) — one result: the record planned, one hold for every reason, a
- *   statement compared, or a fixed sentence.
+ *   statement compared, or a fixed sentence;
+ * - after an approval only, the checks a wait calls for (steps 19–22): `confirm-company`,
+ *   `confirm-vendor`, `create-vendor` and `confirm-no-duplicate`;
+ * - `create-record` — the one write, exactly the record decide saved (`src/writes/`);
+ * - `notify` — the optional email to the "Also email" address.
  *
- * The writes (steps 19–24) come with the plan's Group 5: until then a run decided straight
- * through, or approved, writes nothing, and its result says so (`src/output.ts`).
+ * Its result is the record made, or a statement's comparison (`src/output.ts`).
  *
  * One container serves v1 and nothing else (the platform's D2: one container per
  * manifest version for everything new).
@@ -87,6 +96,11 @@ export const PROMPTS: readonly PromptModule[] = [EXTRACT_DOCUMENT_V1, VERIFY_DOC
 /**
  * The steps repeated after a transient failure: every QuickBooks read and the file's, and each
  * model call only when it never reached the platform. decide calls nothing, so it has none.
+ * No write declares one in v1 — create-vendor, create-record — until the sandbox (S6) shows a
+ * repeated request id answered with the first answer rather than Intuit's Fault 600: a write with
+ * no answer is never repeated, and says QuickBooks did not confirm it (the design's open question,
+ * its recommended answer applied). notify catches its own failure, so a policy there would never
+ * fire.
  */
 export const RETRY: Readonly<Record<string, RetryPolicy>> = {
   receive: READ_RETRY,
@@ -105,6 +119,9 @@ export const RETRY: Readonly<Record<string, RetryPolicy>> = {
   'find-duplicate-amount': READ_RETRY,
   'find-related': READ_RETRY,
   'find-other-record': READ_RETRY,
+  'confirm-company': READ_RETRY,
+  'confirm-vendor': READ_RETRY,
+  'confirm-no-duplicate': READ_RETRY,
 };
 
 /**
@@ -131,6 +148,12 @@ export function pipelineSteps(clock: Clock, expenseSearch: ExpenseSearch): Recor
     'find-related': findRelated(clock, expenseSearch),
     'find-other-record': findOtherRecord(clock, expenseSearch),
     decide: decide(expenseSearch),
+    'confirm-company': confirmCompany(clock),
+    'confirm-vendor': confirmVendor(clock),
+    'create-vendor': createVendor(),
+    'confirm-no-duplicate': confirmNoDuplicate(clock),
+    'create-record': createRecord(),
+    notify: notify(),
   });
 }
 
@@ -155,8 +178,8 @@ export function define(
       dependencies.expenseSearch ?? EXPENSE_SEARCH,
     ),
     retry: RETRY,
-    // decide's outcome: a statement compared, or the record planned (`src/output.ts`).
-    result: (state) => runResult(state),
+    // A statement compared, or the record made (`src/output.ts`).
+    result: (state, request) => runResult(state, request),
   });
   return withFixedSentences(automation, dependencies.log ?? jsonLogger(TEMPLATE_ID));
 }

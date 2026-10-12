@@ -1,40 +1,37 @@
-import { fitLine, formatMoney, type LinePiece } from '@autom8x/automation-kit/values';
-import { isObject, type JsonObject } from '@autom8x/automation-sdk';
+import { type InvokeRequest, type JsonObject } from '@autom8x/automation-sdk';
 
-import type { Payee, RecordPlan } from './decide/plan.js';
 import type { SavedState } from './decide/saved.js';
 import { statementLine, type StatementResult } from './decide/statement.js';
+import { NOUNS, nextStepOf, recordedLine } from './writes/lines.js';
+import {
+  createdOf,
+  newVendorOf,
+  readSaved,
+  statementOf,
+  type CreatedState,
+  type NewVendorState,
+} from './writes/saved-state.js';
 
 /**
- * The run's result once its pipeline ends — decide's outcome, which replaced the run's state (the
- * plan's §2.6 and §5, "Output"); a held run ends at decide instead, with no result of this kind.
+ * The run's result once its pipeline ends (the plan's §5, "Output"; the manifest's `outputSchema`
+ * describes it); a held run ends at decide instead, with no result of this kind.
  *
  * - **A statement compared** (`outcome: 'compared'`): what decide found — its own sum, the vendor's
  *   open bills it does not list, its balance against QuickBooks' — with the FULL list of the
  *   invoice numbers it lists that QuickBooks lacks, which neither app shows yet, and whether each
  *   lookup read all there was (`listedCheckable`, `openBillsCheckable`: false at its maximum, D6);
  *   the summary is decide's line, the totals and the counts.
- * - **A record decided** (`outcome: 'planned'`), straight through or approved after a hold: the
- *   document's type and route, the record planned — its type, payment type, amount, date, payee,
- *   category and Paid from account — who paid, and why it was held, if it was. The writes (the
- *   plan's Group 5, steps 19–24) are not in this version, so nothing is written: the summary says
- *   so, and the output carries no record Id yet.
+ * - **A record made** (`outcome: 'recorded'`), straight through or after an approval: the
+ *   document's type and route; the record's type and QuickBooks Id, its payment type, the amount
+ *   sent and the total QuickBooks shows, its date, due date and number, its payee — a new vendor's
+ *   QuickBooks Id once found or added — its category and Paid from account; who paid; the next
+ *   step; why it was held, if it was; and whether it was decided automatically or after approval.
+ *   The summary is create-record's line: what was recorded, and the next step.
+ *
+ * It NEVER throws once a record is made: a throw there would mark failed a run whose record
+ * exists. A state with `created` that does not read back — a guard that should never fire, since
+ * create-record read it whole moments before — still answers with the record's type and Id.
  */
-
-/** decide's statement comparison, as its step left the state. */
-function isComparison(state: JsonObject): boolean {
-  return (
-    state.v === 1 &&
-    state.route === 'statement' &&
-    Array.isArray(state.listedNotInQuickBooks) &&
-    isObject(state.vendor)
-  );
-}
-
-/** decide's saved plan, as its step left the state — or as an approval handed it back. */
-function isSaved(state: JsonObject): boolean {
-  return state.v === 1 && typeof state.route === 'string' && isObject(state.plan);
-}
 
 function compared(result: StatementResult): { output: JsonObject; summary: string } {
   return {
@@ -62,63 +59,68 @@ function compared(result: StatementResult): { output: JsonObject; summary: strin
   };
 }
 
-/** Who the record names, as a person reads it. */
-function payeeName(payee: Payee): string | null {
-  return payee.kind === 'none' ? null : payee.name;
+/** The payee the record names: a planned new vendor as the vendor it became. */
+function payeeOf(saved: SavedState, newVendor: NewVendorState | null): JsonObject {
+  const { payee } = saved.plan;
+  return payee.kind === 'new_vendor' && newVendor !== null
+    ? { kind: 'vendor', id: newVendor.id, name: newVendor.displayName }
+    : { ...payee };
 }
 
-/** What the record is, as the summary words it: "a bill from Harrowgate Office Supply, $413.34". */
-function recordWords(plan: RecordPlan): LinePiece[] {
-  const amount = formatMoney(plan.amountCents);
-  const name = payeeName(plan.payee);
-  const paidFrom = plan.accounts.paidFrom?.name ?? '';
-  switch (plan.record) {
-    case 'bill':
-      return ['a bill from ', { name: name ?? '' }, `, ${amount}`];
-    case 'expense':
-      return [`an expense of ${amount} from `, { name: paidFrom }];
-    case 'card_refund':
-      return [`a refund of ${amount} to `, { name: paidFrom }];
-    case 'vendor_credit':
-      return ['a vendor credit from ', { name: name ?? '' }, `, ${amount}`];
-    case 'journal_entry':
-      return ['a journal entry for what ', { name: name ?? '' }, ` paid, ${amount}`];
-  }
-}
-
-function planned(saved: SavedState): { output: JsonObject; summary: string } {
+function recorded(
+  saved: SavedState,
+  created: CreatedState,
+  newVendor: NewVendorState | null,
+  request: InvokeRequest,
+): { output: JsonObject; summary: string } {
   const { plan } = saved;
   return {
     output: {
-      outcome: 'planned',
+      outcome: 'recorded',
       documentType: saved.documentType,
       route: saved.route,
       record: {
         type: plan.record,
+        id: created.id,
         operation: plan.operation,
         paymentType: plan.paymentType,
         amountCents: plan.amountCents,
-        date: plan.date,
-        dueDate: plan.dueDate,
-        docNumber: plan.docNumber,
-        payee: { ...plan.payee },
+        quickBooksTotalCents: created.totalCents,
+        date: created.txnDate,
+        dueDate: created.dueDate,
+        docNumber: created.docNumber,
+        documentNumber: saved.documentNumber,
+        payee: payeeOf(saved, newVendor),
         category: { ...plan.accounts.category },
         paidFromAccount: plan.accounts.paidFrom === null ? null : { ...plan.accounts.paidFrom },
       },
+      newVendor: newVendor === null ? null : { ...newVendor },
       payer: saved.payer === null ? null : { ...saved.payer },
+      nextStep: nextStepOf(saved),
       holdReasons: [...saved.holdReasons],
-    } as unknown as JsonObject,
-    summary: fitLine([
-      'Ready to record ',
-      ...recordWords(plan),
-      '; this version stops before writing to QuickBooks. Nothing was created.',
-    ]),
+      decidedBy: request.continuation ? 'after approval' : 'automatically',
+    },
+    summary: recordedLine(saved, created, newVendor),
   };
 }
 
-/** The run's output and summary from decide's outcome; a state decide did not leave is a fault. */
-export function runResult(state: JsonObject): { output: JsonObject; summary: string } {
-  if (isComparison(state)) return compared(state as unknown as StatementResult);
-  if (isSaved(state)) return planned(state as unknown as SavedState);
+/** The run's output and summary from what its steps left; a state that holds neither is a fault. */
+export function runResult(
+  state: JsonObject,
+  request: InvokeRequest,
+): { output: JsonObject; summary: string } {
+  const statement = statementOf(state);
+  if (statement) return compared(statement);
+  const created = createdOf(state);
+  if (created) {
+    const saved = readSaved(state);
+    const newVendor = newVendorOf(state);
+    if (saved && newVendor !== undefined) return recorded(saved, created, newVendor, request);
+    const noun = NOUNS[created.record] ?? 'record';
+    return {
+      output: { outcome: 'recorded', record: { type: created.record, id: created.id } },
+      summary: `Recorded ${noun} ${created.id.slice(0, 20)} in QuickBooks.`,
+    };
+  }
   throw new Error('the run ended without a decision');
 }
