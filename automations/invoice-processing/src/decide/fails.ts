@@ -41,7 +41,11 @@ export const DECIDE_REASONS: Readonly<Record<DecideFailure, string>> = {
   saved_too_large: 'saved_too_large',
 };
 
-/** The rules each path checks (the plan's §2.6). */
+/**
+ * The rules each path checks, in order (the plan's §2.6), except that a statement checks F7 before
+ * F6 (the owner's decision of 2026-10-12): a first-time bill titled "Statement" that the two reads
+ * dispute gets F7's instruction to enter it by hand, not F6's "nothing to compare it with".
+ */
 export const PATH_FAILS: Readonly<Record<Route, readonly FailRule[]>> = {
   bill: ['F1', 'F2', 'F3', 'F4'],
   company_receipt: ['F1', 'F2', 'F3'],
@@ -50,7 +54,7 @@ export const PATH_FAILS: Readonly<Record<Route, readonly FailRule[]>> = {
   employee: ['F1', 'F3'],
   owner: ['F1', 'F3'],
   contractor: ['F1', 'F2', 'F3'],
-  statement: ['F1', 'F2', 'F6', 'F7'],
+  statement: ['F1', 'F2', 'F7', 'F6'],
 };
 
 /** The name a new vendor is created with: as printed, or "<name> (vendor)" when a customer or employee has it. */

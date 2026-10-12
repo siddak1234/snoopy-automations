@@ -41,7 +41,7 @@ test('the sentences, word for word as the plan gives them, each at most 200 char
   );
 });
 
-test('the rules each path checks (§2.6)', () => {
+test("the rules each path checks, in order (§2.6), a statement's F7 before its F6", () => {
   assert.deepEqual(PATH_FAILS, {
     bill: ['F1', 'F2', 'F3', 'F4'],
     company_receipt: ['F1', 'F2', 'F3'],
@@ -50,7 +50,7 @@ test('the rules each path checks (§2.6)', () => {
     employee: ['F1', 'F3'],
     owner: ['F1', 'F3'],
     contractor: ['F1', 'F2', 'F3'],
-    statement: ['F1', 'F2', 'F6', 'F7'],
+    statement: ['F1', 'F2', 'F7', 'F6'],
   });
 });
 
@@ -184,7 +184,8 @@ test('the first rule wins, and every fail comes before any hold', () => {
     }),
     'F2',
   );
-  // An unknown statement vendor whose type read 2 disputes: F6 before F7.
+  // An unknown statement vendor whose type read 2 disputes: F7 before F6, so a first-time bill
+  // titled "Statement" gets F7's "enter it by hand", not F6's "nothing to compare it with".
   const document = documentOf(check(statement()));
   assert.equal(
     failure({
@@ -194,6 +195,16 @@ test('the first rule wins, and every fail comes before any hold', () => {
         ...agreed(document),
         differences: [{ field: 'documentType', first: 'supplier statement', second: 'bill' }],
       },
+    }),
+    'F7',
+  );
+  // Undisputed — the reads agree, or read 2 was not made — an unknown statement vendor is F6.
+  assert.equal(failure({ answer: statement(), vendor: { status: 'new' } }), 'F6');
+  assert.equal(
+    failure({
+      answer: statement(),
+      vendor: { status: 'new' },
+      verification: { status: 'not_made', reason: 'no_answer' },
     }),
     'F6',
   );
