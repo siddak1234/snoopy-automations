@@ -445,10 +445,34 @@ out, or answered `no_model_left`, it is not made, never made without the exclusi
 compares the fields the route writes, exact after the same cleaning and the seller roughly,
 records the second total only when it alone adds up (and runs the arithmetic again), and
 keeps `state.verification` for decide: a difference holds, a statement's disputed type fails
-(F7), a second read not made holds; out of time and the platform's faults fail. `decide`,
-the plan's approval wording and the data saved for after approval are built and tested in
-`src/decide/` and join the pipeline with the lookups they read (Group 4); its input contract
-is `src/decide/contract.ts`.
+(F7), a second read not made holds; out of time and the platform's faults fail. Nine lookups
+follow (steps 9–17), each ONE `query.run` per document type, as the plan's §5 table runs it,
+or skipped (`src/lookups/queries.ts` builds every text, and fixed-text tests hold each):
+`find-vendor` and `find-vendor-company` find the seller — or the contractor who paid — by the
+exact name, then by company name, active or not, each row re-checked in code (an inactive
+vendor fails "reactivate it" and two fail — but a company receipt's or a card refund's seller,
+looked up only to link an existing vendor (D20), is then not linked: no payee, its line saying
+why — and a person nobody has is V1); for a bill's new vendor, `find-similar-vendors` lists up
+to three vendors with its distinctive word for the approver, inactive ones marked, and
+`find-customer-name` and `find-employee-name` check the name is free (employees a connection
+cannot read go on as unreadable — sandbox S7); then `find-duplicate-number`,
+`find-duplicate-amount`, `find-related` and `find-other-record` gather the records decide
+weighs — a number QuickBooks could not hold (none, or over 21 characters: the document's own,
+a credit's original invoice number, every one a statement lists) says "Not checked" and is
+never sent, a full answer is a possible duplicate (D6) whose line always keeps "maybe more",
+a statement's listed invoice numbers — each once, whatever its case, one past 21 characters
+counted as not in QuickBooks — and open bills are this vendor's, and a statement's lookup
+QuickBooks refuses ends "Compare the statement in QuickBooks". The bank-feed check (D21) searches
+expenses by amount in its window, or, set from sandbox S4 before v1 registers
+(`src/lookups/expense-search.ts`), the window alone, newest first, 50 at most, a bill's D32
+check dropped. `decide` (`src/decide/`, step 18) makes one result: a fixed sentence, one hold
+with every reason (the SDK's held outcome, an approval resuming after it), a statement
+compared, or the record planned; its whole input is `src/decide/contract.ts`, and the
+lookups and decide share one table of which lookups run (`lookupUses`,
+`src/decide/lookup-uses.ts`). The writes are the plan's Group 5: until
+then a run decided straight through, or approved, writes nothing, and its result
+(`src/output.ts`) says so — the record planned, or a statement's comparison with the full
+list of the invoice numbers it lists that QuickBooks lacks.
 Every failure ends the run with a fixed sentence, a run that ends on a thrown error
 included — never the error's message. The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
@@ -507,14 +531,16 @@ only what an automation here uses:
   one WRITE of a bill, an expense, a vendor credit or a journal entry, never repeated,
   the request id left to the platform: a failure says whether a record may exist, in a
   fixed sentence — no record was created, or QuickBooks did not confirm it — with a Fault
-  named by its number; the query text — `lookupQuery` and `lookupInQuery` for a name list,
+  named by its number; the query text — `lookupQuery`, `lookupInQuery` and
+  `lookupLikeQuery` (one word of letters and digits, `LIKE '%word%'`) for a name list,
   active or not, and `transactionQuery` with `dateRange` for bills, expenses, vendor
   credits and journal entries, conditions joined by AND, no Active condition, each value
   quoted with every backslash doubled, then every apostrophe escaped — and readers for
   Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
 - `@autom8x/automation-kit/values` — the one cleaning of a value read from a document:
   `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
-  marked), `parseDate` (a real day from 2000 on), `cleanCurrency` against ISO 4217 List One
+  marked), `queryAmount` (cents as a query's `1250.00`), `parseDate` (a real day from 2000
+  on), `cleanCurrency` against ISO 4217 List One
   of 2026-09-17 (155 codes), `formatMoney`, `fitLine` and `fitReasonLine` (a line of at most
   200 characters, names shortened first with '…'; `phrasesKept` says how many phrases a reason
   line keeps before '+N more'), and the receipt and credit rules: `cardDigits`, `tipRule`,
@@ -524,13 +550,14 @@ only what an automation here uses:
   Connections' rules — a final answer replayed for the same request under its key, a
   different request under a used key refused 409, nothing recorded for a 5xx, 401, 403,
   408, 425 or 429, an answer over 192 KiB a 502 naming no reason, an input naming
-  `accountId` refused. Its company holds accounts, employees, expenses, vendor credits and
-  journal entries: it answers only the query text the kit's builders write, by Intuit's
-  documented rules (filterable and sortable fields from Intuit's model file; an expense's
-  amount behind a switch until the sandbox settles it), and creates an expense, a vendor
-  credit or a journal entry as Intuit documents, each kept for the queries after it. It
-  throws each refusal through the SDK's `refusalFixture`, which the suite hands it, so the
-  kit imports nothing at run time.
+  `accountId` refused. Its company holds accounts, employees, vendors, customers, bills,
+  expenses, vendor credits and journal entries (a `sample…` builder for each): it answers
+  only the query text the kit's builders write, by Intuit's documented rules (IN, =, <, >,
+  <=, >= and LIKE joined by AND, OR refused; filterable and sortable fields from Intuit's
+  model file; an expense's amount behind a switch until the sandbox settles it), and
+  creates an expense, a vendor credit or a journal entry as Intuit documents, each kept
+  for the queries after it. It throws each refusal through the SDK's `refusalFixture`,
+  which the suite hands it, so the kit imports nothing at run time.
 
 ## Adding an automation
 

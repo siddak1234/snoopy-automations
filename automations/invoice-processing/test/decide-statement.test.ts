@@ -128,6 +128,67 @@ test('the open-bills lookup at its maximum: the open bills it does not list may 
   assert.equal(capped.result.listedCheckable, true, 'the number lookup was not capped');
 });
 
+test('an invoice listed twice, in any case, is one invoice: counted once, listed once (N1)', () => {
+  const twice = statement({
+    listedItems: [
+      { reference: 'Balance forward', amount: 214.2, kind: 'balance_forward' },
+      { reference: 'HOS-1031', amount: 380, kind: 'invoice' },
+      { reference: 'PMT-5520', amount: -214.2, kind: 'payment' },
+      { reference: 'HOS-1042', amount: 413.34, kind: 'invoice' },
+      { reference: 'CM-0077', amount: -203.2, kind: 'credit' },
+      { reference: 'hos-1031', amount: 96.4, kind: 'invoice' },
+    ],
+  });
+  const { summary, result } = compared({
+    answer: twice,
+    lookups: { numberLookup: found(billRow({ id: '2', docNumber: 'HOS-1042' })) },
+  });
+  assert.deepEqual(result.listedNotInQuickBooks, ['HOS-1031']);
+  assert.equal(
+    summary,
+    'Statement balance $686.54; QuickBooks shows $686.54 open (the same); 1 listed invoice not in QuickBooks. Nothing was created.',
+  );
+});
+
+test("a listed number longer than the 21 characters a bill's holds is not searched, so it counts as not in QuickBooks (G4-4)", () => {
+  const long = `HOS-${'0'.repeat(18)}31`;
+  assert.equal(long.length, 24);
+  const { result } = compared({
+    answer: statement({
+      listedItems: [
+        { reference: 'Balance forward', amount: 214.2, kind: 'balance_forward' },
+        { reference: long, amount: 380, kind: 'invoice' },
+        { reference: 'PMT-5520', amount: -214.2, kind: 'payment' },
+        { reference: 'HOS-1042', amount: 413.34, kind: 'invoice' },
+        { reference: 'CM-0077', amount: -203.2, kind: 'credit' },
+        { reference: 'HOS-1050', amount: 96.4, kind: 'invoice' },
+      ],
+    }),
+    lookups: {
+      numberLookup: found(
+        billRow({ id: '2', docNumber: 'HOS-1042' }),
+        billRow({ id: '3', docNumber: 'HOS-1050' }),
+      ),
+    },
+  });
+  assert.deepEqual([result.listedNotInQuickBooks, result.listedCheckable], [[long], true]);
+});
+
+test("only this vendor's bills count: another vendor's with a listed number, or open, is neither found nor counted", () => {
+  const other = '88';
+  const { result } = compared({
+    lookups: {
+      numberLookup: found(
+        billRow({ id: '1', docNumber: 'HOS-1031', vendorId: other }),
+        billRow({ id: '2', docNumber: 'HOS-1042' }),
+      ),
+      amountLookup: found(billRow({ id: '9', docNumber: 'HOS-0999', vendorId: other })),
+    },
+  });
+  assert.deepEqual(result.listedNotInQuickBooks, ['HOS-1031', 'HOS-1050']);
+  assert.deepEqual(result.openBillsNotListed, { count: 0, totalCents: 0 });
+});
+
 test('read 2 not made, the switch on, QuickBooks showing nothing open: the line says each; still no approval', () => {
   const { summary, result } = compared({
     verification: { status: 'not_made', reason: 'no_answer' },

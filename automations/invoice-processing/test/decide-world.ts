@@ -6,7 +6,6 @@ import type { CheckInput } from '../src/checks/check.js';
 import { COMPARED_FIELDS } from '../src/checks/fields.js';
 import {
   LOOKUP_KEYS,
-  requiredLookups,
   type BillRow,
   type ExpenseRow,
   type FoundRecord,
@@ -19,6 +18,7 @@ import {
   type VendorState,
 } from '../src/decide/contract.js';
 import { decideRun, type Decision } from '../src/decide/decide.js';
+import { requiredLookups } from '../src/decide/lookup-uses.js';
 import type { DocumentState, VerificationState } from '../src/state.js';
 import { CHECKING, OWNER_EQUITY, TEAM_OWED, VISA, check, documentOf } from './check-world.js';
 import { DEFAULT_ACCOUNTS, SEEDED_STATE } from './extract-world.js';

@@ -1,5 +1,6 @@
 import type { JsonObject } from '@autom8x/automation-sdk';
 
+import type { ExpenseSearch } from '../lookups/expense-search.js';
 import { readDecideState } from './contract.js';
 import { DECIDE_SENTENCES, failRuleOf, type DecideFailure } from './fails.js';
 import { holdsOf, type Hold } from './holds.js';
@@ -26,6 +27,8 @@ export interface DecideInput {
   /** "I paid for this with my own money". */
   readonly switchOn: boolean;
   readonly runId: string;
+  /** How the lookups searched expenses (sandbox S4), which says which lookups had to run; D21's by default. */
+  readonly expenseSearch?: ExpenseSearch;
 }
 
 export type Decision =
@@ -49,7 +52,7 @@ function failed(failure: DecideFailure): Decision {
 }
 
 export function decideRun(input: DecideInput): Decision {
-  const state = readDecideState(input.state);
+  const state = readDecideState(input.state, input.expenseSearch);
   if (!state) return failed('state_incomplete');
   const rule = failRuleOf(state);
   if (rule !== undefined) return failed(rule);

@@ -1,28 +1,30 @@
 import { held, type JsonObject, type Step } from '@autom8x/automation-sdk';
 
+import { EXPENSE_SEARCH, type ExpenseSearch } from '../lookups/expense-search.js';
 import { failedWith } from '../outcome.js';
 import { decideRun } from './decide.js';
 import { DECIDE_REASONS } from './fails.js';
 
 /**
- * decide as a step. Built and tested now, and NOT in the pipeline yet: it reads the lookups'
- * records (the plan's Group 4, steps 9–17), which are not built — a step the manifest declares
- * must have code, and code the manifest does not declare must not run (test/conformance.test.ts).
- * Group 4 adds it to `define`'s steps and to the manifest, after its lookups.
+ * decide as a step — step 18, after the lookups (steps 9–17) whose records it reads; no QuickBooks
+ * or model call, so nothing to repeat. `expenseSearch` is how those lookups searched expenses
+ * (sandbox S4), which says which of them had to run.
  *
  * - failed: the fixed sentence, nothing created;
  * - a statement compared: ok, the run's state replaced by the comparison, which the run's output
  *   carries — nothing is written and nothing waits for approval;
  * - straight through: ok, the state replaced by the saved plan;
- * - held: one approval, with the saved plan as the state the platform keeps and hands back.
+ * - held: the SDK's held outcome — the run ends with one approval, the saved plan the state the
+ *   platform keeps and hands back, and an approval resumes after decide.
  */
-export function decide(): Step {
+export function decide(expenseSearch: ExpenseSearch = EXPENSE_SEARCH): Step {
   return ({ request, state }) => {
     const decision = decideRun({
       state,
       config: request.config,
       switchOn: request.input.paidPersonally === true,
       runId: request.runId,
+      expenseSearch,
     });
     switch (decision.outcome) {
       case 'failed':
