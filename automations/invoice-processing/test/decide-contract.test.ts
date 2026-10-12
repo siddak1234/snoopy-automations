@@ -98,6 +98,7 @@ test('every key a path reads, missing or malformed, is "could not finish its che
     { vendor: { status: 'matched', id: '7' } },
     { vendor: { status: 'skipped' } },
     { amountLookup: { reachedMax: 'no', records: [] } },
+    { amountLookup: { reachedMax: false, records: [], answeredAt: 7 } },
     { amountLookup: found({ kind: 'bill', id: '1' } as never) },
     {
       amountLookup: {

@@ -3,6 +3,7 @@ import {
   type QuickBooksRead,
   type QuickBooksWrite,
 } from '@autom8x/automation-kit/quickbooks';
+import { capitalised, shorten } from '@autom8x/automation-kit/values';
 
 /**
  * The fixed sentences of steps 19–24 (the plan's §5; ip-review design-after-approval-writes-
@@ -153,6 +154,17 @@ export function recordFailure(
       ? intuitSentence(write.detail, noun)
       : undefined;
   const sentence = coded ?? write.sentence;
+  return vendorAdded ? `${sentence} The new vendor was added to QuickBooks.` : sentence;
+}
+
+/**
+ * A run that ends on a throw once create-record has made the record — the runner's report of that
+ * step or a later one refused, the Edge's 429 say (`src/failures.ts`): the record stands, so the
+ * run never says "run it again", and names the record, as the line that could not be reported
+ * would have.
+ */
+export function recordedUnfinished(noun: string, id: string, vendorAdded: boolean): string {
+  const sentence = `${capitalised(noun)} ${shorten(id, 20)} was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again.`;
   return vendorAdded ? `${sentence} The new vendor was added to QuickBooks.` : sentence;
 }
 

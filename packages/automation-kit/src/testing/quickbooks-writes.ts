@@ -1,5 +1,6 @@
 import type { JsonObject, ProviderAnswer } from '@autom8x/automation-sdk';
 
+import { nameValueOf } from '../quickbooks/answers.js';
 import {
   TIME,
   TODAY,
@@ -22,7 +23,8 @@ import {
  * `{ <Entity>: {…}, time }`, its Id assigned, its `TotalAmt` the sum of its lines — a
  * journal entry's always 0, as Intuit's model says — a bill's `DueDate` its date when none is
  * sent, as Intuit's create sample answers, a vendor active in the home currency with its check
- * name its display name when none is sent, and kept, so a later query finds it.
+ * name its display name when none is sent, an expense or a vendor credit sent no number numbered by
+ * QuickBooks itself when the company's own numbers are off, and kept, so a later query finds it.
  *
  * What only the sandbox can settle is not imitated: whether a payment type must match
  * its account's type, whether multicurrency makes `CurrencyRef` required (S13), whether a
@@ -176,6 +178,31 @@ function createBill(company: SimulatedCompany, input: JsonObject): ProviderAnswe
   );
 }
 
+/**
+ * Whether QuickBooks numbers an expense or a vendor credit sent none: Intuit's model says, of both,
+ * "If VendorAndPurchasesPrefs.UseCustomTxnNumbers is false, resulting DocNumber is system generated
+ * by incrementing the last number by 1" — so only when the company says false. Its own samples
+ * name no such setting and answer no number, so a company that says nothing gets none.
+ */
+function numbersItself(company: SimulatedCompany, input: JsonObject): boolean {
+  if (typeof input.DocNumber === 'string') return false;
+  const prefs = company.preferences.OtherPrefs;
+  const setting = nameValueOf(
+    isObject(prefs) ? prefs.NameValue : undefined,
+    'VendorAndPurchasesPrefs.UseCustomTxnNumbers',
+  );
+  return setting === 'false';
+}
+
+/** QuickBooks' own next number among `rows`: the last of digits alone, plus 1; 1 for the first. */
+function nextNumber(rows: readonly JsonObject[]): string {
+  const numbers = rows
+    .map((row) => row.DocNumber)
+    .filter((value): value is string => typeof value === 'string' && /^\d{1,15}$/u.test(value))
+    .map(Number);
+  return String(Math.max(0, ...numbers) + 1);
+}
+
 function createPurchase(company: SimulatedCompany, input: JsonObject): ProviderAnswer {
   if (typeof input.PaymentType !== 'string' || refValue(input.AccountRef) === undefined) {
     return refused('2020');
@@ -186,7 +213,10 @@ function createPurchase(company: SimulatedCompany, input: JsonObject): ProviderA
   const lines = linesOf(company, input.Line, 'AccountBasedExpenseLineDetail');
   if (typeof lines === 'string') return refused(lines);
   const total = lines.amounts.reduce((sum, each) => sum + each, 0) / 100;
-  return created(company.purchases, 'Purchase', input, { TotalAmt: total }, company);
+  const numbered = numbersItself(company, input)
+    ? { DocNumber: nextNumber(company.purchases) }
+    : {};
+  return created(company.purchases, 'Purchase', input, { TotalAmt: total, ...numbered }, company);
 }
 
 function createVendorCredit(company: SimulatedCompany, input: JsonObject): ProviderAnswer {
@@ -205,6 +235,7 @@ function createVendorCredit(company: SimulatedCompany, input: JsonObject): Provi
       VendorRef: { value: String(vendor.Id), name: String(vendor.DisplayName) },
       TotalAmt: total,
       Balance: total,
+      ...(numbersItself(company, input) ? { DocNumber: nextNumber(company.vendorCredits) } : {}),
     },
     company,
   );

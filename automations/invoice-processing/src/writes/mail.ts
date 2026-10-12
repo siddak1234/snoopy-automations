@@ -45,8 +45,10 @@ const withArticle = (noun: string) => `${/^[aeiou]/u.test(noun) ? 'an' : 'a'} ${
 /**
  * The mail for a record made: what it is in QuickBooks — its Id, the vendor it names, or the seller
  * when it names none (an expense with no payee, a journal entry) or names the person who paid (a
- * contractor's bill) — who paid, its number (from QuickBooks, else the document's, kept in the
- * memo), date, total and due date as QuickBooks answered them, and the next step.
+ * contractor's bill) — who paid, the document's number ("in the memo" when the record was not sent
+ * it), QuickBooks' own number when it gave the record one, date, total and due date as QuickBooks
+ * answered them, and the next step. With own numbers off QuickBooks numbers an expense or a vendor
+ * credit itself ("system generated", Intuit's model): that number is never the document's.
  */
 export function recordMail(
   saved: SavedState,
@@ -62,8 +64,9 @@ export function recordMail(
   const vendor = vendorNamed ? value(payeeNameOf(saved, created, newVendor)) : null;
   const seller = value(saved.seller);
   const total = formatMoney(created.totalCents ?? plan.amountCents);
-  const sentNumber = created.docNumber ?? plan.docNumber;
-  const number = sentNumber ?? saved.documentNumber;
+  const number = saved.documentNumber;
+  const ownNumber =
+    created.docNumber !== null && created.docNumber !== plan.docNumber ? created.docNumber : null;
   const next = nextStepOf(saved);
   const lines = [
     `${capitalised(withArticle(noun))} was recorded in your QuickBooks Online company by Autom8x Bills & Receipts.`,
@@ -74,7 +77,8 @@ export function recordMail(
     ...(person ? [`Paid by: ${value(saved.payer?.name)}`] : []),
     ...(number === null
       ? []
-      : [`Number: ${value(number)}${sentNumber === null ? ' (in the memo)' : ''}`]),
+      : [`Number: ${value(number)}${plan.docNumber === null ? ' (in the memo)' : ''}`]),
+    ...(ownNumber === null ? [] : [`QuickBooks number: ${value(ownNumber)}`]),
     `Date: ${created.txnDate}`,
     `Total: ${total}`,
     ...(saved.route === 'bill' ? [`Due date: ${created.dueDate ?? 'not set'}`] : []),

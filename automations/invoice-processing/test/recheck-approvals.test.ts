@@ -1,0 +1,128 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import type { JsonObject } from '@autom8x/automation-sdk';
+
+import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
+import { PAID, REF, sampleBill, samplePurchase, type RouteRun } from './lookups-world.js';
+import { approve, firstRun, heldState, ownNumbers, writesOf } from './writes-world.js';
+
+/**
+ * confirm-no-duplicate end to end, on the simulator (the plan's §5; ip-review design-after-
+ * approval-writes-notify-tests.json, its whole-path case "an approval while a new run of the same
+ * invoice is in flight (exactly one bill)"): two uploads of one document, held and both approved
+ * before either wrote, make ONE record on every path — the re-check searches by the document's
+ * number only when the record carries it — and after a full lookup ("too many to check") a match
+ * QuickBooks made before the hold is allowed, one made while it waited is not.
+ */
+
+const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
+const DUPLICATE =
+  'A matching record was added in QuickBooks while this waited for approval, possibly from your bank feed. Nothing was created.';
+
+/** Every path, held whatever its amount: a person who paid always is (D16). */
+const PATHS: readonly [string, RouteRun][] = [
+  ['a bill, its number sent', { answer: bill() }],
+  [
+    "a bill whose number another vendor's bill has, kept in the memo",
+    {
+      answer: bill(),
+      company: (sim) =>
+        sim.company.bills.push(sampleBill('161', REF.other, { DocNumber: 'HOS-1042' })),
+    },
+  ],
+  ["a new vendor's bill", { answer: bill(), bare: true }],
+  ['a company receipt on the card', { answer: receipt() }],
+  [
+    'a company receipt paid by check from the bank',
+    { answer: receipt({ paymentMethod: 'check' }), ...PAID.bank },
+  ],
+  [
+    'a company receipt paid by card from the bank, its seller no vendor',
+    { answer: receipt(), bare: true, config: { ...PAID.bank.config, companyCardLast4: '4417' } },
+  ],
+  ['a card refund', { answer: sampleAnswer('card-refund') }],
+  ['a vendor credit, own numbers unstated: its number in the memo', { answer: creditNote() }],
+  ['a vendor credit, own numbers off', { answer: creditNote(), company: ownNumbers('false') }],
+  [
+    'a vendor credit, own numbers on: its number sent',
+    { answer: creditNote(), company: ownNumbers('true') },
+  ],
+  ['an employee who paid', { answer: receipt(), ...PAID.employee }],
+  ['an owner who paid', { answer: receipt(), ...PAID.owner }],
+  ['a contractor who paid', { answer: receipt(), ...PAID.contractor }],
+];
+
+test('two uploads of one document, held and both approved before either wrote, make ONE record on every path: the second approval finds the first', async () => {
+  for (const [label, run] of PATHS) {
+    const first = await firstRun({
+      ...run,
+      config: { ...(run.config ?? PAID.company.config), holdAboveAmount: 0 },
+    });
+    const { bills, purchases, vendorCredits, journalEntries } = first.simulator.company;
+    const records = () =>
+      bills.length + purchases.length + vendorCredits.length + journalEntries.length;
+    const before = records();
+    const one = await approve(first, { runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
+    assert.equal(one.result.outcome, 'success', label);
+    // The second upload's hold: the same decision, made before the first approval wrote anything.
+    const two = await approve(first, { runId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' });
+    assert.deepEqual(two.result, { outcome: 'failed', failureReason: DUPLICATE }, label);
+    assert.deepEqual(writesOf(two.providerCalls), [], label);
+    assert.equal(records(), before + 1, label);
+  }
+});
+
+test('confirm-no-duplicate after a full lookup ("too many to check"): a match QuickBooks made before the hold is allowed, one made while it waited fails', async () => {
+  // Identical charges on the card, all there before the run: decide's bank-feed check read three,
+  // its bound, so the re-check's fourth row was never shown to the approver.
+  const charges = (count: number) => (sim: Parameters<NonNullable<RouteRun['company']>>[0]) => {
+    for (let index = 0; index < count; index += 1) {
+      sim.company.purchases.push(
+        samplePurchase(String(300 + index), REF.visa, {
+          TxnDate: `2026-09-${26 + index}`,
+          TotalAmt: 60.63,
+        }),
+      );
+    }
+  };
+  const four = await firstRun({ answer: receipt(), company: charges(4) });
+  const held = heldState(four);
+  assert.deepEqual(held.holdReasons, ['possible_duplicate']);
+  assert.deepEqual((held.duplicates as JsonObject).expenseIds, ['300', '301', '302']);
+  const approved = await approve(four);
+  assert.equal(approved.result.outcome, 'success');
+  assert.equal(
+    approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
+    'No matching record added since this was held; 3 already shown to the approver; 1 already in QuickBooks before the hold, not shown; the search was full, so more may exist',
+  );
+  assert.deepEqual(writesOf(approved.providerCalls).length, 1);
+  // Three before the run, and the bank feed's fourth while it waited, made after decide's answer.
+  const three = await firstRun({ answer: receipt(), company: charges(3) });
+  three.simulator.company.purchases.push(
+    samplePurchase('303', REF.visa, {
+      TxnDate: '2026-09-29',
+      TotalAmt: 60.63,
+      MetaData: {
+        CreateTime: '2026-10-10T11:30:00-07:00',
+        LastUpdatedTime: '2026-10-10T11:30:00-07:00',
+      },
+    }),
+  );
+  const fed = await approve(three);
+  assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
+  assert.equal(
+    fed.steps.at(-1)?.[2],
+    'A matching record was added while this waited: Id 303 (duplicate_appeared)',
+  );
+  // A match decide's lookup did not show though it was not full was changed, or added, meanwhile:
+  // it fails however old QuickBooks says it is.
+  const notFull = await firstRun({ answer: receipt(), config: HOLD_ALL, company: charges(2) });
+  notFull.simulator.company.purchases.push(
+    samplePurchase('309', REF.visa, { TxnDate: '2026-09-30', TotalAmt: 60.63 }),
+  );
+  assert.deepEqual((await approve(notFull)).result, {
+    outcome: 'failed',
+    failureReason: DUPLICATE,
+  });
+});

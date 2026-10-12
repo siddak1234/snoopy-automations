@@ -95,6 +95,20 @@ export function outputOf(result: RunResult): JsonObject {
   return (result as Extract<RunResult, { outcome: 'success' }>).output ?? {};
 }
 
+/**
+ * The made-up company stating its own-numbers setting for expenses and vendor credits
+ * (`VendorAndPurchasesPrefs.UseCustomTxnNumbers`): off, QuickBooks numbers them itself.
+ */
+export const ownNumbers =
+  (value: 'true' | 'false') =>
+  (sim: Parameters<NonNullable<RouteRun['company']>>[0]): void => {
+    const other = sim.company.preferences.OtherPrefs as JsonObject;
+    (other.NameValue as JsonObject[]).push({
+      Name: 'VendorAndPurchasesPrefs.UseCustomTxnNumbers',
+      Value: value,
+    });
+  };
+
 /** The memo's first sentence for a run. */
 export const runLine = (runId: string) => `Created by Autom8x Bills & Receipts, run ${runId}.`;
 

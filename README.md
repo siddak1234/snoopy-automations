@@ -475,11 +475,14 @@ platform allows): an approval resumes at `confirm-company`, which compares the c
 country and file creation time with QuickBooks' again; `confirm-vendor` looks a new vendor up
 again by the name it would get, and links one added while the run waited; `create-vendor` adds it
 as the approver saw it named; `confirm-no-duplicate` repeats the path's own duplicate lookup —
-the very query, one row more — and fails on a matching record the approver never saw ("A
-matching record was added in QuickBooks while this waited for approval, possibly from your bank
-feed."), by the one rule decide holds on (`src/decide/duplicate-rule.ts`); a first run skips all
-four. `create-record` then makes the one record — a bill, an expense, a refund to the card, a
-vendor credit or a journal entry, through the platform's `bill.create`, `purchase.create`,
+the very query, one row more, by the document's number only when the record will carry it, else by
+its total and date — and fails on a matching record added while the run waited ("A matching
+record was added in QuickBooks while this waited for approval, possibly from your bank feed."),
+by the one rule decide holds on (`src/decide/duplicate-rule.ts`): one the approver never saw,
+unless decide's lookup was full and QuickBooks created it before that answer, which the approved
+"too many to check" covered; a first run skips all four. `create-record` then makes the one
+record — a bill, an expense, a refund to the card, a vendor credit or a journal entry, through
+the platform's `bill.create`, `purchase.create`,
 `vendorCredit.create` or `journalEntry.create`, each with its `requestid` — from the saved plan
 alone, never the settings as they are by then, its memo naming the run that wrote it (after an
 approval the continuation); one request, never repeated (no write declares a retry until sandbox
@@ -488,14 +491,18 @@ S6), so a 429, a 5xx or a lost answer is "did not confirm", and each Intuit code
 which is also the run's summary, says what was recorded and the next step — "When this charge
 arrives in your bank feed, choose Match, not Add" for a receipt or a refund, how an employee, a
 contractor or an owner is repaid. `notify` mails a plain-text summary, built from QuickBooks'
-answer, to the optional "Also email" address — a statement's counts and what QuickBooks shows
-open — and is skipped when it is empty; a mail that fails never fails the run. The run's result
-(`src/output.ts`, described by the manifest's `outputSchema`, which the tests hold every output
+answer — the document's number on its line, "in the memo" when the record was not sent it, and
+the number QuickBooks gave an expense or a credit itself on its own — to the optional "Also email"
+address — a statement's counts and what QuickBooks shows open — and is skipped when it is empty;
+a mail that fails never fails the run. The run's result (`src/output.ts`, described by the
+manifest's `outputSchema`, which the tests hold every output
 to with Ajv) is the record made — its type and QuickBooks Id, payment type, payee, payer, Paid
 from account, the next step, why it was held — or a statement's comparison with the full list of
 the invoice numbers it lists that QuickBooks lacks.
 Every failure ends the run with a fixed sentence, a run that ends on a thrown error
-included — never the error's message. The measurements — `measuredKind`, `pageCount`,
+included — never the error's message; once the record exists, a run that cannot finish (the
+platform refusing a step's report, say) names it and says to check QuickBooks before running
+it again, never "run it again in a few minutes". The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
 platform's pull request before it merged (its BUILD-PLAN 25.2.28, merged unchanged as its
 `main` `7086e5e`), and `measurementsOf` in `src/file.ts` is the one place that reads them;
@@ -582,7 +589,9 @@ only what an automation here uses:
   <=, >= and LIKE joined by AND, OR refused; filterable and sortable fields from Intuit's
   model file; an expense's amount behind a switch until the sandbox settles it), and
   creates a vendor, a bill, an expense, a vendor credit or a journal entry as Intuit
-  documents, each kept for the queries after it. It throws each refusal through the SDK's `refusalFixture`,
+  documents — an expense or a vendor credit sent no number numbered by QuickBooks itself, the
+  last number plus 1, when the company's own numbers are off — each kept for the queries after
+  it. It throws each refusal through the SDK's `refusalFixture`,
   which the suite hands it, so the kit imports nothing at run time.
 
 ## Adding an automation

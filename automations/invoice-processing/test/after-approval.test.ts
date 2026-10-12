@@ -296,10 +296,18 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
 });
 
 test('confirm-no-duplicate: the possible duplicate the approver saw and approved is allowed; a full answer with nothing new goes on, saying more may exist', async () => {
+  // The vendor's bill with the number, the total and the date: the number is then kept in the
+  // memo, so the re-check repeats the total-and-date lookup, which finds the bill the approver saw.
   const seen = await firstRun({
     answer: bill(),
     company: (sim) =>
-      sim.company.bills.push(sampleBill('150', REF.harrowgate, { DocNumber: 'HOS-1042' })),
+      sim.company.bills.push(
+        sampleBill('150', REF.harrowgate, {
+          DocNumber: 'HOS-1042',
+          TxnDate: '2026-09-14',
+          TotalAmt: 413.34,
+        }),
+      ),
   });
   assert.deepEqual(heldState(seen).holdReasons, ['possible_duplicate']);
   const approved = await approve(seen);
@@ -308,13 +316,16 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
     approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
     'No matching record added since this was held; 1 already shown to the approver',
   );
-  // Four bills with the number: the first run's number lookup read three (its bound), its amount
-  // lookup the fourth, so the re-check's four rows were all shown to the approver.
+  // Four of the vendor's bills for the total and date, one with the number: the first run's amount
+  // lookup read three (its bound), its number lookup the fourth, so the re-check's four rows were
+  // all shown to the approver.
   const full = await firstRun({
     answer: bill(),
     company: (sim) => {
       for (const id of ['150', '151', '152']) {
-        sim.company.bills.push(sampleBill(id, REF.harrowgate, { DocNumber: 'HOS-1042' }));
+        sim.company.bills.push(
+          sampleBill(id, REF.harrowgate, { TxnDate: '2026-09-14', TotalAmt: 413.34 }),
+        );
       }
       sim.company.bills.push(
         sampleBill('153', REF.harrowgate, {
@@ -326,9 +337,10 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
     },
   });
   const many = await approve(full);
-  assert.match(
-    many.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2] ?? '',
-    /the search was full, so more may exist$/u,
+  assert.equal(many.result.outcome, 'success');
+  assert.equal(
+    many.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
+    'No matching record added since this was held; 4 already shown to the approver; the search was full, so more may exist',
   );
 });
 
@@ -363,6 +375,7 @@ test('a held state that does not read back whole is stopped before any QuickBook
     { ...state, v: 2 },
     { ...state, plan: { ...(state.plan as JsonObject), amountCents: 0 } },
     { ...state, recheck: undefined },
+    { ...state, recheck: { ...(state.recheck as JsonObject), fullAt: 7 } },
     { ...state, company: { ...(state.company as JsonObject), createdAt: 7 } },
     { ...state, route: 'statement' },
     { ...state, plan: { ...(state.plan as JsonObject), operation: 'purchase.create' } },

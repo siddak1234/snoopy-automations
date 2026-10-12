@@ -164,6 +164,7 @@ function isRecheck(value: unknown, saved: JsonObject): boolean {
     Number.isSafeInteger(value.maxResults) &&
     value.maxResults >= 1 &&
     value.maxResults <= 1_000 &&
+    isTextOrNull(value.fullAt) &&
     facts.route === saved.route &&
     isTextOrNull(facts.number) &&
     isCents(facts.amountCents) &&

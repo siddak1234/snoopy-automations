@@ -5,7 +5,12 @@ import type { JsonObject, ProviderRequest } from '@autom8x/automation-sdk';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import { lookupQuery, transactionQuery } from '../src/quickbooks/query.js';
-import { sampleCustomer, sampleEmployee, sampleVendor } from '../src/testing/quickbooks-company.js';
+import {
+  sampleCustomer,
+  sampleEmployee,
+  samplePurchase,
+  sampleVendor,
+} from '../src/testing/quickbooks-company.js';
 import {
   QuickBooksSimulator,
   REFUSED_BODY_FIELDS,
@@ -225,6 +230,45 @@ test('a vendor credit names a vendor the company holds and keeps active', async 
     value: '7',
     name: 'Harrowgate Office Supply',
   });
+});
+
+test("an expense or a vendor credit sent no number: with own numbers off QuickBooks numbers it, the last number plus 1 (Intuit's model); on, or unstated as in Intuit's samples, none", async () => {
+  const numbered = async (setting: string | null) => {
+    const sim = simulator();
+    if (setting !== null) {
+      const other = sim.company.preferences.OtherPrefs as JsonObject;
+      (other.NameValue as JsonObject[]).push({
+        Name: 'VendorAndPurchasesPrefs.UseCustomTxnNumbers',
+        Value: setting,
+      });
+    }
+    sim.company.purchases.push(
+      samplePurchase('140', { value: '41', name: 'Company Visa' }, { DocNumber: '1022' }),
+      samplePurchase('141', { value: '41', name: 'Company Visa' }, { DocNumber: 'R-77' }),
+    );
+    const expense = { PaymentType: 'Cash', AccountRef: { value: '35' }, Line: [line(10)] };
+    const credit = { VendorRef: { value: '7' }, Line: [line(10)] };
+    const numbers: unknown[] = [];
+    for (const [operation, input, entity] of [
+      ['purchase.create', expense, 'Purchase'],
+      ['purchase.create', expense, 'Purchase'],
+      ['purchase.create', { ...expense, DocNumber: '55120' }, 'Purchase'],
+      ['vendorCredit.create', credit, 'VendorCredit'],
+      ['vendorCredit.create', { ...credit, DocNumber: 'CM-0077' }, 'VendorCredit'],
+    ] as const) {
+      const made = await sim.provider(call(operation, input as JsonObject));
+      numbers.push((made.body as Record<string, JsonObject>)[entity]?.DocNumber ?? null);
+    }
+    return numbers;
+  };
+  assert.deepEqual(await numbered('false'), ['1023', '1024', '55120', '1', 'CM-0077']);
+  for (const setting of ['true', null]) {
+    assert.deepEqual(
+      await numbered(setting),
+      [null, null, '55120', null, 'CM-0077'],
+      String(setting),
+    );
+  }
 });
 
 test('an answer lost after QuickBooks acted: a 502 naming no reason; recorded first, the key replays it, else QuickBooks is asked again', async () => {

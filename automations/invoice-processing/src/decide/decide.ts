@@ -68,7 +68,7 @@ export function decideRun(input: DecideInput): Decision {
     plan,
     matches,
     holds.map((hold) => hold.code),
-    recheckOf(state, input.expenseSearch),
+    recheckOf(state, plan, input.expenseSearch),
   );
   if (savedBytes(saved) > SAVED_MAXIMUM_BYTES) return failed('saved_too_large');
   const notes = notesOf(state, plan);

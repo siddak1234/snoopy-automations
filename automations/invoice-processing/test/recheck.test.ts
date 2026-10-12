@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { FoundRecord } from '../src/decide/contract.js';
+import type { DecideState, FoundRecord, LookupState } from '../src/decide/contract.js';
 import { readDecideState } from '../src/decide/contract.js';
 import { isDuplicate } from '../src/decide/duplicate-rule.js';
 import { matchesOf } from '../src/decide/matches.js';
-import { recheckLookup, recheckOf } from '../src/decide/recheck.js';
+import { recordPlan } from '../src/decide/plan.js';
+import { createdBefore, recheckLookup, recheckOf } from '../src/decide/recheck.js';
+import type { ExpenseSearch } from '../src/lookups/expense-search.js';
 import { amountSearch, numberSearch } from '../src/lookups/queries.js';
 import { bill, creditNote, paidBy, receipt, sampleAnswer } from './check-world.js';
 import {
@@ -23,8 +25,9 @@ import {
 /**
  * The re-check an approval repeats (`src/decide/recheck.ts`), and the ONE rule it shares with decide
  * (`src/decide/duplicate-rule.ts`): per path, the lookup repeated and its text — the very search
- * the lookup step sent, one row more — and, for every record a lookup can find, decide's "possible
- * duplicate" and the re-check's verdict the same.
+ * the lookup step sent, one row more, by number only when the record will carry the number — and,
+ * for every record a lookup can find, decide's "possible duplicate" and the re-check's verdict the
+ * same; and when a full lookup lets a record QuickBooks made before it go unseen.
  */
 
 const TIDEWELL = { ...VENDOR, id: '9', displayName: 'Tidewell Hardware' };
@@ -33,6 +36,9 @@ const stateOf = (setUp: DecideSetUp) => {
   assert.ok(state);
   return state;
 };
+/** The re-check decide saves for a state, built from the plan it makes. */
+const recheckFor = (state: DecideState, how: ExpenseSearch = 'amount') =>
+  recheckOf(state, recordPlan(state, matchesOf(state)), how);
 
 const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', string][] = [
   [
@@ -40,6 +46,12 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
     { answer: bill() },
     'numberLookup',
     "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' MAXRESULTS 4",
+  ],
+  [
+    "a bill whose number another vendor's bill has: the number goes in the memo, so by its total and date, from its vendor",
+    { answer: bill(), lookups: { numberLookup: found(billRow({ id: '152', vendorId: '88' })) } },
+    'amountLookup',
+    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '7' MAXRESULTS 4",
   ],
   [
     'a bill with a number past 21 characters: by its total and date, from its vendor',
@@ -66,10 +78,16 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
     "SELECT * FROM Purchase WHERE TotalAmt = '23.72' AND TxnDate >= '2026-10-01' AND TxnDate <= '2026-10-22' MAXRESULTS 4",
   ],
   [
-    'a vendor credit with its number',
-    { answer: creditNote() },
+    'a vendor credit with own numbers on: its number sent, so by it',
+    { answer: creditNote(), preferences: { purchaseCustomTxnNumbers: true } },
     'numberLookup',
     "SELECT * FROM VendorCredit WHERE DocNumber = 'CM-0077' MAXRESULTS 4",
+  ],
+  [
+    'a vendor credit with own numbers not on: its number in the memo — QuickBooks numbers the credit itself — so by its total and date',
+    { answer: creditNote() },
+    'amountLookup',
+    "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' MAXRESULTS 4",
   ],
   [
     'a vendor credit with none',
@@ -104,7 +122,7 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
 test("each path's re-check: its own duplicate lookup, the text the lookup step sent with one row more", () => {
   for (const [label, setUp, lookup, query] of PATHS) {
     const state = stateOf(setUp);
-    const recheck = recheckOf(state, 'amount');
+    const recheck = recheckFor(state);
     assert.deepEqual([recheck.lookup, recheck.query], [lookup, query], label);
     const sent =
       lookup === 'numberLookup'
@@ -118,13 +136,16 @@ test("each path's re-check: its own duplicate lookup, the text the lookup step s
     );
   }
   // Sandbox S4's fallback: the window alone, newest first, one row more than its 50.
-  const fallback = recheckOf(stateOf({ answer: receipt(), vendor: TIDEWELL }), 'window');
+  const fallback = recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL }), 'window');
   assert.equal(
     fallback.query,
     "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY TxnDate DESC MAXRESULTS 51",
   );
   assert.equal(recheckLookup('company_receipt', true), 'amountLookup');
   assert.equal(recheckLookup('vendor_credit', false), 'amountLookup');
+  // Own numbers said off, as unknown: the credit's number in the memo, searched by total and date.
+  const off = stateOf({ answer: creditNote(), preferences: { purchaseCustomTxnNumbers: false } });
+  assert.equal(recheckFor(off).lookup, 'amountLookup');
 });
 
 /** Records a lookup can find, matching and not, for the rule to weigh. */
@@ -155,6 +176,8 @@ const RECORDS: readonly FoundRecord[] = [
 const VERDICTS: readonly string[][] = [
   // The same vendor's bill with the number, in any case.
   ['151', '153'],
+  // Its number in the memo: the same vendor's bill for the total and date.
+  ['151', '154'],
   // The same vendor's bill for the total and date.
   ['151', '154'],
   // A new vendor's: any vendor's bill for the total and date (D5).
@@ -165,6 +188,8 @@ const VERDICTS: readonly string[][] = [
   ['202'],
   // The vendor's credit with the number; not another vendor's.
   ['301'],
+  // Its number in the memo: the vendor's credit for the total and date, numbered or not.
+  ['301', '302'],
   // The vendor's credit for the total and date, numbered or not.
   ['301', '302'],
   // An entry that day crediting the amount to Owed to team members under this employee.
@@ -177,7 +202,7 @@ const VERDICTS: readonly string[][] = [
 
 test("the one rule's verdicts, per path: which records duplicate the planned one", () => {
   for (const [index, [label, setUp, lookup]] of PATHS.entries()) {
-    const facts = recheckOf(stateOf(setUp), 'amount').facts;
+    const facts = recheckFor(stateOf(setUp)).facts;
     assert.deepEqual(
       RECORDS.filter((record) => isDuplicate(facts, lookup, record)).map((record) => record.id),
       VERDICTS[index],
@@ -191,7 +216,7 @@ test("decide's possible duplicate and the re-check's verdict are one rule: for e
     for (const record of RECORDS) {
       const state = stateOf({ ...setUp, lookups: { [lookup]: found(record) } });
       const held = matchesOf(state).duplicates.length > 0;
-      const facts = recheckOf(state, 'amount').facts;
+      const facts = recheckFor(state).facts;
       assert.equal(
         isDuplicate(facts, lookup, record),
         held,
@@ -202,7 +227,7 @@ test("decide's possible duplicate and the re-check's verdict are one rule: for e
 });
 
 test("the rule's facts are decide's: the document's number, amount and date, the vendor matched (none for a new one), the account and the person", () => {
-  assert.deepEqual(recheckOf(stateOf({ answer: bill(), vendor: { status: 'new' } })).facts, {
+  assert.deepEqual(recheckFor(stateOf({ answer: bill(), vendor: { status: 'new' } })).facts, {
     route: 'bill',
     number: 'HOS-1042',
     amountCents: 41334,
@@ -212,7 +237,7 @@ test("the rule's facts are decide's: the document's number, amount and date, the
     employeeId: null,
   });
   assert.deepEqual(
-    recheckOf(stateOf({ answer: receipt(), check: paidBy('employee', { paidFrom: null }) })).facts,
+    recheckFor(stateOf({ answer: receipt(), check: paidBy('employee', { paidFrom: null }) })).facts,
     {
       route: 'employee',
       number: '55120',
@@ -223,5 +248,52 @@ test("the rule's facts are decide's: the document's number, amount and date, the
       employeeId: '55',
     },
   );
-  assert.equal(recheckOf(stateOf({ answer: receipt(), vendor: TIDEWELL })).facts.accountId, '41');
+  assert.equal(recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL })).facts.accountId, '41');
+});
+
+/** QuickBooks' time on an answer, with milliseconds as Intuit writes it. */
+const ANSWERED = '2026-10-10T09:00:00.462-07:00';
+const answered = (reachedMax: boolean, answeredAt?: string | null): LookupState => ({
+  reachedMax,
+  records: [],
+  ...(answeredAt === undefined ? {} : { answeredAt }),
+});
+
+test("the re-check keeps QuickBooks' time on decide's lookup only when that answer was full: then a match made before it was past the bound", () => {
+  const receiptWith = (amountLookup: LookupState) =>
+    recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL, lookups: { amountLookup } }));
+  assert.equal(receiptWith(answered(true, ANSWERED)).fullAt, ANSWERED);
+  assert.equal(receiptWith(answered(false, ANSWERED)).fullAt, null);
+  assert.equal(receiptWith(answered(true, null)).fullAt, null);
+  assert.equal(receiptWith(answered(true)).fullAt, null);
+  // The lookup repeated is the one whose answer counts: a bill's number lookup, its number sent.
+  const byNumber = recheckFor(
+    stateOf({
+      answer: bill(),
+      lookups: { numberLookup: answered(true, ANSWERED), amountLookup: answered(false, ANSWERED) },
+    }),
+  );
+  assert.deepEqual([byNumber.lookup, byNumber.fullAt], ['numberLookup', ANSWERED]);
+});
+
+test("a row was there before decide's full answer when QuickBooks created it before the second that answer came in; unknown is never before", () => {
+  // Each row changed since, after the answer: its creation is what counts, not its last change.
+  const row = (CreateTime?: unknown) =>
+    CreateTime === undefined
+      ? {}
+      : { MetaData: { CreateTime, LastUpdatedTime: '2026-10-11T08:00:00-07:00' } };
+  assert.equal(createdBefore(row('2026-10-10T08:59:59-07:00'), ANSWERED), true);
+  assert.equal(createdBefore(row('2024-01-02T09:00:00-08:00'), ANSWERED), true);
+  // The same instant in another offset: 15:59:59Z is 08:59:59 at -07:00.
+  assert.equal(createdBefore(row('2026-10-10T15:59:59Z'), ANSWERED), true);
+  // CreateTime keeps whole seconds: one in the answer's second may be just after it, so it is new.
+  assert.equal(createdBefore(row('2026-10-10T09:00:00-07:00'), ANSWERED), false);
+  assert.equal(createdBefore(row('2026-10-10T09:00:01-07:00'), ANSWERED), false);
+  // Unknown either way is not before: an unseen match then fails, the safe side.
+  for (const unknown of [row(), row(''), row(7), row('2026-10-09'), row('2026-10-09T08:00:00')]) {
+    assert.equal(createdBefore(unknown, ANSWERED), false, JSON.stringify(unknown));
+  }
+  assert.equal(createdBefore(row('2024-01-02T09:00:00-08:00'), null), false);
+  assert.equal(createdBefore(row('2024-01-02T09:00:00-08:00'), 'yesterday'), false);
+  assert.equal(createdBefore(undefined, ANSWERED), false);
 });

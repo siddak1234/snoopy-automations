@@ -8,16 +8,33 @@ import {
   type ScriptedAnswer,
 } from '@autom8x/automation-kit/testing';
 
-import type { JsonObject, StepPlatform } from '@autom8x/automation-sdk';
-import { invokeFixture } from '@autom8x/automation-sdk/testing';
+import {
+  defineAutomation,
+  type JsonObject,
+  type StepPlatform,
+  type StepReport,
+} from '@autom8x/automation-sdk';
+import {
+  RecordingPlatform,
+  invokeFixture,
+  refusalFixture,
+  type ProblemInput,
+} from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID } from '../src/automation.js';
+import { noteThrows, withFixedSentences } from '../src/failures.js';
 import { createRecord } from '../src/steps/create-record.js';
-import { AFTER_APPROVAL_SENTENCES, INTUIT_CODES, intuitSentence } from '../src/writes/sentences.js';
+import { NOUNS } from '../src/writes/lines.js';
+import {
+  AFTER_APPROVAL_SENTENCES,
+  INTUIT_CODES,
+  intuitSentence,
+  recordedUnfinished,
+} from '../src/writes/sentences.js';
 import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import { decide } from './decide-world.js';
 import { PAID, type RouteRun } from './lookups-world.js';
-import { approve, firstRun, writesOf } from './writes-world.js';
+import { approve, firstRun, writesOf, type Run } from './writes-world.js';
 
 /**
  * create-record's failures (the plan's §5 "Error mapping"; ip-review design-after-approval-writes-
@@ -232,4 +249,134 @@ test('a new vendor that was neither found nor added — a guard that should neve
     failureReason: AFTER_APPROVAL_SENTENCES.state_incomplete,
   });
   assert.equal(calls, 0);
+});
+
+/** The Edge's flood valve, refusing a callback. */
+const FLOOD: ProblemInput = { status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' };
+
+/** The platform refusing the runner's report of `stepId` — a throw outside every step. */
+function refuseReport(run: Run, stepId: string, problem: ProblemInput = FLOOD): void {
+  const report = run.platform.reportStep.bind(run.platform);
+  run.platform.reportStep = (line: StepReport) =>
+    line.stepId === stepId ? Promise.reject(refusalFixture('step', problem)) : report(line);
+}
+
+const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
+const RECORDED =
+  'Expense 1001 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again.';
+
+test("once the record is made, a refused report — create-record's line or notify's, a 429 or any other — never says 'run it again': the run names the record", async () => {
+  const cases: [string, string, ProblemInput][] = [
+    ["create-record's line refused 429", 'create-record', FLOOD],
+    [
+      "create-record's line refused 502",
+      'create-record',
+      { status: 502, code: 'DEPENDENCY_FAILURE', detail: 'x' },
+    ],
+    ["notify's line refused 429", 'notify', FLOOD],
+  ];
+  for (const [label, stepId, problem] of cases) {
+    const first = await firstRun({
+      answer: receipt(),
+      config: { ...HOLD_ALL, notifyEmail: 'books@example.com' },
+    });
+    refuseReport(first, stepId, problem);
+    const approved = await approve(first);
+    assert.deepEqual(approved.result, { outcome: 'failed', failureReason: RECORDED }, label);
+    assert.deepEqual(
+      first.simulator.company.purchases.map((row) => row.Id),
+      ['1001'],
+      label,
+    );
+  }
+});
+
+test("a write's own failure stands when its line's report is refused: 'did not confirm' is never turned into 'run it again in a few minutes'", async () => {
+  const first = await firstRun({ answer: receipt(), config: HOLD_ALL });
+  first.simulator.script('purchase.create', [{ lost: 'before_record' }]);
+  refuseReport(first, 'create-record');
+  assert.deepEqual((await approve(first)).result, {
+    outcome: 'failed',
+    failureReason:
+      'QuickBooks did not confirm whether the expense was created. Check QuickBooks before running this again.',
+  });
+  // Before any write, a refused report is still the Edge's flood valve: nothing was made.
+  const early = await firstRun({ answer: receipt(), config: HOLD_ALL });
+  refuseReport(early, 'confirm-company');
+  assert.deepEqual((await approve(early)).result, {
+    outcome: 'failed',
+    failureReason: 'Autom8x is busy; run it again in a few minutes.',
+  });
+});
+
+test('once create-vendor added the vendor, a refused report says so — and names the bill once it is made', async () => {
+  const vendor = await firstRun({ answer: bill(), bare: true });
+  refuseReport(vendor, 'confirm-no-duplicate');
+  assert.deepEqual((await approve(vendor)).result, {
+    outcome: 'failed',
+    failureReason:
+      'Autom8x is busy; run it again in a few minutes. The new vendor was added to QuickBooks.',
+  });
+  const other = await firstRun({ answer: bill(), bare: true });
+  refuseReport(other, 'create-vendor', { status: 422, code: 'BAD_REQUEST', detail: 'x' });
+  assert.deepEqual((await approve(other)).result, {
+    outcome: 'failed',
+    failureReason:
+      "Bills & Receipts stopped before it finished. Check the run's timeline before running it again. The new vendor was added to QuickBooks.",
+  });
+  const billed = await firstRun({ answer: bill(), bare: true });
+  refuseReport(billed, 'create-record');
+  assert.deepEqual((await approve(billed)).result, {
+    outcome: 'failed',
+    failureReason:
+      'Bill 1001 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again. The new vendor was added to QuickBooks.',
+  });
+});
+
+test('the sentence naming a record made fits 200 characters for every record, the longest Id and the vendor named', () => {
+  for (const noun of Object.values(NOUNS)) {
+    const sentence = recordedUnfinished(noun, '9'.repeat(40), true);
+    assert.ok(sentence.length <= 200, `${noun}: ${sentence.length}`);
+    // An Id is cut to 20 characters, as on every line.
+    assert.ok(sentence.includes(` ${'9'.repeat(19)}… was recorded`), noun);
+  }
+});
+
+test("a run's notes are its own: a record of a kind the run's end does not know is still named, and the same request run again starts with nothing done", async () => {
+  // One step that makes a record and one after it, each report refusable.
+  let made: JsonObject = { created: { record: 'payment', id: '77' } };
+  const automation = withFixedSentences(
+    defineAutomation({
+      templateId: TEMPLATE_ID,
+      manifests: [
+        {
+          templateId: TEMPLATE_ID,
+          version: 1,
+          requiredCapabilities: [],
+          pipeline: [{ id: 'make' }, { id: 'after' }],
+        },
+      ],
+      steps: noteThrows({
+        make: () => Promise.resolve({ outcome: 'ok', summary: 'Made', state: made }),
+        after: () => Promise.resolve({ outcome: 'ok', summary: 'After' }),
+      }),
+      result: () => ({}),
+    }),
+    () => undefined,
+  );
+  const request = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 1 });
+  const platform = new RecordingPlatform();
+  platform.reportStep = (line: StepReport) =>
+    line.stepId === 'after' ? Promise.reject(refusalFixture('step', FLOOD)) : Promise.resolve();
+  assert.deepEqual(await automation.execute(request, platform), {
+    outcome: 'failed',
+    failureReason:
+      'Record 77 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again.',
+  });
+  // The same request again, nothing made this time: the flood valve's own sentence.
+  made = {};
+  assert.deepEqual(await automation.execute(request, platform), {
+    outcome: 'failed',
+    failureReason: 'Autom8x is busy; run it again in a few minutes.',
+  });
 });

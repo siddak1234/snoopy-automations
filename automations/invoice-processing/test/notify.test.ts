@@ -6,7 +6,7 @@ import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
 import { PAID, type RouteRun } from './lookups-world.js';
-import { approve, firstRun, outputOf } from './writes-world.js';
+import { approve, firstRun, outputOf, ownNumbers } from './writes-world.js';
 
 /**
  * notify (step 24; the plan's §5 "notify, per type"): one plain-text mail to the "Also email"
@@ -206,6 +206,40 @@ test("QuickBooks' answer wins over what was read: its total, due date and the ve
     (result as { summary?: string }).summary,
     'Recorded bill 151 from Harrowgate Office Supply Co., HOS-1042, $413.34, due 2026-10-15; QuickBooks shows $413.35.',
   );
+});
+
+test("QuickBooks' own number — an expense or a vendor credit it numbers itself, own numbers off — has its own label: the document's number keeps its line, in the memo, and the subject", async () => {
+  const numbers = (body = '') =>
+    body.split('\n').filter((line) => /^(Number|QuickBooks number):/u.test(line));
+  const cases: [RouteRun, string, string[], [string | null, string]][] = [
+    [
+      { answer: receipt(), company: ownNumbers('false') },
+      'Expense 1001 recorded in QuickBooks: Tidewell Hardware, 55120, $60.63',
+      ['Number: 55120 (in the memo)', 'QuickBooks number: 1'],
+      ['1', '55120'],
+    ],
+    [
+      { answer: creditNote(), company: ownNumbers('false') },
+      'Vendor credit 1001 recorded in QuickBooks: Harrowgate Office Supply, CM-0077, $203.20',
+      ['Number: CM-0077 (in the memo)', 'QuickBooks number: 1'],
+      ['1', 'CM-0077'],
+    ],
+    // Own numbers on: the credit is sent its number, which QuickBooks keeps.
+    [
+      { answer: creditNote(), company: ownNumbers('true') },
+      'Vendor credit 1001 recorded in QuickBooks: Harrowgate Office Supply, CM-0077, $203.20',
+      ['Number: CM-0077'],
+      ['CM-0077', 'CM-0077'],
+    ],
+  ];
+  for (const [run, subject, lines, [docNumber, documentNumber]] of cases) {
+    const { mails, result } = await mailed(withMail(run));
+    assert.equal(mails[0]?.subject, subject);
+    assert.deepEqual(numbers(mails[0]?.body), lines, subject);
+    // The output keeps both: the record's number in QuickBooks, and the document's.
+    const record = outputOf(result).record as JsonObject;
+    assert.deepEqual([record.docNumber, record.documentNumber], [docNumber, documentNumber]);
+  }
 });
 
 test('a mail refused for certain, or never answered, fails only its own line: the run succeeds, the record stands', async () => {
