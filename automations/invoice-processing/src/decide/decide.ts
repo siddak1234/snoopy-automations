@@ -6,17 +6,18 @@ import { DECIDE_SENTENCES, failRuleOf, type DecideFailure } from './fails.js';
 import { holdsOf, type Hold } from './holds.js';
 import { matchesOf } from './matches.js';
 import { recordPlan } from './plan.js';
+import { recheckOf } from './recheck.js';
 import { SAVED_MAXIMUM_BYTES, savedBytes, savedStateOf, type SavedState } from './saved.js';
 import { statementLine, statementResult, type StatementResult } from './statement.js';
 import { approvalWording, heldSummary, notesOf, reasonLine, straightSummary } from './wording.js';
 
 /**
  * decide (step 18): one result for the run — continue, hold or fail (the plan's §2.6) — as a pure
- * function of the state the steps before it leave, the flow's settings and the run's id. Its
- * order: the state complete, else "could not finish its checks"; the path's fail rules (F1–F7),
- * first match winning; a statement compared and the run done, never held; then every hold reason,
- * collected into ONE hold, or none — and the record planned once, saved for after approval in
- * the same shape either way, refused over 32 KiB.
+ * function of the state the steps before it leave and the flow's settings. Its order: the state
+ * complete, else "could not finish its checks"; the path's fail rules (F1–F7), first match
+ * winning; a statement compared and the run done, never held; then every hold reason, collected
+ * into ONE hold, or none — and the record planned once, with the re-check an approval repeats,
+ * saved for after approval in the same shape either way, refused over 32 KiB.
  */
 
 export interface DecideInput {
@@ -26,7 +27,6 @@ export interface DecideInput {
   readonly config: JsonObject;
   /** "I paid for this with my own money". */
   readonly switchOn: boolean;
-  readonly runId: string;
   /** How the lookups searched expenses (sandbox S4), which says which lookups had to run; D21's by default. */
   readonly expenseSearch?: ExpenseSearch;
 }
@@ -62,12 +62,13 @@ export function decideRun(input: DecideInput): Decision {
   }
   const matches = matchesOf(state);
   const holds = holdsOf({ state, config: input.config, matches });
-  const plan = recordPlan(state, input.runId, matches);
+  const plan = recordPlan(state, matches);
   const saved = savedStateOf(
     state,
     plan,
     matches,
     holds.map((hold) => hold.code),
+    recheckOf(state, input.expenseSearch),
   );
   if (savedBytes(saved) > SAVED_MAXIMUM_BYTES) return failed('saved_too_large');
   const notes = notesOf(state, plan);

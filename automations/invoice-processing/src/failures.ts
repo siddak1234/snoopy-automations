@@ -24,6 +24,8 @@ import {
  */
 
 const thrownBy = new WeakMap<object, string>();
+/** A sentence a step registered on the error it throws on unchanged: it wins over every other. */
+const sentences = new WeakMap<object, string>();
 
 export const THROWN_SENTENCES = {
   /** The Edge's flood valve: a callback refused 429. */
@@ -41,7 +43,12 @@ export const THROWN_SENTENCES = {
     "Bills & Receipts stopped before it finished. Check the run's timeline before running it again.",
 } as const;
 
-/** Every step that calls QuickBooks: a throw there ends with QuickBooks' sentence. */
+/**
+ * Every step that READS QuickBooks: a throw there ends with QuickBooks' sentence. The writes —
+ * create-vendor, create-record — throw nothing they could have sent: the kit's write answers every
+ * failure itself, so a throw there is a fault, and the general sentence sends the person to the
+ * timeline, which names any record made.
+ */
 export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-company',
   'read-preferences',
@@ -56,10 +63,22 @@ export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'find-duplicate-amount',
   'find-related',
   'find-other-record',
+  'confirm-company',
+  'confirm-vendor',
+  'confirm-no-duplicate',
 ]);
 
 /** The steps that call a model: a throw there that got no answer ends with the SDK's sentence. */
 export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read']);
+
+/**
+ * A step's own sentence for an error it throws on unchanged — for the SDK's retry to read — so that
+ * when the attempts are spent the run ends with it: confirm-no-duplicate's, once this run added a
+ * vendor, says so.
+ */
+export function noteSentence(error: unknown, sentence: string): void {
+  if (typeof error === 'object' && error !== null) sentences.set(error, sentence);
+}
 
 /** Each step, noting the step id against anything it throws, then throwing it on unchanged. */
 export function noteThrows(steps: Readonly<Record<string, Step>>): Record<string, Step> {
@@ -100,6 +119,8 @@ export function withFixedSentences(automation: Automation, log: Logger): Automat
 }
 
 export function sentenceFor(stepId: string | undefined, error: unknown): string {
+  const registered = typeof error === 'object' && error !== null ? sentences.get(error) : undefined;
+  if (registered !== undefined) return registered;
   if (error instanceof CallbackRefusedError && error.status === 429) return THROWN_SENTENCES.busy;
   if (stepId === 'receive') return THROWN_SENTENCES.receive;
   if (stepId !== undefined && QUICKBOOKS_STEPS.has(stepId)) return THROWN_SENTENCES.quickbooks;

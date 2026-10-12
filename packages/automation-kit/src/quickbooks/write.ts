@@ -5,7 +5,7 @@ import { refusalOf } from './read.js';
 
 /**
  * One QuickBooks WRITE through the SDK's provider call — a bill, an expense, a vendor
- * credit or a journal entry — judged so that a step never makes a second record:
+ * credit, a journal entry or a vendor — judged so that a step never makes a second record:
  *
  * **Never repeated.** One request, whatever happens: no wait after a 429, no second try
  * after a 5xx, nothing thrown for the SDK's step retry to repeat (a step that writes
@@ -36,6 +36,8 @@ export const QUICKBOOKS_WRITES = {
     entity: 'JournalEntry',
     noun: 'journal entry',
   },
+  /** A new vendor a bill names: created only after an approval, before the bill. */
+  vendor: { operation: 'vendor.create', entity: 'Vendor', noun: 'vendor' },
 } as const;
 export type QuickBooksWriteKind = keyof typeof QUICKBOOKS_WRITES;
 

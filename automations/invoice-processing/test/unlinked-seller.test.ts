@@ -5,7 +5,7 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import type { Decision } from '../src/decide/decide.js';
 import { receipt, sampleAnswer } from './check-world.js';
-import { RUN_ID, decide, type DecideSetUp } from './decide-world.js';
+import { decide, type DecideSetUp } from './decide-world.js';
 import { lineOf, queriesOf, routeRun, sampleVendor, stateOf } from './lookups-world.js';
 
 /**
@@ -17,7 +17,6 @@ import { lineOf, queriesOf, routeRun, sampleVendor, stateOf } from './lookups-wo
  */
 
 const THROUGH = 'find-vendor-company';
-const CREATED = `Created by Autom8x Bills & Receipts, run ${RUN_ID}.`;
 
 function saved(decision: Decision) {
   assert.ok(decision.outcome === 'ok' || decision.outcome === 'held', decision.outcome);
@@ -107,7 +106,7 @@ test("a receipt's or a card refund's seller not linked — an inactive vendor's 
       [expense.payee, expense.memo, expense.lineDescription],
       [
         { kind: 'none' },
-        `${CREATED} Receipt 55120 from Tidewell Hardware.`,
+        `Receipt 55120 from Tidewell Hardware.`,
         'Receipt 55120 from Tidewell Hardware',
       ],
     );
@@ -120,7 +119,7 @@ test("a receipt's or a card refund's seller not linked — an inactive vendor's 
       [refund.payee, refund.memo, refund.lineDescription],
       [
         { kind: 'none' },
-        `${CREATED} Refund R-6603 from Tidewell Hardware.`,
+        `Refund R-6603 from Tidewell Hardware.`,
         'Refund R-6603 from Tidewell Hardware',
       ],
     );

@@ -72,7 +72,24 @@ test('each kind names its operation and the entity its answer carries', () => {
       entity: 'JournalEntry',
       noun: 'journal entry',
     },
+    vendor: { operation: 'vendor.create', entity: 'Vendor', noun: 'vendor' },
   });
+});
+
+test('a vendor is written as a record is: one request, its Id from the answer', async () => {
+  const { write, recording, simulator } = writeWith('vendor', {
+    DisplayName: 'Larkspur Paper Co.',
+    CompanyName: 'Larkspur Paper Co.',
+  });
+  const result = await write();
+  assert.ok(result.ok);
+  assert.equal(result.id, '1001');
+  assert.equal(result.record.DisplayName, 'Larkspur Paper Co.');
+  assert.deepEqual(
+    recording.providerCalls.map((call) => call.operation),
+    ['vendor.create'],
+  );
+  assert.equal(simulator.company.vendors.length, 1);
 });
 
 test('the request id is the platform’s: an input naming requestid is refused before anything is sent', async () => {

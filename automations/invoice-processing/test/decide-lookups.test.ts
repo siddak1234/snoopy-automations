@@ -17,7 +17,7 @@ import {
   sampleAnswer,
   statement,
 } from './check-world.js';
-import { RUN_ID, VENDOR, decideState } from './decide-world.js';
+import { VENDOR, decideState } from './decide-world.js';
 
 /**
  * The lookups' table, shared by the steps and decide (`lookupUses`, Group 4's change to the
@@ -161,7 +161,6 @@ test("a vendor credit's or a statement's vendor not in QuickBooks: nothing runs,
       state: decideState({ answer, vendor: NEW }),
       config: {},
       switchOn: false,
-      runId: RUN_ID,
     });
     assert.deepEqual(decision, {
       outcome: 'failed',
@@ -187,7 +186,7 @@ test("S4's fallback drops a bill's D32 lookup, and decide then needs it not; not
   );
   const { otherRecordLookup: _dropped, ...state } = decideState({ answer: bill() });
   const run = (expenseSearch: 'amount' | 'window') =>
-    decideRun({ state, config: {}, switchOn: false, runId: RUN_ID, expenseSearch }).outcome;
+    decideRun({ state, config: {}, switchOn: false, expenseSearch }).outcome;
   assert.equal(run('window'), 'ok');
   assert.equal(run('amount'), 'failed', 'under D21 its absence is "could not finish its checks"');
 });

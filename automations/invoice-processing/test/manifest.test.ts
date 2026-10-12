@@ -140,9 +140,9 @@ test('one category setting per spend type but other, titled "Category for <spend
   );
 });
 
-test('the pipeline: 18 of the 24 steps the platform allows — the trigger, two AI steps, then actions: the nine lookups and decide last', () => {
+test('the pipeline: all 24 steps the platform allows — the trigger, two AI steps, then actions: the nine lookups, decide, the four checks after an approval, the one write and the email', () => {
   const kinds = manifest.pipeline.map((step) => step.kicker);
-  assert.equal(manifest.pipeline.length, 18);
+  assert.equal(manifest.pipeline.length, 24);
   assert.equal(kinds[0], 'TRIGGER');
   assert.deepEqual(
     manifest.pipeline.filter((step) => step.kicker === 'AI STEP').map((step) => step.id),
@@ -161,10 +161,21 @@ test('the pipeline: 18 of the 24 steps the platform allows — the trigger, two 
       ['find-related', 'ACTION'],
       ['find-other-record', 'ACTION'],
       ['decide', 'ACTION'],
+      ['confirm-company', 'ACTION'],
+      ['confirm-vendor', 'ACTION'],
+      ['create-vendor', 'ACTION'],
+      ['confirm-no-duplicate', 'ACTION'],
+      ['create-record', 'ACTION'],
+      ['notify', 'ACTION'],
     ],
   );
   for (const step of manifest.pipeline) {
     assert.match(step.id, /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u);
     assert.ok(step.title.length <= 80 && step.description.length <= 200, step.id);
   }
+  // The "Also email" field says where the summary goes: an address the platform will send to.
+  assert.equal(
+    manifest.setup.find((field) => field.key === 'notifyEmail')?.description,
+    'An address outside your workspace, such as your bookkeeper, that gets a short summary of each document recorded or compared.',
+  );
 });
