@@ -114,7 +114,8 @@ export function recordBody(plan: RecordPlan, vendorId: string | null, runId: str
         ...(vendorId === null ? {} : { EntityRef: { value: vendorId, type: 'Vendor' } }),
         // A refund to the card: "Credit card credit" (I2).
         ...(plan.credit ? { Credit: true } : {}),
-        // A check's default print status is NeedToPrint (I2; sandbox S8).
+        // A check's print status said outright, NotSet: accepted, and the API's own default in the
+        // sandbox too (I2; sandbox S8).
         ...(plan.printStatus === null ? {} : { PrintStatus: plan.printStatus }),
         PrivateNote: memo,
         ...currencyOf(plan),
@@ -147,7 +148,11 @@ export function recordBody(plan: RecordPlan, vendorId: string | null, runId: str
   }
 }
 
-/** QuickBooks' bounds on a vendor's company name and check name ("Maximum of 100 chars"). */
+/**
+ * QuickBooks' bound on a vendor's company name, 100 characters ("Max:100"), which also caps the
+ * check name sent here. The check name's own bound is 110 ("Max:110", sandbox G4–5), but this one
+ * number decides when a company name is sent at all, and one of 101–110 characters is refused.
+ */
 const NAME_ON_CHECK_LENGTH = 100;
 
 /** `text` in at most `maximum` whole characters — never half of one — with no space left at the end. */
@@ -160,9 +165,10 @@ function cut(text: string, maximum: number): string {
  * company name when that fits QuickBooks' 100 characters — so the next document from a "(vendor)"
  * supplier matches find-vendor-company — and nothing from the document beyond the name: no
  * address, email, phone or tax id. With a display name past 100 characters, `PrintOnCheckName` —
- * which QuickBooks fills from the display name, and holds to 100 — is the printed name cut to 100
- * whole characters (the design's open question, its recommended answer applied: whether QuickBooks
- * would cut or refuse a longer one is for the sandbox). No `CurrencyRef`: the home currency.
+ * which QuickBooks fills from the display name when none is sent, cutting it to 110 itself, and
+ * refuses past 110 (sandbox G4–5) — is the printed name cut to 100 whole characters (the design's
+ * open question, its recommended answer applied; accepted as sent in the sandbox). No
+ * `CurrencyRef`: the home currency.
  */
 export function vendorBody(payee: Extract<Payee, { kind: 'new_vendor' }>): JsonObject {
   const printed = [...payee.printedName].length;

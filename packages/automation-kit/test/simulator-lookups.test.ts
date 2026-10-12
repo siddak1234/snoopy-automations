@@ -6,6 +6,7 @@ import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import {
   dateRange,
+  lookupInQuery,
   lookupLikeQuery,
   lookupQuery,
   transactionQuery,
@@ -271,4 +272,66 @@ test('a bill search whose answer is over 192 KiB reaches the automation as a 502
     60,
   );
   await assert.rejects(sim.provider(call(query)), { status: 502, reason: undefined });
+});
+
+test('a backslash anywhere in a name or a number is found as the kit writes it, four, which QuickBooks reads twice (sandbox G4–5)', async () => {
+  const sim = simulator();
+  const acme = { value: '56', name: 'Acme Supplies' };
+  sim.company.vendors.push(
+    sampleVendor('64', 'Back\\Slash Co'),
+    sampleVendor('70', 'Ends With Backslash\\'),
+    sampleVendor('71', "Odd\\'Name"),
+  );
+  sim.company.bills.push(
+    sampleBill('189', acme, { DocNumber: 'S9\\Back\\slash%100 X' }),
+    sampleBill('190', acme, { DocNumber: "S9 it's\\ends-with\\" }),
+  );
+  for (const [id, name] of [
+    ['64', 'Back\\Slash Co'],
+    ['70', 'Ends With Backslash\\'],
+    ['71', "Odd\\'Name"],
+  ] as const) {
+    assert.deepEqual(await ids(sim, lookupQuery('Vendor', 'DisplayName', name, 2), 'Vendor'), [id]);
+    assert.deepEqual(
+      await ids(sim, lookupInQuery('Vendor', 'DisplayName', [name, 'Nobody'], 4), 'Vendor'),
+      [id],
+    );
+  }
+  const numbers = bills([
+    {
+      field: 'DocNumber',
+      operator: 'IN',
+      values: ['S9\\Back\\slash%100 X', "S9 it's\\ends-with\\"],
+    },
+  ]);
+  assert.deepEqual(await ids(sim, numbers, 'Bill'), ['189', '190']);
+});
+
+test('a search ordered by MetaData.CreateTime DESC answers the newest created first, by the instant each names, the bound after the order (sandbox G4–5)', async () => {
+  const sim = simulator();
+  const acme = { value: '56', name: 'Acme Supplies' };
+  const at = (CreateTime: string) => ({ MetaData: { CreateTime, LastUpdatedTime: CreateTime } });
+  sim.company.bills.push(
+    sampleBill('201', acme, { DocNumber: 'SAME-1', ...at('2026-10-11T09:00:00-07:00') }),
+    sampleBill('202', acme, { DocNumber: 'SAME-1', ...at('2026-10-12T08:00:00Z') }),
+    // 00:00 UTC: older than 202, though its text sorts after it.
+    sampleBill('203', acme, { DocNumber: 'SAME-1', ...at('2026-10-12T09:00:00+09:00') }),
+  );
+  const search = (orderBy?: { field: string; descending: boolean }) =>
+    transactionQuery({
+      entity: 'Bill',
+      where: [{ field: 'DocNumber', operator: '=', value: 'SAME-1' }],
+      ...(orderBy ? { orderBy } : {}),
+      maxResults: 2,
+    });
+  assert.deepEqual(
+    await ids(sim, search({ field: 'MetaData.CreateTime', descending: true }), 'Bill'),
+    ['202', '203'],
+  );
+  assert.deepEqual(
+    await ids(sim, search({ field: 'MetaData.CreateTime', descending: false }), 'Bill'),
+    ['201', '203'],
+  );
+  // Without an order, the first the company holds: the newest left past the bound.
+  assert.deepEqual(await ids(sim, search(), 'Bill'), ['201', '202']);
 });

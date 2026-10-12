@@ -11,19 +11,54 @@ import {
   transactionQuery,
 } from '../src/quickbooks/query.js';
 
-test('a value is quoted with each backslash doubled first, then each apostrophe escaped', () => {
+test('a value is quoted with each backslash written four times first, then each apostrophe escaped', () => {
   assert.equal(quoteQueryValue('Utilities:Electric'), "'Utilities:Electric'");
   assert.equal(quoteQueryValue("O'Brien's Fees"), "'O\\'Brien\\'s Fees'");
-  assert.equal(quoteQueryValue('C:\\Temp'), "'C:\\\\Temp'");
-  // A trailing backslash would otherwise escape the closing apostrophe and run on.
-  assert.equal(quoteQueryValue('Fees\\'), "'Fees\\\\'");
-  // Backslash before an apostrophe: the backslash doubled, then the apostrophe escaped.
-  assert.equal(quoteQueryValue("a\\'b"), "'a\\\\\\'b'");
+  // The values Intuit's sandbox searched for (G4–5, 2026-10-12): each found by exactly this form,
+  // under = and IN, and a doubled backslash found only the one at a value's very end.
+  assert.equal(quoteQueryValue('Back\\Slash Co'), "'Back\\\\\\\\Slash Co'");
+  assert.equal(quoteQueryValue('Ends With Backslash\\'), "'Ends With Backslash\\\\\\\\'");
+  // A backslash before an apostrophe: four backslashes, then the apostrophe escaped.
+  assert.equal(quoteQueryValue("Odd\\'Name"), "'Odd\\\\\\\\\\'Name'");
+  assert.equal(quoteQueryValue('S9\\Back\\slash%100 X'), "'S9\\\\\\\\Back\\\\\\\\slash%100 X'");
+  assert.equal(quoteQueryValue("S9 it's\\ends-with\\"), "'S9 it\\'s\\\\\\\\ends-with\\\\\\\\'");
   assert.equal(quoteQueryValue(''), "''");
 });
 
-test('nothing else in a value changes: double quotes, &, #, %, and a curly apostrophe', () => {
-  for (const value of ['Say "hi"', 'Repairs & Maintenance', 'Line #2', '100% Juice', 'O’Brien']) {
+test('the text a lookup sends for a name with a backslash is, byte for byte, the text that found it in the sandbox', () => {
+  // G45-backslash-and-case #6 and #12, the sandbox's prefix left out of the names.
+  assert.equal(
+    lookupQuery('Vendor', 'DisplayName', "Odd\\'Name", 2),
+    "SELECT * FROM Vendor WHERE DisplayName = 'Odd\\\\\\\\\\'Name' AND Active IN (true, false) MAXRESULTS 2",
+  );
+  assert.equal(
+    transactionQuery({
+      entity: 'Bill',
+      where: [{ field: 'DocNumber', operator: 'IN', values: ["S9 it's\\ends-with\\", 'SBX-NONE'] }],
+      maxResults: 3,
+    }),
+    "SELECT * FROM Bill WHERE DocNumber IN ('S9 it\\'s\\\\\\\\ends-with\\\\\\\\', 'SBX-NONE') MAXRESULTS 3",
+  );
+  // And the platform's URL encoding carries every one of the four.
+  assert.ok(
+    new URLSearchParams({ query: lookupQuery('Vendor', 'DisplayName', 'A\\B', 2) })
+      .toString()
+      .includes('%27A%5C%5C%5C%5CB%27'),
+  );
+});
+
+test('nothing else in a value changes: double quotes, &, #, %, _, accents and a curly apostrophe', () => {
+  // `%` and `_` are wildcards only in LIKE: under = and IN Intuit's sandbox read each as itself
+  // (G4–5 and its `_` probe, 2026-10-12), so neither is escaped.
+  for (const value of [
+    'Say "hi"',
+    'Repairs & Maintenance',
+    'Line #2',
+    '100% Juice',
+    'Under_Score Supply',
+    'Café Crème',
+    'O’Brien',
+  ]) {
     assert.equal(quoteQueryValue(value), `'${value}'`);
   }
 });
@@ -70,7 +105,7 @@ test('an entity, a field or a bound outside Intuit’s shapes is refused before 
 test('a lookup by several names is one IN query, every value quoted, active or not', () => {
   assert.equal(
     lookupInQuery('Account', 'FullyQualifiedName', ['Utilities:Electric', "O'Brien's \\ Fees"], 4),
-    "SELECT * FROM Account WHERE FullyQualifiedName IN ('Utilities:Electric', 'O\\'Brien\\'s \\\\ Fees') AND Active IN (true, false) MAXRESULTS 4",
+    "SELECT * FROM Account WHERE FullyQualifiedName IN ('Utilities:Electric', 'O\\'Brien\\'s \\\\\\\\ Fees') AND Active IN (true, false) MAXRESULTS 4",
   );
   assert.equal(
     lookupInQuery('Employee', 'DisplayName', ['Robin Example'], 2),
@@ -109,14 +144,14 @@ test('a transaction search joins its conditions by AND, quotes every value, orde
     }),
     "SELECT * FROM Bill WHERE VendorRef = '56' AND DocNumber IN ('INV-1\\'01', 'INV-1002') AND TotalAmt > '0' ORDERBY TxnDate MAXRESULTS 40",
   );
-  // A compared value is quoted as a lookup's is: each backslash doubled, then each apostrophe escaped.
+  // A compared value is quoted as a lookup's is: each backslash four times, then each apostrophe escaped.
   assert.equal(
     transactionQuery({
       entity: 'VendorCredit',
       where: [{ field: 'DocNumber', operator: '=', value: "O'B-7\\" }],
       maxResults: 3,
     }),
-    "SELECT * FROM VendorCredit WHERE DocNumber = 'O\\'B-7\\\\' MAXRESULTS 3",
+    "SELECT * FROM VendorCredit WHERE DocNumber = 'O\\'B-7\\\\\\\\' MAXRESULTS 3",
   );
   for (const operator of ['=', '<', '>', '<=', '>='] as const) {
     assert.equal(
@@ -182,16 +217,37 @@ test('a search of a name list, with no condition, or with a name, operator, boun
     () => transactionQuery({ entity: 'Bill', where: one, maxResults: 1_001 }),
     /MAXRESULTS/u,
   );
+  // A dotted field other than `MetaData.CreateTime`, as an order or a condition, is refused.
+  for (const field of ['MetaData.LastUpdatedTime', 'VendorRef.value', 'TxnDate, Id']) {
+    assert.throws(
+      () => transactionQuery({ entity: 'Bill', where: one, orderBy: { field }, maxResults: 3 }),
+      /not a QuickBooks field/u,
+      field,
+    );
+  }
   assert.throws(
     () =>
       transactionQuery({
         entity: 'Bill',
-        where: one,
-        orderBy: { field: 'MetaData.CreateTime' },
+        where: [{ field: 'MetaData.CreateTime', operator: '>', value: '2026-10-12' }],
         maxResults: 3,
       }),
     /not a QuickBooks field/u,
   );
+});
+
+test('a search may be ordered by when QuickBooks created each record, newest first: Intuit applies the bound after the order (sandbox G4–5)', () => {
+  for (const entity of TRANSACTION_ENTITIES) {
+    assert.equal(
+      transactionQuery({
+        entity,
+        where: [{ field: 'DocNumber', operator: '=', value: 'A-1' }],
+        orderBy: { field: 'MetaData.CreateTime', descending: true },
+        maxResults: 4,
+      }),
+      `SELECT * FROM ${entity} WHERE DocNumber = 'A-1' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4`,
+    );
+  }
 });
 
 test('a date range is two real days, the first not after the second', () => {

@@ -1,7 +1,9 @@
 import {
   QUICKBOOKS_SENTENCES,
+  rowsNaming,
   writeQuickBooks,
   type Clock,
+  type QuickBooksWrite,
 } from '@autom8x/automation-kit/quickbooks';
 import {
   MAXIMUM_NAME_LENGTH,
@@ -15,6 +17,7 @@ import type { JsonObject, Step, StepResult } from '@autom8x/automation-sdk';
 import { DECIDE_SENTENCES } from '../decide/fails.js';
 import type { Payee } from '../decide/plan.js';
 import type { SavedState } from '../decide/saved.js';
+import { noteSentence } from '../failures.js';
 import { vendorByName } from '../lookups/queries.js';
 import { LOOKUP_SENTENCES, lookupRows } from '../lookups/read.js';
 import { matchedVendorOf } from '../lookups/records.js';
@@ -34,11 +37,13 @@ import { AFTER_APPROVAL_SENTENCES, vendorFailure } from '../writes/sentences.js'
  *   created; inactive, or two, fails as find-vendor does. The display name only: a company-name
  *   re-check would be a 25th step (the design's open question, its recommended answer applied).
  * - `create-vendor` then adds it, when it is still missing, exactly as the approver saw it named
- *   (`vendorBody`). One write, never repeated — no declared retry on any write in v1, until the
- *   sandbox (S6) shows a repeated request id answered with the first answer — so a 429 or a lost
- *   answer is "did not confirm", the safe side. It runs before confirm-no-duplicate, as approved:
- *   if a later step fails, the vendor stays — a real supplier, which the next document matches —
- *   and that step's sentence says it was added (the recommended answer to keeping that order).
+ *   (`vendorBody`). One write, repeated only by the SDK's step retry when nothing answered — no
+ *   answer, a 502/503/504 naming no reason — under the same key, so the same `requestid`, which
+ *   Intuit answers with the first answer, never a second vendor (sandbox S6); when the attempts
+ *   are spent, and for QuickBooks' own 429 or 5xx, the run ends "did not confirm", the safe side.
+ *   It runs before confirm-no-duplicate, as approved: if a later step fails, the vendor stays — a
+ *   real supplier, which the next document matches — and that step's sentence says it was added
+ *   (the recommended answer to keeping that order).
  */
 
 const LOOK_WHAT = 'New vendor not looked up again';
@@ -79,9 +84,11 @@ export function confirmVendor(clock: Clock): Step {
       refused: 'vendor_refused',
     });
     if (!read.ok) return read.result;
-    // Intuit compares without case; a row QuickBooks matched otherwise is a near-miss, ignored.
-    const kept = read.rows.filter((row) => sameName(row.DisplayName, payee.name));
-    const ignored = nearMisses(read.rows.length - kept.length);
+    // As find-vendor reads it: the name, else an inactive vendor renamed from it, capital letters
+    // aside; a row QuickBooks matched otherwise is a near-miss, ignored.
+    const named = rowsNaming(read.rows, 'DisplayName', payee.name, sameName);
+    const kept = named.rows;
+    const ignored = nearMisses(named.others);
     if (kept.length === 0) {
       return {
         outcome: 'ok',
@@ -138,7 +145,15 @@ export function createVendor(): Step {
     if (payee.name.length > MAXIMUM_NAME_LENGTH) {
       return failedWith(ADD_WHAT, 'state_incomplete', AFTER_APPROVAL_SENTENCES.state_incomplete);
     }
-    const write = await writeQuickBooks({ platform, kind: 'vendor', input: vendorBody(payee) });
+    let write: QuickBooksWrite;
+    try {
+      write = await writeQuickBooks({ platform, kind: 'vendor', input: vendorBody(payee) });
+    } catch (error) {
+      // On unchanged for the SDK's retry (S6); when its attempts are spent, the run's wrapper ends
+      // with this sentence: the vendor may have been added.
+      noteSentence(error, AFTER_APPROVAL_SENTENCES.vendor_unconfirmed);
+      throw error;
+    }
     if (!write.ok) {
       const reason = write.detail === undefined ? write.reason : `${write.reason} ${write.detail}`;
       return failedWith(ADD_WHAT, reason, vendorFailure(write));

@@ -117,6 +117,18 @@ test('every setting the code reads is declared, as text, optional but the defaul
   }
 });
 
+test('every setting that names an account says it must match QuickBooks exactly, capitals included (the owner’s "Exact capitals, said clearly", sandbox S1); no other does', () => {
+  const naming = new Set([...ACCOUNT_SETTINGS.map((setting) => setting.key), OWNERS_SETTING.key]);
+  for (const field of manifest.setup) {
+    assert.equal(
+      field.description.includes('exactly as QuickBooks shows it, capitals included'),
+      naming.has(field.key),
+      field.key,
+    );
+  }
+  assert.equal(naming.size, 16);
+});
+
 test('one category setting per spend type but other, titled "Category for <spend type>"', () => {
   assert.deepEqual(
     CATEGORY_SETTINGS.map((setting) => setting.spendType),

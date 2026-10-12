@@ -1,8 +1,10 @@
 import {
   dateRange,
+  lookupInQuery,
   lookupLikeQuery,
   lookupQuery,
   transactionQuery,
+  withDeletedForm,
   type QueryCondition,
   type TransactionEntity,
 } from '@autom8x/automation-kit/quickbooks';
@@ -19,9 +21,10 @@ import type { ExpenseSearch } from './expense-search.js';
  * test holds each one (ip-review design-quickbooks-lookups.json cross_cutting[0], as the plan's §5
  * table runs each lookup per document type). One `query.run` per step: the platform refuses a
  * second, different request under a step's one key with 409, so nothing pages. Intuit's language:
- * IN, =, <, >, <=, >= and LIKE, joined by AND, never OR; a value quoted by the kit (a backslash
- * doubled, then an apostrophe escaped); `Active IN (true, false)` on a name list — vendors,
- * customers, employees — and never on a transaction; an amount from whole cents (`1250.00`).
+ * IN, =, <, >, <=, >= and LIKE, joined by AND, never OR; a value quoted by the kit (each backslash
+ * written four times, then an apostrophe escaped: sandbox G4–5); `Active IN (true, false)` on a
+ * name list — vendors, customers, employees — and never on a transaction; an amount from whole
+ * cents (`1250.00`).
  */
 
 /**
@@ -33,7 +36,7 @@ import type { ExpenseSearch } from './expense-search.js';
  * 1,865; a Bill of one or two lines 576–892; a JournalEntry of two lines 660–669).
  */
 export const MAX_RESULTS = {
-  /** Two vendors tell one from two. */
+  /** Two vendors tell one from two — for each form of a name asked for (`vendorByName`). */
   vendor: 2,
   /** One customer or employee is enough to know the name is taken. */
   nameClash: 1,
@@ -43,11 +46,12 @@ export const MAX_RESULTS = {
   records: 3,
   /**
    * Journal entries on a day, or in the bank-feed window — their `TotalAmt` is always 0, so lines
-   * are compared in code: 10 rows of up to 19.6 KB each, a journal entry of some 75 lines.
-   * PROVISIONAL, a trade-off owed a measured answer size or the owner's choice before v1 freezes:
-   * a company receipt whose 22-day window holds 10 entries of any kind — the reimbursements this
-   * automation records among them — is held "too many to check" (D6), and a larger bound lets
-   * larger entries make an answer over 192 KiB, which fails the run.
+   * are compared in code: 10 rows of up to 19.6 KB each, entries averaging about 65 lines (sandbox
+   * S9 measured an entry at 344 bytes and 294 a line, with an employee and a description). A
+   * trade-off still open to the owner's choice: a company receipt whose 22-day window holds 10
+   * entries of any kind — the reimbursements this automation records among them — is held "too
+   * many to check" (D6), and a larger bound holds smaller entries (S9's table: 20 holds 32 lines
+   * an entry, 25 holds 25) before an answer passes 192 KiB, which fails the run.
    */
   journalEntries: 10,
   /**
@@ -85,9 +89,22 @@ function parts(
   return { entity, where, maxResults, newestFirst };
 }
 
-/** The search's text, at its bound plus `extraRows`. */
-function written({ entity, where, maxResults, newestFirst }: Parts, extraRows = 0): Search {
-  const orderBy = newestFirst ? { orderBy: { field: 'TxnDate', descending: true } } : {};
+/**
+ * The search's text, at its bound plus `extraRows` — and, for the re-check after an approval,
+ * the newest CREATED first in place of any other order: Intuit applies the bound after the
+ * order (sandbox G4–5 and the verifier's probe), so a copy made while the run waited is always
+ * within it, however many older rows match.
+ */
+function written(
+  { entity, where, maxResults, newestFirst }: Parts,
+  extraRows = 0,
+  newestCreatedFirst = false,
+): Search {
+  const orderBy = newestCreatedFirst
+    ? { orderBy: { field: 'MetaData.CreateTime', descending: true } }
+    : newestFirst
+      ? { orderBy: { field: 'TxnDate', descending: true } }
+      : {};
   const bound = maxResults + extraRows;
   return {
     entity,
@@ -105,11 +122,20 @@ function search(
   return written(parts(entity, where, maxResults, newestFirst));
 }
 
-/** A vendor by the exact name printed, or typed in "Who paid": `SELECT * FROM Vendor WHERE DisplayName = '…' AND Active IN (true, false) MAXRESULTS 2`. */
+/**
+ * A vendor by the exact name printed, or typed in "Who paid" — and by the name QuickBooks gives
+ * a vendor made inactive, "<name> (deleted)" (sandbox G4–5), so an inactive vendor is found as
+ * inactive and not as no vendor: `SELECT * FROM Vendor WHERE DisplayName IN ('…', '… (deleted)')
+ * AND Active IN (true, false) MAXRESULTS 4`. Still one query: Intuit's IN on a vendor's name
+ * ignores case, as its `=` does (sandbox S1).
+ */
 export const vendorByName = (name: string) =>
-  lookupQuery('Vendor', 'DisplayName', name, MAX_RESULTS.vendor);
+  lookupInQuery('Vendor', 'DisplayName', withDeletedForm(name), MAX_RESULTS.vendor * 2);
 
-/** A vendor whose company name is that name. */
+/**
+ * A vendor whose company name is that name. QuickBooks leaves an inactive vendor's company name
+ * as it was, so this finds it, and an active vendor made with its name, as they are.
+ */
 export const vendorByCompanyName = (name: string) =>
   lookupQuery('Vendor', 'CompanyName', name, MAX_RESULTS.vendor);
 
@@ -117,11 +143,14 @@ export const vendorByCompanyName = (name: string) =>
 export const similarVendorsQuery = (word: string) =>
   lookupLikeQuery('Vendor', 'DisplayName', word, MAX_RESULTS.similar);
 
-/** A customer with a new vendor's name. */
+/**
+ * A customer with a new vendor's name — the name alone: one made inactive is renamed
+ * "<name> (deleted)", and its old name no longer stops a new vendor (sandbox G4–5).
+ */
 export const customerByName = (name: string) =>
   lookupQuery('Customer', 'DisplayName', name, MAX_RESULTS.nameClash);
 
-/** An employee with a new vendor's name. */
+/** An employee with a new vendor's name — the name alone, as a customer's. */
 export const employeeByName = (name: string) =>
   lookupQuery('Employee', 'DisplayName', name, MAX_RESULTS.nameClash);
 
@@ -165,7 +194,8 @@ function numberParts(document: DocumentState, vendor: VendorState | null): Parts
       );
     case 'card_refund':
     case 'vendor_credit':
-      // VendorRef cannot be searched on a vendor credit: decide compares the vendor.
+      // By the number alone, and decide compares the vendor — though VendorRef does filter a
+      // vendor credit (sandbox S6's probe found only the one vendor's credits by it).
       return parts('VendorCredit', [equals('DocNumber', number)], MAX_RESULTS.records);
     case 'statement': {
       // Each listed number once, whatever its case, and only one a bill's number could be: a longer
@@ -240,8 +270,9 @@ export const amountSearch = (
 /**
  * confirm-no-duplicate's one query after an approval (the plan's §5): the path's own duplicate
  * lookup — find-duplicate-number's or find-duplicate-amount's, the search decide's run sent — with
- * one row more, so a record added while the run waited shows beside every one the approver saw.
- * decide builds it, and saves it with the plan (`src/decide/recheck.ts`).
+ * one row more, the newest created first (`written`), so a record added while the run waited shows
+ * beside every one the approver saw, however many older ones match. decide builds it, and saves it
+ * with the plan (`src/decide/recheck.ts`).
  */
 export function recheckSearch(
   lookup: DuplicateLookup,
@@ -251,7 +282,7 @@ export function recheckSearch(
 ): Search {
   const found =
     lookup === 'numberLookup' ? numberParts(document, vendor) : amountParts(document, vendor, how);
-  return written(found, 1);
+  return written(found, 1, true);
 }
 
 /** find-related's search per route (§5). */

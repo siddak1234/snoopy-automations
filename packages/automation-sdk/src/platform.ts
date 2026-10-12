@@ -18,6 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
+import { floodClock, floodWaitMs, isFloodRefusal, waitEndsBefore } from './flood.js';
 import { modelRequestProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
 import { unanswered, unsent } from './marks.js';
@@ -112,6 +113,12 @@ export interface PlatformClientOptions {
    * front of the platform, which before platform BUILD-PLAN 25.2.13 gave up after 5 s.
    */
   mailTimeoutMs?: number;
+  /**
+   * The invoke's `deadline`. A callback the Edge's flood valve turned away is sent again once its
+   * window turns, while that wait ends before this (`flood.ts`); without one, or with one that does
+   * not parse, the refusal is thrown at once. `clientFor` passes the invoke's.
+   */
+  deadline?: string;
 }
 
 export class PlatformClient implements AutomationPlatform {
@@ -119,6 +126,7 @@ export class PlatformClient implements AutomationPlatform {
   readonly #modelTimeoutMs: number;
   readonly #downloadTimeoutMs: number;
   readonly #mailTimeoutMs: number;
+  readonly #deadline: string | undefined;
 
   public constructor(
     private readonly callbackOrigin: string,
@@ -129,6 +137,7 @@ export class PlatformClient implements AutomationPlatform {
     this.#modelTimeoutMs = options.modelTimeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
     this.#downloadTimeoutMs = options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     this.#mailTimeoutMs = options.mailTimeoutMs ?? DEFAULT_MAIL_TIMEOUT_MS;
+    this.#deadline = options.deadline;
   }
 
   public async reportStep(report: StepReport): Promise<void> {
@@ -290,39 +299,51 @@ export class PlatformClient implements AutomationPlatform {
     // Serialised BEFORE the request, outside the mark: an input JSON cannot carry
     // throws here, a step's own fault, and must never read as an answer that did not come.
     const payload = JSON.stringify(body);
-    const response = await unanswered(
-      unsent(
-        fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            // The run token, as a bearer credential. The platform relays it inward and
-            // verifies it against the run it was minted for.
-            authorization: `Bearer ${this.runToken}`,
-          },
-          body: payload,
-          signal: AbortSignal.timeout(timeoutMs),
-        }),
-      ),
-    );
+    for (;;) {
+      const response = await unanswered(
+        unsent(
+          fetch(`${this.callbackOrigin}/v1/automations/callbacks/${message}`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              // The run token, as a bearer credential. The platform relays it inward and
+              // verifies it against the run it was minted for.
+              authorization: `Bearer ${this.runToken}`,
+            },
+            body: payload,
+            signal: AbortSignal.timeout(timeoutMs),
+          }),
+        ),
+      );
 
-    if (!response.ok) {
-      // Surfaced rather than swallowed. A refused callback means the platform
-      // rejected something about this run — an undeclared step, an expired token —
-      // and continuing as if it succeeded would produce a run whose timeline
-      // disagrees with what actually happened.
-      const answer = await response.text().catch(() => '');
-      // The platform's problem body, read whole (`refusals.ts`): a model
-      // refusal the platform typed is a `ModelRefusedError`, anything else a
-      // `CallbackRefusedError` with the problem's `code`, `details` and `reason`.
-      throw refusalFrom(message, response.status, answer);
+      if (!response.ok) {
+        // The platform's problem body, read whole (`refusals.ts`): a model
+        // refusal the platform typed is a `ModelRefusedError`, anything else a
+        // `CallbackRefusedError` with the problem's `code`, `details` and `reason`.
+        const answer = await response.text().catch(() => '');
+        const refusal = refusalFrom(message, response.status, answer);
+        // The Edge's flood valve turned the callback away before the platform saw it: the
+        // same bytes again once its window turns, while the deadline allows (`flood.ts`).
+        const wait = isFloodRefusal(refusal)
+          ? floodWaitMs(response.headers.get('retry-after'))
+          : undefined;
+        if (wait !== undefined && waitEndsBefore(wait, this.#deadline)) {
+          await floodClock.sleep(wait);
+          continue;
+        }
+        // Surfaced rather than swallowed. A refused callback means the platform
+        // rejected something about this run — an undeclared step, an expired token —
+        // and continuing as if it succeeded would produce a run whose timeline
+        // disagrees with what actually happened.
+        throw refusal;
+      }
+
+      // Parsed once here rather than per message, and an empty body is `undefined`
+      // rather than a parse error. A body cut off mid-read is no answer either; one
+      // that arrived whole and does not parse IS an answer, and is not marked.
+      const text = await unanswered(response.text());
+      return text ? (JSON.parse(text) as unknown) : undefined;
     }
-
-    // Parsed once here rather than per message, and an empty body is `undefined`
-    // rather than a parse error. A body cut off mid-read is no answer either; one
-    // that arrived whole and does not parse IS an answer, and is not marked.
-    const text = await unanswered(response.text());
-    return text ? (JSON.parse(text) as unknown) : undefined;
   }
 }
 
@@ -343,7 +364,10 @@ export function boundedResult(result: RunResult): RunResult {
   }
 }
 
-/** Builds the client for one invoke. */
+/** Builds the client for one invoke, held to its deadline. */
 export function clientFor(request: InvokeRequest, options?: PlatformClientOptions): PlatformClient {
-  return new PlatformClient(request.callbackOrigin, request.runToken, options);
+  return new PlatformClient(request.callbackOrigin, request.runToken, {
+    ...options,
+    deadline: request.deadline,
+  });
 }

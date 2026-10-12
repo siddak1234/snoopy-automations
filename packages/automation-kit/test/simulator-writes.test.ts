@@ -141,7 +141,8 @@ test("a vendor: its name required, held to Intuit's lengths, unique among vendor
     ['no display name', { CompanyName: 'X' }, '2020'],
     ['a display name of 501', { DisplayName: 'V'.repeat(501) }, '2050'],
     ['a company name of 101', { DisplayName: 'V', CompanyName: 'C'.repeat(101) }, '2050'],
-    ['a check name of 101', { DisplayName: 'V', PrintOnCheckName: 'P'.repeat(101) }, '2050'],
+    // Sandbox G4–5: a check name past 110 is "Max:110", a company name past 100 "Max:100".
+    ['a check name of 111', { DisplayName: 'V', PrintOnCheckName: 'P'.repeat(111) }, '2050'],
     ["another vendor's name", { DisplayName: 'HARROWGATE office supply' }, '6240'],
     ["a customer's name", { DisplayName: 'brightquill office mart' }, '6240'],
     ["an employee's name", { DisplayName: 'Robin Example' }, '6240'],
@@ -166,12 +167,12 @@ test("a vendor: its name required, held to Intuit's lengths, unique among vendor
     ),
     ['1001'],
   );
-  // Exactly 500 and 100 characters are taken.
+  // Exactly 500, 100 and 110 characters are taken.
   const longest = await sim.provider(
     call('vendor.create', {
       DisplayName: 'L'.repeat(500),
       CompanyName: 'C'.repeat(100),
-      PrintOnCheckName: 'P'.repeat(100),
+      PrintOnCheckName: 'P'.repeat(110),
     }),
   );
   assert.equal(longest.status, 200);
@@ -271,7 +272,7 @@ test("an expense or a vendor credit sent no number: with own numbers off QuickBo
   }
 });
 
-test('an answer lost after QuickBooks acted: a 502 naming no reason; recorded first, the key replays it, else QuickBooks is asked again', async () => {
+test('an answer lost after QuickBooks acted: a 502 naming no reason; recorded first, the key replays it, else QuickBooks is asked again and answers the first record under the same requestid (sandbox S6)', async () => {
   for (const lost of ['after_record', 'before_record'] as const) {
     const sim = simulator();
     sim.script('bill.create', [{ lost }]);
@@ -284,13 +285,46 @@ test('an answer lost after QuickBooks acted: a 502 naming no reason; recorded fi
     );
     const again = await sim.provider(request);
     assert.equal(again.status, 200);
-    if (lost === 'after_record') {
-      assert.equal(sim.calls.at(-1)?.outcome, 'replayed');
-      assert.equal((again.body as { Bill: JsonObject }).Bill.Id, '1001');
-      assert.equal(sim.company.bills.length, 1, 'the record answered: no second bill');
-    } else {
-      assert.equal(sim.calls.at(-1)?.outcome, 'answered');
-      assert.equal(sim.company.bills.length, 2, "nothing recorded: only Intuit's requestid helps");
-    }
+    assert.equal((again.body as { Bill: JsonObject }).Bill.Id, '1001', lost);
+    assert.equal(sim.company.bills.length, 1, `${lost}: no second bill`);
+    assert.equal(
+      sim.calls.at(-1)?.outcome,
+      lost === 'after_record' ? 'replayed' : 'answered',
+      `${lost}: from Connections' record, else from QuickBooks' own`,
+    );
   }
+});
+
+test('QuickBooks answers a repeated requestid with its first answer, whatever the body; a refused first request is not kept, and another key or operation is another id (sandbox S6)', async () => {
+  const sim = simulator();
+  // Nothing recorded by Connections — QuickBooks' answer lost each time — so each ask reaches it.
+  sim.script('bill.create', [{ lost: 'before_record' }, { lost: 'before_record' }]);
+  const first = call('bill.create', BILL);
+  await assert.rejects(sim.provider(first), { status: 502 });
+  // The same key with the body changed: Connections recorded nothing, so QuickBooks answers it.
+  const changed = { ...first, input: { ...BILL, DocNumber: 'CHANGED-1' } };
+  await assert.rejects(sim.provider(changed), { status: 502 });
+  const answered = await sim.provider(changed);
+  const bill = (answered.body as { Bill: JsonObject }).Bill;
+  assert.deepEqual(
+    [bill.Id, bill.DocNumber],
+    ['1001', undefined],
+    'the first body, not the changed one',
+  );
+  assert.equal(sim.company.bills.length, 1, 'one bill, as first sent');
+  // Another key is another request id: a second bill.
+  const other = await sim.provider({ ...first, idempotencyKey: 'create-record-other-key-0001' });
+  assert.equal((other.body as { Bill: JsonObject }).Bill.Id, '1002');
+  // A first request QuickBooks refused is not kept — here its answer lost before Connections
+  // recorded it — so the corrected body under the same id creates the record.
+  const refusedFirst = { ...first, idempotencyKey: 'create-record-refused-first-01' };
+  sim.script('bill.create', [{ lost: 'before_record' }]);
+  await assert.rejects(
+    sim.provider({ ...refusedFirst, input: { ...BILL, VendorRef: { value: '404' } } }),
+    { status: 502 },
+  );
+  assert.equal(sim.calls.at(-1)?.status, 400, 'QuickBooks refused it');
+  const corrected = await sim.provider(refusedFirst);
+  assert.equal((corrected.body as { Bill: JsonObject }).Bill.Id, '1003');
+  assert.equal(sim.company.bills.length, 3);
 });

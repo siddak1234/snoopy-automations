@@ -58,7 +58,7 @@ const journalLine = (amount: number, posting: string, account: string) => ({
   JournalEntryLineDetail: { PostingType: posting, AccountRef: { value: account } },
 });
 
-test('an employee is found by display name without case, active or not; an account by several names in one IN query', async () => {
+test('an employee is found by display name without case, active or not; an account by several names in one IN query, with case (sandbox S1)', async () => {
   const sim = simulator();
   sim.company.employees.push(sampleEmployee('57', 'Casey Sample', { Active: false }));
   const found = await rows(
@@ -81,7 +81,7 @@ test('an employee is found by display name without case, active or not; an accou
     lookupInQuery(
       'Account',
       'FullyQualifiedName',
-      ['utilities:electric', 'Company Visa', 'Nope'],
+      ['Utilities:Electric', 'Company Visa', 'Nope'],
       6,
     ),
     'Account',
@@ -90,11 +90,41 @@ test('an employee is found by display name without case, active or not; an accou
     accounts.map((row) => row.Id),
     ['57', '41'],
   );
+  // IN on an account's names compares WITH case, as Intuit's sandbox did — `=` and an employee's
+  // or a vendor's IN without.
+  const cased = await rows(
+    sim,
+    lookupInQuery('Account', 'FullyQualifiedName', ['utilities:electric', 'COMPANY VISA'], 4),
+    'Account',
+  );
+  assert.deepEqual(cased, []);
+  const equal = await rows(
+    sim,
+    lookupQuery('Account', 'FullyQualifiedName', 'utilities:electric', 2),
+    'Account',
+  );
+  assert.deepEqual(
+    equal.map((row) => row.Id),
+    ['57'],
+  );
+  const people = await rows(
+    sim,
+    lookupInQuery('Employee', 'DisplayName', ['ROBIN example', 'casey sample'], 4),
+    'Employee',
+  );
+  assert.deepEqual(
+    people.map((row) => row.Id),
+    ['55', '57'],
+  );
   // MAXRESULTS is the most rows returned.
-  sim.company.accounts.push(sampleAccount('58', 'UTILITIES:ELECTRIC', 'Expense'));
   const bounded = await rows(
     sim,
-    lookupInQuery('Account', 'FullyQualifiedName', ['Utilities:Electric', 'Checking'], 2),
+    lookupInQuery(
+      'Account',
+      'FullyQualifiedName',
+      ['Utilities:Electric', 'Checking', 'Company Visa'],
+      2,
+    ),
     'Account',
   );
   assert.equal(bounded.length, 2);

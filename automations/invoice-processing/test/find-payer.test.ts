@@ -26,8 +26,9 @@ const SETTINGS = {
   ownerNames: 'Pat Owner; Sam Partner = Owner investments',
 };
 
+/** find-payer's one query: the name, and the name QuickBooks gives an inactive employee, two rows a form. */
 const employeeQuery = (name: string) =>
-  `SELECT * FROM Employee WHERE DisplayName = '${name}' AND Active IN (true, false) MAXRESULTS 2`;
+  `SELECT * FROM Employee WHERE DisplayName IN ('${name}', '${name} (deleted)') AND Active IN (true, false) MAXRESULTS 4`;
 
 async function paid(
   input: JsonObject,
@@ -172,6 +173,32 @@ test('an employee: one lookup by display name, re-checked after cleaning; active
   );
   assert.deepEqual(apostrophe.sent[0]?.input, { query: employeeQuery("Jo O\\'Neil") });
   assert.equal((apostrophe.payer as JsonObject).employeeId, '61');
+});
+
+test('P2 an inactive employee — as QuickBooks keeps one, renamed "(deleted)" (sandbox G4–5) — is P2, not passed on to the vendors', async () => {
+  const renamed = await paid({ paidPersonally: true, paidBy: 'Robin Example' }, SETTINGS, (world) =>
+    Object.assign(world.simulator.company.employees[0]!, {
+      DisplayName: 'Robin Example (deleted)',
+      Active: false,
+    }),
+  );
+  assert.deepEqual(renamed.sent[0]?.input, { query: employeeQuery('Robin Example') });
+  assert.deepEqual(renamed.result, failed('payer_inactive'));
+  assert.deepEqual(renamed.platform.modelCalls, []);
+  // An active employee made with the name an inactive one had is that employee.
+  const remade = await paid({ paidPersonally: true, paidBy: 'Robin Example' }, SETTINGS, (world) =>
+    world.simulator.company.employees.push(
+      sampleEmployee('63', 'Robin Example (deleted)', { Active: false }),
+    ),
+  );
+  assert.equal((remade.payer as JsonObject).employeeId, '55');
+  // An active employee someone named "… (deleted)" is not the name's.
+  const named = await paid({ paidPersonally: true, paidBy: 'Robin Example' }, SETTINGS, (world) =>
+    Object.assign(world.simulator.company.employees[0]!, {
+      DisplayName: 'Robin Example (deleted)',
+    }),
+  );
+  assert.equal((named.payer as JsonObject).route, 'not_employee');
 });
 
 test('P2 an inactive employee; P3 Owed to team members not set; two employees by one name', async () => {

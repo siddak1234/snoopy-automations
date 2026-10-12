@@ -16,7 +16,10 @@ import { faultAnswer, queryAnswer, type SimulatedCompany } from './quickbooks-co
  * CodesModelsJsonObjects_v2.json, read 2026-10-11): values compared without case, IN, =,
  * <, >, <=, >= and LIKE (`%` its one wildcard) joined by AND — never OR — ORDERBY on a
  * sortable field, MAXRESULTS the most rows returned, and `Active IN (true, false)` on a name
- * list alone.
+ * list alone. And as Intuit's sandbox answered (2026-10-12): a quoted value's escapes read
+ * twice, so four backslashes are one (G4–5); IN on an account's names compared WITH case
+ * (S1); and `ORDERBY MetaData.CreateTime` on every transaction, newest created first, the
+ * bound applied after the order (G4–5 and the verifier's probe).
  *
  * It answers only the text the kit's builders write — `lookupQuery`, `lookupInQuery` and
  * `lookupLikeQuery` on Account, Employee, Vendor and Customer, `transactionQuery` on Bill,
@@ -111,7 +114,10 @@ const FILTERABLE: Readonly<Record<string, readonly string[]>> = {
   JournalEntry: ['Id', 'TxnDate', 'DocNumber'],
 };
 
-/** Marked `sortable` in Intuit's model file, for the transactions a search may order. */
+/**
+ * Marked `sortable` in Intuit's model file, for the transactions a search may order — and
+ * `MetaData.CreateTime`, which Intuit's sandbox ordered every one of them by (G4–5).
+ */
 const SORTABLE: Readonly<Record<string, readonly string[]>> = {
   Bill: [
     'TxnDate',
@@ -121,10 +127,18 @@ const SORTABLE: Readonly<Record<string, readonly string[]>> = {
     'VendorRef',
     'APAccountRef',
     'SalesTermRef',
+    'MetaData.CreateTime',
   ],
-  Purchase: ['TxnDate', 'DocNumber'],
-  VendorCredit: ['TxnDate', 'DocNumber', 'TotalAmt', 'APAccountRef', 'Balance'],
-  JournalEntry: ['TxnDate', 'DocNumber'],
+  Purchase: ['TxnDate', 'DocNumber', 'MetaData.CreateTime'],
+  VendorCredit: [
+    'TxnDate',
+    'DocNumber',
+    'TotalAmt',
+    'APAccountRef',
+    'Balance',
+    'MetaData.CreateTime',
+  ],
+  JournalEntry: ['TxnDate', 'DocNumber', 'MetaData.CreateTime'],
 };
 
 export interface QueryRules {
@@ -147,6 +161,9 @@ interface Parsed {
   readonly maxResults: number;
 }
 
+/** One reading of a value's escapes: each backslash keeps the character after it; a last one stays. */
+const unescaped = (value: string) => value.replace(/\\(.)/gu, '$1');
+
 /** The query's words, quoted values and symbols; `undefined` for text no builder writes. */
 function tokensOf(text: string): string[] | undefined {
   const tokens: string[] = [];
@@ -160,11 +177,14 @@ function tokensOf(text: string): string[] | undefined {
     }
     const quoted = /^'((?:[^'\\]|\\.)*)'/u.exec(rest);
     if (quoted) {
-      tokens.push(`'${quoted[1]!.replace(/\\(.)/gu, '$1')}`);
+      // Read twice, as Intuit reads it: four backslashes come through as one, and two only
+      // at the value's very end (G4–5).
+      tokens.push(`'${unescaped(unescaped(quoted[1]!))}`);
       at += quoted[0].length;
       continue;
     }
-    const piece = /^(?:<=|>=|[=<>(),*]|[A-Za-z0-9]+)/u.exec(rest);
+    // A field may be dotted: `MetaData.CreateTime`, which only an ORDERBY takes.
+    const piece = /^(?:<=|>=|[=<>(),*]|[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)/u.exec(rest);
     if (!piece) return undefined;
     tokens.push(piece[0]);
     at += piece[0].length;
@@ -272,10 +292,17 @@ function rebuilt(parsed: Parsed): string | undefined {
   }
 }
 
-/** A field's value on a row: a reference (`VendorRef`) by its `value`. */
+/** A field's value on a row: a reference (`VendorRef`) by its `value`; a dotted field by its path. */
 function fieldOf(row: JsonObject, field: string): unknown {
-  const value = row[field];
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
+  const [first, ...rest] = field.split('.');
+  let value: unknown = row[first ?? ''];
+  for (const part of rest) {
+    value =
+      value !== null && typeof value === 'object' && !Array.isArray(value)
+        ? (value as JsonObject)[part]
+        : undefined;
+  }
+  return rest.length === 0 && value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as JsonObject).value
     : value;
 }
@@ -286,14 +313,19 @@ function likePattern(value: string): RegExp {
   return new RegExp(`^${parts.join('.*')}$`, 'isu');
 }
 
-/** Intuit compares without case; a number as a number, a date as its `YYYY-MM-DD` text. */
-function holds(row: JsonObject, condition: Condition): boolean {
+/**
+ * Intuit compares without case — but IN on an account's names WITH case (sandbox S1:
+ * `IN ('automobile:fuel')` finds no `Automobile:Fuel`, while `=` does); a number as a number,
+ * a date as its `YYYY-MM-DD` text.
+ */
+function holds(row: JsonObject, condition: Condition, entity: string): boolean {
   const actual = fieldOf(row, condition.field);
   if (actual === undefined || actual === null) return false;
+  const withCase = entity === 'Account' && condition.operator === 'IN';
   const compare = (wanted: string): number => {
     if (typeof actual === 'number') return actual - Number(wanted);
-    const left = String(actual).toLowerCase();
-    const right = wanted.toLowerCase();
+    const left = withCase ? String(actual) : String(actual).toLowerCase();
+    const right = withCase ? wanted : wanted.toLowerCase();
     return left < right ? -1 : left > right ? 1 : 0;
   };
   switch (condition.operator) {
@@ -314,10 +346,20 @@ function holds(row: JsonObject, condition: Condition): boolean {
   }
 }
 
+/** A QuickBooks DateTime, which carries its offset (`2026-10-12T05:25:00-07:00`), as an instant. */
+function instantOf(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !/T\d{2}:\d{2}:\d{2}/u.test(value)) return undefined;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) ? instant : undefined;
+}
+
 function sortedBy(rows: JsonObject[], field: string, descending: boolean): JsonObject[] {
   const order = (left: JsonObject, right: JsonObject): number => {
     const [a, b] = [fieldOf(left, field), fieldOf(right, field)];
     if (typeof a === 'number' && typeof b === 'number') return a - b;
+    // Times by the instant they name, whatever their offsets.
+    const [p, q] = [instantOf(a), instantOf(b)];
+    if (p !== undefined && q !== undefined) return p - q;
     const [x, y] = [String(a ?? ''), String(b ?? '')];
     return x < y ? -1 : x > y ? 1 : 0;
   };
@@ -343,7 +385,7 @@ export function answerQuery(
     return refused;
   }
   const rows = ENTITIES[parsed.entity]!.rows(company).filter((row) =>
-    parsed.where.every((condition) => holds(row, condition)),
+    parsed.where.every((condition) => holds(row, condition, parsed.entity)),
   );
   const ordered = parsed.orderBy
     ? sortedBy(rows, parsed.orderBy.field, parsed.orderBy.descending)
