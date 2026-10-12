@@ -136,9 +136,9 @@ test('a statement: compared, the run done with no approval, its comparison the s
   ]);
 });
 
-test('in v1: decide is the last of the eighteen steps, after the nine lookups whose records it reads', () => {
+test('in v1: decide is step 18 of the 24, after the nine lookups whose records it reads and before the steps an approval resumes at', () => {
   const automation = define(manifests);
-  assert.deepEqual(automation.steps.at(-1), 'decide');
+  assert.equal(automation.steps.indexOf('decide'), 17);
   assert.deepEqual(manifests[0]?.pipeline.map((step) => step.id).slice(7), [
     'verify-read',
     'find-vendor',
@@ -151,6 +151,12 @@ test('in v1: decide is the last of the eighteen steps, after the nine lookups wh
     'find-related',
     'find-other-record',
     'decide',
+    'confirm-company',
+    'confirm-vendor',
+    'create-vendor',
+    'confirm-no-duplicate',
+    'create-record',
+    'notify',
   ]);
-  assert.equal(manifests[0]?.pipeline.length, 18);
+  assert.equal(manifests[0]?.pipeline.length, 24);
 });

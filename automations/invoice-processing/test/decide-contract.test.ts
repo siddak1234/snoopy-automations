@@ -17,7 +17,7 @@ import {
   sampleAnswer,
   statement,
 } from './check-world.js';
-import { RUN_ID, VENDOR, decideState, found, type DecideSetUp } from './decide-world.js';
+import { VENDOR, decideState, found, type DecideSetUp } from './decide-world.js';
 
 /**
  * decide's whole input, per path (the plan's §2.9 "decide's whole input"): the keys every path
@@ -46,8 +46,7 @@ const PATHS: readonly [string, DecideSetUp][] = [
   ['statement', { answer: statement() }],
 ];
 
-const run = (state: JsonObject, switchOn = false) =>
-  decideRun({ state, config: {}, switchOn, runId: RUN_ID });
+const run = (state: JsonObject, switchOn = false) => decideRun({ state, config: {}, switchOn });
 
 test('a complete state decides on every path', () => {
   for (const [label, setUp] of PATHS) {
@@ -99,6 +98,7 @@ test('every key a path reads, missing or malformed, is "could not finish its che
     { vendor: { status: 'matched', id: '7' } },
     { vendor: { status: 'skipped' } },
     { amountLookup: { reachedMax: 'no', records: [] } },
+    { amountLookup: { reachedMax: false, records: [], answeredAt: 7 } },
     { amountLookup: found({ kind: 'bill', id: '1' } as never) },
     {
       amountLookup: {

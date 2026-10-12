@@ -49,9 +49,10 @@ test("QuickBooks answers its reads in Intuit's shapes, from the made-up company"
       MultiCurrencyEnabled: false,
     },
   );
+  // A write the platform declares that no automation here makes: not imitated.
   await assert.rejects(
-    sim.provider(call('bill.create', {}, `x-${'c'.repeat(48)}`)),
-    /does not answer bill\.create/u,
+    sim.provider(call('invoice.create', {}, `x-${'c'.repeat(48)}`)),
+    /does not answer invoice\.create/u,
   );
   await assert.rejects(
     sim.provider({ ...call('companyInfo.get'), providerId: 'google' }),

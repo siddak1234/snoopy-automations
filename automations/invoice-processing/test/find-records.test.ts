@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { expenseLine } from '@autom8x/automation-kit/testing';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { DECIDE_SENTENCES } from '../src/decide/fails.js';
@@ -14,16 +13,14 @@ import {
   queriesOf,
   routeRun,
   sampleBill,
-  sampleJournalEntry,
   samplePurchase,
-  stateOf,
   type RouteRun,
 } from './lookups-world.js';
 
 /**
  * Steps 14–17 per document type (the plan's §5): which lookups run, which say "Not checked" when no
- * number QuickBooks could hold was read (G4-4), which are skipped; the records each keeps, typed as
- * decide's contract has them; an answer at its bound (D6); and a statement's missing numbers.
+ * number QuickBooks could hold was read (G4-4), which are skipped; an answer at its bound (D6); and
+ * a statement's missing numbers. What each keeps is `lookup-records.test.ts`'s.
  */
 
 const RECORD_STEPS = [
@@ -134,147 +131,6 @@ test('paid personally: the day’s entries or the contractor’s bills, and the 
   assert.deepEqual(
     await usesOf({ answer: bill({ documentNumber: null }), ...PAID.employee }),
     uses(NO_NUMBER, 'run', 'run', 'skip'),
-  );
-});
-
-test("each record is kept as decide's contract types it: a bill, an expense, a vendor credit, a journal entry and its lines", async () => {
-  const world = await routeRun({
-    answer: receipt(),
-    through: 'find-other-record',
-    company: (sim) => {
-      sim.company.bills.push(
-        sampleBill('160', REF.tidewell, {
-          DocNumber: '55120',
-          TxnDate: '2026-09-20',
-          TotalAmt: 60.63,
-          Balance: 0,
-        }),
-      );
-      sim.company.purchases.push(
-        samplePurchase('201', REF.visa, {
-          TxnDate: '2026-09-28',
-          TotalAmt: 60.63,
-          DocNumber: 'X 1',
-        }),
-      );
-      sim.company.journalEntries.push(
-        sampleJournalEntry(
-          '401',
-          60.63,
-          { debit: REF.electric, credit: REF.teamOwed },
-          { TxnDate: '2026-09-27' },
-          { Type: 'Employee', EntityRef: { value: '55', name: 'Robin Example' } },
-        ),
-      );
-    },
-  });
-  const state = stateOf(world.result);
-  const bill160 = {
-    kind: 'bill',
-    id: '160',
-    vendorId: '9',
-    docNumber: '55120',
-    txnDate: '2026-09-20',
-    totalCents: 6063,
-    balanceCents: 0,
-    lineAccounts: [{ id: '64', name: 'Office Supplies' }],
-  };
-  assert.deepEqual(state.numberLookup, { reachedMax: false, records: [bill160] });
-  assert.deepEqual(state.relatedLookup, { reachedMax: false, records: [bill160] });
-  assert.deepEqual(state.amountLookup, {
-    reachedMax: false,
-    records: [
-      {
-        kind: 'expense',
-        id: '201',
-        accountId: '41',
-        txnDate: '2026-09-28',
-        totalCents: 6063,
-        credit: false,
-        docNumber: 'X 1',
-      },
-    ],
-  });
-  assert.deepEqual(state.otherRecordLookup, {
-    reachedMax: false,
-    records: [
-      {
-        kind: 'journal_entry',
-        id: '401',
-        txnDate: '2026-09-27',
-        lines: [
-          { postingType: 'Debit', amountCents: 6063, accountId: '57', entity: null },
-          {
-            postingType: 'Credit',
-            amountCents: 6063,
-            accountId: '120',
-            entity: { type: 'Employee', id: '55' },
-          },
-        ],
-      },
-    ],
-  });
-  assert.equal(
-    lineOf(world, 'find-duplicate-number'),
-    "Bills from this vendor with number '55120': Id 160 (this vendor, 2026-09-20, $60.63, paid)",
-  );
-  assert.equal(
-    lineOf(world, 'find-duplicate-amount'),
-    'Expenses for $60.63 from 2026-09-26 to 2026-10-17: Id 201 (Company Visa, 2026-09-28, $60.63)',
-  );
-  assert.equal(
-    lineOf(world, 'find-other-record'),
-    'Journal entries from 2026-09-26 to 2026-10-17: Id 401 (2026-09-27)',
-  );
-});
-
-test('a vendor credit kept with its vendor, compared in code; an item line leaves a bill’s accounts unknown', async () => {
-  const world = await routeRun({
-    answer: creditNote(),
-    through: 'find-other-record',
-    company: (sim) => {
-      sim.company.vendorCredits.push({
-        Id: '301',
-        VendorRef: REF.other,
-        DocNumber: 'CM-0077',
-        TxnDate: '2026-09-01',
-        TotalAmt: 15,
-      });
-      sim.company.bills.push(
-        sampleBill('151', REF.harrowgate, {
-          DocNumber: 'HOS-1042',
-          Line: [
-            {
-              Id: '1',
-              Amount: 5,
-              DetailType: 'ItemBasedExpenseLineDetail',
-              ItemBasedExpenseLineDetail: {},
-            },
-            // An account line beside the item's: still not "one account the bill used".
-            expenseLine(5, { value: '64', name: 'Office Supplies' }),
-          ],
-        }),
-      );
-    },
-  });
-  const state = stateOf(world.result);
-  assert.deepEqual((state.numberLookup as JsonObject).records, [
-    {
-      kind: 'vendor_credit',
-      id: '301',
-      vendorId: '88',
-      docNumber: 'CM-0077',
-      txnDate: '2026-09-01',
-      totalCents: 1500,
-    },
-  ]);
-  assert.equal(
-    lineOf(world, 'find-duplicate-number'),
-    "Vendor credits with number 'CM-0077': Id 301 (Pacific Gas, 2026-09-01, $15.00)",
-  );
-  assert.deepEqual(
-    ((state.relatedLookup as JsonObject).records as JsonObject[])[0]?.lineAccounts,
-    [],
   );
 });
 

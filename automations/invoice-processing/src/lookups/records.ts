@@ -139,6 +139,25 @@ export function journalEntryOf(row: JsonObject): JournalEntryRow | undefined {
   return { kind: 'journal_entry', id, txnDate, lines };
 }
 
+/**
+ * QuickBooks' DateTime — an answer's `time` (`2015-07-27T09:09:11.269-07:00`), a row's
+ * `MetaData.CreateTime` (`2014-09-17T11:45:45-07:00`) — always with its offset, so it is never read
+ * as this machine's local time.
+ */
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
+
+/** A QuickBooks DateTime in milliseconds since the epoch; undefined when it is none. */
+export function instantOf(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !DATE_TIME.test(value)) return undefined;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) ? instant : undefined;
+}
+
+/** When QuickBooks created a row — its `MetaData.CreateTime`, by QuickBooks' own clock. */
+export function createdAtOf(row: JsonObject): number | undefined {
+  return isObject(row.MetaData) ? instantOf(row.MetaData.CreateTime) : undefined;
+}
+
 const READERS: Readonly<Record<string, (row: JsonObject) => FoundRecord | undefined>> = {
   Bill: billOf,
   Purchase: expenseOf,

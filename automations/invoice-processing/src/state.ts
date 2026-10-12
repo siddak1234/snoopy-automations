@@ -39,6 +39,12 @@ export interface CompanyState {
    * that an employee is repaid through a Reimbursement pay item; null when it is not said.
    */
   readonly payrollFeature: boolean | null;
+  /**
+   * CompanyInfo's `MetaData.CreateTime`: when the company file was created, from the same answer,
+   * so confirm-company can tell two companies with the same names apart after an approval (the
+   * design's open question, its recommended answer applied); null when QuickBooks does not say.
+   */
+  readonly createdAt: string | null;
 }
 
 /** `read-preferences`: the settings later steps read. */

@@ -21,9 +21,9 @@ import {
 import { LOOKUP_STEPS, seededCompany } from './lookups-world.js';
 
 /**
- * The eighteen steps as one run: their order, the lines and the result of a bill decided
- * straight through, the manifest that declares them, the retry each declares, and a fixed sentence
- * for a run that ends on a thrown error.
+ * The 24 steps as one run: their order, the lines and the result of a bill decided straight
+ * through and created, the manifest that declares them, the retry each declares, and a fixed
+ * sentence for a run that ends on a thrown error.
  */
 
 /** A run where an employee paid with their own money. */
@@ -42,7 +42,7 @@ function wholeRun(options: Parameters<typeof setUp>[0] = {}) {
   return setUp({ simulator, through: 'decide', ...options });
 }
 
-test('the eighteen steps run in order, each QuickBooks step under its own key, and a bill decided straight through is the result', async () => {
+test('the steps run in order, each QuickBooks step under its own key, and a bill decided straight through is created and is the result', async () => {
   const world = wholeRun();
   const result = await world.run();
   assert.deepEqual(lines(world.platform), [
@@ -83,21 +83,29 @@ test('the eighteen steps run in order, each QuickBooks step under its own key, a
       'ok',
       'No reason to hold: $461.53 within the $500 limit, Harrowgate Office Supply matched by display name, no duplicate; creating the bill; category Utilities:Electric (no category set for office supplies)',
     ],
+    [
+      'create-record',
+      'ok',
+      'Recorded bill 1001 from Harrowgate Office Supply, HOS-1042, $461.53, due 2026-10-14.',
+    ],
   ]);
   assert.deepEqual(result, {
     outcome: 'success',
     output: {
-      outcome: 'planned',
+      outcome: 'recorded',
       documentType: 'bill',
       route: 'bill',
       record: {
         type: 'bill',
+        id: '1001',
         operation: 'bill.create',
         paymentType: null,
         amountCents: 46153,
+        quickBooksTotalCents: 46153,
         date: '2026-09-14',
         dueDate: '2026-10-14',
         docNumber: 'HOS-1042',
+        documentNumber: 'HOS-1042',
         payee: { kind: 'vendor', id: '7', name: 'Harrowgate Office Supply' },
         category: {
           id: '57',
@@ -106,11 +114,13 @@ test('the eighteen steps run in order, each QuickBooks step under its own key, a
         },
         paidFromAccount: null,
       },
+      newVendor: null,
       payer: null,
+      nextStep: null,
       holdReasons: [],
+      decidedBy: 'automatically',
     },
-    summary:
-      'Ready to record a bill from Harrowgate Office Supply, $461.53; this version stops before writing to QuickBooks. Nothing was created.',
+    summary: 'Recorded bill 1001 from Harrowgate Office Supply, HOS-1042, $461.53, due 2026-10-14.',
   });
   for (const [stepId, operation] of [
     ['read-company', 'companyInfo.get'],
@@ -121,6 +131,7 @@ test('the eighteen steps run in order, each QuickBooks step under its own key, a
     ['find-duplicate-amount', 'query.run'],
     ['find-related', 'query.run'],
     ['find-other-record', 'query.run'],
+    ['create-record', 'bill.create'],
   ] as const) {
     assert.deepEqual(
       callsOf(world.platform, world.request, stepId).map((call) => call.operation),
@@ -128,7 +139,7 @@ test('the eighteen steps run in order, each QuickBooks step under its own key, a
       stepId,
     );
   }
-  assert.equal(world.platform.providerCalls.length, 8, 'no step called QuickBooks twice');
+  assert.equal(world.platform.providerCalls.length, 9, 'no step called QuickBooks twice');
   assert.deepEqual(world.platform.artifactReads, [FILE_ID]);
   assert.equal(world.platform.modelCalls.length, 2, 'two model calls: extract, then verify-read');
 });
@@ -167,7 +178,7 @@ test('an employee who paid: find-payer runs before the document is read, the ven
   });
 });
 
-test('the v1 manifest declares the eighteen steps in order, with neutral words, extract and verify-read the AI steps', () => {
+test('the v1 manifest declares the 24 steps in order, with neutral words, extract and verify-read the AI steps', () => {
   const manifest = JSON.parse(
     readFileSync(join(manifestsRoot, 'invoice-processing.v1.json'), 'utf8'),
   ) as { pipeline: { id: string; kicker: string; title: string; description: string }[] };
@@ -192,6 +203,12 @@ test('the v1 manifest declares the eighteen steps in order, with neutral words, 
       ['find-related', 'ACTION', 'Look for a related record'],
       ['find-other-record', 'ACTION', 'Look for the same purchase recorded another way'],
       ['decide', 'ACTION', 'Decide: record it or hold it for approval'],
+      ['confirm-company', 'ACTION', 'Check it is still the same QuickBooks company'],
+      ['confirm-vendor', 'ACTION', 'Check whether the new vendor was added'],
+      ['create-vendor', 'ACTION', 'Add the new vendor to QuickBooks'],
+      ['confirm-no-duplicate', 'ACTION', 'Check no copy was added while it waited'],
+      ['create-record', 'ACTION', 'Record it in QuickBooks'],
+      ['notify', 'ACTION', 'Email a summary'],
     ],
   );
   assert.deepEqual(manifest.pipeline.slice(5, 8), [
@@ -218,7 +235,7 @@ test('the v1 manifest declares the eighteen steps in order, with neutral words, 
     },
   ]);
   assert.equal(
-    manifest.pipeline.at(-1)?.description,
+    manifest.pipeline.find((step) => step.id === 'decide')?.description,
     'Decides in code from everything found: record it, hold it once with every reason for an owner or admin, or stop with one plain sentence. Statements are compared only.',
   );
   for (const step of manifest.pipeline) {
@@ -227,9 +244,10 @@ test('the v1 manifest declares the eighteen steps in order, with neutral words, 
   }
 });
 
-test("the reads repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; decide none", () => {
+test("the reads repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; decide, the writes and notify none", () => {
   const policy = { attempts: 3, backoffMs: 10_000 };
   const model = { attempts: 2, backoffMs: 10_000, when: 'unsent' };
+  const recheck = ['confirm-company', 'confirm-vendor', 'confirm-no-duplicate'];
   assert.deepEqual(define(manifests).retry, {
     receive: policy,
     'read-company': policy,
@@ -239,11 +257,23 @@ test("the reads repeat a transient failure at the SDK's floor and ceilings; each
     extract: model,
     'verify-read': model,
     ...Object.fromEntries(LOOKUP_STEPS.map((stepId) => [stepId, policy])),
+    ...Object.fromEntries(recheck.map((stepId) => [stepId, policy])),
   });
-  // A throw at every step that calls QuickBooks ends with QuickBooks' sentence.
+  // No write is ever repeated in v1 (until sandbox S6): no policy on create-vendor or create-record.
+  for (const write of ['create-vendor', 'create-record', 'notify', 'decide']) {
+    assert.equal(define(manifests).retry[write], undefined, write);
+  }
+  // A throw at every step that reads QuickBooks ends with QuickBooks' sentence.
   assert.deepEqual(
     [...QUICKBOOKS_STEPS],
-    ['read-company', 'read-preferences', 'find-accounts', 'find-payer', ...LOOKUP_STEPS],
+    [
+      'read-company',
+      'read-preferences',
+      'find-accounts',
+      'find-payer',
+      ...LOOKUP_STEPS,
+      ...recheck,
+    ],
   );
 });
 

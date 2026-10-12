@@ -14,7 +14,7 @@ import type { DecideState } from './contract.js';
 import type { Hold } from './holds.js';
 import { limitCentsOf } from './holds.js';
 import type { Matches } from './matches.js';
-import type { RecordPlan } from './plan.js';
+import { payerNameOf, type RecordPlan } from './plan.js';
 
 /**
  * What a person reads (the plan's §2.7, replacing Group 3's D7): the wording under decide's line,
@@ -35,16 +35,10 @@ const numberOf = (state: DecideState) =>
 
 /**
  * Who paid, as the lines name them (§2.7: "Names come from QuickBooks, from your settings, or from
- * the document itself"): an employee as QuickBooks shows them (find-payer keeps its DisplayName),
- * an owner as "Owners and partners" writes them, and a contractor as the vendor find-vendor
- * matched, as QuickBooks shows it — never as typed in "Who paid".
+ * the document itself"): as the record names them (`payerNameOf`) — an employee as QuickBooks shows
+ * them, an owner as "Owners and partners" writes them, a contractor as QuickBooks shows the vendor.
  */
-function payerName(state: DecideState): string {
-  if (state.document.route === 'contractor' && state.vendor?.status === 'matched') {
-    return state.vendor.displayName;
-  }
-  return state.payer?.name ?? '';
-}
+const payerName = payerNameOf;
 
 /** The wording under decide's line: what approving creates — and, for a receipt matching a bill, a warning. */
 export function approvalWording(state: DecideState, plan: RecordPlan, matches: Matches): string {

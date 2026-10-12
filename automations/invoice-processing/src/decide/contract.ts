@@ -130,6 +130,11 @@ export interface LookupState {
   /** The answer reached its MAXRESULTS: more may be unseen, which counts as a possible duplicate (D6). */
   readonly reachedMax: boolean;
   readonly records: readonly FoundRecord[];
+  /**
+   * QuickBooks' own clock when it answered (the answer's `time`), which the re-check after an
+   * approval holds a record's creation against (`recheck.ts`); absent or null when it gave none.
+   */
+  readonly answeredAt?: string | null;
 }
 
 /** The lookups by their state keys. */
@@ -218,6 +223,8 @@ function lookupOf(value: unknown): LookupState | null | undefined {
   if (!isObject(value) || typeof value.reachedMax !== 'boolean' || !Array.isArray(value.records)) {
     return undefined;
   }
+  const { answeredAt } = value;
+  if (answeredAt !== undefined && answeredAt !== null && !isText(answeredAt)) return undefined;
   return value.records.every(isRecord) ? (value as unknown as LookupState) : undefined;
 }
 

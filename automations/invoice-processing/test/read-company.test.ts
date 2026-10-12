@@ -25,6 +25,7 @@ test('a US company continues: its names are kept and the line names it', async (
     legalName: 'Sample Bakery LLC',
     country: 'USA',
     payrollFeature: false,
+    createdAt: '2024-01-02T09:00:00-08:00',
   });
   assert.deepEqual(callsOf(platform, request, 'read-company'), [
     { providerId: 'quickbooks', operation: 'companyInfo.get', input: {} },
@@ -86,6 +87,27 @@ test("PayrollFeature is kept as Intuit's sample gives it: 'true' or 'false', and
   const { result } = await readWith((info) => delete info.NameValue);
   assert.ok(result.outcome === 'success');
   assert.equal((result.output?.company as { payrollFeature: unknown }).payrollFeature, null);
+});
+
+test("the company file's creation time is kept from the same answer, for confirm-company; null when QuickBooks does not give one", async () => {
+  const created = async (edit: (info: Record<string, unknown>) => void) => {
+    const { result, platform, request } = await readWith(edit);
+    assert.ok(result.outcome === 'success');
+    assert.equal(callsOf(platform, request, 'read-company').length, 1, 'no extra call');
+    return (result.output?.company as { createdAt: unknown }).createdAt;
+  };
+  assert.equal(
+    await created((info) => (info.MetaData = { CreateTime: ' 2015-06-05T13:55:54-07:00 ' })),
+    '2015-06-05T13:55:54-07:00',
+  );
+  for (const edit of [
+    (info: Record<string, unknown>) => delete info.MetaData,
+    (info: Record<string, unknown>) => (info.MetaData = { CreateTime: '' }),
+    (info: Record<string, unknown>) => (info.MetaData = { CreateTime: 20150605 }),
+    (info: Record<string, unknown>) => (info.MetaData = 'x'),
+  ]) {
+    assert.equal(await created(edit), null);
+  }
 });
 
 test('a missing or blank LegalName is kept as null', async () => {

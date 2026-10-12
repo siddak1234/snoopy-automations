@@ -195,7 +195,6 @@ export function decide(setUp: DecideSetUp): Decision {
     state: decideState(setUp),
     config: setUp.config ?? { expenseAccount: 'Utilities:Electric' },
     switchOn: setUp.check?.switchOn === true,
-    runId: RUN_ID,
   });
 }
 
