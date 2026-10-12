@@ -153,8 +153,10 @@ export function backoffWaits(policy: RetryPolicy): number[] {
  * code that is the platform's `DEPENDENCY_FAILURE` (the Edge could not reach
  * Runs, Runs could not reach a dependency) or none at all (a proxy's own page).
  *
- * Never: any 4xx — the mail allowance's 429 included; a `ModelRefusedError` (it
- * always names its reason); a 5xx the platform typed with a reason
+ * Never: any 4xx — the mail allowance's 429 included, and the Edge's flood valve's,
+ * which the client itself waits out and sends again while the deadline allows
+ * (`flood.ts`), so one that reaches a step had no time left to wait; a
+ * `ModelRefusedError` (it always names its reason); a 5xx the platform typed with a reason
  * (`workspace_membership_truncated`, `pinned_version_unavailable`,
  * `outbound_mail_not_configured`); `NOT_CONFIGURED`, a deployment without the
  * component, which no wait inside a run repairs; an answer that came and was

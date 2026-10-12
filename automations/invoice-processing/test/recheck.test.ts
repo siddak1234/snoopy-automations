@@ -45,67 +45,67 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
     'a bill with a number QuickBooks can hold: by its number',
     { answer: bill() },
     'numberLookup',
-    "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     "a bill whose number another vendor's bill has: the number goes in the memo, so by its total and date, from its vendor",
     { answer: bill(), lookups: { numberLookup: found(billRow({ id: '152', vendorId: '88' })) } },
     'amountLookup',
-    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '7' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '7' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a bill with a number past 21 characters: by its total and date, from its vendor',
     { answer: bill({ documentNumber: 'N'.repeat(22) }) },
     'amountLookup',
-    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '7' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '7' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     "a new vendor's bill with no number: by its total and date, from any vendor",
     { answer: bill({ documentNumber: null }), vendor: { status: 'new' } },
     'amountLookup',
-    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a company receipt: the bank-feed check (D21)',
     { answer: receipt(), vendor: TIDEWELL },
     'amountLookup',
-    "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' MAXRESULTS 4",
+    "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a card refund: the bank-feed check on the card',
     { answer: sampleAnswer('card-refund'), vendor: TIDEWELL },
     'amountLookup',
-    "SELECT * FROM Purchase WHERE TotalAmt = '23.72' AND TxnDate >= '2026-10-01' AND TxnDate <= '2026-10-22' MAXRESULTS 4",
+    "SELECT * FROM Purchase WHERE TotalAmt = '23.72' AND TxnDate >= '2026-10-01' AND TxnDate <= '2026-10-22' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a vendor credit with own numbers on: its number sent, so by it',
     { answer: creditNote(), preferences: { purchaseCustomTxnNumbers: true } },
     'numberLookup',
-    "SELECT * FROM VendorCredit WHERE DocNumber = 'CM-0077' MAXRESULTS 4",
+    "SELECT * FROM VendorCredit WHERE DocNumber = 'CM-0077' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a vendor credit with own numbers not on: its number in the memo — QuickBooks numbers the credit itself — so by its total and date',
     { answer: creditNote() },
     'amountLookup',
-    "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' MAXRESULTS 4",
+    "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     'a vendor credit with none',
     { answer: creditNote({ documentNumber: null }) },
     'amountLookup',
-    "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' MAXRESULTS 4",
+    "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
   [
     "an employee's: the day's journal entries",
     { answer: receipt(), check: paidBy('employee', { paidFrom: null }) },
     'amountLookup',
-    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' MAXRESULTS 11",
+    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' ORDERBY MetaData.CreateTime DESC MAXRESULTS 11",
   ],
   [
     "an owner's: the day's journal entries",
     { answer: receipt(), check: paidBy('owner', { paidFrom: null }) },
     'amountLookup',
-    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' MAXRESULTS 11",
+    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' ORDERBY MetaData.CreateTime DESC MAXRESULTS 11",
   ],
   [
     "a contractor's: the bills to them for its total and date",
@@ -115,11 +115,11 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
       vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee' },
     },
     'amountLookup',
-    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '31' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '31' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
 ];
 
-test("each path's re-check: its own duplicate lookup, the text the lookup step sent with one row more", () => {
+test("each path's re-check: its own duplicate lookup, the text the lookup step sent with one row more, the newest created first", () => {
   for (const [label, setUp, lookup, query] of PATHS) {
     const state = stateOf(setUp);
     const recheck = recheckFor(state);
@@ -129,17 +129,22 @@ test("each path's re-check: its own duplicate lookup, the text the lookup step s
         ? numberSearch(state.document, state.vendor)
         : amountSearch(state.document, state.vendor, 'amount');
     assert.equal(recheck.maxResults, sent.maxResults + 1, label);
+    // The same search: only its order — the newest created first — and its bound differ.
     assert.equal(
       recheck.query,
-      sent.query.replace(/MAXRESULTS \d+$/u, `MAXRESULTS ${sent.maxResults + 1}`),
+      sent.query.replace(
+        /MAXRESULTS \d+$/u,
+        `ORDERBY MetaData.CreateTime DESC MAXRESULTS ${sent.maxResults + 1}`,
+      ),
       label,
     );
   }
-  // Sandbox S4's fallback: the window alone, newest first, one row more than its 50.
+  // Sandbox S4's fallback: the window alone, one row more than its 50 — the newest created first
+  // in place of the lookup's newest dated first, so a charge the feed brought in meanwhile is in it.
   const fallback = recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL }), 'window');
   assert.equal(
     fallback.query,
-    "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY TxnDate DESC MAXRESULTS 51",
+    "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY MetaData.CreateTime DESC MAXRESULTS 51",
   );
   assert.equal(recheckLookup('company_receipt', true), 'amountLookup');
   assert.equal(recheckLookup('vendor_credit', false), 'amountLookup');

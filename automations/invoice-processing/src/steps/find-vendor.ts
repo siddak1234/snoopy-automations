@@ -1,4 +1,4 @@
-import { QUICKBOOKS_SENTENCES, type Clock } from '@autom8x/automation-kit/quickbooks';
+import { QUICKBOOKS_SENTENCES, rowsNaming, type Clock } from '@autom8x/automation-kit/quickbooks';
 import { fitLine, sameName, shorten } from '@autom8x/automation-kit/values';
 import type { JsonObject, Step, StepResult } from '@autom8x/automation-sdk';
 
@@ -22,15 +22,19 @@ import type { DocumentState } from '../state.js';
  * design-quickbooks-lookups.json steps[0]–[1]). Skipped on the employee and owner routes, which
  * have no vendor.
  *
- * One lookup by the exact name — printed and cleaned, or typed in "Who paid" — among vendors active
- * or not (`Active IN (true, false)`, at most 2), each row re-checked in code: the same name after
- * cleaning, capital letters aside (`sameName`), so a row QuickBooks matched otherwise is a
- * near-miss, ignored. One row is the vendor, unless it is inactive — "reactivate it" — and two fail
- * as two vendors with the name. None: the vendor is new for now, and step 10 looks for a vendor
- * whose company name it is, by the same rules, skipped past QuickBooks' 100 characters of
- * CompanyName. A seller nobody has is `{ status: 'new' }` — a new vendor for a bill (a hold), no
- * payee for a receipt or a card refund (D20), and for a credit note or a statement decide's F5 or
- * F6. A person nobody has is V1, once both lookups have found nobody.
+ * One lookup by the exact name — printed and cleaned, or typed in "Who paid" — and by the name
+ * QuickBooks gives a vendor it made inactive, "<name> (deleted)" (sandbox G4–5), among vendors
+ * active or not (`Active IN (true, false)`, at most two a form), each row re-checked in code: the
+ * same name after cleaning, capital letters aside (`sameName`), so a row QuickBooks matched
+ * otherwise is a near-miss, ignored. Rows holding the name decide; only when none does, an
+ * inactive vendor renamed from it (`rowsNaming`) — so a vendor made with the name an inactive one
+ * had is that vendor, and an inactive vendor alone fails "reactivate it" instead of reading as
+ * new. One row is the vendor, unless it is inactive, and two fail as two vendors with the name.
+ * None: the vendor is new for now, and step 10 looks for a vendor whose company name it is —
+ * which QuickBooks leaves as it was on an inactive vendor — by the same rules, skipped past
+ * QuickBooks' 100 characters of CompanyName. A seller nobody has is `{ status: 'new' }` — a new
+ * vendor for a bill (a hold), no payee for a receipt or a card refund (D20), and for a credit note
+ * or a statement decide's F5 or F6. A person nobody has is V1, once both lookups have found nobody.
  *
  * A company receipt's or a card refund's seller is looked up only to link an existing vendor
  * (D20), so an inactive vendor with its name, or two, fail nothing: the seller is `not_linked` —
@@ -160,8 +164,9 @@ export function findVendor(clock: Clock): Step {
       refused: refusedSentence(searched, 'display name'),
     });
     if (!read.ok) return read.result;
-    const kept = read.rows.filter((row) => sameName(row.DisplayName, searched.name));
-    const ignored = nearMisses(read.rows.length - kept.length);
+    const named = rowsNaming(read.rows, 'DisplayName', searched.name, sameName);
+    const kept = named.rows;
+    const ignored = nearMisses(named.others);
     if (kept.length === 0) {
       const vendor: VendorState = { status: 'new' };
       return {

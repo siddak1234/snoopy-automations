@@ -90,17 +90,27 @@ const READ_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
  */
 const MODEL_RETRY: RetryPolicy = { attempts: 2, backoffMs: 10_000, when: 'unsent' };
 
+/**
+ * The two writes — create-vendor, create-record — repeated as the reads are, after a failure
+ * nothing answered: no answer, or a 502/503/504 naming no reason (the owner's "Retry the
+ * creates", 2026-10-12). Every attempt carries the step's one key, so the platform sends the same
+ * `requestid`, and Intuit answers a repeated `requestid` with its first answer — the same record
+ * and Id, never a second, for every record these steps make, two copies in flight and 75 minutes
+ * later alike (sandbox S6). The kit's write throws those failures on (`writeQuickBooks`), and the
+ * step registers its "did not confirm" sentence on them for when the attempts are spent; QuickBooks'
+ * own 429 or 5xx, inside an answer, stays "did not confirm" at once.
+ */
+const WRITE_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
+
 /** The prompts the steps send, each registered with the runner. */
 export const PROMPTS: readonly PromptModule[] = [EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1];
 
 /**
- * The steps repeated after a transient failure: every QuickBooks read and the file's, and each
- * model call only when it never reached the platform. decide calls nothing, so it has none.
- * No write declares one in v1 — create-vendor, create-record — until the sandbox (S6) shows a
- * repeated request id answered with the first answer rather than Intuit's Fault 600: a write with
- * no answer is never repeated, and says QuickBooks did not confirm it (the design's open question,
- * its recommended answer applied). notify catches its own failure, so a policy there would never
- * fire.
+ * The steps repeated after a transient failure: every QuickBooks read and the file's, both writes
+ * — the sandbox (S6) showed a repeated request id answered with the first answer, never Intuit's
+ * Fault 600 nor a second record — and each model call only when it never reached the platform.
+ * decide calls nothing, so it has none. notify catches its own failure, so a policy there would
+ * never fire.
  */
 export const RETRY: Readonly<Record<string, RetryPolicy>> = {
   receive: READ_RETRY,
@@ -121,7 +131,9 @@ export const RETRY: Readonly<Record<string, RetryPolicy>> = {
   'find-other-record': READ_RETRY,
   'confirm-company': READ_RETRY,
   'confirm-vendor': READ_RETRY,
+  'create-vendor': WRITE_RETRY,
   'confirm-no-duplicate': READ_RETRY,
+  'create-record': WRITE_RETRY,
 };
 
 /**

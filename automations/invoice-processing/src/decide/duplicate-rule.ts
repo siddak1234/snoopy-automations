@@ -130,7 +130,8 @@ export function isDuplicate(
       );
     }
     case 'vendor_credit':
-      // VendorRef cannot be searched on a vendor credit: compared here.
+      // The vendor compared here: the lookup searches a credit by its number or its total alone,
+      // though VendorRef does filter a vendor credit (sandbox S6's probe).
       return (
         record.kind === 'vendor_credit' &&
         record.vendorId === facts.vendorId &&

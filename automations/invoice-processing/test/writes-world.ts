@@ -41,6 +41,12 @@ export interface Approval {
   readonly deadline?: string;
 }
 
+/**
+ * A continuation's deadline too near for the SDK's step retry, which waits at least 10 s before a
+ * repeat: a write that throws is not repeated, and the run ends with the sentence it registered.
+ */
+export const noTimeToRepeat = () => new Date(Date.now() + 5_000).toISOString();
+
 /** The held state the platform keeps: fails the test when the first run did not hold. */
 export function heldState(run: Run): JsonObject {
   assert.equal(run.result.outcome, 'held', JSON.stringify(run.result).slice(0, 300));
