@@ -73,19 +73,32 @@ test('two uploads of one document, held and both approved before either wrote, m
   }
 });
 
+/** `count` identical charges on the card, all there before the run, dated a day apart. */
+const charges = (count: number) => (sim: Parameters<NonNullable<RouteRun['company']>>[0]) => {
+  for (let index = 0; index < count; index += 1) {
+    sim.company.purchases.push(
+      samplePurchase(String(300 + index), REF.visa, {
+        TxnDate: `2026-09-${26 + index}`,
+        TotalAmt: 60.63,
+      }),
+    );
+  }
+};
+
+/** The bank feed's charge, made while the run waited: after decide's answer, by QuickBooks' clock. */
+const fedWhileWaiting = (id: string) =>
+  samplePurchase(id, REF.visa, {
+    TxnDate: '2026-09-30',
+    TotalAmt: 60.63,
+    MetaData: {
+      CreateTime: '2026-10-10T11:30:00-07:00',
+      LastUpdatedTime: '2026-10-10T11:30:00-07:00',
+    },
+  });
+
 test('confirm-no-duplicate after a full lookup ("too many to check"): a match QuickBooks made before the hold is allowed, one made while it waited fails', async () => {
   // Identical charges on the card, all there before the run: decide's bank-feed check read three,
   // its bound, so the re-check's fourth row was never shown to the approver.
-  const charges = (count: number) => (sim: Parameters<NonNullable<RouteRun['company']>>[0]) => {
-    for (let index = 0; index < count; index += 1) {
-      sim.company.purchases.push(
-        samplePurchase(String(300 + index), REF.visa, {
-          TxnDate: `2026-09-${26 + index}`,
-          TotalAmt: 60.63,
-        }),
-      );
-    }
-  };
   const four = await firstRun({ answer: receipt(), company: charges(4) });
   const held = heldState(four);
   assert.deepEqual(held.holdReasons, ['possible_duplicate']);
@@ -99,16 +112,7 @@ test('confirm-no-duplicate after a full lookup ("too many to check"): a match Qu
   assert.deepEqual(writesOf(approved.providerCalls).length, 1);
   // Three before the run, and the bank feed's fourth while it waited, made after decide's answer.
   const three = await firstRun({ answer: receipt(), company: charges(3) });
-  three.simulator.company.purchases.push(
-    samplePurchase('303', REF.visa, {
-      TxnDate: '2026-09-29',
-      TotalAmt: 60.63,
-      MetaData: {
-        CreateTime: '2026-10-10T11:30:00-07:00',
-        LastUpdatedTime: '2026-10-10T11:30:00-07:00',
-      },
-    }),
-  );
+  three.simulator.company.purchases.push(fedWhileWaiting('303'));
   const fed = await approve(three);
   assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
   assert.equal(
@@ -125,4 +129,23 @@ test('confirm-no-duplicate after a full lookup ("too many to check"): a match Qu
     outcome: 'failed',
     failureReason: DUPLICATE,
   });
+});
+
+test('the re-check asks for the newest created first, so a match made while the run waited is found however many older ones lie past its bound (sandbox G4–5)', async () => {
+  // Five identical charges before the run — decide's lookup read three, "too many to check" — and
+  // the feed's sixth while it waited: in the order QuickBooks holds them it would be the sixth row,
+  // past the re-check's four.
+  const five = await firstRun({ answer: receipt(), company: charges(5) });
+  assert.deepEqual(heldState(five).holdReasons, ['possible_duplicate']);
+  five.simulator.company.purchases.push(fedWhileWaiting('305'));
+  const fed = await approve(five);
+  assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
+  assert.equal(
+    fed.steps.at(-1)?.[2],
+    'A matching record was added while this waited: Id 305 (duplicate_appeared)',
+  );
+  assert.match(
+    String(fed.providerCalls.at(-1)?.input.query),
+    / ORDERBY MetaData\.CreateTime DESC MAXRESULTS 4$/u,
+  );
 });

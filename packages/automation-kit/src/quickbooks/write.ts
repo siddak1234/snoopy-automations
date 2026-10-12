@@ -7,19 +7,26 @@ import { refusalOf } from './read.js';
  * One QuickBooks WRITE through the SDK's provider call — a bill, an expense, a vendor
  * credit, a journal entry or a vendor — judged so that a step never makes a second record:
  *
- * **Never repeated.** One request, whatever happens: no wait after a 429, no second try
- * after a 5xx, nothing thrown for the SDK's step retry to repeat (a step that writes
- * declares no retry). Connections replays a recorded final answer for the step's key, and
- * Intuit's `requestid` covers the window Connections cannot: the PLATFORM derives it from
- * the step's key and puts it on the URL (its BUILD-PLAN 25.2.26), so the input never
- * carries one — a `requestid` in it is the caller's mistake, refused before anything is sent.
+ * **Repeated only by the step's retry, and only when nothing answered.** One request a
+ * call: no wait after QuickBooks' 429, no second try after its 5xx. A failure no answer
+ * judged — no answer at all, or a 502, 503 or 504 naming no reason, as the platform
+ * answers when a hop or a dependency did not — is THROWN UNCHANGED, the same object, so a
+ * step that declares a retry has the SDK send the same request under its one key again:
+ * Connections replays a final answer it recorded, and otherwise asks Intuit again under the
+ * same `requestid`, which the PLATFORM derives from the step's key and puts on the URL (its
+ * BUILD-PLAN 25.2.26) — and Intuit answers a repeated `requestid` with its first answer,
+ * the same record and Id, never a second record: for a bill, an expense, a vendor credit, a
+ * journal entry and a vendor, with the body changed, two copies in flight, and 75 minutes
+ * later (sandbox S6, 2026-10-12). So the input never carries a `requestid` — one in it is
+ * the caller's mistake, refused before anything is sent — and the step registers its own
+ * "did not confirm" sentence on what is thrown, for when the attempts are spent.
  *
- * **Did it happen?** Each failure says whether a record may exist. Certain — refused
+ * **Did it happen?** Each answer says whether a record may exist. Certain — refused
  * before QuickBooks, or refused by QuickBooks with a Fault or a 4xx — says no record was
- * created. Uncertain — no answer, a 502/503/504 naming no reason, a 5xx, 408, 425 or 429
- * from QuickBooks, Intuit's Fault 600 (a repeated request id), a 409 for another body
- * under the key, a 2xx without the record's Id — says QuickBooks did not confirm it, in a
- * fixed sentence that sends the person to check QuickBooks before running it again.
+ * created. Uncertain — a 5xx, 408, 425 or 429 from QuickBooks, Intuit's Fault 600 (a
+ * repeated request id), a 409 for another body under the key, a 2xx without the record's
+ * Id, a refusal this code does not know — says QuickBooks did not confirm it, in a fixed
+ * sentence that sends the person to check QuickBooks before running it again.
  *
  * A Fault is named by its number alone, in `detail`: the caller maps the codes it knows
  * (Group 5's 6140, 6210, …) to its own sentences. Intuit's `Message` and `Detail` are
@@ -93,6 +100,19 @@ export type QuickBooksWrite =
 /** The platform's own word for why, when it is one: lowercase letters, digits and `_`. */
 const REASON_WORD = /^[a-z][a-z0-9_]{0,63}$/u;
 
+/**
+ * The SDK's transient refusal (its `isTransient`, read here by shape): a 502, 503 or 504 that
+ * names no reason, its code the platform's `DEPENDENCY_FAILURE` or none — the platform did not
+ * decide, and may not have reached QuickBooks.
+ */
+function undecided(refusal: NonNullable<ReturnType<typeof refusalOf>>): boolean {
+  return (
+    [502, 503, 504].includes(refusal.status) &&
+    refusal.reason === undefined &&
+    (refusal.code === undefined || refusal.code === 'DEPENDENCY_FAILURE')
+  );
+}
+
 export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<QuickBooksWrite> {
   const { operation, entity, noun } = QUICKBOOKS_WRITES[write.kind];
   if (Object.hasOwn(write.input, 'requestid')) {
@@ -120,7 +140,10 @@ export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<Qu
     });
   } catch (error) {
     const refusal = refusalOf(error);
-    if (!refusal) return failed('qb_unconfirmed', 'unknown');
+    // No answer at all, or a refusal the platform did not decide: on unchanged, for the step's
+    // retry to repeat under the same key and `requestid` (S6) — anything this code cannot read
+    // too, which the SDK repeats only when it marked it as an answer that never came.
+    if (!refusal || undecided(refusal)) throw error;
     const { status, reason } = refusal;
     const word = reason !== undefined && REASON_WORD.test(reason) ? reason : undefined;
     if (status === 404) return failed('qb_not_connected', false);
@@ -139,8 +162,8 @@ export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<Qu
       return failed('platform_refused', false, word ?? 'refused');
     }
     // 409 idempotency_key_reused: an earlier copy of this step sent another body under
-    // the key, and may have created a record. A reasonless 502/503/504: it may have
-    // reached QuickBooks. Anything else this code does not know: the same caution.
+    // the key, and may have created a record. Anything else this code does not know: the
+    // same caution.
     return failed('qb_unconfirmed', 'unknown', word ?? String(status));
   }
 

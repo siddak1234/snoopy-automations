@@ -269,6 +269,29 @@ routing (its 25.2.17–25.2.25) go live with its next platform promotion; `exclu
 yet merged, so until they are promoted the platform answers `excludeModelAuthors` with a 400
 and sends no measurements.
 
+## The Edge's flood valve
+
+Every callback reaches the platform through its Edge, which sheds a flood before it reads
+anything: 120 requests a minute per source, counted in a fixed one-minute window (the platform's
+`apps/api/src/app.ts`, `DEFAULT_EDGE_RATE_LIMIT`). In production every automation on a host
+calls back through the same address, so they share that one bucket, and one Bills & Receipts
+document costs 25–44 callbacks. The Edge's refusal is a 429 problem with the code
+`TOO_MANY_REQUESTS`, no `details.reason`, and a `retry-after` header — the whole seconds until
+the window turns, at most 60 — and nothing behind it ran: nothing reached Runs, nothing was
+spent. So the client waits it out itself, the owner's decision of 2026-10-12 ("Wait and
+retry"): every callback — a step report, a provider or model call, a file read, a mail, the
+result — that the flood valve turns away is sent again, the same bytes, once the window turns
+(`packages/automation-sdk/src/flood.ts`). It waits as long as `retry-after` says, in whole
+seconds; without one it can read, the whole minute; never more than a minute, nor less than a
+second. It waits only while the wait would end before the invoke's `deadline` — `clientFor`
+hands the client the invoke's, and a client given none never waits — and a wait that would not
+throws the refusal as before. A burst then slows down instead of failing; before this, a result
+refused halfway through one left its run "running" until the deadline (`result_unreportable`).
+Only that refusal: a 429 that names a reason — the mail allowance's, a workspace's quota — is
+the platform's decision and is thrown at once, as is any other status. A step never sees the
+waits; one that receives the flood valve's 429 had no time left to wait, and its retry policy
+does not repeat a 4xx (below).
+
 ## Retrying a step
 
 A step is run again after a failure only when its automation declares a policy for
@@ -300,7 +323,8 @@ defineAutomation({
   timed out or cut off, which the client marks where it makes the request — or a
   callback answered 502, 503 or 504 without deciding: no `details.reason`, and the
   code `DEPENDENCY_FAILURE` or none (a proxy's page). Never a 4xx (the mail
-  allowance's 429 among them), a `ModelRefusedError`, a 5xx the platform typed
+  allowance's 429 among them, and the Edge's flood valve's, which the client has already
+  waited out while the deadline allowed — above), a `ModelRefusedError`, a 5xx the platform typed
   (`workspace_membership_truncated`, `pinned_version_unavailable`,
   `outbound_mail_not_configured`), `NOT_CONFIGURED`, an answer that came malformed, a
   provider's own status (it arrives inside a 200 and is the step's to judge), a link
@@ -340,7 +364,11 @@ defineAutomation({
     not close it: the platform's own work before the provider call does not stop
     either, so a slow platform can start the first call late. A first call with no
     final answer is sent again whatever the wait. So a provider WRITE is safe to
-    retry only at a vendor that deduplicates on the key. The same key with a
+    retry only at a vendor that deduplicates the repeat. QuickBooks does: the platform
+    derives its `requestid` from the step's key (its BUILD-PLAN 25.2.26), and Intuit
+    answers a repeated `requestid` with its first answer — the same record and Id, the
+    body sent again ignored, two copies in flight and 75 minutes later alike (sandbox S6,
+    2026-10-12). The same key with a
     different request is refused 409, which reaches the container as a 502 today and
     is retried to the bound, performing nothing (a finding returned to the platform).
   - **Mail.** The same key and the same words claim no further allowance — the
@@ -367,8 +395,11 @@ defineAutomation({
   the attempts, so a held step is never run twice.
 
 `invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-reads, and `{ attempts: 2, backoffMs: 10_000, when: 'unsent' }` for `extract` and
-`verify-read`, its two model calls. Neither older automation declares a policy:
+reads and for its two QuickBooks writes, `create-vendor` and `create-record` (the owner's
+"Retry the creates", 2026-10-12, on sandbox S6 — the kit's `writeQuickBooks` throws the
+transient failures on, for the retry), and `{ attempts: 2, backoffMs: 10_000, when:
+'unsent' }` for `extract` and `verify-read`, its two model calls. Neither older automation
+declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
 `receive` only reads the file its run was given and is the one safe candidate. The
@@ -420,11 +451,17 @@ multicurrency flag, the books' closing date and whether a vendor credit may carr
 number; `find-accounts` resolves every account the flow's settings name — the default
 category, Paid from, Owed to team members, Owner's investment account, each owner's own
 account and one category per spend type — in one `FullyQualifiedName IN (…)` query, each
-held to the kinds its role accepts and, with multicurrency on, to USD, and before that query
+name beside the one QuickBooks gives an account it made inactive, "<name> (deleted)", so an
+inactive account is said to be inactive and not missing; Intuit's IN compares an account's
+names with case (sandbox S1), so a setting must match QuickBooks exactly, capitals included,
+as its help in the manifest and its "No QuickBooks account matches" sentence say (the owner's
+"Exact capitals, said clearly", 2026-10-12); each held to the kinds its role accepts and,
+with multicurrency on, to USD, and before that query
 fails the run on a "Company card's last four digits" filled in but not exactly four digits,
 which would otherwise turn the card check off unseen; `find-payer`, when a
 person switched on "I paid for this with my own money", finds who paid among the flow's
-owners and partners, or as an employee in QuickBooks, before anything is read. `extract`,
+owners and partners, or as an employee in QuickBooks — an inactive one, found by the
+"(deleted)" name QuickBooks gives it, failing as inactive — before anything is read. `extract`,
 the one model call, sends `prompts/extract-document.v1.json` — 17 rules and a 27-field
 answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
 (`anthropic/claude-haiku-4.5`, then `google/gemini-3.1-flash-lite`) and the run's file by
@@ -449,11 +486,14 @@ keeps `state.verification` for decide: a difference holds, a statement's dispute
 follow (steps 9–17), each ONE `query.run` per document type, as the plan's §5 table runs it,
 or skipped (`src/lookups/queries.ts` builds every text, and fixed-text tests hold each):
 `find-vendor` and `find-vendor-company` find the seller — or the contractor who paid — by the
-exact name, then by company name, active or not, each row re-checked in code (an inactive
+exact name and the "<name> (deleted)" QuickBooks gives a vendor it made inactive (sandbox
+G4–5), so an inactive vendor is never taken for a new one, then by company name, which
+QuickBooks leaves as it was, active or not, each row re-checked in code (an inactive
 vendor fails "reactivate it" and two fail — but a company receipt's or a card refund's seller,
 looked up only to link an existing vendor (D20), is then not linked: no payee, its line saying
 why — and a person nobody has is V1); for a bill's new vendor, `find-similar-vendors` lists up
-to three vendors with its distinctive word for the approver, inactive ones marked, and
+to three vendors with its distinctive word for the approver, inactive ones shown by the name
+they had and marked once, and
 `find-customer-name` and `find-employee-name` check the name is free (employees a connection
 cannot read go on as unreadable — sandbox S7); then `find-duplicate-number`,
 `find-duplicate-amount`, `find-related` and `find-other-record` gather the records decide
@@ -474,8 +514,10 @@ repeats, the company it checked — is the ONLY input of the six steps after it 
 platform allows): an approval resumes at `confirm-company`, which compares the company's names,
 country and file creation time with QuickBooks' again; `confirm-vendor` looks a new vendor up
 again by the name it would get, and links one added while the run waited; `create-vendor` adds it
-as the approver saw it named; `confirm-no-duplicate` repeats the path's own duplicate lookup —
-the very query, one row more, by the document's number only when the record will carry it, else by
+as the approver saw it named, a lost answer repeated as create-record's is (below); `confirm-no-duplicate` repeats the path's own duplicate lookup —
+the very query, one row more and the newest created first (`ORDERBY MetaData.CreateTime DESC`,
+which Intuit applies before the bound: sandbox G4–5), so a copy made while the run waited is
+never past it, by the document's number only when the record will carry it, else by
 its total and date — and fails on a matching record added while the run waited ("A matching
 record was added in QuickBooks while this waited for approval, possibly from your bank feed."),
 by the one rule decide holds on (`src/decide/duplicate-rule.ts`): one the approver never saw,
@@ -485,8 +527,10 @@ record — a bill, an expense, a refund to the card, a vendor credit or a journa
 the platform's `bill.create`, `purchase.create`,
 `vendorCredit.create` or `journalEntry.create`, each with its `requestid` — from the saved plan
 alone, never the settings as they are by then, its memo naming the run that wrote it (after an
-approval the continuation); one request, never repeated (no write declares a retry until sandbox
-S6), so a 429, a 5xx or a lost answer is "did not confirm", and each Intuit code the plan maps
+approval the continuation); a lost answer, or a 502/503/504 naming no reason, repeated by the
+step's retry under the same key, so the same `requestid`, which QuickBooks answers with the
+first record and never a second (sandbox S6) — and, once the attempts are spent, or for
+QuickBooks' own 429 or 5xx or Fault 600, "did not confirm" — and each Intuit code the plan maps
 (6140, 6240, 610, 2500, 6190, 6200, 6210, 2050, 2290, 2300, 6430) has its own sentence. Its line,
 which is also the run's summary, says what was recorded and the next step — "When this charge
 arrives in your bank feed, choose Match, not Add" for a receipt or a refund, how an employee, a
@@ -558,14 +602,21 @@ only what an automation here uses:
   number alone; any other failure is thrown on unchanged, so the SDK's step retry can
   repeat it. The waits use an injected `Clock`, so a suite never waits a minute. Reads
   only: a repeated write could create a second record. Beside it, `writeQuickBooks` —
-  one WRITE of a bill, an expense, a vendor credit, a journal entry or a vendor, never repeated,
-  the request id left to the platform: a failure says whether a record may exist, in a
-  fixed sentence — no record was created, or QuickBooks did not confirm it — with a Fault
-  named by its number; the query text — `lookupQuery`, `lookupInQuery` and
+  one WRITE of a bill, an expense, a vendor credit, a journal entry or a vendor, one request
+  a call, the request id left to the platform: no answer, or a 502/503/504 naming no reason,
+  is thrown on unchanged for the step's retry, whose repeat goes out under the same key and
+  so the same `requestid`, which QuickBooks answers with the first record (sandbox S6); any
+  other failure says whether a record may exist, in a fixed sentence — no record was
+  created, or QuickBooks did not confirm it — with a Fault named by its number;
+  `withDeletedForm`, `rowsNaming` and `unmarkedName` for the "<name> (deleted)" QuickBooks
+  gives a vendor, an employee or an account it made inactive (sandbox G4–5); the query
+  text — `lookupQuery`, `lookupInQuery` and
   `lookupLikeQuery` (one word of letters and digits, `LIKE '%word%'`) for a name list,
   active or not, and `transactionQuery` with `dateRange` for bills, expenses, vendor
-  credits and journal entries, conditions joined by AND, no Active condition, each value
-  quoted with every backslash doubled, then every apostrophe escaped — and readers for
+  credits and journal entries, conditions joined by AND, no Active condition, ordered by a
+  plain field or by `MetaData.CreateTime`, each value quoted with every backslash written
+  four times — Intuit reads a value's escapes twice (sandbox G4–5) — then every apostrophe
+  escaped, `%` and `_` left as themselves, which they are under `=` and IN — and readers for
   Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
 - `@autom8x/automation-kit/values` — the one cleaning of a value read from a document:
   `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
@@ -583,11 +634,15 @@ only what an automation here uses:
   `accountId` refused, and — as the platform's `4807959` refuses it (its BUILD-PLAN 25.2.33) — a
   write naming `Id`, `SyncToken` or `sparse` at the top level, in any case, refused 400
   `refused_field` before anything is written (`REFUSED_BODY_FIELDS`). A suite can script an
-  answer lost after QuickBooks acted, recorded first or not. Its company holds accounts, employees, vendors, customers, bills,
+  answer lost after QuickBooks acted, recorded first or not; QuickBooks answers a create
+  repeated under the same request id — for one company, the same operation and key — with
+  its first answer, as sandbox S6 found. Its company holds accounts, employees, vendors, customers, bills,
   expenses, vendor credits and journal entries (a `sample…` builder for each): it answers
   only the query text the kit's builders write, by Intuit's documented rules (IN, =, <, >,
   <=, >= and LIKE joined by AND, OR refused; filterable and sortable fields from Intuit's
-  model file; an expense's amount behind a switch until the sandbox settles it), and
+  model file; an expense's amount behind a switch) and as Intuit's sandbox answered (a
+  value's escapes read twice, IN on an account's names compared with case, and `ORDERBY
+MetaData.CreateTime` on every transaction), and
   creates a vendor, a bill, an expense, a vendor credit or a journal entry as Intuit
   documents — an expense or a vendor credit sent no number numbered by QuickBooks itself, the
   last number plus 1, when the company's own numbers are off — each kept for the queries after

@@ -47,10 +47,10 @@ test('every account setting in one query, each name once, two rows a name; each 
     ownerInvestmentAccount: 'Owner investments',
     ownerNames: 'Pat Owner = Partner investments:Pat; Sam Partner',
     categoryMeals: 'Meals',
-    categoryOfficeSupplies: 'OFFICE SUPPLIES',
+    categoryOfficeSupplies: 'Office Supplies',
     categoryMaterials: 'Cost of Goods Sold',
     // The same account as another setting is asked for once.
-    categoryUtilitiesAndPhone: 'utilities:electric',
+    categoryUtilitiesAndPhone: 'Utilities:Electric',
   };
   const { result, line, sent } = await find(config, (world) =>
     world.simulator.company.accounts.push(
@@ -68,7 +68,7 @@ test('every account setting in one query, each name once, two rows a name; each 
           'Owed to Team Members',
           'Owner investments',
           'Meals',
-          'OFFICE SUPPLIES',
+          'Office Supplies',
           'Cost of Goods Sold',
           'Partner investments:Pat',
         ]),
@@ -104,27 +104,55 @@ test('every account setting in one query, each name once, two rows a name; each 
   });
 });
 
-test('spaces around the colons go; case does not matter, and the name is kept as QuickBooks spells it', async () => {
+test('spaces around the colons go; the capitals must be QuickBooks’ own — IN on an account’s names compares with case (sandbox S1) — and the sentence says so', async () => {
   const spaced = await find(only('  Utilities : Electric '));
   assert.deepEqual(spaced.sent[0]?.input, { query: query(['Utilities:Electric']) });
   assert.equal(spaced.result.outcome, 'success');
   const lower = await find(only('utilities:electric'));
-  assert.ok(lower.result.outcome === 'success');
+  assert.deepEqual(lower.sent[0]?.input, { query: query(['utilities:electric']) });
+  assert.deepEqual(
+    lower.result,
+    failed(
+      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
+    ),
+  );
+  // Two settings in two spellings are asked for once, as first typed: each holds to its own.
+  const right = await find({
+    expenseAccount: 'Utilities:Electric',
+    categoryRent: 'UTILITIES:ELECTRIC',
+  });
+  assert.deepEqual(right.sent[0]?.input, { query: query(['Utilities:Electric']) });
+  assert.deepEqual(
+    right.result,
+    failed(
+      "No QuickBooks account matches the 'Category for rent' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
+    ),
+  );
+  // An answer row in other capitals than the setting is no match either.
+  const cased = await find(only('Utilities:Electric'), (world) =>
+    world.simulator.script('query.run', [
+      {
+        status: 200,
+        body: {
+          QueryResponse: { Account: [sampleAccount('57', 'UTILITIES:ELECTRIC', 'Expense')] },
+        },
+      },
+    ]),
+  );
   assert.equal(
-    (lower.result.output?.accounts as { defaultCategory: { fullyQualifiedName: string } })
-      .defaultCategory.fullyQualifiedName,
-    'Utilities:Electric',
+    cased.line?.[2],
+    'Default category "Utilities:Electric" not resolved (account_not_found)',
   );
 });
 
-test('an apostrophe is escaped and a backslash doubled in the text sent', async () => {
+test('an apostrophe is escaped and a backslash written four times in the text sent (sandbox G4–5)', async () => {
   const add = (name: string) => (world: ReturnType<typeof setUp>) =>
     world.simulator.company.accounts.push(sampleAccount('70', name, 'Expense'));
   const apostrophes = await find(only("Legal:O'Brien's Fees"), add("Legal:O'Brien's Fees"));
   assert.deepEqual(apostrophes.sent[0]?.input, { query: query(["Legal:O\\'Brien\\'s Fees"]) });
   assert.equal(apostrophes.result.outcome, 'success');
   const backslash = await find(only('Fees\\Misc'), add('Fees\\Misc'));
-  assert.deepEqual(backslash.sent[0]?.input, { query: query(['Fees\\\\Misc']) });
+  assert.deepEqual(backslash.sent[0]?.input, { query: query(['Fees\\\\\\\\Misc']) });
   assert.equal(backslash.result.outcome, 'success');
 });
 
@@ -133,7 +161,7 @@ test('no match fails as not found; an account number typed in front gets the hin
   assert.deepEqual(
     missing.result,
     failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the full name as QuickBooks shows it, without its number, then run it again.",
+      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
     ),
   );
   assert.equal(
@@ -145,7 +173,7 @@ test('no match fails as not found; an account number typed in front gets the hin
   assert.deepEqual(
     numbered.result,
     failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the name without the account number in front, then run it again.",
+      "No QuickBooks account matches the 'Default category' setting. Type the name without the number in front, exactly as QuickBooks shows it, capitals included, then run it again.",
     ),
   );
   assert.equal(
@@ -154,10 +182,10 @@ test('no match fails as not found; an account number typed in front gets the hin
   );
 });
 
-test('two matches fail as ambiguous, an inactive account as inactive', async () => {
+test('two matches fail as ambiguous, an inactive account as inactive — found by the name QuickBooks gives it, "(deleted)"', async () => {
   const two = await find(only('Utilities:Electric'), (world) =>
     world.simulator.company.accounts.push(
-      sampleAccount('58', 'UTILITIES:ELECTRIC', 'Expense', { Active: false }),
+      sampleAccount('58', 'Utilities:Electric', 'Expense', { Active: false }),
     ),
   );
   assert.deepEqual(
@@ -174,6 +202,33 @@ test('two matches fail as ambiguous, an inactive account as inactive', async () 
     failed(
       "The account in the 'Default category' setting is inactive in QuickBooks. Make it active or choose another, then run it again.",
     ),
+  );
+  // As QuickBooks keeps an inactive account (sandbox S1): renamed "<name> (deleted)". Found by that
+  // name, it is inactive — not missing.
+  const renamed = await find(only('Office Supplies'), (world) => {
+    const row = world.simulator.company.accounts.find((account) => account.Id === '64')!;
+    Object.assign(row, {
+      Name: 'Office Supplies (deleted)',
+      FullyQualifiedName: 'Office Supplies (deleted)',
+      Active: false,
+    });
+  });
+  assert.deepEqual(renamed.sent[0]?.input, { query: query(['Office Supplies']) });
+  assert.deepEqual(renamed.result, inactive.result);
+  assert.equal(
+    renamed.line?.[2],
+    'Default category "Office Supplies" not resolved (account_inactive)',
+  );
+  // An active account made with the name an inactive one had is that account.
+  const remade = await find(only('Utilities:Electric'), (world) =>
+    world.simulator.company.accounts.push(
+      sampleAccount('59', 'Utilities:Electric (deleted)', 'Expense', { Active: false }),
+    ),
+  );
+  assert.ok(remade.result.outcome === 'success');
+  assert.equal(
+    (remade.result.output?.accounts as { defaultCategory: { id: string } }).defaultCategory.id,
+    '57',
   );
   // A row with no Active field is Intuit's default: active.
   const unmarked = await find(only('Office Supplies'), (world) => {
@@ -211,7 +266,7 @@ test('a category may be an Expense, Other Expense or Cost of Goods Sold account;
   );
 });
 
-test('a returned name that differs beyond case is no match', async () => {
+test('a returned name that differs at all is no match', async () => {
   const { result } = await find(only('Utilities:Electric'), (world) =>
     world.simulator.script('query.run', [
       {
@@ -225,7 +280,7 @@ test('a returned name that differs beyond case is no match', async () => {
   assert.deepEqual(
     result,
     failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the full name as QuickBooks shows it, without its number, then run it again.",
+      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
     ),
   );
 });

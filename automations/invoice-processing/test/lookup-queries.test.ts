@@ -41,10 +41,10 @@ const doc = (answer: JsonObject, options = {}) => documentOf(check(answer, optio
 const NEW: VendorState = { status: 'new' };
 const TIDEWELL: VendorState = { ...VENDOR, id: '9', displayName: 'Tidewell Hardware' };
 
-test('the name lookups: by display name and by company name, active or not, at most 2; a new vendor’s checks at most 1; similar names by one word, at most 3', () => {
+test('the name lookups: by display name — and the name QuickBooks gives an inactive vendor — at most 2 a form, and by company name, at most 2, active or not; a new vendor’s checks at most 1; similar names by one word, at most 3', () => {
   assert.equal(
     vendorByName('Harrowgate Office Supply'),
-    "SELECT * FROM Vendor WHERE DisplayName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
+    "SELECT * FROM Vendor WHERE DisplayName IN ('Harrowgate Office Supply', 'Harrowgate Office Supply (deleted)') AND Active IN (true, false) MAXRESULTS 4",
   );
   assert.equal(
     vendorByCompanyName('Acme Supplies, Inc.'),
@@ -73,19 +73,19 @@ test('the name lookups: by display name and by company name, active or not, at m
   });
 });
 
-test("a name is escaped as Intuit reads it: O'Brien & Sons, a backslash, a double quote", () => {
+test("a name is escaped as Intuit reads it: O'Brien & Sons, a backslash written four times, a double quote (sandbox G4–5)", () => {
   assert.equal(
     vendorByName("O'Brien & Sons"),
-    "SELECT * FROM Vendor WHERE DisplayName = 'O\\'Brien & Sons' AND Active IN (true, false) MAXRESULTS 2",
+    "SELECT * FROM Vendor WHERE DisplayName IN ('O\\'Brien & Sons', 'O\\'Brien & Sons (deleted)') AND Active IN (true, false) MAXRESULTS 4",
   );
   assert.equal(
     vendorByName('A\\B Supply'),
-    "SELECT * FROM Vendor WHERE DisplayName = 'A\\\\B Supply' AND Active IN (true, false) MAXRESULTS 2",
+    "SELECT * FROM Vendor WHERE DisplayName IN ('A\\\\\\\\B Supply', 'A\\\\\\\\B Supply (deleted)') AND Active IN (true, false) MAXRESULTS 4",
   );
   assert.ok(vendorByName('Say "Hi" Co').includes(`'Say "Hi" Co'`));
   assert.ok(
     numberSearch(doc(bill({ documentNumber: "O'B-7\\" })), VENDOR).query.includes(
-      "DocNumber = 'O\\'B-7\\\\'",
+      "DocNumber = 'O\\'B-7\\\\\\\\'",
     ),
   );
 });

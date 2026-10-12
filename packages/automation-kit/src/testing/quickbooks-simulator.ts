@@ -32,6 +32,13 @@ import { answerCreate } from './quickbooks-writes.js';
  *   record it would change could overwrite it. A nested field — a bill's `VendorRef.value`, a
  *   line's `Id` — goes on as it is, as there.
  *
+ * And Intuit's own rule for a create (sandbox S6, 2026-10-12): **a repeated `requestid` is
+ * answered with the first answer** — the same record and Id, the body sent again ignored, nothing
+ * made twice — once that first answer created the record; a refused one is not kept. The platform
+ * derives the id from the workspace, the provider, the operation and the step's key (its
+ * BUILD-PLAN 25.2.26), so for one company it is the operation and the key: an answer lost before
+ * Connections recorded it is asked again under the same id, and answered with the record made.
+ *
  * QuickBooks itself answers from `company`: `companyInfo.get`, `preferences.get`;
  * `query.run` for exactly the text the kit's builders write — a lookup of an account, an
  * employee, a vendor or a customer, by a name, several or a word in it; a search of bills,
@@ -162,6 +169,8 @@ export class QuickBooksSimulator {
   readonly #refusal: QuickBooksSimulatorOptions['refusal'];
   readonly #scripts = new Map<string, ScriptedAnswer[]>();
   readonly #records = new Map<string, { hash: string; answer: ProviderAnswer }>();
+  /** Intuit's first answer to each create that made a record, by its `requestid` (S6). */
+  readonly #requestIds = new Map<string, ProviderAnswer>();
 
   public constructor(options: QuickBooksSimulatorOptions) {
     this.#refusal = options.refusal;
@@ -237,9 +246,16 @@ export class QuickBooksSimulator {
           expenseAmountSearchable: this.expenseAmountSearchable,
         });
       default: {
+        // One company: the platform's request id for this operation and key (S6).
+        const requestId = `${call.operation}\n${call.idempotencyKey}`;
+        const first = this.#requestIds.get(requestId);
+        if (first) return structuredClone(first);
         const created = answerCreate(this.company, call.operation, call.input);
-        if (created) return created;
-        throw new Error(`the QuickBooks simulator does not answer ${call.operation}`);
+        if (!created) throw new Error(`the QuickBooks simulator does not answer ${call.operation}`);
+        if (created.status >= 200 && created.status < 300) {
+          this.#requestIds.set(requestId, structuredClone(created));
+        }
+        return created;
       }
     }
   }

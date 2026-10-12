@@ -44,7 +44,7 @@ export interface RecordPlan {
   readonly paymentType: 'Cash' | 'Check' | 'CreditCard' | null;
   /** A card refund: an expense with `Credit` true. */
   readonly credit: boolean;
-  /** A check expense is sent with print status NotSet; QuickBooks' default is NeedToPrint (sandbox S8). */
+  /** A check expense is sent with print status NotSet, said rather than left to QuickBooks, whose own default was NotSet too (sandbox S8). */
   readonly printStatus: 'NotSet' | null;
   readonly accounts: {
     readonly category: CategoryChoice;

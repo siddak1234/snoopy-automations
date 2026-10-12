@@ -79,7 +79,7 @@ test('no vendor by name: one by company name is matched; none at all is a new ve
   });
   assert.deepEqual(queriesOf(byCompany), {
     'find-vendor':
-      "SELECT * FROM Vendor WHERE DisplayName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
+      "SELECT * FROM Vendor WHERE DisplayName IN ('Harrowgate Office Supply', 'Harrowgate Office Supply (deleted)') AND Active IN (true, false) MAXRESULTS 4",
     'find-vendor-company':
       "SELECT * FROM Vendor WHERE CompanyName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
   });
@@ -217,7 +217,7 @@ test('names with an apostrophe, an ampersand or a backslash are sent escaped and
   });
   assert.deepEqual(queriesOf(world), {
     'find-vendor':
-      "SELECT * FROM Vendor WHERE DisplayName = 'O\\'Brien & Sons' AND Active IN (true, false) MAXRESULTS 2",
+      "SELECT * FROM Vendor WHERE DisplayName IN ('O\\'Brien & Sons', 'O\\'Brien & Sons (deleted)') AND Active IN (true, false) MAXRESULTS 4",
     'find-vendor-company':
       "SELECT * FROM Vendor WHERE CompanyName = 'O\\'Brien & Sons' AND Active IN (true, false) MAXRESULTS 2",
   });

@@ -1,8 +1,9 @@
-import { writeQuickBooks } from '@autom8x/automation-kit/quickbooks';
+import { writeQuickBooks, type QuickBooksWrite } from '@autom8x/automation-kit/quickbooks';
 import { cleanText, shorten, toCents } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject, type Step } from '@autom8x/automation-sdk';
 
 import type { Payee, RecordPlan } from '../decide/plan.js';
+import { noteSentence } from '../failures.js';
 import { failedWith } from '../outcome.js';
 import { recordBody, writeKindOf } from '../writes/bodies.js';
 import { WRITE_NOUNS, recordedLine } from '../writes/lines.js';
@@ -14,7 +15,7 @@ import {
   type CreatedState,
   type NewVendorState,
 } from '../writes/saved-state.js';
-import { recordFailure, stateIncomplete } from '../writes/sentences.js';
+import { recordFailure, recordUnconfirmed, stateIncomplete } from '../writes/sentences.js';
 
 /**
  * `create-record` (step 23, was create-bill) — the ONE write: the record decide planned, exactly as
@@ -26,9 +27,11 @@ import { recordFailure, stateIncomplete } from '../writes/sentences.js';
  *   (`journalEntry.create`) — the platform's P1–P5, each with its `requestid` — its body built from
  *   the saved plan alone (`src/writes/bodies.ts`), never from the settings as they are by then; the
  *   memo names this run, after an approval the continuation;
- * - one request, never repeated: no declared retry on any write in v1, until the sandbox (S6) shows
- *   a repeated request id answered with the first answer, so a 429, a 5xx, a lost answer or Intuit's
- *   600 is "QuickBooks did not confirm whether the … was created" — the safe side;
+ * - one request, repeated only by the SDK's step retry when nothing answered — no answer, a
+ *   502/503/504 naming no reason — under the same key, so the same `requestid`, which Intuit
+ *   answers with the first answer, never a second record (sandbox S6); when the attempts are spent,
+ *   and for QuickBooks' own 429 or 5xx or Intuit's 600, "QuickBooks did not confirm whether the …
+ *   was created" — the safe side;
  * - every Intuit code the plan maps (6140, 6240, 610, 2500, 6190, 6200, 6210, 2050, 2290, 2300, 6430)
  *   in its own sentence, any other in the kit's, each saying the new vendor was added when this run
  *   added it;
@@ -92,23 +95,28 @@ export function createRecord(): Step {
     const named = plan.operation === 'bill.create' || plan.operation === 'vendorCredit.create';
     // A new vendor neither found nor added — a first run, which a new vendor always holds — or a
     // bill or credit with no vendor: guards that should never fire.
+    const noun = WRITE_NOUNS[plan.record];
     if (vendorId === undefined || (named && vendorId === null)) {
-      return failedWith(WHAT, 'state_incomplete', stateIncomplete(WRITE_NOUNS[plan.record], added));
+      return failedWith(WHAT, 'state_incomplete', stateIncomplete(noun, added));
     }
-    const write = await writeQuickBooks({
-      platform,
-      kind: writeKindOf(plan),
-      input: recordBody(plan, vendorId, request.runId),
-    });
+    let write: QuickBooksWrite;
+    try {
+      write = await writeQuickBooks({
+        platform,
+        kind: writeKindOf(plan),
+        input: recordBody(plan, vendorId, request.runId),
+      });
+    } catch (error) {
+      // On unchanged for the SDK's retry (S6); when its attempts are spent, the run's wrapper ends
+      // with this sentence: the record may have been made.
+      noteSentence(error, recordUnconfirmed(noun, added));
+      throw error;
+    }
     if (!write.ok) {
       const reason = write.detail === undefined ? write.reason : `${write.reason} ${write.detail}`;
       const kept =
         added && newVendor ? `; the new vendor stays (Id ${shorten(newVendor.id, 20)})` : '';
-      return failedWith(
-        `${WHAT}${kept}`,
-        reason,
-        recordFailure(write, WRITE_NOUNS[plan.record], added),
-      );
+      return failedWith(`${WHAT}${kept}`, reason, recordFailure(write, noun, added));
     }
     const created = createdFrom(plan, write.id, write.record);
     return {

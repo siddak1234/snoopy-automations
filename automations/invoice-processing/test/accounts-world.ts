@@ -4,9 +4,12 @@ import { callsOf, lines, setUp } from './fixtures.js';
 
 /** The run as `find-accounts` sees it: its line, what it sent, and how the run ended. */
 
-/** The IN text `find-accounts` sends for `names`, two rows a name. */
-export const query = (names: string[], max = names.length * 2) =>
-  `SELECT * FROM Account WHERE FullyQualifiedName IN (${names.map((name) => `'${name}'`).join(', ')}) AND Active IN (true, false) MAXRESULTS ${max}`;
+/**
+ * The IN text `find-accounts` sends for `names`, each as written here (already escaped) and in the
+ * form QuickBooks gives an inactive account, "<name> (deleted)"; two rows a value.
+ */
+export const query = (names: string[], max = names.length * 4) =>
+  `SELECT * FROM Account WHERE FullyQualifiedName IN (${names.map((name) => `'${name}', '${name} (deleted)'`).join(', ')}) AND Active IN (true, false) MAXRESULTS ${max}`;
 
 export async function find(
   config: JsonObject,

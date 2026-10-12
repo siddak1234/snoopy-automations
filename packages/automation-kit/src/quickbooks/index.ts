@@ -1,9 +1,11 @@
 /**
  * `@autom8x/automation-kit/quickbooks` — QuickBooks calls for an automation's steps:
- * the read (`read.ts`), the write (`write.ts`), readers for their answers (`answers.ts`)
- * and the query text (`query.ts`).
+ * the read (`read.ts`), the write (`write.ts`), readers for their answers (`answers.ts`),
+ * the query text (`query.ts`) and the names QuickBooks gives inactive records (`names.ts`).
  */
 export { entityOf, nameValueOf, queryRowsOf } from './answers.js';
+export { DELETED_MARK, rowsNaming, unmarkedName, withDeletedForm } from './names.js';
+export type { NamedRows } from './names.js';
 export {
   TRANSACTION_ENTITIES,
   dateRange,

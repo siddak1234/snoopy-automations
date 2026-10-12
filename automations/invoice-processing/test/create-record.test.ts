@@ -34,15 +34,19 @@ import {
 import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import { decide } from './decide-world.js';
 import { PAID, type RouteRun } from './lookups-world.js';
-import { approve, firstRun, writesOf, type Run } from './writes-world.js';
+import { approve, firstRun, noTimeToRepeat, writesOf, type Run } from './writes-world.js';
 
 /**
  * create-record's failures (the plan's §5 "Error mapping"; ip-review design-after-approval-writes-
  * notify-tests.json steps[4]): each Intuit code in its own fixed sentence — 6200 beside 6210, 2290,
- * 2300, 6430 added — any other in the kit's; a write QuickBooks may have made (a 429, a 5xx, Intuit's
- * 600, an answer lost) "did not confirm"; ONE request whatever happens, never repeated; Intuit's
- * words nowhere; and the vendor this run added named in every sentence after it.
+ * 2300, 6430 added — any other in the kit's; a write QuickBooks may have made (its own 429 or 5xx,
+ * Intuit's 600, an answer lost once the SDK's repeat cannot wait) "did not confirm"; one request a
+ * call, repeated only by the step's retry (test/write-retry.test.ts); Intuit's words nowhere; and
+ * the vendor this run added named in every sentence after it.
  */
+
+const UNCONFIRMED_BILL =
+  'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.';
 
 /** The noun each path's sentences use: the kit's, so a refund is an expense there. */
 const PATHS: readonly [string, RouteRun, string, string][] = [
@@ -132,32 +136,18 @@ test("each Intuit code the plan maps, in its own sentence naming the record, Int
   assert.equal(intuitSentence('1', 'bill'), undefined);
 });
 
-test('a lost answer, a 429, a 5xx or Fault 600: QuickBooks did not confirm it — one request, never repeated, the safe side', async () => {
+test("QuickBooks' own 429 or 5xx, Fault 600, or an answer without the record: QuickBooks did not confirm it — one request, the safe side", async () => {
   const cases: [string, ScriptedAnswer[]][] = [
-    ['an answer lost after QuickBooks made it', [{ lost: 'before_record' }]],
-    ['an answer lost after the platform recorded it', [{ lost: 'after_record' }]],
     ['a 429', [{ status: 429 }]],
     ['a 500', [{ status: 500 }]],
     ['a 503', [{ status: 503 }]],
     ['Fault 600', [{ status: 400, body: faultAnswer('600') }]],
-    ['a reasonless 502 before QuickBooks', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]],
     ['a 200 without the record', [{ status: 200, body: { time: 't' } }]],
   ];
   for (const [label, script] of cases) {
-    const { result, calls, simulator } = await written({ answer: bill() }, 'bill.create', script);
-    assert.deepEqual(
-      result,
-      {
-        outcome: 'failed',
-        failureReason:
-          'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.',
-      },
-      label,
-    );
+    const { result, calls } = await written({ answer: bill() }, 'bill.create', script);
+    assert.deepEqual(result, { outcome: 'failed', failureReason: UNCONFIRMED_BILL }, label);
     assert.equal(writesOf(calls).length, 1, `${label}: one request`);
-    if (label.startsWith('an answer lost')) {
-      assert.equal(simulator.company.bills.length, 1, `${label}: the bill QuickBooks made, once`);
-    }
   }
 });
 
@@ -191,26 +181,29 @@ test("the platform's certain refusals: nothing reached QuickBooks, so nothing wa
 });
 
 test('after create-vendor added the vendor: every create-record sentence says so, and its line names the vendor kept', async () => {
-  for (const [script, sentence] of [
-    [
-      { status: 400, body: faultAnswer('6140') },
-      'QuickBooks already has a bill with this number, so no bill was created. Check QuickBooks before running this again. The new vendor was added to QuickBooks.',
-    ],
-    [
-      { lost: 'before_record' },
-      'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again. The new vendor was added to QuickBooks.',
-    ],
-  ] as const) {
-    const first = await firstRun({ answer: bill(), bare: true });
-    first.simulator.script('bill.create', [script]);
-    const approved = await approve(first);
-    assert.deepEqual(approved.result, { outcome: 'failed', failureReason: sentence });
-    assert.ok(sentence.length <= 200);
-    assert.match(
-      approved.steps.at(-1)?.[2] ?? '',
-      /^Not recorded; the new vendor stays \(Id 1001\) \(/u,
-    );
-  }
+  const refused = await firstRun({ answer: bill(), bare: true });
+  refused.simulator.script('bill.create', [{ status: 400, body: faultAnswer('6140') }]);
+  const fault = await approve(refused);
+  const sentence =
+    'QuickBooks already has a bill with this number, so no bill was created. Check QuickBooks before running this again. The new vendor was added to QuickBooks.';
+  assert.deepEqual(fault.result, { outcome: 'failed', failureReason: sentence });
+  assert.ok(sentence.length <= 200);
+  assert.match(
+    fault.steps.at(-1)?.[2] ?? '',
+    /^Not recorded; the new vendor stays \(Id 1001\) \(/u,
+  );
+  // An answer lost with no time to repeat it: the sentence registered on the throw says it too,
+  // and create-vendor's line named the vendor it added.
+  const lost = await firstRun({ answer: bill(), bare: true });
+  lost.simulator.script('bill.create', [{ lost: 'before_record' }]);
+  const unconfirmed = await approve(lost, { deadline: noTimeToRepeat() });
+  const said = `${UNCONFIRMED_BILL} The new vendor was added to QuickBooks.`;
+  assert.deepEqual(unconfirmed.result, { outcome: 'failed', failureReason: said });
+  assert.ok(said.length <= 200);
+  assert.match(
+    unconfirmed.steps.find(([stepId]) => stepId === 'create-vendor')?.[2] ?? '',
+    /^Added vendor 'Harrowgate Office Supply' to QuickBooks \(Id 1001\)/u,
+  );
 });
 
 test('every sentence create-record can end with fits 200 characters, for every record, with the vendor named', () => {
@@ -295,7 +288,7 @@ test("a write's own failure stands when its line's report is refused: 'did not c
   const first = await firstRun({ answer: receipt(), config: HOLD_ALL });
   first.simulator.script('purchase.create', [{ lost: 'before_record' }]);
   refuseReport(first, 'create-record');
-  assert.deepEqual((await approve(first)).result, {
+  assert.deepEqual((await approve(first, { deadline: noTimeToRepeat() })).result, {
     outcome: 'failed',
     failureReason:
       'QuickBooks did not confirm whether the expense was created. Check QuickBooks before running this again.',

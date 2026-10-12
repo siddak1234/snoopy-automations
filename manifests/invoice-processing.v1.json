@@ -66,7 +66,7 @@
       "section": "rules",
       "key": "expenseAccount",
       "title": "Default category",
-      "description": "The QuickBooks category used when no category below applies, as QuickBooks shows it, without its number. For a sub-account: Parent:Child.",
+      "description": "The QuickBooks category used when no category below applies, exactly as QuickBooks shows it, capitals included, without its number. For a sub-account: Parent:Child.",
       "control": "text",
       "required": true
     },
@@ -74,7 +74,7 @@
       "section": "rules",
       "key": "paidFromAccount",
       "title": "Paid from",
-      "description": "The bank or credit card account the company pays receipts from, as QuickBooks shows it. Needed for receipts and card refunds.",
+      "description": "The bank or credit card account the company pays receipts from, exactly as QuickBooks shows it, capitals included. Needed for receipts and card refunds.",
       "control": "text",
       "required": false
     },
@@ -90,7 +90,7 @@
       "section": "rules",
       "key": "teamOwedAccount",
       "title": "Owed to team members",
-      "description": "A liability account, not Accounts Payable or a credit card, for what the company owes an employee who paid with their own money.",
+      "description": "A liability account, not Accounts Payable or a credit card, for what the company owes an employee who paid with their own money. Type it exactly as QuickBooks shows it, capitals included.",
       "control": "text",
       "required": false
     },
@@ -98,7 +98,7 @@
       "section": "rules",
       "key": "ownerInvestmentAccount",
       "title": "Owner's investment account",
-      "description": "The equity account, such as Owner investments, for a purchase an owner or partner paid with their own money.",
+      "description": "The equity account, such as Owner investments, for a purchase an owner or partner paid with their own money. Type it exactly as QuickBooks shows it, capitals included.",
       "control": "text",
       "required": false
     },
@@ -106,7 +106,7 @@
       "section": "rules",
       "key": "ownerNames",
       "title": "Owners and partners",
-      "description": "One entry per person, separated by semicolons. Add = and an equity account for a person's own account, for example: Jane Doe = Partner investments:Jane; Sam Lee",
+      "description": "One entry per person, separated by semicolons. Add = and a person's own equity account, exactly as QuickBooks shows it, capitals included, for example: Jane Doe = Partner investments:Jane; Sam Lee",
       "control": "text",
       "required": false
     },
@@ -114,7 +114,7 @@
       "section": "rules",
       "key": "categoryMeals",
       "title": "Category for meals",
-      "description": "The QuickBooks category for meals. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for meals, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -122,7 +122,7 @@
       "section": "rules",
       "key": "categoryTravel",
       "title": "Category for travel",
-      "description": "The QuickBooks category for travel. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for travel, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -130,7 +130,7 @@
       "section": "rules",
       "key": "categoryVehicleAndFuel",
       "title": "Category for vehicle and fuel",
-      "description": "The QuickBooks category for vehicle and fuel. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for vehicle and fuel, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -138,7 +138,7 @@
       "section": "rules",
       "key": "categoryOfficeSupplies",
       "title": "Category for office supplies",
-      "description": "The QuickBooks category for office supplies. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for office supplies, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -146,7 +146,7 @@
       "section": "rules",
       "key": "categorySoftwareAndSubscriptions",
       "title": "Category for software and subscriptions",
-      "description": "The QuickBooks category for software and subscriptions. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for software and subscriptions, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -154,7 +154,7 @@
       "section": "rules",
       "key": "categoryUtilitiesAndPhone",
       "title": "Category for utilities and phone",
-      "description": "The QuickBooks category for utilities and phone. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for utilities and phone, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -162,7 +162,7 @@
       "section": "rules",
       "key": "categoryRent",
       "title": "Category for rent",
-      "description": "The QuickBooks category for rent. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for rent, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -170,7 +170,7 @@
       "section": "rules",
       "key": "categoryRepairsAndMaintenance",
       "title": "Category for repairs and maintenance",
-      "description": "The QuickBooks category for repairs and maintenance. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for repairs and maintenance, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -178,7 +178,7 @@
       "section": "rules",
       "key": "categoryProfessionalServices",
       "title": "Category for professional services",
-      "description": "The QuickBooks category for professional services. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for professional services, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -186,7 +186,7 @@
       "section": "rules",
       "key": "categoryMaterials",
       "title": "Category for materials",
-      "description": "The QuickBooks category for materials. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for materials, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },
@@ -194,7 +194,7 @@
       "section": "rules",
       "key": "categoryAdvertising",
       "title": "Category for advertising",
-      "description": "The QuickBooks category for advertising. The default category is used when this is left empty.",
+      "description": "The QuickBooks category for advertising, exactly as QuickBooks shows it, capitals included. The default category is used when this is left empty.",
       "control": "text",
       "required": false
     },

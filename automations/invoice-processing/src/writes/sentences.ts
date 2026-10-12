@@ -1,5 +1,6 @@
 import {
   QUICKBOOKS_SENTENCES,
+  writeSentences,
   type QuickBooksRead,
   type QuickBooksWrite,
 } from '@autom8x/automation-kit/quickbooks';
@@ -141,8 +142,8 @@ export const INTUIT_CODES = [
 
 /**
  * create-record's sentence for a failed write: its Intuit code's, else the kit's — "did not
- * confirm" for a write QuickBooks may have made (a 429, a 5xx, a lost answer, Fault 600) — and
- * the vendor kept when this run added it.
+ * confirm" for a write QuickBooks may have made (its own 429 or 5xx, Fault 600, a 409 for another
+ * body under the key) — and the vendor kept when this run added it.
  */
 export function recordFailure(
   write: Extract<QuickBooksWrite, { ok: false }>,
@@ -155,6 +156,19 @@ export function recordFailure(
       : undefined;
   const sentence = coded ?? write.sentence;
   return vendorAdded ? `${sentence} The new vendor was added to QuickBooks.` : sentence;
+}
+
+/**
+ * create-record's sentence for a write that threw — no answer, a refusal the platform did not
+ * decide — until the SDK's attempts were spent: QuickBooks may have made the record.
+ */
+export function recordUnconfirmed(noun: string, vendorAdded: boolean): string {
+  const sentence = writeSentences(noun).qb_unconfirmed;
+  return recordFailure(
+    { ok: false, reason: 'qb_unconfirmed', created: 'unknown', sentence },
+    noun,
+    vendorAdded,
+  );
 }
 
 /**

@@ -1,3 +1,4 @@
+import { unmarkedName } from '@autom8x/automation-kit/quickbooks';
 import { cleanText, fitLine, shorten, type LinePiece } from '@autom8x/automation-kit/values';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
@@ -90,7 +91,11 @@ export interface SimilarName {
   readonly likelySame: boolean;
 }
 
-/** The rows that hold the word, likely-the-same first, then in QuickBooks' order. */
+/**
+ * The rows that hold the word, likely-the-same first, then in QuickBooks' order. An inactive
+ * vendor's name is read without the "(deleted)" QuickBooks adds to it (sandbox G4–5), so it is
+ * compared as the name it had and marked inactive once.
+ */
 export function similarNamesOf(
   rows: readonly JsonObject[],
   word: string,
@@ -99,7 +104,7 @@ export function similarNamesOf(
   const key = sellerKey(printed);
   const names: SimilarName[] = [];
   for (const row of rows) {
-    const name = cleanText(row.DisplayName);
+    const name = cleanText(unmarkedName(row, 'DisplayName'));
     // A re-check, as every lookup's: a row without the word is not one QuickBooks was asked for.
     if (name === null || !name.toLowerCase().includes(word)) continue;
     names.push({

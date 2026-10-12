@@ -26,8 +26,10 @@ import {
 /**
  * `confirm-no-duplicate` (step 22) — after an approval, right before the record is written, the
  * path's own duplicate lookup once more (the plan's §5; `src/decide/recheck.ts`): decide saved the
- * very query its lookup step sent, one row more, and the facts the ONE rule compares
- * (`src/decide/duplicate-rule.ts`), so this step and decide cannot disagree. Every record the
+ * very query its lookup step sent, one row more and the newest created first — so a record made
+ * while the run waited is within the bound however many older ones match (sandbox G4–5) — and the
+ * facts the ONE rule compares (`src/decide/duplicate-rule.ts`), so this step and decide cannot
+ * disagree. Every record the
  * approver already saw — any lookup's, by kind — is allowed; a record the rule matches that was
  * not there then fails: "A matching record was added in QuickBooks while this waited for
  * approval, possibly from your bank feed." When decide's lookup was full, the approver approved

@@ -17,24 +17,40 @@
 /** An entity or field name as Intuit spells it: `Account`, `FullyQualifiedName`. */
 const NAME = /^[A-Z][A-Za-z]*$/u;
 
+/**
+ * The one dotted field a search may be ordered by: Intuit takes `ORDERBY MetaData.CreateTime DESC`
+ * on bills, expenses, vendor credits and journal entries, and applies MAXRESULTS after the order —
+ * the newest created first (sandbox G4–5 and the verifier's probe, 2026-10-12). Never a condition.
+ */
+const ORDER_FIELDS: ReadonlySet<string> = new Set(['MetaData.CreateTime']);
+
 /** Intuit's own ceiling on one query's rows. */
 const MAXIMUM_RESULTS = 1_000;
 
 /**
- * A value as a query literal: every backslash doubled FIRST, then a backslash before
+ * A value as a query literal: every backslash written FOUR times first, then a backslash before
  * every apostrophe, the whole inside apostrophes — `O'Brien's Fees` is sent as
- * `'O\'Brien\'s Fees'`. Intuit documents only the apostrophe escape; the backslash goes
- * first, or a value ending in one (or holding one before an apostrophe) would close the
- * literal early and let the rest be read as query text. Nothing else changes: a double
- * quote, `&`, `#`, `%` (a wildcard only in LIKE) and a curly apostrophe stay as typed.
+ * `'O\'Brien\'s Fees'`, `Back\Slash Co` as `'Back\\\\Slash Co'`. Intuit reads a value's escapes
+ * twice (sandbox G4–5, 2026-10-12): four backslashes reach the comparison as one, wherever it
+ * stands — a doubled one was found only at a value's very end, so a vendor or a bill number with a
+ * backslash anywhere else was never found, and a single one before the closing apostrophe is
+ * Intuit's Fault 4000. The backslashes go first, or the apostrophe's own escape would be counted
+ * among them. Nothing else changes: a double quote, `&`, `#`, a curly apostrophe and accented
+ * letters stay as typed, and `%` and `_` are wildcards only in LIKE — under `=` and `IN` each is
+ * itself (sandbox G4–5 and its `_` probe, 2026-10-12).
  */
 export function quoteQueryValue(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  return `'${value.replaceAll('\\', '\\\\\\\\').replaceAll("'", "\\'")}'`;
 }
 
 function nameOf(name: string, what: 'entity' | 'field'): string {
   if (!NAME.test(name)) throw new Error(`${name} is not a QuickBooks ${what} name`);
   return name;
+}
+
+/** A field a search may be ordered by: a plain name, or one of `ORDER_FIELDS`. */
+function orderFieldOf(name: string): string {
+  return ORDER_FIELDS.has(name) ? name : nameOf(name, 'field');
 }
 
 function boundOf(maxResults: number): number {
@@ -44,7 +60,12 @@ function boundOf(maxResults: number): number {
   return maxResults;
 }
 
-/** `(value, value)` for IN: at least one value, and no value twice, compared as Intuit compares them — without case. */
+/**
+ * `(value, value)` for IN: at least one value, and no value twice, even in another case — Intuit
+ * compares IN without case on a vendor's, a customer's and an employee's names and on a bill's
+ * number, and WITH case on an account's names (sandbox S1), so a list that names a value twice
+ * in two cases is a caller's mistake either way.
+ */
 function listOf(values: readonly string[]): string {
   if (values.length === 0) throw new Error('IN needs at least one value');
   const seen = new Set<string>();
@@ -60,8 +81,8 @@ function listOf(values: readonly string[]): string {
  * Every record of `entity` — active or not — whose `field` equals `value`, at most
  * `maxResults` of them:
  * `SELECT * FROM Account WHERE FullyQualifiedName = 'Utilities:Electric' AND Active IN (true, false) MAXRESULTS 2`.
- * Intuit compares the value without case, so a caller re-checks each returned row.
- * A name or bound outside Intuit's shapes is the caller's mistake, refused here.
+ * Intuit compares the value without case under `=` (sandbox S1 and G4–5), so a caller re-checks
+ * each returned row. A name or bound outside Intuit's shapes is the caller's mistake, refused here.
  */
 export function lookupQuery(
   entity: string,
@@ -77,7 +98,9 @@ export function lookupQuery(
  * `maxResults` of them: several names in ONE query, since a step makes one QuickBooks
  * call, and IN is a documented operator where OR is not —
  * `SELECT * FROM Account WHERE FullyQualifiedName IN ('Utilities:Electric', 'Checking') AND Active IN (true, false) MAXRESULTS 4`.
- * A value given twice, even in another case, is refused: Intuit would read it as one.
+ * A value given twice, even in another case, is refused (`listOf`). On an account's names Intuit
+ * compares IN with case — `'utilities:electric'` does not find `Utilities:Electric` (sandbox S1) —
+ * and on every other field this kit asks for, without.
  */
 export function lookupInQuery(
   entity: string,
@@ -124,7 +147,10 @@ export interface TransactionSearch {
   readonly entity: TransactionEntity;
   /** Joined by AND; at least one, so a search never lists a company's every record. */
   readonly where: readonly QueryCondition[];
-  /** Newest first is `{ field: 'TxnDate', descending: true }`. */
+  /**
+   * Newest first is `{ field: 'TxnDate', descending: true }`; the newest created first,
+   * `{ field: 'MetaData.CreateTime', descending: true }` (`ORDER_FIELDS`).
+   */
   readonly orderBy?: { readonly field: string; readonly descending?: boolean };
   readonly maxResults: number;
 }
@@ -152,7 +178,7 @@ export function transactionQuery(search: TransactionSearch): string {
   if (search.where.length === 0) throw new Error('a transaction search needs a condition');
   const where = search.where.map(conditionOf).join(' AND ');
   const order = search.orderBy
-    ? ` ORDERBY ${nameOf(search.orderBy.field, 'field')}${search.orderBy.descending ? ' DESC' : ''}`
+    ? ` ORDERBY ${orderFieldOf(search.orderBy.field)}${search.orderBy.descending ? ' DESC' : ''}`
     : '';
   return `SELECT * FROM ${search.entity} WHERE ${where}${order} MAXRESULTS ${boundOf(search.maxResults)}`;
 }

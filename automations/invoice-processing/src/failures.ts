@@ -83,10 +83,11 @@ export const THROWN_SENTENCES = {
 
 /**
  * Every step that READS QuickBooks: a throw there ends with QuickBooks' sentence. The writes —
- * create-vendor, create-record — throw nothing they could have sent: the kit's write answers every
- * failure itself, so a throw there is a fault, and the general sentence sends the person to the
- * timeline. A record made, and a vendor added, the run's end names itself (`RunNotes`): the line
- * naming them may be the very report that failed.
+ * create-vendor, create-record — throw on only what nothing answered, for the SDK's retry (sandbox
+ * S6), and register their own "did not confirm" sentence on it (`noteSentence`), so a write that
+ * QuickBooks may have made never ends "nothing was created"; any other throw there is a fault, and
+ * the general sentence sends the person to the timeline. A record made, and a vendor added, the
+ * run's end names itself (`RunNotes`): the line naming them may be the very report that failed.
  */
 export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-company',
@@ -113,7 +114,7 @@ export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read
 /**
  * A step's own sentence for an error it throws on unchanged — for the SDK's retry to read — so that
  * when the attempts are spent the run ends with it: confirm-no-duplicate's, once this run added a
- * vendor, says so.
+ * vendor, says so; create-vendor's and create-record's say QuickBooks did not confirm the write.
  */
 export function noteSentence(error: unknown, sentence: string): void {
   if (typeof error === 'object' && error !== null) sentences.set(error, sentence);

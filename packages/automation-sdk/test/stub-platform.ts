@@ -22,7 +22,8 @@ export interface RecordedCall {
   body: unknown;
 }
 
-export type Answer = { status: number; body?: unknown };
+/** A callback's answer: its status, its body, and any header beside `content-type` (`retry-after`). */
+export type Answer = { status: number; body?: unknown; headers?: Record<string, string> };
 
 export interface StubPlatform {
   origin: string;
@@ -36,7 +37,8 @@ export interface StubPlatform {
   close(): Promise<void>;
 }
 
-function defaultAnswer(message: string, body: Record<string, unknown>): Answer {
+/** The handler's own answer to `message`: what the stub sends unless a test says otherwise. */
+export function defaultAnswer(message: string, body: Record<string, unknown>): Answer {
   switch (message) {
     case 'step':
       return { status: 202, body: { accepted: true } };
@@ -122,7 +124,9 @@ export async function startStubPlatform(): Promise<StubPlatform> {
       // process past the end of the suite.
       setTimeout(() => {
         const payload = answer.body === undefined ? '' : JSON.stringify(answer.body);
-        response.writeHead(answer.status, { 'content-type': 'application/json' }).end(payload);
+        response
+          .writeHead(answer.status, { 'content-type': 'application/json', ...answer.headers })
+          .end(payload);
       }, stub.delayMs).unref();
     });
   });

@@ -3,6 +3,8 @@ import {
   lookupInQuery,
   queryRowsOf,
   readQuickBooks,
+  rowsNaming,
+  withDeletedForm,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
 import { cardDigits } from '@autom8x/automation-kit/values';
@@ -26,8 +28,12 @@ import type { AccountRef, AccountsState } from '../state.js';
  * `find-accounts` — turn every account the flow's settings name, typed as text, into the
  * QuickBooks account it means, in ONE query (a step makes one QuickBooks call):
  * `FullyQualifiedName IN (…)` over the default category, Paid from, Owed to team members,
- * Owner's investment account, each owner's own account and each category setting
- * (whether IN works on that field is sandbox item S1). Each is then held to its role: exactly
+ * Owner's investment account, each owner's own account and each category setting — IN works on
+ * that field (sandbox S1). It compares WITH case there, so a name must be typed exactly as
+ * QuickBooks shows it, capitals included (the owner's "Exact capitals, said clearly", 2026-10-12:
+ * one query kept, and the settings and the sentence say so). Each name is asked for with the
+ * name QuickBooks gives an account it made inactive, "<name> (deleted)" (S1), so an inactive
+ * account is said to be inactive, not missing. Each is then held to its role: exactly
  * one account by that name, active, of a kind the role accepts, and — with multicurrency on —
  * holding USD. The first setting that fails, in the manifest's order, stops the run with
  * find-account's sentences naming that setting (A1), before any model call. An optional
@@ -89,9 +95,9 @@ export function accountSentence(reason: AccountReason, place: Place, role: Accou
     case 'account_setting_invalid':
       return `${place.named} is not a QuickBooks account name. Type the full name, such as ${place.example}, then run it again.`;
     case 'account_not_found':
-      return `No QuickBooks account matches ${place.object}. Type the full name as QuickBooks shows it, without its number, then run it again.`;
+      return `No QuickBooks account matches ${place.object}. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.`;
     case 'account_not_found_number':
-      return `No QuickBooks account matches ${place.object}. Type the name without the account number in front, then run it again.`;
+      return `No QuickBooks account matches ${place.object}. Type the name without the number in front, exactly as QuickBooks shows it, capitals included, then run it again.`;
     case 'account_ambiguous':
       return `Two QuickBooks accounts match ${place.object}. Type the full Parent:Child name, or rename one in QuickBooks, then run it again.`;
     case 'account_inactive':
@@ -138,13 +144,18 @@ function refused(asked: Pick<Asked, 'place' | 'role'>, name: string, reason: Acc
   );
 }
 
-/** The names to ask for, each once: Intuit compares without case, and IN refuses a repeat. */
-function distinctNames(asked: readonly Asked[]): string[] {
-  const names = new Map<string, string>();
-  for (const { name } of asked) {
-    if (!names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+/**
+ * The values to ask for: each name as first typed, and the name QuickBooks gives the account once
+ * it is inactive, each once in any case — the kit's IN refuses a value twice even in other
+ * capitals. Intuit compares them WITH case, so a setting in other capitals than an earlier one
+ * finds only what the earlier spelling does, and fails here unless that is QuickBooks' own.
+ */
+function valuesAskedFor(asked: readonly Asked[]): string[] {
+  const values = new Map<string, string>();
+  for (const value of asked.flatMap(({ name }) => withDeletedForm(name))) {
+    if (!values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
   }
-  return [...names.values()];
+  return [...values.values()];
 }
 
 function currencyOf(row: JsonObject): string | undefined {
@@ -199,15 +210,15 @@ export function findAccounts(clock: Clock): Step {
     }
 
     // Built once: every attempt sends exactly these bytes under the step's one key. Two rows
-    // a name tell one account from two.
-    const names = distinctNames(asked);
-    const maxResults = Math.min(1_000, names.length * 2);
+    // a value tell one account from two.
+    const values = valuesAskedFor(asked);
+    const maxResults = Math.min(1_000, values.length * 2);
     const read = await readQuickBooks({
       platform,
       deadline: request.deadline,
       clock,
       operation: 'query.run',
-      input: { query: lookupInQuery('Account', 'FullyQualifiedName', names, maxResults) },
+      input: { query: lookupInQuery('Account', 'FullyQualifiedName', values, maxResults) },
       purpose: "looking up the accounts in this flow's settings",
       advice: 'Remove unusual characters from them, then run it again.',
     });
@@ -222,12 +233,14 @@ export function findAccounts(clock: Clock): Step {
     let undecided = false;
     const found = new Map<Asked, AccountRef>();
     for (const one of asked) {
-      // Intuit compares values without case; so does this re-check of what came back.
-      const matches = rows.filter(
-        (row) =>
-          typeof row.FullyQualifiedName === 'string' &&
-          row.FullyQualifiedName.toLowerCase() === one.name.toLowerCase(),
-      );
+      // WITH case, as Intuit's IN on an account's names compares (sandbox S1): the name as typed,
+      // and only without it, an inactive account QuickBooks renamed from it (`rowsNaming`).
+      const matches = rowsNaming(
+        rows,
+        'FullyQualifiedName',
+        one.name,
+        (value, name) => value === name,
+      ).rows;
       const [match] = matches;
       if (!match) {
         if (full) {

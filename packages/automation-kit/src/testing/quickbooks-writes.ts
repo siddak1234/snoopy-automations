@@ -18,8 +18,9 @@ import {
  * or a vendor made inactive (610), a negative line (2290), a journal entry with no lines (2250),
  * a line with no posting type (2260) or debits unequal to credits (2300), a value longer than
  * its field holds (2050: a bill's number past 21 characters; a vendor's display name past 500,
- * its company name or check name past 100), a vendor's display name another vendor, customer or
- * employee already has (6240, compared without case); the record answered as
+ * its company name past 100, its check name past 110 — sandbox G4–5's "Max:100" and "Max:110"), a
+ * vendor's display name another vendor, customer or employee already has (6240, compared without
+ * case); the record answered as
  * `{ <Entity>: {…}, time }`, its Id assigned, its `TotalAmt` the sum of its lines — a
  * journal entry's always 0, as Intuit's model says — a bill's `DueDate` its date when none is
  * sent, as Intuit's create sample answers, a vendor active in the home currency with its check
@@ -102,8 +103,8 @@ function created(
 
 const refused = (code: Fault): ProviderAnswer => ({ status: 400, body: faultAnswer(code) });
 
-/** Intuit's bounds on the fields a create may send ("Maximum of N chars"). */
-const LENGTHS = { docNumber: 21, displayName: 500, companyName: 100, printOnCheckName: 100 };
+/** Intuit's bounds on the fields a create may send ("Maximum of N chars"; the check name's, sandbox G4–5). */
+const LENGTHS = { docNumber: 21, displayName: 500, companyName: 100, printOnCheckName: 110 };
 
 const longer = (value: unknown, maximum: number) =>
   typeof value === 'string' && [...value].length > maximum;

@@ -1,8 +1,10 @@
 import {
   QUICKBOOKS_SENTENCES,
-  lookupQuery,
+  lookupInQuery,
   queryRowsOf,
   readQuickBooks,
+  rowsNaming,
+  withDeletedForm,
   type Clock,
 } from '@autom8x/automation-kit/quickbooks';
 import { MAXIMUM_NAME_LENGTH, cleanText } from '@autom8x/automation-kit/values';
@@ -21,10 +23,11 @@ import type { AccountRef, AccountsState, PayerState } from '../state.js';
  * A name in "Owners and partners" is an owner, with no QuickBooks call, and wins over an
  * employee of the same name; their own account, or else "Owner's investment account", must
  * be set (P4). Any other name is looked up among employees by display name — one query; an
- * email cannot be searched — and an employee must be active (P2), with "Owed to team
- * members" set (P3). A name that is no employee is passed on: find-vendor looks it up among
- * vendors (V1). Whether the accounting scope can read Employee is sandbox item S7. Skipped
- * when the switch is off and no name is typed.
+ * email cannot be searched — and by the name QuickBooks gives an employee it made inactive,
+ * "<name> (deleted)" (sandbox G4–5), so that an employee must be active (P2) is a sentence
+ * that can be reached; then "Owed to team members" must be set (P3). A name that is no
+ * employee is passed on: find-vendor looks it up among vendors (V1). The accounting scope reads
+ * Employee (sandbox S7). Skipped when the switch is off and no name is typed.
  */
 
 /** Every sentence ends "Nothing was created.", as the plan's §2.3 words them. */
@@ -93,23 +96,29 @@ export function findPayer(clock: Clock): Step {
       );
     }
 
-    // Built once: every attempt sends exactly these bytes under the step's one key.
+    // Built once: every attempt sends exactly these bytes under the step's one key. Two rows a
+    // form tell one employee from two.
     const read = await readQuickBooks({
       platform,
       deadline: request.deadline,
       clock,
       operation: 'query.run',
-      input: { query: lookupQuery('Employee', 'DisplayName', name, 2) },
+      input: { query: lookupInQuery('Employee', 'DisplayName', withDeletedForm(name), 4) },
       purpose: "looking up the name in 'Who paid'",
       advice: 'Remove unusual characters from it, then run it again.',
     });
     if (!read.ok) return quickBooksFailed(WHAT, read);
     const rows = queryRowsOf(read.body, 'Employee');
     if (!rows) return failedWith(WHAT, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer);
-    // Intuit compares without case; so does this re-check, after cleaning QuickBooks' name.
-    const matches = rows.filter(
-      (row) => cleanText(row.DisplayName)?.toLowerCase() === name.toLowerCase(),
-    );
+    // Intuit's IN on an employee's name ignores case (sandbox S1); so does this re-check, after
+    // cleaning QuickBooks' name. The name decides; only without it, an inactive employee renamed
+    // from it (`rowsNaming`).
+    const matches = rowsNaming(
+      rows,
+      'DisplayName',
+      name,
+      (value, wanted) => cleanText(value)?.toLowerCase() === wanted.toLowerCase(),
+    ).rows;
     const [employee] = matches;
     if (!employee) {
       return done(

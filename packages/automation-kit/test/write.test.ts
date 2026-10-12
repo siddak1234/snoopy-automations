@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import { CallbackRefusedError, type JsonObject } from '@autom8x/automation-sdk';
 import { refusalFixture, type ProblemInput } from '@autom8x/automation-sdk/testing';
 
 import {
@@ -124,24 +124,64 @@ test('QuickBooks 5xx, 429, 408 or 425, a Fault 600, or a 2xx without an Id: not 
   }
 });
 
-test('the platform’s uncertain refusals — a reasonless 502, a 409 for another body under the key, no answer at all — are not confirmed', async () => {
-  const thrown: [string, Error, string | undefined][] = [
-    ['a reasonless 502', refusalFixture('provider', PROVIDER_REFUSALS.noAnswer()), '502'],
+test('no answer, or a refusal the platform did not decide — a 502, 503 or 504 naming no reason — is thrown on unchanged, the same object, for the step’s retry (sandbox S6)', async () => {
+  const thrown: [string, Error][] = [
+    ['a reasonless 502', refusalFixture('provider', PROVIDER_REFUSALS.noAnswer())],
+    // A page from in front of the platform: no problem body, so no code.
+    ['a codeless 503', new CallbackRefusedError('provider', 503, '')],
+    ['a 504', refusalFixture('provider', { status: 504, code: 'DEPENDENCY_FAILURE', detail: 'x' })],
+    ['no answer', new TypeError('fetch failed')],
+    ['another callback', refusalFixture('model', PROVIDER_REFUSALS.notConnected())],
+  ];
+  for (const [name, error] of thrown) {
+    let calls = 0;
+    await assert.rejects(
+      writeQuickBooks({
+        platform: {
+          callProvider: () => {
+            calls += 1;
+            return Promise.reject(error);
+          },
+        },
+        kind: 'expense',
+        input: EXPENSE,
+      }),
+      (caught: unknown) => caught === error,
+      name,
+    );
+    assert.equal(calls, 1, `${name}: one request; a repeat is the step's retry`);
+  }
+});
+
+test('the platform’s other uncertain refusals — a 409 for another body under the key, a 5xx it typed — are not confirmed', async () => {
+  const answered: [string, Error, string][] = [
     [
       'idempotency_key_reused',
       refusalFixture('provider', PROVIDER_REFUSALS.keyReused('purchase.create')),
       'idempotency_key_reused',
     ],
     [
-      'a 504',
-      refusalFixture('provider', { status: 504, code: 'DEPENDENCY_FAILURE', detail: 'x' }),
-      '504',
+      'a 502 naming a reason',
+      refusalFixture('provider', {
+        status: 502,
+        code: 'DEPENDENCY_FAILURE',
+        detail: 'x',
+        details: { reason: 'provider_unavailable' },
+      }),
+      'provider_unavailable',
     ],
-    ['no answer', new TypeError('fetch failed'), undefined],
-    ['another callback', refusalFixture('model', PROVIDER_REFUSALS.notConnected()), undefined],
+    [
+      'a 503 NOT_CONFIGURED naming no reason',
+      refusalFixture('provider', { status: 503, code: 'NOT_CONFIGURED', detail: 'x' }),
+      '503',
+    ],
+    [
+      'a 500',
+      refusalFixture('provider', { status: 500, code: 'INTERNAL_ERROR', detail: 'x' }),
+      '500',
+    ],
   ];
-  for (const [name, error, detail] of thrown) {
-    const { platform } = harness();
+  for (const [name, error, detail] of answered) {
     let calls = 0;
     const result = await writeQuickBooks({
       platform: {
@@ -155,17 +195,10 @@ test('the platform’s uncertain refusals — a reasonless 502, a 409 for anothe
     });
     assert.deepEqual(
       result,
-      {
-        ok: false,
-        reason: 'qb_unconfirmed',
-        created: 'unknown',
-        sentence: UNCONFIRMED,
-        ...(detail === undefined ? {} : { detail }),
-      },
+      { ok: false, reason: 'qb_unconfirmed', created: 'unknown', sentence: UNCONFIRMED, detail },
       name,
     );
     assert.equal(calls, 1, name);
-    assert.ok(platform);
   }
 });
 

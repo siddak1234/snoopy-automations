@@ -131,13 +131,13 @@ test('confirm-vendor: the new vendor added while it waited, in any case, is link
     displayName: 'HARROWGATE OFFICE SUPPLY',
   });
   assert.equal(first.simulator.company.vendors.length, 1, 'no vendor created');
-  // The query: the name it would be created with, active or not.
+  // The query: the name it would be created with, and the name QuickBooks gives an inactive vendor.
   const query = approved.providerCalls.find(
     (call) => call.operation === 'query.run' && String(call.input.query).includes('FROM Vendor'),
   );
   assert.equal(
     query?.input.query,
-    "SELECT * FROM Vendor WHERE DisplayName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
+    "SELECT * FROM Vendor WHERE DisplayName IN ('Harrowgate Office Supply', 'Harrowgate Office Supply (deleted)') AND Active IN (true, false) MAXRESULTS 4",
   );
 });
 
@@ -199,7 +199,7 @@ test('create-vendor: a printed name past 100 characters is no company name, and 
   assert.equal(approved.result.outcome, 'success');
 });
 
-test('create-vendor: QuickBooks refusing, or not confirming, ends the run in a fixed sentence, the bill never sent', async () => {
+test('create-vendor: QuickBooks refusing, or not confirming, ends the run in a fixed sentence, the bill never sent (a lost answer: test/write-retry.test.ts)', async () => {
   const cases: [string, ScriptedAnswer[], string][] = [
     [
       '6240',
@@ -222,7 +222,6 @@ test('create-vendor: QuickBooks refusing, or not confirming, ends the run in a f
       AFTER_APPROVAL_SENTENCES.vendor_refused,
     ],
     ['a 429', [{ status: 429 }], AFTER_APPROVAL_SENTENCES.vendor_unconfirmed],
-    ['a lost answer', [{ lost: 'before_record' }], AFTER_APPROVAL_SENTENCES.vendor_unconfirmed],
     [
       'Fault 600',
       [{ status: 400, body: faultAnswer('600') }],
@@ -255,10 +254,10 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
     billed.steps.at(-1)?.[2],
     'A matching record was added while this waited: Id 160 (duplicate_appeared)',
   );
-  // The query: find-duplicate-number's, one row more.
+  // The query: find-duplicate-number's, one row more, the newest created first.
   assert.equal(
     billed.providerCalls.at(-1)?.input.query,
-    "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' MAXRESULTS 4",
+    "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   );
   // A company receipt: the bank feed brought the charge.
   const receiptRun = await firstRun({ answer: receipt(), config: HOLD_ALL });
@@ -269,7 +268,7 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
   assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
   assert.equal(
     fed.providerCalls.at(-1)?.input.query,
-    "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' MAXRESULTS 4",
+    "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   );
   // An employee's: an entry that day owing them the amount.
   const employeeRun = await firstRun({ answer: receipt(), ...PAID.employee });

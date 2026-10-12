@@ -244,7 +244,7 @@ test('the v1 manifest declares the 24 steps in order, with neutral words, extrac
   }
 });
 
-test("the reads repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; decide, the writes and notify none", () => {
+test("the reads and the two writes repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; decide and notify none", () => {
   const policy = { attempts: 3, backoffMs: 10_000 };
   const model = { attempts: 2, backoffMs: 10_000, when: 'unsent' };
   const recheck = ['confirm-company', 'confirm-vendor', 'confirm-no-duplicate'];
@@ -258,10 +258,12 @@ test("the reads repeat a transient failure at the SDK's floor and ceilings; each
     'verify-read': model,
     ...Object.fromEntries(LOOKUP_STEPS.map((stepId) => [stepId, policy])),
     ...Object.fromEntries(recheck.map((stepId) => [stepId, policy])),
+    // Sandbox S6: Intuit answers a repeated request id with its first answer, never a second record.
+    'create-vendor': policy,
+    'create-record': policy,
   });
-  // No write is ever repeated in v1 (until sandbox S6): no policy on create-vendor or create-record.
-  for (const write of ['create-vendor', 'create-record', 'notify', 'decide']) {
-    assert.equal(define(manifests).retry[write], undefined, write);
+  for (const step of ['notify', 'decide']) {
+    assert.equal(define(manifests).retry[step], undefined, step);
   }
   // A throw at every step that reads QuickBooks ends with QuickBooks' sentence.
   assert.deepEqual(

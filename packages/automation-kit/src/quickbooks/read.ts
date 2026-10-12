@@ -230,15 +230,19 @@ function platformRefusal(error: unknown): QuickBooksRead | undefined {
  * The provider callback's refusal, read by its shape: the kit runs on Node built-ins
  * alone, so it holds the SDK's `CallbackRefusedError` as a type and never imports the
  * class. The SDK names the error and records the callback, the status and the
- * platform's reason on it.
+ * platform's problem code and reason on it.
  */
 export function refusalOf(
   error: unknown,
-): { status: number; reason: string | undefined } | undefined {
+): { status: number; code: string | undefined; reason: string | undefined } | undefined {
   if (!(error instanceof Error) || error.name !== 'CallbackRefusedError') return undefined;
-  const { callback, status, reason } = error as Partial<
-    Pick<CallbackRefusedError, 'callback' | 'status' | 'reason'>
+  const { callback, status, code, reason } = error as Partial<
+    Pick<CallbackRefusedError, 'callback' | 'status' | 'code' | 'reason'>
   >;
   if (callback !== 'provider' || typeof status !== 'number') return undefined;
-  return { status, reason: typeof reason === 'string' ? reason : undefined };
+  return {
+    status,
+    code: typeof code === 'string' ? code : undefined,
+    reason: typeof reason === 'string' ? reason : undefined,
+  };
 }

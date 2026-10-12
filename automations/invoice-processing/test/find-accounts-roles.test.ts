@@ -106,7 +106,7 @@ test('each category setting is a category, and names itself when it is not one, 
   assert.deepEqual(
     missing.result,
     failed(
-      "No QuickBooks account matches the 'Category for travel' setting. Type the full name as QuickBooks shows it, without its number, then run it again.",
+      "No QuickBooks account matches the 'Category for travel' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
     ),
   );
   const inactive = await find({ ...BASE, categoryMeals: 'Meals' }, (world) => {
@@ -119,7 +119,7 @@ test('each category setting is a category, and names itself when it is not one, 
     ),
   );
   const doubled = await find({ ...BASE, categoryMeals: 'Meals' }, (world) =>
-    world.simulator.company.accounts.push(sampleAccount('67', 'MEALS', 'Expense')),
+    world.simulator.company.accounts.push(sampleAccount('67', 'Meals', 'Expense')),
   );
   assert.deepEqual(
     doubled.result,
@@ -214,7 +214,7 @@ test("an owner's own account is equity, and its failures name the Owners and par
   assert.deepEqual(
     missing.result,
     failed(
-      "No QuickBooks account matches an account in the 'Owners and partners' setting. Type the full name as QuickBooks shows it, without its number, then run it again.",
+      "No QuickBooks account matches an account in the 'Owners and partners' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
     ),
   );
   for (const setting of ['Pat Owner =', '=Partner investments', 'Pat; pat', 'Pat = A::B']) {
@@ -303,8 +303,10 @@ test('with multicurrency on, every account must hold USD; with it off, the curre
 
 test("a full answer gives no verdict on a name it left out: another setting's duplicates fail, and nothing else passes", async () => {
   const config = { ...BASE, paidFromAccount: 'Company Visa' };
-  const visa = (id: string, name: string) => sampleAccount(id, name, 'Credit Card');
-  // Four rows, the bound for two names, all for Paid from: the default category's is crowded out.
+  const visa = (id: string, name: string, active = true) =>
+    sampleAccount(id, name, 'Credit Card', { Active: active });
+  // Eight rows, the bound for two names in both their forms, all for Paid from: the default
+  // category's are crowded out.
   const crowded = await find(config, (world) =>
     world.simulator.script('query.run', [
       {
@@ -313,9 +315,10 @@ test("a full answer gives no verdict on a name it left out: another setting's du
           QueryResponse: {
             Account: [
               visa('41', 'Company Visa'),
-              visa('42', 'COMPANY VISA'),
-              visa('43', 'company visa'),
-              visa('44', 'Company visa'),
+              visa('42', 'Company Visa'),
+              ...['43', '44', '45', '46', '47', '48'].map((id) =>
+                visa(id, 'Company Visa (deleted)', false),
+              ),
             ],
           },
         },
@@ -333,7 +336,9 @@ test("a full answer gives no verdict on a name it left out: another setting's du
       {
         status: 200,
         body: {
-          QueryResponse: { Account: ['1', '2', '3', '4'].map((id) => visa(id, `Other ${id}`)) },
+          QueryResponse: {
+            Account: ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => visa(id, `Other ${id}`)),
+          },
         },
       },
     ]),

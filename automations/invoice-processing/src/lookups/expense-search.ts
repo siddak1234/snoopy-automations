@@ -1,8 +1,9 @@
 /**
  * How the lookups search expenses (Intuit's Purchase) for an amount — sandbox item S4 (the plan's
  * §7): Intuit's model file does not mark `Purchase.TotalAmt` filterable, though Intuit's own sample
- * query filters on it. SET FROM SANDBOX S4 BEFORE v1 REGISTERS — a registered version is never
- * edited.
+ * query filters on it. Set from sandbox S4 before v1 registers — a registered version is never
+ * edited — and S4 answered on 2026-10-12: Intuit filters `TotalAmt =` within a date range, leaving
+ * out other totals and days outside it, so it stays `amount`; the `window` fallback worked too.
  *
  * - `amount` — D21 as the owner decided it, and the default: the bank-feed checks (a company
  *   receipt's, a card refund's, and hold 7's for a purchase someone paid personally) ask for
@@ -17,5 +18,5 @@
  */
 export type ExpenseSearch = 'amount' | 'window';
 
-/** Sandbox S4's answer, until the sandbox gives it: D21's search by amount. */
+/** Sandbox S4's answer (2026-10-12): D21's search by amount, which Intuit filters. */
 export const EXPENSE_SEARCH: ExpenseSearch = 'amount';
