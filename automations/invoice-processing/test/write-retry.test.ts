@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PROVIDER_REFUSALS, type ScriptedAnswer } from '@autom8x/automation-kit/testing';
+import { writeSentences, type QuickBooksWriteFailure } from '@autom8x/automation-kit/quickbooks';
+import {
+  PROVIDER_REFUSALS,
+  faultAnswer,
+  type ScriptedAnswer,
+} from '@autom8x/automation-kit/testing';
 import type { JsonObject } from '@autom8x/automation-sdk';
+import type { ProblemInput } from '@autom8x/automation-sdk/testing';
 
 import { AFTER_APPROVAL_SENTENCES } from '../src/writes/sentences.js';
 import { bill, receipt } from './check-world.js';
@@ -13,9 +19,11 @@ import { approve, firstRun, noTimeToRepeat, outputOf, writesOf } from './writes-
  * The writes' retry in real time (the owner's "Retry the creates", 2026-10-12): a create whose
  * answer was lost is repeated by the SDK's step retry under the step's one key — so the platform
  * sends the same `requestid` — and QuickBooks answers it with the first record (sandbox S6), never a
- * second. The SDK's 10-second floor is not a clock a suite can replace, so the first test waits it,
- * once, for every case at the same time; with no time left for that wait, the run ends with the
- * step's own "did not confirm" sentence, registered on what the write threw.
+ * second. The SDK's 10-second floor is not a clock a suite can replace, so each test that repeats
+ * a create waits it, once, for every case at the same time; with no time left for that wait, the
+ * run ends with the step's own "did not confirm" sentence, registered on what the write threw. A
+ * repeat the platform refuses after a lost answer says "did not confirm" too, never "nothing was
+ * created": the lost attempt may have made the record (Gate 25's AUT-38-1).
  */
 
 const HELD = { ...PAID.company.config, holdAboveAmount: 0 };
@@ -143,5 +151,150 @@ test('with no time left to repeat it, a new vendor that got no answer ends "did 
       ['vendor.create'],
       label,
     );
+  }
+});
+
+/**
+ * The platform refusing a create — certain on its first answer, nothing having reached QuickBooks —
+ * with the reason the kit gives it and the word a repeat's "did not confirm" names: no live
+ * connection (the connection retired while the run waited), the Edge's flood valve with no time
+ * left to wait it out, a 400, and a 403 at the deadline.
+ */
+const REFUSED: readonly [
+  string,
+  (operation: string) => ProblemInput,
+  QuickBooksWriteFailure,
+  string,
+][] = [
+  [
+    'no live connection (404)',
+    () => PROVIDER_REFUSALS.notConnected(),
+    'qb_not_connected',
+    'qb_not_connected',
+  ],
+  [
+    "the Edge's flood valve (429)",
+    () => ({ status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' }),
+    'platform_busy',
+    'platform_busy',
+  ],
+  [
+    'a 400',
+    (operation) => PROVIDER_REFUSALS.badRequest(operation, 'refused_field'),
+    'platform_refused',
+    'refused_field',
+  ],
+  [
+    'a 403 at the deadline',
+    () => ({
+      status: 403,
+      code: 'FORBIDDEN',
+      detail: 'x',
+      details: { reason: 'deadline_exceeded' },
+    }),
+    'platform_refused',
+    'deadline_exceeded',
+  ],
+];
+
+/**
+ * A repeat's answer, each certain had it come first: the platform's refusals above, and QuickBooks
+ * refusing the record itself (Fault 6210, a closed period), each with the word the repeat's "did
+ * not confirm" names.
+ */
+const REPEATED: readonly [string, (operation: string) => ScriptedAnswer, string][] = [
+  ...REFUSED.map(
+    ([name, problem, , word]): [string, (operation: string) => ScriptedAnswer, string] => [
+      name,
+      (operation) => ({ refuse: problem(operation) }),
+      word,
+    ],
+  ),
+  [
+    'QuickBooks refusing it (Fault 6210)',
+    () => ({ status: 400, body: faultAnswer('6210') }),
+    '6210',
+  ],
+];
+
+/** Each write a step repeats: its operation, a first run that reaches it, and its line's words. */
+const WRITES = [
+  {
+    stepId: 'create-record',
+    operation: 'bill.create',
+    run: () => firstRun({ answer: bill(), config: HELD }),
+    what: 'Not recorded',
+    noun: 'bill',
+    unconfirmed:
+      'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.',
+  },
+  {
+    stepId: 'create-vendor',
+    operation: 'vendor.create',
+    run: () => firstRun({ answer: bill(), bare: true }),
+    what: 'New vendor not added',
+    noun: 'vendor',
+    unconfirmed: AFTER_APPROVAL_SENTENCES.vendor_unconfirmed,
+  },
+] as const;
+
+test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403, a Fault — ends "did not confirm", never "nothing was created": QuickBooks made it', async () => {
+  // Every case at once: one 10-second wait.
+  const cases = await Promise.all(
+    REPEATED.flatMap(([name, answer, word]) =>
+      WRITES.map(async (write) => {
+        const first = await write.run();
+        // QuickBooks makes it and the answer is lost; the repeat is refused.
+        first.simulator.script(write.operation, [
+          { lost: 'before_record' },
+          answer(write.operation),
+        ]);
+        return { name, word, write, first, approved: await approve(first) };
+      }),
+    ),
+  );
+  for (const { name, word, write, first, approved } of cases) {
+    const label = `${write.stepId}, ${name}`;
+    assert.deepEqual(
+      approved.result,
+      { outcome: 'failed', failureReason: write.unconfirmed },
+      label,
+    );
+    assert.deepEqual(
+      approved.steps.at(-1),
+      [write.stepId, 'failed', `${write.what} (qb_unconfirmed ${word}) (after 2 attempts)`],
+      label,
+    );
+    const writes = writesOf(approved.providerCalls);
+    assert.deepEqual(
+      writes.map(([operation]) => operation),
+      [write.operation, write.operation],
+      `${label}: the bill is never sent after a vendor not confirmed`,
+    );
+    assert.deepEqual(writes[1], writes[0], `${label}: the same request under the same key`);
+    const made =
+      write.stepId === 'create-record'
+        ? first.simulator.company.bills
+        : first.simulator.company.vendors;
+    assert.equal(made.length, 1, `${label}: what the lost attempt made`);
+  }
+});
+
+test('a create refused on its first answer is still certain: nothing reached QuickBooks, one request, "No … was created"', async () => {
+  for (const [name, problem, reason] of REFUSED) {
+    for (const write of WRITES) {
+      const first = await write.run();
+      first.simulator.script(write.operation, [{ refuse: problem(write.operation) }]);
+      const approved = await approve(first);
+      const label = `${write.stepId}, ${name}`;
+      assert.deepEqual(
+        approved.result,
+        { outcome: 'failed', failureReason: writeSentences(write.noun)[reason] },
+        label,
+      );
+      assert.match(writeSentences(write.noun)[reason], /\bno (bill|vendor) was created\b/iu, label);
+      assert.equal(writesOf(approved.providerCalls).length, 1, `${label}: one request`);
+      assert.doesNotMatch(approved.steps.at(-1)?.[2] ?? '', /attempts/u, label);
+    }
   }
 });

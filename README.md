@@ -368,9 +368,14 @@ defineAutomation({
     derives its `requestid` from the step's key (its BUILD-PLAN 25.2.26), and Intuit
     answers a repeated `requestid` with its first answer — the same record and Id, the
     body sent again ignored, two copies in flight and 75 minutes later alike (sandbox S6,
-    2026-10-12). The same key with a
-    different request is refused 409, which reaches the container as a 502 today and
-    is retried to the bound, performing nothing (a finding returned to the platform).
+    2026-10-12). A repeat the platform refuses — the connection retired while it waited,
+    the flood valve with no time left, the deadline — says nothing of the attempt that
+    went unanswered, which may have made the record, so the kit's write calls it not
+    confirmed, never "nothing was created" ("The kit", below). The same key with a different
+    request is refused 409 `CONFLICT` naming `idempotency_key_reused`, which the platform
+    relays typed (its BUILD-PLAN 25.2.27, §12.1 #242, live since its TWENTY-NINTH
+    promotion, 2026-10-12): a 4xx is never repeated, so it performs nothing more, and the
+    kit reads it as a write QuickBooks did not confirm.
   - **Mail.** The same key and the same words claim no further allowance — the
     reservation is keyed on the run, the key and the message's digest — and go to the
     transport again under the same vendor idempotency key, which the transport
@@ -439,10 +444,12 @@ a run already recorded (platform §12.1 #220).
 `invoice-processing` — shown to people as **Bills & Receipts** — records a bill, a receipt
 or a credit note from a PDF or photo in QuickBooks Online, and compares a supplier's
 statement with it (the platform's BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and
-plan of 2026-10-11). It is built in groups, each appending its steps to
-`manifests/invoice-processing.v1.json` before that version is registered; the first five
-spend nothing. `receive` holds the platform's measurements of the upload — its real kind,
-its size, a PDF's pages, an image's pixels, taken once when the upload was sealed — to the
+plan of 2026-10-11). It was built in groups, each appending its steps to
+`manifests/invoice-processing.v1.json`; v1 holds all 24 and was registered on 2026-10-12 (the
+platform's #205, read back live by its #206), so that file is now immutable and a change to it
+is a v2 (below). The first five steps spend nothing. `receive` holds the platform's
+measurements of the upload — its real kind, its size, a PDF's pages, an image's pixels, taken
+once when the upload was sealed — to the
 owner's limits (a PDF, JPEG or PNG, measured as the type it declares; 3,500,000 bytes; 10
 pages; 8,000 px a side), fails closed when one is missing, and never downloads the file;
 `read-company` proves QuickBooks is connected and the company is in the US, and keeps
@@ -462,8 +469,8 @@ which would otherwise turn the card check off unseen; `find-payer`, when a
 person switched on "I paid for this with my own money", finds who paid among the flow's
 owners and partners, or as an employee in QuickBooks — an inactive one, found by the
 "(deleted)" name QuickBooks gives it, failing as inactive — before anything is read. `extract`,
-the one model call, sends `prompts/extract-document.v1.json` — 17 rules and a 27-field
-answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
+the first of its two model calls, sends `prompts/extract-document.v1.json` — 17 rules and a
+27-field answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
 (`anthropic/claude-haiku-4.5`, then `google/gemini-3.1-flash-lite`) and the run's file by
 its id; it starts no call with less than 260 seconds to the deadline, repeats one only when
 nothing reached the platform, and passes the answer on whole in `state.extraction`, beside
@@ -503,10 +510,12 @@ never sent, a full answer is a possible duplicate (D6) whose line always keeps "
 a statement's listed invoice numbers — each once, whatever its case, one past 21 characters
 counted as not in QuickBooks — and open bills are this vendor's, and a statement's lookup
 QuickBooks refuses ends "Compare the statement in QuickBooks". The bank-feed check (D21) searches
-expenses by amount in its window, or, set from sandbox S4 before v1 registers
-(`src/lookups/expense-search.ts`), the window alone, newest first, 50 at most, a bill's D32
-check dropped. `decide` (`src/decide/`, step 18) makes one result: a fixed sentence, one hold
-with every reason (the SDK's held outcome, an approval resuming after it), a statement
+expenses by amount in its window: `EXPENSE_SEARCH` is `'amount'` (`src/lookups/expense-search.ts`),
+because sandbox S4 answered on 2026-10-12 that Intuit filters `TotalAmt =` within a date range;
+the plan's fallback, `'window'` — the window alone, newest first, 50 at most, a bill's D32 check
+dropped — stays in the code, run only by the suites. `decide` (`src/decide/`, step 18) makes
+one result: a fixed sentence, one hold with every reason (the SDK's held outcome, an approval
+resuming after it), a statement
 compared, or the record planned; its whole input is `src/decide/contract.ts`, and the
 lookups and decide share one table of which lookups run (`lookupUses`,
 `src/decide/lookup-uses.ts`). What decide saves — the record planned, the re-check an approval
@@ -529,8 +538,9 @@ the platform's `bill.create`, `purchase.create`,
 alone, never the settings as they are by then, its memo naming the run that wrote it (after an
 approval the continuation); a lost answer, or a 502/503/504 naming no reason, repeated by the
 step's retry under the same key, so the same `requestid`, which QuickBooks answers with the
-first record and never a second (sandbox S6) — and, once the attempts are spent, or for
-QuickBooks' own 429 or 5xx or Fault 600, "did not confirm" — and each Intuit code the plan maps
+first record and never a second (sandbox S6) — and, once the attempts are spent, for
+QuickBooks' own 429 or 5xx or Fault 600, or for any refusal of a repeat (the attempt that went
+unanswered may have made the record), "did not confirm" — and each Intuit code the plan maps
 (6140, 6240, 610, 2500, 6190, 6200, 6210, 2050, 2290, 2300, 6430) has its own sentence. Its line,
 which is also the run's summary, says what was recorded and the next step — "When this charge
 arrives in your bank feed, choose Match, not Add" for a receipt or a refund, how an employee, a
@@ -607,7 +617,11 @@ only what an automation here uses:
   is thrown on unchanged for the step's retry, whose repeat goes out under the same key and
   so the same `requestid`, which QuickBooks answers with the first record (sandbox S6); any
   other failure says whether a record may exist, in a fixed sentence — no record was
-  created, or QuickBooks did not confirm it — with a Fault named by its number;
+  created, or QuickBooks did not confirm it — with a Fault named by its number, and once an
+  attempt was thrown on, no later attempt's answer says no record was created: a refusal of
+  the repeat, the platform's or QuickBooks', says QuickBooks did not confirm it, naming what
+  the repeat was answered (the attempts of a step share the one platform object the runner
+  hands it, against which the write notes an attempt it threw on);
   `withDeletedForm`, `rowsNaming` and `unmarkedName` for the "<name> (deleted)" QuickBooks
   gives a vendor, an employee or an account it made inactive (sandbox G4–5); the query
   text — `lookupQuery`, `lookupInQuery` and
