@@ -30,8 +30,9 @@ import { recordFailure, recordUnconfirmed, stateIncomplete } from '../writes/sen
  * - one request, repeated only by the SDK's step retry when nothing answered — no answer, a
  *   502/503/504 naming no reason — under the same key, so the same `requestid`, which Intuit
  *   answers with the first answer, never a second record (sandbox S6); when the attempts are spent,
- *   and for QuickBooks' own 429 or 5xx or Intuit's 600, "QuickBooks did not confirm whether the …
- *   was created" — the safe side;
+ *   for QuickBooks' own 429 or 5xx or Intuit's 600, and for any refusal of a repeat — the attempt
+ *   that went unanswered may have made the record (the kit's `writeQuickBooks`, Gate 25's
+ *   AUT-38-1) — "QuickBooks did not confirm whether the … was created" — the safe side;
  * - every Intuit code the plan maps (6140, 6240, 610, 2500, 6190, 6200, 6210, 2050, 2290, 2300, 6430)
  *   in its own sentence, any other in the kit's, each saying the new vendor was added when this run
  *   added it;
