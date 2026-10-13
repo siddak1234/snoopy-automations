@@ -40,7 +40,9 @@ import { AFTER_APPROVAL_SENTENCES, vendorFailure } from '../writes/sentences.js'
  *   (`vendorBody`). One write, repeated only by the SDK's step retry when nothing answered — no
  *   answer, a 502/503/504 naming no reason — under the same key, so the same `requestid`, which
  *   Intuit answers with the first answer, never a second vendor (sandbox S6); when the attempts
- *   are spent, and for QuickBooks' own 429 or 5xx, the run ends "did not confirm", the safe side.
+ *   are spent, for QuickBooks' own 429 or 5xx, and for any refusal of a repeat after an attempt
+ *   that went unanswered (the kit's `writeQuickBooks`, Gate 25's AUT-38-1), the run ends "did not
+ *   confirm", the safe side.
  *   It runs before confirm-no-duplicate, as approved: if a later step fails, the vendor stays — a
  *   real supplier, which the next document matches — and that step's sentence says it was added
  *   (the recommended answer to keeping that order).

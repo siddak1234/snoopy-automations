@@ -143,7 +143,8 @@ export const INTUIT_CODES = [
 /**
  * create-record's sentence for a failed write: its Intuit code's, else the kit's — "did not
  * confirm" for a write QuickBooks may have made (its own 429 or 5xx, Fault 600, a 409 for another
- * body under the key) — and the vendor kept when this run added it.
+ * body under the key, any refusal of a repeat after an attempt nothing answered) — and the vendor
+ * kept when this run added it.
  */
 export function recordFailure(
   write: Extract<QuickBooksWrite, { ok: false }>,

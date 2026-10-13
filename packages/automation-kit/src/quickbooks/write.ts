@@ -28,6 +28,16 @@ import { refusalOf } from './read.js';
  * Id, a refusal this code does not know — says QuickBooks did not confirm it, in a fixed
  * sentence that sends the person to check QuickBooks before running it again.
  *
+ * **Certain only while nothing went unanswered.** Once an attempt of a step's write was
+ * thrown on unanswered, that attempt may have made the record — Intuit acting while the
+ * answer was lost — so no later attempt's answer can say none was made: a refusal of the
+ * repeat (no live connection any more, the Edge's flood valve with no time left to wait, a
+ * 400, a 403 at the deadline) or QuickBooks refusing it says QuickBooks did not confirm it
+ * instead, `detail` naming what the repeat was answered (Gate 25's AUT-38-1). The attempts
+ * of a step share one platform object — the SDK's runner hands every attempt its one
+ * context (`packages/automation-sdk/src/runner.ts`) — so the write notes, against that
+ * object, an attempt it threw on; a step's first answer is judged as it always was.
+ *
  * A Fault is named by its number alone, in `detail`: the caller maps the codes it knows
  * (Group 5's 6140, 6210, …) to its own sentences. Intuit's `Message` and `Detail` are
  * never read.
@@ -93,9 +103,27 @@ export type QuickBooksWrite =
       /** `false`: certainly not created. `'unknown'`: QuickBooks may have created it. */
       readonly created: false | 'unknown';
       readonly sentence: string;
-      /** The Fault code, QuickBooks' status, or the platform's reason word. */
+      /**
+       * The Fault code, QuickBooks' status, or the platform's reason word — or, for a write
+       * not confirmed after an attempt nothing answered, the certain failure the repeat was
+       * answered (`qb_not_connected`, `platform_busy`, `deadline_exceeded`, `401`, `6210`, …).
+       */
       readonly detail?: string;
     };
+
+/** How a failure is built: its reason, whether a record may exist, and its word for the timeline. */
+type Failed = (
+  reason: QuickBooksWriteFailure,
+  created: false | 'unknown',
+  detail?: string,
+) => QuickBooksWrite;
+
+/**
+ * The step platforms whose write was thrown on unanswered — no answer, or a refusal the
+ * platform did not decide — so that the step's next attempt, handed the same object, knows
+ * an earlier one may have made the record.
+ */
+const unanswered = new WeakSet<object>();
 
 /** The platform's own word for why, when it is one: lowercase letters, digits and `_`. */
 const REASON_WORD = /^[a-z][a-z0-9_]{0,63}$/u;
@@ -119,11 +147,7 @@ export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<Qu
     throw new Error(`${operation} input names requestid; the platform adds the request id`);
   }
   const sentences = writeSentences(noun);
-  const failed = (
-    reason: QuickBooksWriteFailure,
-    created: false | 'unknown',
-    detail?: string,
-  ): QuickBooksWrite => ({
+  const failed: Failed = (reason, created, detail) => ({
     ok: false,
     reason,
     created,
@@ -142,31 +166,45 @@ export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<Qu
     const refusal = refusalOf(error);
     // No answer at all, or a refusal the platform did not decide: on unchanged, for the step's
     // retry to repeat under the same key and `requestid` (S6) — anything this code cannot read
-    // too, which the SDK repeats only when it marked it as an answer that never came.
-    if (!refusal || undecided(refusal)) throw error;
-    const { status, reason } = refusal;
-    const word = reason !== undefined && REASON_WORD.test(reason) ? reason : undefined;
-    if (status === 404) return failed('qb_not_connected', false);
-    if (status === 400 && reason === 'insufficient_scope') {
-      return failed('qb_missing_scope', false);
+    // too, which the SDK repeats only when it marked it as an answer that never came. Noted
+    // first: this attempt may have made the record, whatever the next one is answered.
+    if (!refusal || undecided(refusal)) {
+      unanswered.add(write.platform);
+      throw error;
     }
-    if (status === 503 && reason === 'connections_not_configured') {
-      return failed('qb_not_configured', false);
-    }
-    // The Edge's flood valve turns the callback away before it reaches the platform.
-    if (status === 429) return failed('platform_busy', false);
-    if (
-      status === 400 ||
-      (status === 403 && (reason === 'provider_not_declared' || reason === 'deadline_exceeded'))
-    ) {
-      return failed('platform_refused', false, word ?? 'refused');
-    }
-    // 409 idempotency_key_reused: an earlier copy of this step sent another body under
-    // the key, and may have created a record. Anything else this code does not know: the
-    // same caution.
-    return failed('qb_unconfirmed', 'unknown', word ?? String(status));
+    return afterUnanswered(write, refused(refusal, failed), failed);
   }
+  return afterUnanswered(write, answered(answer, entity, failed), failed);
+}
 
+/** A refusal the platform decided: certain when nothing can have reached QuickBooks. */
+function refused(
+  refusal: NonNullable<ReturnType<typeof refusalOf>>,
+  failed: Failed,
+): QuickBooksWrite {
+  const { status, reason } = refusal;
+  const word = reason !== undefined && REASON_WORD.test(reason) ? reason : undefined;
+  if (status === 404) return failed('qb_not_connected', false);
+  if (status === 400 && reason === 'insufficient_scope') return failed('qb_missing_scope', false);
+  if (status === 503 && reason === 'connections_not_configured') {
+    return failed('qb_not_configured', false);
+  }
+  // The Edge's flood valve turns the callback away before it reaches the platform.
+  if (status === 429) return failed('platform_busy', false);
+  if (
+    status === 400 ||
+    (status === 403 && (reason === 'provider_not_declared' || reason === 'deadline_exceeded'))
+  ) {
+    return failed('platform_refused', false, word ?? 'refused');
+  }
+  // 409 idempotency_key_reused: an earlier copy of this step sent another body under
+  // the key, and may have created a record. Anything else this code does not know: the
+  // same caution.
+  return failed('qb_unconfirmed', 'unknown', word ?? String(status));
+}
+
+/** QuickBooks' own answer: the record and its Id, or whether a record may exist. */
+function answered(answer: ProviderAnswer, entity: string, failed: Failed): QuickBooksWrite {
   const { status, body } = answer;
   // QuickBooks may have acted before it failed: Intuit's advice on a 500 is to resubmit.
   if (status >= 500 || status === 429 || status === 408 || status === 425) {
@@ -187,4 +225,18 @@ export async function writeQuickBooks(write: QuickBooksWriteRequest): Promise<Qu
     return failed('qb_unconfirmed', 'unknown', 'no_id');
   }
   return { ok: true, id, record };
+}
+
+/**
+ * A failure certain that nothing was created, once an earlier attempt of this step's write
+ * was thrown on unanswered, is no longer certain: that attempt may have made the record. It
+ * says QuickBooks did not confirm it, naming what this attempt was answered.
+ */
+function afterUnanswered(
+  write: QuickBooksWriteRequest,
+  verdict: QuickBooksWrite,
+  failed: Failed,
+): QuickBooksWrite {
+  if (verdict.ok || verdict.created !== false || !unanswered.has(write.platform)) return verdict;
+  return failed('qb_unconfirmed', 'unknown', verdict.detail ?? verdict.reason);
 }

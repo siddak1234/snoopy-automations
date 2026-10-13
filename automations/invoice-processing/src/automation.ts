@@ -45,9 +45,10 @@ import { verifyRead } from './steps/verify-read.js';
  * Bills & Receipts (template `invoice-processing`) — records a bill, a receipt or a credit
  * note from a PDF or photo in QuickBooks Online, and compares a supplier's statement with it
  * (platform BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and plan of 2026-10-11).
- * Built in groups, each appending its steps to the v1 manifest before it is registered: 24 of
- * the 24 steps the platform allows. The first five spend nothing; the sixth and the eighth are
- * its two model calls:
+ * Built in groups, each appending its steps to the v1 manifest: 24 of the 24 steps the platform
+ * allows. v1 is registered (the platform's #205, 2026-10-12), so its manifest is immutable and a
+ * change to it is a v2. The first five spend nothing; the sixth and the eighth are its two model
+ * calls:
  *
  * - `receive` checks the file against the platform's measurements of it;
  * - `read-company` proves QuickBooks is connected and the company is in the US;
@@ -98,7 +99,10 @@ const MODEL_RETRY: RetryPolicy = { attempts: 2, backoffMs: 10_000, when: 'unsent
  * and Id, never a second, for every record these steps make, two copies in flight and 75 minutes
  * later alike (sandbox S6). The kit's write throws those failures on (`writeQuickBooks`), and the
  * step registers its "did not confirm" sentence on them for when the attempts are spent; QuickBooks'
- * own 429 or 5xx, inside an answer, stays "did not confirm" at once.
+ * own 429 or 5xx, inside an answer, stays "did not confirm" at once. And once an attempt went
+ * unanswered — it may have made the record — a refusal of a later one (no live connection, the
+ * flood valve, a 400, a 403 at the deadline) is "did not confirm" too, never "nothing was created"
+ * (Gate 25's AUT-38-1): the kit judges every attempt after one it threw on.
  */
 const WRITE_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
 
