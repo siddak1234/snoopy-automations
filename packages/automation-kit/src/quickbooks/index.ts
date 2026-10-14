@@ -7,7 +7,9 @@ export { entityOf, nameValueOf, queryRowsOf } from './answers.js';
 export { DELETED_MARK, rowsNaming, unmarkedName, withDeletedForm } from './names.js';
 export type { NamedRows } from './names.js';
 export {
+  CHART_ACCOUNT_TYPES,
   TRANSACTION_ENTITIES,
+  chartQuery,
   dateRange,
   lookupInQuery,
   lookupLikeQuery,

@@ -10,11 +10,12 @@ import type { SpendType } from './spend-types.js';
  * hands back verbatim in its continuation.
  *
  * A step's returned state REPLACES the whole state (the SDK's runner), so every step
- * returns `{ ...state, <its key>: value }` and writes no other step's key — with two
- * exceptions, each the plan's: `check-document` drops `extraction`, the raw answer, once it has
- * cleaned it, and `verify-read` re-derives `document` when its tie-break records the second
- * read's total (Group 3's D9). Bytes, links and filenames never enter it: a held state travels
- * to the platform and back.
+ * returns `{ ...state, <its key>: value }` and writes no other step's key — with these
+ * exceptions: `check-document` drops `extraction`, the raw answer, once it has cleaned it;
+ * `verify-read` re-derives `document` when its tie-break records the second read's total (Group
+ * 3's D9); `decide` drops `chart` once the plan is made; and any QuickBooks step may set
+ * `quickBooks` (`src/quickbooks-path.ts`) when QuickBooks will not record this document. Bytes,
+ * links and filenames never enter it: a held state travels to the platform and back.
  */
 
 /** `receive`: the file, as the platform measured it. */
@@ -28,17 +29,12 @@ export interface FileState {
   readonly sha256: string | null;
 }
 
-/** `read-company`: the names kept for the checks that compare them later, and the payroll flag. */
+/** `read-company`: the names kept for the checks that compare them later. */
 export interface CompanyState {
   readonly name: string;
   readonly legalName: string | null;
   /** As QuickBooks returned it. */
   readonly country: string;
-  /**
-   * CompanyInfo's `PayrollFeature`: whether the company runs QuickBooks Payroll, for the note
-   * that an employee is repaid through a Reimbursement pay item; null when it is not said.
-   */
-  readonly payrollFeature: boolean | null;
   /**
    * CompanyInfo's `MetaData.CreateTime`: when the company file was created, from the same answer,
    * so confirm-company can tell two companies with the same names apart after an approval (the
@@ -62,45 +58,6 @@ export interface PreferencesState {
   readonly warnDuplicateBillNumber: boolean | null;
   /** The books' closing date, `YYYY-MM-DD`, when QuickBooks returned a real one. */
   readonly bookCloseDate: string | null;
-}
-
-/** One QuickBooks account a setting names. */
-export interface AccountRef {
-  readonly id: string;
-  /** As QuickBooks spells it. */
-  readonly fullyQualifiedName: string;
-  /** Intuit's AccountType: a Paid from account's decides the expense's payment type. */
-  readonly accountType: string;
-}
-
-/** `find-accounts`: one account per role; an optional setting left empty is null. */
-export interface AccountsState {
-  readonly defaultCategory: AccountRef;
-  /** Each category setting filled in, by its spend type; a type absent here uses the default. */
-  readonly categories: Readonly<Partial<Record<SpendType, AccountRef>>>;
-  readonly paidFrom: AccountRef | null;
-  readonly teamOwed: AccountRef | null;
-  readonly ownerInvestment: AccountRef | null;
-  /** "Owners and partners", in order, each with their own account when the setting gives one. */
-  readonly owners: readonly { readonly name: string; readonly account: AccountRef | null }[];
-}
-
-/**
- * `find-payer`, only when someone paid with their own money: an owner from this flow's
- * settings, an employee in QuickBooks, or neither yet — then find-vendor looks the name up
- * among vendors. Absent when the company paid.
- */
-export interface PayerState {
-  readonly route: 'owner' | 'employee' | 'not_employee';
-  /** As the owner is written in the settings, as QuickBooks shows the employee, or as typed, cleaned. */
-  readonly name: string;
-  /** The employee's QuickBooks Id; null for an owner or a name that is not an employee. */
-  readonly employeeId: string | null;
-  /**
-   * The account the purchase is owed or invested to: Owed to team members for an employee; the
-   * owner's own account, or else Owner's investment; null for a name that is not an employee.
-   */
-  readonly account: AccountRef | null;
 }
 
 /**
@@ -208,7 +165,7 @@ export interface DocumentState {
   readonly refundMethod: RefundMethod;
   readonly originalInvoiceNumber: string | null;
   readonly spendType: SpendType;
-  /** The first read listed the spend type as unclear: the default category is used (D27). */
+  /** The first read listed the spend type as unclear: Uncategorized Expense is used (§2.5). */
   readonly spendTypeUnclear: boolean;
   /** The earlier invoices a bill lists (hold 5); the rows themselves are dropped. */
   readonly listedInvoiceCount: number;
@@ -257,8 +214,11 @@ export type NotMadeReason =
 
 /**
  * `verify-read` (the plan's §4; Group 2's D1–D6): the second, blind read by another maker, and
- * where it parts from the first. Spend type is never a difference: a dispute uses the default
- * category (D27). When it could not be made, the run holds — "second check not made" (D6).
+ * where it parts from the first — made ONLY when the first read shows a problem (the session's
+ * decision 3, approved in advance, `secondReadDue`). Spend type is never a difference: a dispute
+ * uses Uncategorized Expense (§2.5). Due and not made, the run holds on the QuickBooks path —
+ * "second read not made" (D6). Not due, there is none: `{ status: 'not_needed' }`, which is also
+ * what an absent key means, since a skipped step writes no state.
  */
 export type VerificationState =
   | {
@@ -271,4 +231,5 @@ export type VerificationState =
       readonly totalPicked: 'first' | 'second' | null;
       readonly spendTypeDisputed: boolean;
     }
-  | { readonly status: 'not_made'; readonly reason: NotMadeReason };
+  | { readonly status: 'not_made'; readonly reason: NotMadeReason }
+  | { readonly status: 'not_needed' };

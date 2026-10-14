@@ -6,7 +6,7 @@ import { defineAutomation, type JsonObject } from '@autom8x/automation-sdk';
 import { RecordingPlatform, invokeFixture } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, pipelineSteps } from '../src/automation.js';
-import { LOOKUP_SENTENCES, lookupDocumentOf } from '../src/lookups/read.js';
+import { lookupDocumentOf } from '../src/lookups/read.js';
 import {
   billOf,
   expenseOf,
@@ -15,14 +15,15 @@ import {
   recordsOf,
   vendorCreditOf,
 } from '../src/lookups/records.js';
+import { RUN_FAILS } from '../src/words.js';
 import { bill, check, documentOf, receipt, statement } from './check-world.js';
-import { lines } from './fixtures.js';
-import { LOOKUP_STEPS, PAID, REF, routeRun, stateOf } from './lookups-world.js';
+import { QUICKBOOKS, lines } from './fixtures.js';
+import { LOOKUP_STEPS, REF, routeRun, stateOf } from './lookups-world.js';
 
 /**
  * The guards that should never fire: the state a lookup reads, missing or malformed, ends the run
- * with "could not finish its checks", never a guess; and a QuickBooks row missing what decide weighs
- * is no record at all.
+ * with "Something went wrong. Try again." — the code in the log alone — never a guess; and a
+ * QuickBooks row missing what decide weighs is no record at all.
  */
 
 test('the document a lookup reads: a record needs its date and amount; a statement, its rows', () => {
@@ -117,32 +118,31 @@ async function stepOn(stepId: string, state: JsonObject) {
     manifests: [
       {
         templateId: TEMPLATE_ID,
-        version: 1,
+        version: 2,
         requiredCapabilities: [],
         pipeline: [{ id: 'seed' }, { id: stepId }],
       },
     ],
     steps: {
       seed: () => Promise.resolve({ outcome: 'ok', summary: 'Seeded', state }),
-      [stepId]: pipelineSteps({ now: () => Date.now(), sleep: () => Promise.resolve() }, 'amount')[
-        stepId
-      ]!,
+      [stepId]: pipelineSteps(
+        { now: () => Date.now(), sleep: () => Promise.resolve() },
+        'amount',
+        () => undefined,
+      )[stepId]!,
     },
     result: (end) => ({ output: end }),
   });
   const platform = new RecordingPlatform();
   const result = await automation.execute(
-    invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 1 }),
+    invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2, config: QUICKBOOKS }),
     platform,
   );
   return { result, platform };
 }
 
-test("a lookup's state missing or malformed — no document, a vendor where none can be, none where one must be — fails before asking QuickBooks", async () => {
+test("a lookup's state missing or malformed — no document, no vendor where one must be — fails before asking QuickBooks", async () => {
   const company = stateOf((await routeRun({ answer: receipt(), through: 'find-vendor' })).result);
-  const employee = stateOf(
-    (await routeRun({ answer: receipt(), through: 'verify-read', ...PAID.employee })).result,
-  );
   const { document: _gone, ...noDocument } = company;
   const { vendor: _none, ...noVendor } = company;
   const RECORDS = LOOKUP_STEPS.slice(5);
@@ -150,11 +150,6 @@ test("a lookup's state missing or malformed — no document, a vendor where none
   const cases: [string, JsonObject, readonly string[]][] = [
     ['no document', noDocument, LOOKUP_STEPS],
     ['no vendor on a company receipt', noVendor, ['find-vendor-company', ...RECORDS]],
-    [
-      'a vendor on an employee’s receipt',
-      { ...employee, vendor: company.vendor as JsonObject },
-      RECORDS,
-    ],
     [
       'a malformed vendor',
       { ...company, vendor: { status: 'matched', id: '9' } },
@@ -167,24 +162,15 @@ test("a lookup's state missing or malformed — no document, a vendor where none
       if (stepId === 'find-vendor' && label !== 'no document') continue;
       const { result, platform } = await stepOn(stepId, state);
       const expected = stopped.includes(stepId)
-        ? { outcome: 'failed', failureReason: LOOKUP_SENTENCES.state_incomplete }
+        ? { outcome: 'failed', failureReason: RUN_FAILS.other }
         : { outcome: 'success', output: state };
       assert.deepEqual(result, expected, `${stepId}: ${label}`);
       if (expected.outcome === 'failed') {
-        assert.match(lines(platform).at(-1)?.[2] ?? '', /\(state_incomplete\)$/u);
+        assert.equal(lines(platform).at(-1)?.[2], RUN_FAILS.other, 'no code in the line');
         assert.deepEqual(platform.providerCalls, [], `${stepId}: ${label}`);
       }
     }
   }
   const { result } = await stepOn('find-vendor', noDocument);
-  assert.deepEqual(result, {
-    outcome: 'failed',
-    failureReason: LOOKUP_SENTENCES.state_incomplete,
-  });
-  const contractor = { ...employee, payer: undefined } as unknown as JsonObject;
-  assert.equal(
-    (await stepOn('find-vendor', contractor)).result.outcome,
-    'success',
-    'employee: skipped',
-  );
+  assert.deepEqual(result, { outcome: 'failed', failureReason: RUN_FAILS.other });
 });

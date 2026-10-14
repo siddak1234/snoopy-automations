@@ -17,7 +17,7 @@ import {
 } from './lookups-world.js';
 
 /**
- * What each record lookup (steps 14–17) keeps in the run's state, for decide and for the re-check
+ * What each record lookup keeps in the run's state, for decide and for the re-check
  * after an approval: every record as decide's contract types it (`src/decide/contract.ts`), and
  * QuickBooks' own time on the answer, which the re-check holds a record's creation against
  * (`src/decide/recheck.ts`).
@@ -108,18 +108,10 @@ test("each record is kept as decide's contract types it: a bill, an expense, a v
       },
     ],
   });
-  assert.equal(
-    lineOf(world, 'find-duplicate-number'),
-    "Bills from this vendor with number '55120': Id 160 (this vendor, 2026-09-20, $60.63, paid)",
-  );
-  assert.equal(
-    lineOf(world, 'find-duplicate-amount'),
-    'Expenses for $60.63 from 2026-09-26 to 2026-10-17: Id 201 (Company Visa, 2026-09-28, $60.63)',
-  );
-  assert.equal(
-    lineOf(world, 'find-other-record'),
-    'Journal entries from 2026-09-26 to 2026-10-17: Id 401 (2026-09-27)',
-  );
+  // Each line says only whether it found a record to weigh (§3.E).
+  for (const stepId of ['find-duplicate-number', 'find-duplicate-amount', 'find-other-record']) {
+    assert.equal(lineOf(world, stepId), 'Possible duplicate', stepId);
+  }
 });
 
 test("a lookup keeps QuickBooks' time only when the answer's `time` is a date and time with its offset; else none", async () => {
@@ -129,13 +121,12 @@ test("a lookup keeps QuickBooks' time only when the answer's `time` is a date an
       context: {
         platform: { callProvider: () => Promise.resolve({ status: 200, body }) },
         request: { deadline: new Date(Date.now() + 60_000).toISOString() },
+        state: {},
       } as never,
       clock: { now: () => Date.now(), sleep: () => Promise.resolve() },
       query: "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' MAXRESULTS 3",
       entity: 'Bill',
-      what: 'Number not searched',
       purpose: 'looking for records with this number',
-      refused: 'number_refused',
     });
     assert.ok(read.ok);
     return read.answeredAt;
@@ -187,10 +178,7 @@ test('a vendor credit kept with its vendor, compared in code; an item line leave
       totalCents: 1500,
     },
   ]);
-  assert.equal(
-    lineOf(world, 'find-duplicate-number'),
-    "Vendor credits with number 'CM-0077': Id 301 (Pacific Gas, 2026-09-01, $15.00)",
-  );
+  assert.equal(lineOf(world, 'find-duplicate-number'), 'Possible duplicate');
   assert.deepEqual(
     ((state.relatedLookup as JsonObject).records as JsonObject[])[0]?.lineAccounts,
     [],

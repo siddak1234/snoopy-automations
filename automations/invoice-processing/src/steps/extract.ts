@@ -6,7 +6,6 @@ import {
   isObject,
   isUnsent,
   readJsonCompletion,
-  truncateText,
   type JsonObject,
   type ModelCompletion,
   type ModelRefusalReason,
@@ -15,11 +14,19 @@ import {
   type StepResult,
 } from '@autom8x/automation-sdk';
 
-import { DOCUMENT_TYPES, LISTED_KINDS, PAYMENT_METHODS, REFUND_METHODS } from '../document.js';
-import { THROWN_SENTENCES } from '../failures.js';
-import { failedWith, grouped } from '../outcome.js';
+import { cleanCurrency, cleanText, toCents } from '@autom8x/automation-kit/values';
+
+import {
+  DOCUMENT_TYPES,
+  LISTED_KINDS,
+  PAYMENT_METHODS,
+  REFUND_METHODS,
+  type DocumentType,
+} from '../document.js';
+import { runFails } from '../outcome.js';
 import { SPEND_TYPES } from '../spend-types.js';
 import type { ExtractionState } from '../state.js';
+import { DOCUMENT_WORDS, lineWith, money, type RunFail } from '../words.js';
 
 /**
  * `extract` — the platform's model reads the document — a bill, a receipt, a credit note or a
@@ -31,11 +38,12 @@ import type { ExtractionState } from '../state.js';
  * `MODELS`, and the run's file by the id `receive` kept — never its bytes, which the platform
  * reads and sends itself. The platform asks one model per attempt and falls to the next on an
  * unusable answer, so the step sees the first usable answer or the last refusal. A refusal the
- * platform answered ends the run with a fixed sentence and puts its reason word in the
- * timeline; an answer that never came, and a 503 naming no code (a page from in front of the
- * platform), is thrown on unchanged, so the runner repeats the step once when nothing was
- * sent. The answer is kept whole in the state and never quoted: the timeline line names the
- * model that served and two counts.
+ * platform answered ends the run with one of the spec's sentences, its reason word in the log;
+ * an answer that never came, and a 503 naming no code (a page from in front of the platform), is
+ * thrown on unchanged, so the runner repeats the step once when nothing was sent. The answer is
+ * kept whole in the state; the timeline line says what it read, its seller and its total. Every
+ * run takes this step, whatever the vendor: ONE model call per document unless the first read
+ * shows a problem (decision 3, `verify-read`).
  */
 
 /**
@@ -50,53 +58,46 @@ export const MODELS: readonly string[] = [
 ];
 
 /**
- * The user message, fixed: nothing a person typed and nothing read from the document is in
- * it — "Who paid" included, which never reaches the model.
+ * The user message, fixed: nothing a person typed and nothing read from the document is in it.
  */
 export const EXTRACT_INPUT: JsonObject = {
   task: 'Extract the fields of the attached document.',
 };
 
-/** Each refusal's sentence: the run's reason, at most 200 characters, never the model's text. */
-export const EXTRACT_SENTENCES = {
-  answer_unusable: 'The document could not be read; try a clearer photo or the PDF.',
-  content_filtered: 'The model provider declined to read this document.',
-  plan_without_model_calls: "This workspace's plan does not include model calls.",
-  plan_check_unavailable:
-    "Model calls could not be checked against this workspace's plan just now; start the run again with the document later.",
-  model_calls_off: 'Model calls are not switched on yet.',
-  no_answer:
-    'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
-  model_account_refused:
-    'Model calls are unavailable on the platform right now; start the run again with the document later.',
-  file_type: 'The document must be a PDF, JPEG or PNG file.',
-  file_too_large: 'The document file is larger than 3.5 MB.',
-  file_mismatch: 'The document file is not the type it says it is; upload the PDF or photo again.',
-  file_encrypted: 'The PDF is password-protected; upload a copy without a password.',
-  file_integrity:
-    'The document file could not be read back from storage; start the run again with the document.',
-  file_gone: 'The document file is no longer available; start the run again with the document.',
-  out_of_time:
-    'The run ran out of time before the document was read; start it again with the document.',
-  platform_fault:
-    'The document could not be sent to be read because of a fault on our side; nothing was created.',
-} as const;
+/**
+ * Why the first read ends the run, each a code for the log and one of the spec's sentences
+ * (§3.F): the file could not be opened, the answer cannot be read, AI is busy for now, or the
+ * document cannot be read right now — model calls off, out of plan, out of time, a fault on our
+ * side. Never the model's text.
+ */
+export const EXTRACT_FAILS = {
+  answer_unusable: 'unreadable',
+  content_filtered: 'unreadable',
+  plan_without_model_calls: 'ai_unavailable',
+  plan_check_unavailable: 'ai_unavailable',
+  allowance_used: 'ai_unavailable',
+  model_calls_off: 'ai_unavailable',
+  model_account_refused: 'ai_unavailable',
+  out_of_time: 'ai_unavailable',
+  platform_fault: 'ai_unavailable',
+  no_answer: 'ai_busy',
+  busy: 'ai_busy',
+  file_type: 'file',
+  file_too_large: 'file',
+  file_mismatch: 'file',
+  file_encrypted: 'file',
+  file_integrity: 'file',
+  file_gone: 'file',
+} as const satisfies Readonly<Record<string, RunFail>>;
 
-type Reason = keyof typeof EXTRACT_SENTENCES;
-
-/** `over_plan_limit`'s sentence: the plan's limit when the platform sent one. */
-export function allowanceUsed(limit: number | undefined): string {
-  return limit === undefined
-    ? 'This workspace has used its model calls this month.'
-    : `This workspace has used its ${grouped(limit)} model calls this month.`;
-}
+type Reason = keyof typeof EXTRACT_FAILS;
 
 /**
  * Each typed refusal's reason word. `no_model_left` answers a call that leaves out a maker,
  * which this one never does: a fault on our side. Typed against the SDK's closed list, so a
  * reason it gains fails the build here until it is given its sentence.
  */
-const MODEL_REFUSALS: Readonly<Record<ModelRefusalReason, Reason | 'allowance_used'>> = {
+const MODEL_REFUSALS: Readonly<Record<ModelRefusalReason, Reason>> = {
   output_schema_mismatch: 'answer_unusable',
   truncated: 'answer_unusable',
   content_filtered: 'content_filtered',
@@ -111,10 +112,27 @@ const MODEL_REFUSALS: Readonly<Record<ModelRefusalReason, Reason | 'allowance_us
   no_model_left: 'platform_fault',
 };
 
-const WHAT = 'The document could not be read';
-
 function failed(reason: Reason): StepResult {
-  return failedWith(WHAT, reason, EXTRACT_SENTENCES[reason]);
+  return runFails(EXTRACT_FAILS[reason], reason);
+}
+
+/**
+ * The timeline line (§3.E): `Read: bill from Harrowgate Office Supply, $461.53` — what the first
+ * read says the document is, its seller and its total, each cleaned and bounded; a part not read
+ * is left out. Never a line item, nor anything else the model wrote.
+ */
+export function readLine(answer: JsonObject): string {
+  const type = DOCUMENT_WORDS[answer.documentType as DocumentType] ?? 'document';
+  const seller = cleanText(answer.vendorName);
+  const total = toCents(answer.total);
+  const currency = cleanCurrency(answer.currency);
+  const amount =
+    total.kind === 'cents'
+      ? `, ${money(Math.abs(total.cents), currency.kind === 'code' ? currency.code : null)}`
+      : '';
+  return seller === null
+    ? lineWith(`Read: ${type}`, '', amount)
+    : lineWith(`Read: ${type} from `, seller, amount);
 }
 
 export function extract(prompt: PromptModule): Step {
@@ -141,8 +159,7 @@ export function extract(prompt: PromptModule): Step {
     }
     // The shape only, never a value: the platform held the answer to the schema, and every
     // check of a value is the next step's.
-    const { lineItems, lineItemsComplete, listedItems, listedItemsComplete, uncertainFields } =
-      answer;
+    const { lineItems, listedItems, uncertainFields } = answer;
     if (
       !Array.isArray(lineItems) ||
       !Array.isArray(listedItems) ||
@@ -155,18 +172,8 @@ export function extract(prompt: PromptModule): Step {
     ) {
       return failed('answer_unusable');
     }
-    const lines = `${lineItems.length} ${lineItems.length === 1 ? 'line' : 'lines'}`;
-    const more = lineItemsComplete === false ? ' (more on the document)' : '';
-    const listed =
-      listedItems.length === 0
-        ? ''
-        : `, ${listedItems.length} listed${listedItemsComplete === false ? ' (more listed)' : ''}`;
     const extracted: ExtractionState = { extraction: answer, modelServed: completion.model };
-    return {
-      outcome: 'ok',
-      summary: `Read the document with ${truncateText(completion.model, 100)}: ${lines}${more}${listed}, ${uncertainFields.length} unclear`,
-      state: { ...state, ...extracted },
-    };
+    return { outcome: 'ok', summary: readLine(answer), state: { ...state, ...extracted } };
   };
 }
 
@@ -185,13 +192,11 @@ function artifactIdOf(state: JsonObject): string | undefined {
 function refused(error: CallbackRefusedError): StepResult {
   if (error instanceof ModelRefusedError) {
     const reason = MODEL_REFUSALS[error.reason];
-    return reason === 'allowance_used'
-      ? failedWith(WHAT, reason, allowanceUsed(error.limit))
-      : failed(reason);
+    return failed(reason);
   }
   const { status, code, reason } = error;
   // The Edge's flood valve, as at every step of this automation.
-  if (status === 429) return failedWith(WHAT, 'busy', THROWN_SENTENCES.busy);
+  if (status === 429) return failed('busy');
   if (status === 503 && code === 'NOT_CONFIGURED') return failed('model_calls_off');
   if (status === 404) return failed('file_gone');
   if (status === 403 && reason === 'deadline_exceeded') return failed('out_of_time');

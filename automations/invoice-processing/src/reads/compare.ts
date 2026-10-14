@@ -206,16 +206,14 @@ export function compareReads(document: DocumentState, second: SecondRead): Compa
 /**
  * The arithmetic run again on the second read's total, once the tie-break records it (Group 3's
  * D9): the tip, the amount, an earlier balance and what the checks found follow the new total, and
- * a fail rule it now meets — zero or less, more than QuickBooks takes, an amount due below the
- * charges — ends the run with check-document's own sentence. Every other value stays the first
- * read's.
+ * the recording rule it now meets, if any — zero or less, more than QuickBooks takes, an amount due
+ * below the charges — which, on the QuickBooks path, keeps it from being recorded. Every other value
+ * stays the first read's.
  */
 export function recheckedWith(
   document: DocumentState,
   totalCents: number,
-):
-  | { readonly outcome: 'ok'; readonly document: DocumentState }
-  | { readonly outcome: 'failed'; readonly rule: 'C12' | 'C13' | 'C15' } {
+): { readonly document: DocumentState; readonly rule: 'C12' | 'C13' | 'C15' | undefined } {
   const parts = partsOf(document);
   const { signs } = document.arithmetic;
   const amounts = amountsOf(
@@ -227,9 +225,8 @@ export function recheckedWith(
     document.amountDueCents,
   );
   const rule = amountFailure(document.type, totalCents, amounts, document.amountDueCents);
-  if (rule !== undefined) return { outcome: 'failed', rule };
   return {
-    outcome: 'ok',
+    rule,
     document: {
       ...document,
       totalCents,

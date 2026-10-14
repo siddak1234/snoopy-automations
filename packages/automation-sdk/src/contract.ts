@@ -14,6 +14,8 @@
  * platform refuses one it does not accept rather than ignoring it.
  */
 
+import type { RunDetail } from './details.js';
+
 export type JsonObject = Record<string, unknown>;
 
 /** The contract version this SDK implements. Named in the manifest's `service`. */
@@ -105,7 +107,10 @@ export interface StepReport {
 export type RunResult =
   // `summary` is one line for a person reading a list of runs; `output` is the
   // structured result. The platform publishes the first and never the second.
-  | { outcome: 'success'; output?: JsonObject; summary?: string }
+  // `details` (platform ADR-0037, its BUILD-PLAN 25.4.22) are a few label and value
+  // lines written for people, which the platform keeps with the run and shows on
+  // the one-run read; it never parses them.
+  | { outcome: 'success'; output?: JsonObject; summary?: string; details?: readonly RunDetail[] }
   | { outcome: 'held'; held: { stepId: string; reason: string; state: JsonObject } }
   // `retryState` was published here and withdrawn by the platform on 2026-09-08
   // (§12.1 #84): nothing read it, and the platform now refuses it as undeclared.

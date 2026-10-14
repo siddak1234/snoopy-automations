@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { Decision } from '../src/decide/decide.js';
-import { joinWithin } from '../src/decide/words.js';
-import { paidBy, statement } from './check-world.js';
+import { statement } from './check-world.js';
 import { VENDOR, billRow, decide, found, type DecideSetUp } from './decide-world.js';
 
 /**
  * A supplier's statement (the plan's §2.5, §2.6, §2.9 "Statements"; D26): compared with QuickBooks,
  * nothing written, no approval — its own sum, the listed invoices QuickBooks lacks, the open bills
- * it does not list, and its balance against the vendor's.
+ * it does not list, and its balance against the vendor's; its line, the run's summary, how many it
+ * lists that QuickBooks lacks (§3.F).
  */
 
 const OPEN = 68_654;
@@ -29,19 +29,16 @@ const listedFound = found(
   billRow({ id: '2', docNumber: 'hos-1042' }),
 );
 
-test('every listed invoice in QuickBooks, and the balances the same: the line says so, nothing created', () => {
+test('every listed invoice in QuickBooks, and the balances the same: the line says none is missing', () => {
   const all = found(
     ...['HOS-1031', 'HOS-1042', 'HOS-1050'].map((docNumber, index) =>
       billRow({ id: String(index), docNumber }),
     ),
   );
   const { summary, result } = compared({ lookups: { numberLookup: all } });
-  assert.equal(
-    summary,
-    'Statement balance $686.54; QuickBooks shows $686.54 open (the same). Nothing was created.',
-  );
+  assert.equal(summary, 'Compared with QuickBooks: 0 invoices not in QuickBooks.');
   assert.deepEqual(result, {
-    v: 1,
+    v: 2,
     documentType: 'supplier_statement',
     route: 'statement',
     vendor: { id: '7', displayName: 'Harrowgate Office Supply' },
@@ -55,7 +52,6 @@ test('every listed invoice in QuickBooks, and the balances the same: the line sa
     quickBooksOpenCents: OPEN,
     differenceCents: 0,
     secondCheck: 'made',
-    switchIgnored: false,
   });
 });
 
@@ -73,19 +69,15 @@ test('missing invoices, open bills it does not list, and a balance that differs'
   assert.deepEqual(result.listedNotInQuickBooks, ['HOS-1050']);
   assert.deepEqual(result.openBillsNotListed, { count: 1, totalCents: 29_346 });
   assert.equal(result.differenceCents, 68_654 - 98_000);
-  assert.equal(
-    summary,
-    'Statement balance $686.54; QuickBooks shows $980.00 open (differs by $293.46); 1 listed invoice not in QuickBooks; 1 open bill not on it ($293.46). Nothing was created.',
-  );
+  assert.equal(summary, 'Compared with QuickBooks: 1 invoice not in QuickBooks.');
 });
 
 test('an incomplete list: its own sum and the unlisted open bills are not judged', () => {
-  const { summary, result } = compared({
+  const { result } = compared({
     answer: statement({ listedItemsComplete: false }),
     lookups: { numberLookup: listedFound },
   });
   assert.deepEqual([result.ownSum, result.openBillsNotListed], ['incomplete', null]);
-  assert.match(summary, /its list is not complete\. Nothing was created\.$/u);
   // Its own rows not adding up, the list complete.
   const differs = compared({
     answer: statement({ total: 700 }),
@@ -95,7 +87,6 @@ test('an incomplete list: its own sum and the unlisted open bills are not judged
     [differs.result.ownSum, differs.result.ownSumDifferenceCents],
     ['differs', 68_654 - 70_000],
   );
-  assert.match(differs.summary, /its own rows differ by \$13\.46/u);
 });
 
 test('a lookup at its maximum: the missing count may be too many', () => {
@@ -103,7 +94,7 @@ test('a lookup at its maximum: the missing count may be too many', () => {
     lookups: { numberLookup: { reachedMax: true, records: [] } },
   });
   assert.equal(result.listedCheckable, false);
-  assert.match(summary, /3 listed invoices not in QuickBooks \(too many to check\)/u);
+  assert.equal(summary, 'Compared with QuickBooks: 3 invoices not in QuickBooks.');
 });
 
 test('the open-bills lookup at its maximum: the open bills it does not list may be more, and the line says so (D6)', () => {
@@ -117,14 +108,10 @@ test('the open-bills lookup at its maximum: the open bills it does not list may 
     });
   const all = line(false);
   assert.equal(all.result.openBillsCheckable, true);
-  assert.match(all.summary, /; 2 open bills not on it \(\$30\.00\)\. Nothing was created\.$/u);
+  assert.deepEqual(all.result.openBillsNotListed, { count: 2, totalCents: 3_000 });
   const capped = line(true);
   assert.equal(capped.result.openBillsCheckable, false);
   assert.deepEqual(capped.result.openBillsNotListed, { count: 2, totalCents: 3_000 });
-  assert.match(
-    capped.summary,
-    /; 2 open bills not on it \(\$30\.00\) \(too many to check\)\. Nothing was created\.$/u,
-  );
   assert.equal(capped.result.listedCheckable, true, 'the number lookup was not capped');
 });
 
@@ -144,10 +131,7 @@ test('an invoice listed twice, in any case, is one invoice: counted once, listed
     lookups: { numberLookup: found(billRow({ id: '2', docNumber: 'HOS-1042' })) },
   });
   assert.deepEqual(result.listedNotInQuickBooks, ['HOS-1031']);
-  assert.equal(
-    summary,
-    'Statement balance $686.54; QuickBooks shows $686.54 open (the same); 1 listed invoice not in QuickBooks. Nothing was created.',
-  );
+  assert.equal(summary, 'Compared with QuickBooks: 1 invoice not in QuickBooks.');
 });
 
 test("a listed number longer than the 21 characters a bill's holds is not searched, so it counts as not in QuickBooks (G4-4)", () => {
@@ -189,25 +173,22 @@ test("only this vendor's bills count: another vendor's with a listed number, or 
   assert.deepEqual(result.openBillsNotListed, { count: 0, totalCents: 0 });
 });
 
-test('read 2 not made, the switch on, QuickBooks showing nothing open: the line says each; still no approval', () => {
+test('read 2 not made, or not needed, QuickBooks showing nothing open: the result says each; still no approval', () => {
   const { summary, result } = compared({
     verification: { status: 'not_made', reason: 'no_answer' },
-    check: paidBy('employee'),
     vendor: { ...VENDOR, balanceCents: null },
     lookups: { numberLookup: listedFound },
   });
-  assert.deepEqual(
-    [result.secondCheck, result.switchIgnored, result.quickBooksOpenCents],
-    ['not_made', true, null],
-  );
-  assert.equal(
-    summary,
-    "Statement balance $686.54; 1 listed invoice not in QuickBooks; second check not made; the switch doesn't apply to a statement. Nothing was created.",
-  );
-  for (const line of [summary]) assert.ok(line.length <= 200);
+  assert.deepEqual([result.secondCheck, result.quickBooksOpenCents], ['not_made', null]);
+  assert.equal(summary, 'Compared with QuickBooks: 1 invoice not in QuickBooks.');
+  const plain = compared({
+    verification: { status: 'not_needed' },
+    lookups: { numberLookup: listedFound },
+  });
+  assert.equal(plain.result.secondCheck, 'not_needed');
 });
 
-test('the line keeps "Nothing was created." whatever it leaves out to fit 200 characters', () => {
+test('the full list is in the output, whatever its length; the line counts it', () => {
   const many = Array.from({ length: 40 }, (_, index) => ({
     reference: `INV-${'0'.repeat(20)}${index}`,
     amount: 10,
@@ -216,21 +197,7 @@ test('the line keeps "Nothing was created." whatever it leaves out to fit 200 ch
   const { summary, result } = compared({
     answer: statement({ listedItems: many, total: 400 }),
     vendor: { ...VENDOR, balanceCents: 1 },
-    verification: { status: 'not_made', reason: 'no_answer' },
-    check: paidBy('owner'),
   });
   assert.equal(result.listedNotInQuickBooks.length, 40, 'the full list in the output');
-  assert.ok(summary.length <= 200 && summary.endsWith('. Nothing was created.'), summary);
-});
-
-test('a line fitted to 200: the parts that do not fit are left out from the end, the tail always kept', () => {
-  const tail = '. Nothing was created.';
-  const line = joinWithin(['a'.repeat(150), 'b'.repeat(40), 'c'], tail);
-  assert.equal(line, `${'a'.repeat(150)}${tail}`);
-  assert.equal(
-    joinWithin(['a'.repeat(300)], tail).length,
-    200,
-    'the first part, alone too long, cut',
-  );
-  assert.equal(joinWithin(['one', 'two'], tail), `one; two${tail}`);
+  assert.equal(summary, 'Compared with QuickBooks: 40 invoices not in QuickBooks.');
 });

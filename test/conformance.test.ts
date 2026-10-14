@@ -27,7 +27,9 @@ import {
  *   anything reaches a vendor;
  * - every prompt file in the automation's `prompts/` directory is registered, so
  *   a template nobody wired in cannot sit there looking shipped;
- * - every `manifests/<id>.v<n>.json` is served by that automation's container.
+ * - every `manifests/<id>.v<n>.json` is served by that automation's container — unless the
+ *   automation exports `SERVED_VERSIONS`, when it conforms to those manifests alone and its
+ *   Dockerfile copies exactly those files, so the image cannot serve a version its code dropped.
  *
  * `defineAutomation` refuses the first two at startup; this test states the rules
  * for the repository and reads each automation's definition the way `main.ts`
@@ -43,6 +45,12 @@ const schemasRoot = join(repositoryRoot, 'contract', 'schemas');
 interface AutomationModule {
   TEMPLATE_ID: string;
   define(manifests: readonly Manifest[]): Automation;
+  /**
+   * The versions this code serves, when it serves fewer than `manifests/` holds: a registered
+   * version stays there, immutable, while its own container runs its pinned image (Invoice
+   * Processing v1 beside v2 until v1 is retired — the platform's D2, one image per version).
+   */
+  SERVED_VERSIONS?: readonly number[];
 }
 
 function childDirectories(root: string): string[] {
@@ -129,13 +137,39 @@ test('every automation conforms to the manifests it serves', async () => {
       name,
       `automations/${name} declares templateId ${module.TEMPLATE_ID}`,
     );
-    const manifests = readManifests(manifestsRoot, name);
+    const all = readManifests(manifestsRoot, name);
+    const served = module.SERVED_VERSIONS;
+    const manifests =
+      served === undefined ? all : all.filter((manifest) => served.includes(manifest.version));
+    if (served !== undefined) {
+      assert.deepEqual(
+        manifests.map((manifest) => manifest.version),
+        [...served].sort((a, b) => a - b),
+        `automations/${name}: every version in SERVED_VERSIONS has its manifest`,
+      );
+      assert.deepEqual(
+        imageManifests(directory),
+        served.map((version) => `manifests/${name}.v${version}.json`).sort(),
+        `automations/${name}/Dockerfile copies exactly the manifests SERVED_VERSIONS names`,
+      );
+    }
     const automation = module.define(manifests);
     assert.equal(automation.templateId, name);
     assertConforms(automation, manifests, `automations/${name}`);
     assertPromptsRegistered(automation, directory, `automations/${name}`);
   }
 });
+
+/** The manifest files an automation's Dockerfile copies into its image, as written there. */
+function imageManifests(directory: string): string[] {
+  const dockerfile = readFileSync(join(directory, 'Dockerfile'), 'utf8');
+  return dockerfile
+    .split('\n')
+    .filter((line) => /^COPY\b/u.test(line))
+    .flatMap((line) => line.split(/\s+/u).filter((word) => word.startsWith('manifests/')))
+    .filter((path) => path !== 'manifests/' && !path.startsWith('./'))
+    .sort();
+}
 
 test('the template automation conforms to its example manifest, which validates against the vendored schema', async () => {
   const module = await load(templateRoot);

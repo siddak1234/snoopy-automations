@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { UNANSWERED_REASON, isUnanswered, isUnsent } from '@autom8x/automation-sdk';
+import { isUnanswered, isUnsent } from '@autom8x/automation-sdk';
 import { refusalFixture, type RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
+import { RUN_FAILS } from '../src/words.js';
 import { everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
 import { droppedConnection, proxyPage, refusedConnection, timedOut } from './wire.js';
 
@@ -69,20 +70,16 @@ test('repeated once, 10 s later, when nothing reached the platform: a refused co
     [paged, pagedResult],
   ] as const) {
     assert.equal(result.outcome, 'success');
-    assert.equal(world.platform.modelCalls.length, 3, 'the same call, made once more; then read 2');
+    assert.equal(world.platform.modelCalls.length, 2, 'the same call, made once more');
     assert.deepEqual(extractLine(world), [
       'extract',
       'ok',
-      'Read the document with anthropic/claude-haiku-4.5: 2 lines, 0 unclear (after 2 attempts)',
+      'Read: bill from Harrowgate Office Supply, $461.53 (after 2 attempts)',
     ]);
   }
 
-  // Two in a row: the attempts are spent, the run fails in the SDK's one sentence, no address.
-  assert.deepEqual(twiceResult, {
-    outcome: 'failed',
-    failureReason: 'The platform did not answer in time, so the run stopped.',
-  });
-  assert.equal(UNANSWERED_REASON, 'The platform did not answer in time, so the run stopped.');
+  // Two in a row: the attempts are spent, the run fails — AI is busy — no address.
+  assert.deepEqual(twiceResult, { outcome: 'failed', failureReason: RUN_FAILS.ai_busy });
   assert.equal(twice.platform.modelCalls.length, 2);
   assert.deepEqual(lines(twice.platform).at(-1), [
     'extract',
@@ -119,10 +116,7 @@ test('never repeated after an answer that may have been made: a timeout, a dropp
   for (const failure of thrown) {
     const world = setUp();
     failing(world.platform, [failure]);
-    assert.deepEqual(await world.run(), {
-      outcome: 'failed',
-      failureReason: 'The platform did not answer in time, so the run stopped.',
-    });
+    assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: RUN_FAILS.ai_busy });
     assert.equal(world.platform.modelCalls.length, 1, 'made once, never again');
     assert.deepEqual(lines(world.platform).at(-1), [
       'extract',
@@ -138,11 +132,7 @@ test('never repeated after an answer that may have been made: a timeout, a dropp
   for (const failure of answered) {
     const world = setUp();
     failing(world.platform, [failure]);
-    assert.deepEqual(await world.run(), {
-      outcome: 'failed',
-      failureReason:
-        'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
-    });
+    assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: RUN_FAILS.ai_busy });
     assert.equal(world.platform.modelCalls.length, 1, 'made once, never again');
   }
   assert.ok(Date.now() - started < 5_000, 'no wait: nothing was repeated');

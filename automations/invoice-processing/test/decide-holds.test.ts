@@ -1,21 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { HOLD_ORDER, limitCentsOf } from '../src/decide/holds.js';
+import { HOLD_ORDER, limitCentsOf, reasonLine } from '../src/decide/holds.js';
+import { bill, check, creditNote, documentOf, receipt, sampleAnswer } from './check-world.js';
 import {
-  bill,
-  check,
-  creditNote,
-  documentOf,
-  paidBy,
-  receipt,
-  sampleAnswer,
-} from './check-world.js';
-import {
-  CHECKING,
   VENDOR,
   agreed,
   billRow,
+  chartWith,
   decide,
   expenseRow,
   found,
@@ -25,26 +17,25 @@ import {
 } from './decide-world.js';
 
 /**
- * decide's holds (the plan's §2.4, §2.9 "Holds"): every hold alone with its phrase, all of them
- * in ONE hold in the plan's order, reimbursements always held, the approval limit, the card check
- * and the payment method against what "Paid from" is.
+ * decide's holds (the plan's §2.4, in v2's words, §2.6): every hold alone with its phrase, all of
+ * them in ONE hold in the plan's order, the approval's reason their phrases joined by commas, the
+ * first letter capitalised, at most 200 characters, and the approval limit.
  */
 
 /** The receipt's seller, linked as a vendor. */
 const TIDEWELL = { ...VENDOR, id: '9', displayName: 'Tidewell Hardware' };
 const phrases = (setUp: DecideSetUp) => heldOf(decide(setUp)).holds.map((hold) => hold.phrase);
 
-test("the twenty reasons, in the plan's order", () => {
+test("the nineteen reasons, in the spec's order", () => {
   assert.deepEqual(HOLD_ORDER, [
-    'paid_personally',
     'over_limit',
     'new_vendor',
     'possible_duplicate',
     'may_be_statement',
     'matches_bill',
     'company_charge_found',
-    'card_check',
     'payment_method',
+    'paid_from_pick',
     'earlier_balance',
     'refund_method_not_shown',
     'tip_added',
@@ -59,14 +50,10 @@ test("the twenty reasons, in the plan's order", () => {
   ]);
 });
 
-test('each hold alone, with its phrase', () => {
+test('each hold alone, with its phrase (§2.6)', () => {
   const document = documentOf(check(bill()));
+  const oneBank = chartWith('35', '41', '42');
   const cases: [string, DecideSetUp, string[]][] = [
-    [
-      'paid personally',
-      { answer: receipt(), check: paidBy('employee', { paidFrom: null }) },
-      ['paid personally'],
-    ],
     [
       'over the limit',
       { answer: bill(), config: { holdAboveAmount: 400 } },
@@ -74,9 +61,14 @@ test('each hold alone, with its phrase', () => {
     ],
     ['new vendor', { answer: bill(), vendor: { status: 'new' } }, ['new vendor']],
     [
+      'new vendor, similar names',
+      { answer: bill(), vendor: { status: 'new' }, similarVendors: ['A Co', 'B Co'] },
+      ['new vendor, 2 similar names'],
+    ],
+    [
       'possible duplicate',
       { answer: bill(), lookups: { amountLookup: found(billRow()) } },
-      ['possible duplicate'],
+      ['may already be in QuickBooks'],
     ],
     [
       'may be a statement',
@@ -84,7 +76,7 @@ test('each hold alone, with its phrase', () => {
       ['may be a statement'],
     ],
     [
-      'matches a bill',
+      'matches an open bill',
       {
         answer: receipt(),
         vendor: TIDEWELL,
@@ -92,22 +84,40 @@ test('each hold alone, with its phrase', () => {
           numberLookup: found(billRow({ vendorId: '9', docNumber: '55120', totalCents: 6063 })),
         },
       },
-      ['matches open bill 55120'],
+      ['matches an open bill'],
     ],
     [
-      'card check',
-      { answer: receipt(), vendor: TIDEWELL, config: { companyCardLast4: '9999' } },
-      ["card ending 4417 isn't the company card"],
+      'matches a paid bill',
+      {
+        answer: receipt(),
+        vendor: TIDEWELL,
+        lookups: {
+          numberLookup: found(
+            billRow({ vendorId: '9', docNumber: '55120', totalCents: 6063, balanceCents: 0 }),
+          ),
+        },
+      },
+      ['matches a paid bill'],
     ],
     [
-      'payment method',
+      'a bank or card charge',
+      { answer: receipt(), vendor: TIDEWELL, lookups: { amountLookup: found(expenseRow()) } },
+      ['a bank or card charge matches'],
+    ],
+    [
+      'payment method not shown',
+      { answer: receipt({ paymentMethod: 'not_shown' }), vendor: TIDEWELL, chart: oneBank },
+      ['payment method not shown'],
+    ],
+    [
+      'paid from, asked',
       { answer: receipt({ paymentMethod: 'cash' }), vendor: TIDEWELL },
-      ['paid in cash, recorded from Company Visa'],
+      ['paid from Checking?'],
     ],
     [
       'earlier balance',
       { answer: sampleAnswer('utility-statement-balance') },
-      ['earlier balance $58.40 also due'],
+      ['earlier balance also due'],
     ],
     [
       'refund method',
@@ -116,10 +126,14 @@ test('each hold alone, with its phrase', () => {
     ],
     [
       'tip added',
-      { answer: sampleAnswer('restaurant-tip-under-total'), vendor: TIDEWELL },
-      ['tip of $6.00 added to the printed total'],
+      {
+        answer: sampleAnswer('restaurant-tip-under-total'),
+        vendor: TIDEWELL,
+        chart: chartWith('35', '41'),
+      },
+      ['tip added to the total'],
     ],
-    ['amounts', { answer: bill({ total: 413.36 }) }, ["amounts don't add up"]],
+    ['amounts', { answer: bill({ total: 413.36 }) }, ["totals don't add up"]],
     [
       'reads disagree',
       {
@@ -133,12 +147,12 @@ test('each hold alone, with its phrase', () => {
           totalPicked: 'first',
         },
       },
-      ['reads disagree on total, date'],
+      ['two reads differ: total, date'],
     ],
     [
-      'second check',
+      'second read',
       { answer: bill(), verification: { status: 'not_made', reason: 'no_model_left' } },
-      ['second check not made'],
+      ['second read not made'],
     ],
     [
       'unclear',
@@ -148,40 +162,25 @@ test('each hold alone, with its phrase', () => {
     [
       'not cross-checked',
       { answer: bill({ subtotal: null, lineItems: [] }) },
-      ['total not cross-checked'],
+      ['total not checked'],
     ],
-    [
-      'currency not recognised',
-      { answer: bill({ currency: 'US$' }) },
-      ['currency not recognised, USD will be used'],
-    ],
+    ['currency not recognised', { answer: bill({ currency: 'US$' }) }, ['currency not recognised']],
   ];
   for (const [label, setUp, expected] of cases) assert.deepEqual(phrases(setUp), expected, label);
   // The two only a new vendor's bill has, beside "new vendor".
   assert.deepEqual(phrases({ answer: bill({ currency: null }), vendor: { status: 'new' } }), [
     'new vendor',
-    'no currency printed, USD will be used',
+    'no currency shown, USD used',
   ]);
-  assert.deepEqual(
-    phrases({ answer: bill(), vendor: { status: 'new' }, customerNameClash: 'match' }),
-    ['new vendor', 'name used by a customer, will be created with (vendor)'],
-  );
-  assert.deepEqual(
-    phrases({ answer: bill(), vendor: { status: 'new' }, employeeNameClash: 'match' }),
-    ['new vendor', 'name used by an employee, will be created with (vendor)'],
-  );
-  // A company charge for a paid-personally amount (hold 7), beside "paid personally".
-  assert.deepEqual(
-    phrases({
-      answer: receipt(),
-      check: paidBy('employee', { paidFrom: null }),
-      lookups: { relatedLookup: found(expenseRow({ accountId: CHECKING.id })) },
-    }),
-    ['paid personally', 'a company card or bank charge matches'],
-  );
+  for (const clash of [{ customerNameClash: 'match' }, { employeeNameClash: 'match' }] as const) {
+    assert.deepEqual(phrases({ answer: bill(), vendor: { status: 'new' }, ...clash }), [
+      'new vendor',
+      'name used by a customer or employee',
+    ]);
+  }
 });
 
-test("every reason that applies, in one hold, in the plan's order; the reason line at most 200 with the path's ending", () => {
+test("every reason that applies, in one hold, in the spec's order; the reason their phrases, capitalised, ended, at most 200", () => {
   const many = heldOf(
     decide({
       answer: bill({
@@ -214,39 +213,27 @@ test("every reason that applies, in one hold, in the plan's order; the reason li
       'name_in_use',
     ],
   );
-  assert.ok(many.reason.length <= 200, String(many.reason.length));
-  assert.match(many.reason, /^Over the \$500 limit; new vendor; possible duplicate; /u);
-  assert.match(many.reason, /; \+3 more: N+…, HOS-1042, \$999\.00$/u);
-  assert.equal(many.saved.holdReasons.length, 10, 'the saved data carries them all');
-  // decide's line names what the reason line gave up to '+3 more', and the category, always.
   assert.equal(
-    many.summary,
-    'Held: $999.00 is over the $500 limit; unclear: date; no currency printed, USD will be used; name used by a customer, will be created with (vendor); category Office Supplies (office supplies)',
+    many.reason,
+    "Over the $500 limit, new vendor, 2 similar names, may already be in QuickBooks, may be a statement, earlier balance also due, totals don't add up, second read not made, unclear: date.",
   );
-  assert.ok(many.summary.length <= 200);
-  // Every reason in one of the two lines (decide-lines.test.ts holds every path to this).
-  const said = `${many.reason}\n${many.summary}`.toLowerCase();
-  for (const hold of many.holds) {
-    const { phrase, detail } = hold;
-    assert.ok(
-      said.includes(phrase.toLowerCase()) || said.includes(detail.toLowerCase()),
-      hold.code,
-    );
-  }
-});
-
-test('a reimbursement always waits for approval, at any amount (D16)', () => {
-  for (const payer of ['employee', 'owner', 'not_employee'] as const) {
-    const small = receipt({ total: 1, subtotal: null, tax: null, lineItems: [] });
-    const held = heldOf(
-      decide({
-        answer: small,
-        check: paidBy(payer, { paidFrom: null }),
-        config: { holdAboveAmount: 1_000_000 },
-      }),
-    );
-    assert.equal(held.holds[0]?.code, 'paid_personally', payer);
-  }
+  assert.ok(many.reason.length <= 200, String(many.reason.length));
+  assert.equal(many.saved.holdReasons.length, 10, 'the saved data carries them all');
+  // The spec's own example.
+  assert.equal(
+    reasonLine([
+      { code: 'over_limit', phrase: 'over the $500 limit' },
+      { code: 'new_vendor', phrase: 'new vendor' },
+    ]),
+    'Over the $500 limit, new vendor.',
+  );
+  // One phrase longer than the line alone: shortened, never empty.
+  const long = reasonLine([{ code: 'paid_from_pick', phrase: `paid from ${'A'.repeat(300)}?` }]);
+  assert.ok(long.length <= 200 && long.startsWith('Paid from AAA') && long.endsWith('.'));
+  assert.equal(
+    reasonLine([{ code: 'paid_from_pick', phrase: 'paid from Checking?' }]),
+    'Paid from Checking?',
+  );
 });
 
 test('the approval limit: strictly over it holds; 500 when missing, null or not a number; read exactly to the cent', () => {
@@ -266,108 +253,7 @@ test('the approval limit: strictly over it holds; 500 when missing, null or not 
   assert.ok(!over(500, { holdAboveAmount: 500.005 }));
   assert.ok(over(500.01, { holdAboveAmount: 500.005 }));
   assert.ok(over(0.01, { holdAboveAmount: 0 }), 'a limit of 0 holds everything');
-  assert.match(
-    phrases({ answer: bill(), config: { holdAboveAmount: 400.5 } })[0]!,
-    /^over the \$400\.50 limit$/u,
-  );
-});
-
-test('the card check (D19): the same digits, other digits, none printed, and paid personally with the company card', () => {
-  const card = (
-    answer = receipt(),
-    config: Record<string, unknown> = {},
-    more: Partial<DecideSetUp> = {},
-  ) => holdCodes(decide({ answer, vendor: TIDEWELL, config, ...more }));
-  assert.deepEqual(card(receipt(), { companyCardLast4: '4417' }), []);
-  assert.deepEqual(card(receipt(), { companyCardLast4: '9999' }), ['card_check']);
-  assert.deepEqual(card(receipt({ cardLast4: null }), { companyCardLast4: '9999' }), []);
-  assert.deepEqual(
-    card(receipt(), {}),
-    [],
-    'no setting: nothing to compare against a card account',
-  );
-  assert.deepEqual(
-    card(receipt(), { companyCardLast4: '44 17' }),
-    [],
-    'a setting not of four digits never reaches decide, find-accounts fails the run first; here it compares nothing',
-  );
-  assert.deepEqual(
-    phrases({
-      answer: receipt(),
-      check: paidBy('employee', { paidFrom: null }),
-      config: { companyCardLast4: '4417' },
-    }),
-    ['paid personally', 'card ending 4417 is the company card'],
-  );
-  assert.deepEqual(
-    holdCodes(
-      decide({
-        answer: receipt(),
-        check: paidBy('employee', { paidFrom: null }),
-        config: { companyCardLast4: '9999' },
-      }),
-    ),
-    ['paid_personally'],
-  );
-  // A refund to another card than the company's.
-  assert.deepEqual(
-    phrases({
-      answer: sampleAnswer('card-refund'),
-      vendor: TIDEWELL,
-      config: { companyCardLast4: '9999' },
-    }),
-    ["card ending 4417 isn't the company card"],
-  );
-});
-
-test("the payment method against the Paid from account's kind (D18): every combination", () => {
-  const method = (
-    paymentMethod: string,
-    paidFrom: typeof CHECKING | undefined,
-    config: Record<string, unknown> = {},
-    more = {},
-  ) => {
-    const decision = decide({
-      answer: receipt({ paymentMethod, ...more }),
-      vendor: TIDEWELL,
-      config,
-      ...(paidFrom ? { check: { paidFrom } } : {}),
-    });
-    return decision.outcome === 'ok' ? [] : heldOf(decision).holds.map((hold) => hold.phrase);
-  };
-  // Paid from the company card.
-  assert.deepEqual(method('not_shown', undefined), ['payment method not shown']);
-  assert.deepEqual(method('cash', undefined), ['paid in cash, recorded from Company Visa']);
-  assert.deepEqual(method('other', undefined), ['paid by other means, recorded from Company Visa']);
-  assert.deepEqual(method('check', undefined), ['paid by check, recorded from Company Visa']);
-  assert.deepEqual(method('bank_transfer', undefined), [
-    'paid by bank transfer, recorded from Company Visa',
+  assert.deepEqual(phrases({ answer: bill(), config: { holdAboveAmount: 400.5 } }), [
+    'over the $400.50 limit',
   ]);
-  assert.deepEqual(method('card', undefined), []);
-  // Paid from a bank account.
-  assert.deepEqual(method('not_shown', CHECKING), ['payment method not shown']);
-  assert.deepEqual(method('cash', CHECKING), ['paid in cash, recorded from Checking']);
-  assert.deepEqual(method('other', CHECKING), ['paid by other means, recorded from Checking']);
-  assert.deepEqual(method('check', CHECKING), []);
-  assert.deepEqual(method('bank_transfer', CHECKING), []);
-  assert.deepEqual(
-    method('card', CHECKING, { companyCardLast4: '4417' }),
-    [],
-    'the company card, confirmed',
-  );
-  assert.deepEqual(
-    method('card', CHECKING),
-    ["card not confirmed as the company's"],
-    'no digits setting',
-  );
-  assert.deepEqual(
-    method('card', CHECKING, { companyCardLast4: '4417' }, { cardLast4: null }),
-    ["card not confirmed as the company's"],
-    'none printed',
-  );
-  assert.deepEqual(
-    method('card', CHECKING, { companyCardLast4: '9999' }),
-    ["card ending 4417 isn't the company card"],
-    'other digits: the card check says it',
-  );
 });

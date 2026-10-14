@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { namedFields } from '../src/checks/fields.js';
 import { hasWebAddress, roughlySameSeller, sellerKey } from '../src/names.js';
-import { bill, check, creditNote, documentOf, paidBy, receipt, statement } from './check-world.js';
+import { bill, check, creditNote, documentOf, receipt, statement } from './check-world.js';
 
 /**
  * The cleaning (the plan's §2.2; Group 3's D1–D4): done once, every later step reading only clean
@@ -159,21 +159,12 @@ test('the unclear list: listed fields that still have a value and that the route
     'documentType',
   ]);
   assert.equal(namedFields(listed.unclearFields), 'total, date +2');
-  // A payment method is a company receipt's: paid personally, and on a bill, it is not used.
-  assert.deepEqual(
-    documentOf(
-      check(
-        receipt({ uncertainFields: ['paymentMethod'] }),
-        paidBy('employee', { paidFrom: null }),
-      ),
-    ).unclearFields,
-    [],
-  );
+  // A payment method is a company receipt's: on a bill it is not used.
   assert.deepEqual(
     documentOf(check(bill({ uncertainFields: ['paymentMethod', 'tip'] }))).unclearFields,
     [],
   );
-  // Spend type is never one: unclear, the default category serves (D27).
+  // Spend type is never one: unclear, Uncategorized Expense serves (§2.5).
   const spend = documentOf(check(bill({ uncertainFields: ['spendType'] })));
   assert.deepEqual([spend.unclearFields, spend.spendTypeUnclear, spend.findings], [[], true, []]);
 });

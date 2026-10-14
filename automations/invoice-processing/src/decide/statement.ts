@@ -1,9 +1,9 @@
-import { cleanText, formatMoney, withinOneCent } from '@autom8x/automation-kit/values';
+import { cleanText, withinOneCent } from '@autom8x/automation-kit/values';
 
 import type { DocumentState } from '../state.js';
 import type { BillRow, DecideState, LookupState } from './contract.js';
+import { RESULTS } from '../words.js';
 import { listedInvoiceNumbers } from './lookup-uses.js';
-import { joinWithin } from './words.js';
 
 /**
  * A supplier's statement, compared with QuickBooks (the plan's §2.5 "Statement" and §2.6; D26):
@@ -17,7 +17,7 @@ import { joinWithin } from './words.js';
  */
 
 export interface StatementResult {
-  readonly v: 1;
+  readonly v: 2;
   readonly documentType: 'supplier_statement';
   readonly route: 'statement';
   readonly vendor: { readonly id: string; readonly displayName: string };
@@ -36,9 +36,8 @@ export interface StatementResult {
   /** (d) */
   readonly quickBooksOpenCents: number | null;
   readonly differenceCents: number | null;
-  readonly secondCheck: 'made' | 'not_made';
-  /** The switch was on; it does not apply to a statement. */
-  readonly switchIgnored: boolean;
+  /** Whether a second read was made: `not_needed` when the first showed no problem (decision 3). */
+  readonly secondCheck: 'made' | 'not_made' | 'not_needed';
 }
 
 const fold = (value: string | null) => cleanText(value)?.toLowerCase() ?? null;
@@ -63,9 +62,9 @@ export function listedNotFound(
   return listedInvoiceNumbers(document).filter((reference) => !known.has(fold(reference)));
 }
 
-export function statementResult(state: DecideState, switchOn: boolean): StatementResult {
+export function statementResult(state: DecideState): StatementResult {
   const { document, vendor, numberLookup, amountLookup, verification } = state;
-  if (vendor?.status !== 'matched') throw new Error('a statement is compared only with a vendor');
+  if (vendor.status !== 'matched') throw new Error('a statement is compared only with a vendor');
   const rows = document.statement?.rows ?? [];
   const complete = document.statement?.complete === true;
   const closing = document.totalCents;
@@ -85,7 +84,7 @@ export function statementResult(state: DecideState, switchOn: boolean): Statemen
   );
   const quickBooksOpen = vendor.balanceCents;
   return {
-    v: 1,
+    v: 2,
     documentType: 'supplier_statement',
     route: 'statement',
     vendor: { id: vendor.id, displayName: vendor.displayName },
@@ -101,51 +100,11 @@ export function statementResult(state: DecideState, switchOn: boolean): Statemen
     openBillsCheckable: amountLookup?.reachedMax !== true,
     quickBooksOpenCents: quickBooksOpen,
     differenceCents: closing !== null && quickBooksOpen !== null ? closing - quickBooksOpen : null,
-    secondCheck: verification.status === 'made' ? 'made' : 'not_made',
-    switchIgnored: switchOn,
+    secondCheck: verification.status,
   };
 }
 
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-
-/**
- * decide's line for a statement, at most 200 characters, with "Nothing was created." always kept:
- * "Statement balance $1,250.00; QuickBooks shows $980.00 open (differs by $270.00); 2 listed
- * invoices not in QuickBooks. Nothing was created." What does not fit is in the run's output.
- */
+/** decide's line for a statement, and the run's summary (§3.F): how many it lists QuickBooks lacks. */
 export function statementLine(result: StatementResult): string {
-  const parts: string[] = [];
-  parts.push(
-    result.closingCents === null
-      ? 'Statement balance not read'
-      : `Statement balance ${formatMoney(result.closingCents)}`,
-  );
-  if (result.quickBooksOpenCents !== null) {
-    const difference = result.differenceCents ?? 0;
-    parts.push(
-      `QuickBooks shows ${formatMoney(result.quickBooksOpenCents)} open${
-        result.closingCents === null
-          ? ''
-          : difference === 0
-            ? ' (the same)'
-            : ` (differs by ${formatMoney(Math.abs(difference))})`
-      }`,
-    );
-  }
-  const missing = result.listedNotInQuickBooks.length;
-  if (missing > 0) {
-    const words = `${plural(missing, 'listed invoice', 'listed invoices')} not in QuickBooks`;
-    parts.push(result.listedCheckable ? words : `${words} (too many to check)`);
-  }
-  if (result.openBillsNotListed !== null && result.openBillsNotListed.count > 0) {
-    const words = `${plural(result.openBillsNotListed.count, 'open bill', 'open bills')} not on it (${formatMoney(result.openBillsNotListed.totalCents)})`;
-    parts.push(result.openBillsCheckable ? words : `${words} (too many to check)`);
-  }
-  if (result.ownSum === 'differs' && result.ownSumDifferenceCents !== null) {
-    parts.push(`its own rows differ by ${formatMoney(Math.abs(result.ownSumDifferenceCents))}`);
-  }
-  if (result.ownSum === 'incomplete') parts.push('its list is not complete');
-  if (result.secondCheck === 'not_made') parts.push('second check not made');
-  if (result.switchIgnored) parts.push("the switch doesn't apply to a statement");
-  return joinWithin(parts, '. Nothing was created.');
+  return RESULTS.compared(result.listedNotInQuickBooks.length);
 }

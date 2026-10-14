@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto';
 import type { JsonObject, ProviderAnswer, ProviderRequest } from '@autom8x/automation-sdk';
 import type { ProblemInput } from '@autom8x/automation-sdk/testing';
 
+import { CHART_ACCOUNT_TYPES, chartQuery } from '../quickbooks/query.js';
 import {
   faultAnswer,
+  queryAnswer,
   readAnswer,
   sampleCompany,
   type SimulatedCompany,
@@ -242,6 +244,9 @@ export class QuickBooksSimulator {
       case 'preferences.get':
         return { status: 200, body: readAnswer('Preferences', this.company.preferences) };
       case 'query.run':
+        // The chart read, byte for byte as `chartQuery` writes it: every active account of its
+        // types, each type compared as Intuit spells it (IN on the field is sandbox read S13).
+        if (call.input.query === chartQuery()) return answerChart(this.company);
         return answerQuery(this.company, String(call.input.query), {
           expenseAmountSearchable: this.expenseAmountSearchable,
         });
@@ -298,4 +303,13 @@ function canonicalJson(value: unknown): string {
     return `{${entries.join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
+}
+
+/** The chart read's answer: the company's active accounts of `CHART_ACCOUNT_TYPES`, at most 1,000. */
+function answerChart(company: SimulatedCompany): ProviderAnswer {
+  const types: readonly string[] = CHART_ACCOUNT_TYPES;
+  const rows = company.accounts.filter(
+    (row) => types.includes(String(row.AccountType)) && row.Active !== false,
+  );
+  return { status: 200, body: queryAnswer('Account', rows.slice(0, 1_000)) };
 }

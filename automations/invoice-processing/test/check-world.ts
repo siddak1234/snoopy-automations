@@ -3,45 +3,16 @@ import assert from 'node:assert/strict';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { checkFirstRead, type CheckInput, type CheckOutcome } from '../src/checks/check.js';
-import type { AccountRef, DocumentState, PayerState } from '../src/state.js';
+import type { DocumentState } from '../src/state.js';
 import { SAMPLES } from './sample-maker/samples.js';
 
 /**
  * `check-document`'s decision as a pure function, for the suites that drive it with one answer at
- * a time: the run's date fixed, the company the simulator names, and the accounts and payers the
- * settings may give.
+ * a time: the run's date fixed, on the QuickBooks path, the company the simulator names.
  */
 
 /** The run's UTC date in these suites. */
 export const TODAY = '2026-10-11';
-
-export const VISA: AccountRef = {
-  id: '41',
-  fullyQualifiedName: 'Company Visa',
-  accountType: 'Credit Card',
-};
-export const CHECKING: AccountRef = {
-  id: '35',
-  fullyQualifiedName: 'Checking',
-  accountType: 'Bank',
-};
-export const TEAM_OWED: AccountRef = {
-  id: '120',
-  fullyQualifiedName: 'Owed to Team Members',
-  accountType: 'Other Current Liability',
-};
-export const OWNER_EQUITY: AccountRef = {
-  id: '125',
-  fullyQualifiedName: 'Owner investments',
-  accountType: 'Equity',
-};
-
-/** Who paid, as find-payer keeps each route. */
-export const PAYERS: Readonly<Record<'owner' | 'employee' | 'not_employee', PayerState>> = {
-  owner: { route: 'owner', name: 'Pat Owner', employeeId: null, account: OWNER_EQUITY },
-  employee: { route: 'employee', name: 'Robin Example', employeeId: '55', account: TEAM_OWED },
-  not_employee: { route: 'not_employee', name: 'Sam Lee', employeeId: null, account: null },
-};
 
 /** A made-up sample's expected answer, by its name. */
 export function sampleAnswer(name: string, changes: JsonObject = {}): JsonObject {
@@ -62,9 +33,7 @@ export const statement = (changes: JsonObject = {}) => sampleAnswer('supplier-st
 export function check(answer: unknown, options: Partial<CheckInput> = {}): CheckOutcome {
   return checkFirstRead({
     answer,
-    switchOn: false,
-    payer: null,
-    paidFrom: VISA,
+    quickBooks: true,
     companyName: 'Sample Bakery',
     legalName: 'Sample Bakery LLC',
     today: TODAY,
@@ -72,10 +41,12 @@ export function check(answer: unknown, options: Partial<CheckInput> = {}): Check
   });
 }
 
-/** With the switch on and `payer` as who paid. */
-export function paidBy(payer: keyof typeof PAYERS, options: Partial<CheckInput> = {}) {
-  return { switchOn: true, payer: PAYERS[payer], ...options };
-}
+/** With the vendor "None": no company, and no recording rule weighed. */
+export const NONE_PATH: Partial<CheckInput> = {
+  quickBooks: false,
+  companyName: null,
+  legalName: null,
+};
 
 /** The document an answer checks to; fails the test when a rule stopped it. */
 export function documentOf(outcome: CheckOutcome): DocumentState {
@@ -83,7 +54,8 @@ export function documentOf(outcome: CheckOutcome): DocumentState {
   return (outcome as Extract<CheckOutcome, { outcome: 'ok' }>).document;
 }
 
-/** The rule an answer fails, or 'ok'. */
+/** The rule an answer meets — a rule it cannot be used under, or one QuickBooks cannot record it under — or 'ok'. */
 export function ruleOf(outcome: CheckOutcome): string {
-  return outcome.outcome === 'failed' ? outcome.rule : 'ok';
+  if (outcome.outcome === 'failed') return outcome.rule;
+  return outcome.recordingRule ?? 'ok';
 }

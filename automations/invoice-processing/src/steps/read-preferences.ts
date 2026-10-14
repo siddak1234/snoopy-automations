@@ -1,5 +1,4 @@
 import {
-  QUICKBOOKS_SENTENCES,
   entityOf,
   nameValueOf,
   readQuickBooks,
@@ -7,7 +6,7 @@ import {
 } from '@autom8x/automation-kit/quickbooks';
 import { isObject, type Step } from '@autom8x/automation-sdk';
 
-import { failedWith, quickBooksFailed } from '../outcome.js';
+import { notRecorded, readFailed } from '../quickbooks-path.js';
 import type { PreferencesState } from '../state.js';
 
 /**
@@ -16,15 +15,9 @@ import type { PreferencesState } from '../state.js';
  * closing date when QuickBooks returns one, the two duplicate-number settings, kept as
  * information only, and — from the same answer, OtherPrefs — whether a vendor credit may
  * carry its own number (`VendorAndPurchasesPrefs.UseCustomTxnNumbers`; Intuit's advice is to
- * check it before sending one). One `preferences.get`.
+ * check it before sending one). One `preferences.get`, on the QuickBooks path only; a failure is
+ * "not recorded in QuickBooks", and the run goes on to save the details (decision 6).
  */
-
-export const READ_PREFERENCES_SENTENCES = {
-  home_currency_missing:
-    "QuickBooks did not return this company's home currency, so the document cannot be checked. Run it again; if it repeats, contact support.",
-} as const;
-
-const WHAT = 'QuickBooks settings not read';
 
 export function readPreferences(clock: Clock): Step {
   return async ({ request, state, platform }) => {
@@ -36,22 +29,15 @@ export function readPreferences(clock: Clock): Step {
       input: {},
       purpose: 'reading the company settings',
     });
-    if (!read.ok) return quickBooksFailed(WHAT, read);
+    if (!read.ok) return readFailed(state, read);
     const prefs = entityOf(read.body, 'Preferences');
-    if (!prefs) {
-      return failedWith(WHAT, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer);
-    }
+    if (!prefs) return notRecorded(state, 'no_answer');
 
     const currency = objectAt(prefs, 'CurrencyPrefs');
     const home = objectAt(currency, 'HomeCurrency')?.value;
     const homeCurrency = typeof home === 'string' ? home.trim().toUpperCase() : '';
-    if (!/^[A-Z]{3}$/u.test(homeCurrency)) {
-      return failedWith(
-        WHAT,
-        'home_currency_missing',
-        READ_PREFERENCES_SENTENCES.home_currency_missing,
-      );
-    }
+    // No home currency: the document cannot be checked against it, so QuickBooks answered unusably.
+    if (!/^[A-Z]{3}$/u.test(homeCurrency)) return notRecorded(state, 'no_answer');
     const customTxnNumbers = objectAt(prefs, 'SalesFormsPrefs')?.CustomTxnNumbers;
     const other = objectAt(prefs, 'OtherPrefs')?.NameValue;
     const warning = nameValueOf(other, 'WarnDuplicateBillNumber');
@@ -67,15 +53,9 @@ export function readPreferences(clock: Clock): Step {
       warnDuplicateBillNumber: warning === 'true' ? true : warning === 'false' ? false : null,
       bookCloseDate: isCalendarDate(closing) ? closing : null,
     };
-    const books =
-      preferences.bookCloseDate !== null
-        ? `books closed through ${preferences.bookCloseDate}`
-        : closing === undefined || closing === null
-          ? 'no closing date from QuickBooks'
-          : 'closing date unreadable';
     return {
       outcome: 'ok',
-      summary: `Home currency ${homeCurrency}; multicurrency ${preferences.multiCurrencyEnabled ? 'on' : 'off'}; ${books}`,
+      summary: 'Settings read',
       state: { ...state, preferences },
     };
   };

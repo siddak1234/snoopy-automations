@@ -5,14 +5,12 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { readDecideState } from '../src/decide/contract.js';
 import { decideRun } from '../src/decide/decide.js';
-import { DECIDE_SENTENCES } from '../src/decide/fails.js';
 import { requiredLookups } from '../src/decide/lookup-uses.js';
 import {
   bill,
   check,
   creditNote,
   documentOf,
-  paidBy,
   receipt,
   sampleAnswer,
   statement,
@@ -21,8 +19,9 @@ import { VENDOR, decideState, found, type DecideSetUp } from './decide-world.js'
 
 /**
  * decide's whole input, per path (the plan's §2.9 "decide's whole input"): the keys every path
- * needs, Group 4's included, each one missing or malformed refused as "could not finish its
- * checks" — never a guess.
+ * needs — the chart among them — each one missing or malformed refused as the guard
+ * `state_incomplete` ("Something went wrong") — never a guess. A verification verify-read did not
+ * write is "not needed": it was not due.
  */
 
 /** A seller an inactive vendor's name leaves unlinked (D20). */
@@ -40,45 +39,34 @@ const PATHS: readonly [string, DecideSetUp][] = [
     { answer: sampleAnswer('card-refund'), vendor: NOT_LINKED },
   ],
   ['vendor credit', { answer: creditNote() }],
-  ['employee', { answer: receipt(), check: paidBy('employee', { paidFrom: null }) }],
-  ['owner', { answer: receipt(), check: paidBy('owner', { paidFrom: null }) }],
-  ['contractor', { answer: receipt(), check: paidBy('not_employee', { paidFrom: null }) }],
   ['statement', { answer: statement() }],
 ];
 
-const run = (state: JsonObject, switchOn = false) => decideRun({ state, config: {}, switchOn });
+const run = (state: JsonObject) => decideRun({ state, config: {} });
 
 test('a complete state decides on every path', () => {
   for (const [label, setUp] of PATHS) {
     const state = decideState(setUp);
     assert.ok(readDecideState(state), label);
-    assert.notEqual(run(state, setUp.check?.switchOn === true).outcome, 'failed', label);
+    assert.notEqual(run(state).outcome, 'failed', label);
   }
 });
 
+test('no verification is a second read not needed, and it decides', () => {
+  const { verification: _none, ...state } = decideState({ answer: bill() });
+  assert.deepEqual(readDecideState(state)?.verification, { status: 'not_needed' });
+  assert.equal(run(state).outcome, 'ok');
+});
+
 test('every key a path reads, missing or malformed, is "could not finish its checks"', () => {
-  const incomplete = {
-    outcome: 'failed',
-    failure: 'state_incomplete',
-    sentence: DECIDE_SENTENCES.state_incomplete,
-  };
-  const always = [
-    'file',
-    'company',
-    'preferences',
-    'accounts',
-    'document',
-    'verification',
-    'modelServed',
-  ];
+  const incomplete = { outcome: 'failed', failure: 'state_incomplete' };
+  const always = ['file', 'company', 'preferences', 'chart', 'document', 'modelServed', 'vendor'];
   for (const [label, setUp] of PATHS) {
     const state = decideState(setUp);
     const document = state.document as JsonObject;
     const vendor = state.vendor as JsonObject | undefined;
     const needed = [
       ...always,
-      ...(state.vendor === undefined ? [] : ['vendor']),
-      ...(state.payer === undefined ? [] : ['payer']),
       ...(state.customerNameClash === undefined ? [] : ['customerNameClash', 'employeeNameClash']),
       ...requiredLookups(document.route as never, document as never, (vendor ?? null) as never),
     ];
@@ -92,7 +80,8 @@ test('every key a path reads, missing or malformed, is "could not finish its che
     { file: { artifactId: '' } },
     { company: { legalName: null } },
     { preferences: { homeCurrency: 'USD' } },
-    { accounts: { owners: [] } },
+    { chart: { banks: [] } },
+    { chart: { ...(state.chart as JsonObject), uncategorized: 'Uncategorized Expense' } },
     { verification: { status: 'maybe' } },
     { modelServed: 7 },
     { vendor: { status: 'matched', id: '7' } },
@@ -126,29 +115,13 @@ test('every key a path reads, missing or malformed, is "could not finish its che
   }
 });
 
-test('the vendor: every route that has one needs it; an employee or owner has none; a contractor is found', () => {
+test("the vendor: every route needs it; a new vendor's bill needs both name checks", () => {
   const incomplete = (state: JsonObject) => run(state).outcome === 'failed';
-  assert.ok(
-    incomplete(
-      decideState({
-        answer: receipt(),
-        check: paidBy('employee', { paidFrom: null }),
-        state: { vendor: VENDOR as never },
-      }),
-    ),
-  );
-  assert.ok(
-    incomplete(
-      decideState({
-        answer: receipt(),
-        check: paidBy('not_employee', { paidFrom: null }),
-        vendor: { status: 'new' },
-      }),
-    ),
-  );
+  const { vendor: _gone, ...noVendor } = decideState({ answer: receipt() });
+  assert.ok(incomplete(noVendor));
   // The name checks: a new vendor's bill needs both; a matched vendor's, neither.
   const newBill = decideState({ answer: bill(), vendor: { status: 'new' } });
-  const { customerNameClash: _gone, ...withoutClash } = newBill;
+  const { customerNameClash: _clash, ...withoutClash } = newBill;
   assert.ok(incomplete(withoutClash));
   assert.notEqual(run(decideState({ answer: bill() })).outcome, 'failed');
 });
@@ -184,12 +157,11 @@ test('a seller not linked is a company receipt\'s or a card refund\'s alone, wit
       );
     }
   }
-  // A bill, a credit note, a statement and a contractor need QuickBooks' vendor itself.
+  // A bill, a credit note and a statement need QuickBooks' vendor itself.
   for (const setUp of [
     { answer: bill() },
     { answer: creditNote() },
     { answer: statement() },
-    { answer: receipt(), check: paidBy('not_employee', { paidFrom: null }) },
   ] satisfies DecideSetUp[]) {
     assert.ok(
       incomplete(decideState({ ...setUp, vendor: NOT_LINKED })),
@@ -249,15 +221,6 @@ test("which lookups must have run, per route (the plan's §5): a number QuickBoo
     ),
     ['amountLookup', 'numberLookup'],
   );
-  assert.deepEqual(requiredLookups('employee', document(receipt(), paidBy('employee')), null), [
-    'amountLookup',
-    'relatedLookup',
-  ]);
-  assert.deepEqual(requiredLookups('owner', document(bill(), paidBy('owner')), null), [
-    'amountLookup',
-    'numberLookup',
-    'relatedLookup',
-  ]);
   assert.deepEqual(requiredLookups('statement', document(statement()), matched), [
     'amountLookup',
     'numberLookup',

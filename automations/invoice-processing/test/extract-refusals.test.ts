@@ -4,14 +4,20 @@ import { test } from 'node:test';
 import { CallbackRefusedError, type ModelCompletion } from '@autom8x/automation-sdk';
 import { NO_ANSWER, refusalFixture, type ProblemInput } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_SENTENCES } from '../src/steps/extract.js';
+import { EXTRACT_FAILS } from '../src/steps/extract.js';
+import { RUN_FAILS } from '../src/words.js';
 import { GOOD_ANSWER, completion, everythingSaid, lines, pdf, setUp } from './fixtures.js';
 
 /**
- * Every way `extract` ends a run on an answer the platform gave: a fixed sentence for the
- * run's reason, the reason word in the timeline, nothing created — and never a word of the
- * model's text or the platform's own.
+ * Every way `extract` ends a run on an answer the platform gave: one of the spec's sentences
+ * (§3.F) for the run's reason and its line, the reason word in the log alone — and never a word of
+ * the model's text or the platform's own.
  */
+
+const UNREADABLE = RUN_FAILS.unreadable;
+const BUSY = RUN_FAILS.ai_busy;
+const UNAVAILABLE = RUN_FAILS.ai_unavailable;
+const FILE = RUN_FAILS.file;
 
 /** A world whose model answers every attempt with `answer`, or rejects with it. */
 async function ended(answer: (model: string) => Promise<ModelCompletion | typeof NO_ANSWER>) {
@@ -28,10 +34,12 @@ function assertEndsWith(
   label: string,
 ): void {
   assert.deepEqual(outcome.result, { outcome: 'failed', failureReason: sentence }, label);
-  assert.deepEqual(
-    outcome.line,
-    ['extract', 'failed', `The document could not be read (${reason})`],
-    label,
+  assert.deepEqual(outcome.line, ['extract', 'failed', sentence], label);
+  assert.ok(
+    outcome.world.logs.some(
+      ([, message, fields]) => message === 'step_failed' && fields?.reason === reason,
+    ),
+    `${label}: the code in the log`,
   );
   assert.equal(outcome.world.platform.modelCalls.length, 1, `${label}: one call, never repeated`);
 }
@@ -45,23 +53,15 @@ test('every model off the schema, not JSON or cut off: the could-not-be-read sen
     ['cut off at the cap', '{"documentType":"bill","lineItems":[', 'length'],
   ] as const) {
     const outcome = await ended((model) => Promise.resolve(completion(model, text, finish)));
-    assertEndsWith(outcome, 'answer_unusable', EXTRACT_SENTENCES.answer_unusable, label);
+    assertEndsWith(outcome, 'answer_unusable', UNREADABLE, label);
     assert.equal(outcome.world.platform.modelAttempts.length, 2, `${label}: both models tried`);
   }
-  assert.equal(
-    EXTRACT_SENTENCES.answer_unusable,
-    'The document could not be read; try a clearer photo or the PDF.',
-  );
+  assert.equal(UNREADABLE, "The document can't be read. Try a clearer photo.");
 });
 
 test('every model declining the document: the declined sentence', async () => {
   const outcome = await ended((model) => Promise.resolve(completion(model, '', 'content_filter')));
-  assertEndsWith(
-    outcome,
-    'content_filtered',
-    'The model provider declined to read this document.',
-    'filtered',
-  );
+  assertEndsWith(outcome, 'content_filtered', UNREADABLE, 'filtered');
 });
 
 test('every model empty or silent (a reasonless 502): the no-answer sentence', async () => {
@@ -69,12 +69,7 @@ test('every model empty or silent (a reasonless 502): the no-answer sentence', a
     ['empty', (model: string) => Promise.resolve(completion(model, '   '))],
     ['no answer in time', () => Promise.resolve(NO_ANSWER)],
   ] as const) {
-    assertEndsWith(
-      await ended(answer),
-      'no_answer',
-      'No model could read the document just now, and nothing was created. Start the run again with the document in a few minutes.',
-      label,
-    );
+    assertEndsWith(await ended(answer), 'no_answer', BUSY, label);
   }
 });
 
@@ -87,34 +82,14 @@ test("the plan's refusals on the first attempt, each after one model call", asyn
       details: { reason, ...details },
     });
   for (const [answer, reason, sentence] of [
-    [
-      forbidden('over_plan_limit', { used: 25, limit: 25 }),
-      'allowance_used',
-      'This workspace has used its 25 model calls this month.',
-    ],
-    [
-      forbidden('over_plan_limit', { used: 1_000, limit: 1_000 }),
-      'allowance_used',
-      'This workspace has used its 1,000 model calls this month.',
-    ],
-    [
-      forbidden('over_plan_limit', { used: 'many' }),
-      'allowance_used',
-      'This workspace has used its model calls this month.',
-    ],
-    [
-      forbidden('capability_not_in_plan', { used: 0 }),
-      'plan_without_model_calls',
-      "This workspace's plan does not include model calls.",
-    ],
-    [
-      forbidden('entitlements_not_configured', { used: 3 }),
-      'plan_check_unavailable',
-      "Model calls could not be checked against this workspace's plan just now; start the run again with the document later.",
-    ],
+    [forbidden('over_plan_limit', { used: 25, limit: 25 }), 'allowance_used', UNAVAILABLE],
+    [forbidden('over_plan_limit', { used: 1_000, limit: 1_000 }), 'allowance_used', UNAVAILABLE],
+    [forbidden('over_plan_limit', { used: 'many' }), 'allowance_used', UNAVAILABLE],
+    [forbidden('capability_not_in_plan', { used: 0 }), 'plan_without_model_calls', UNAVAILABLE],
+    [forbidden('entitlements_not_configured', { used: 3 }), 'plan_check_unavailable', UNAVAILABLE],
   ] as const) {
     const outcome = await ended(answer);
-    assertEndsWith(outcome, reason, sentence, sentence);
+    assertEndsWith(outcome, reason, sentence, reason);
     assert.deepEqual(outcome.world.platform.modelAttempts, [], 'refused before any vendor call');
   }
 });
@@ -128,12 +103,7 @@ test('503 NOT_CONFIGURED, the platform before its key: not switched on, and not 
       details: { component: 'model gateway' },
     }),
   );
-  assertEndsWith(
-    outcome,
-    'model_calls_off',
-    'Model calls are not switched on yet.',
-    'unconfigured',
-  );
+  assertEndsWith(outcome, 'model_calls_off', UNAVAILABLE, 'unconfigured');
 });
 
 test("each of the run's file refusals, and a file the run was not given, has its own sentence", async () => {
@@ -145,35 +115,15 @@ test("each of the run's file refusals, and a file the run was not given, has its
       details: { reason },
     });
   for (const [answer, reason, sentence] of [
-    [
-      fileRefusal(422, 'content_type_not_accepted'),
-      'file_type',
-      'The document must be a PDF, JPEG or PNG file.',
-    ],
-    [
-      fileRefusal(422, 'file_too_large'),
-      'file_too_large',
-      'The document file is larger than 3.5 MB.',
-    ],
-    [
-      fileRefusal(422, 'file_content_mismatch'),
-      'file_mismatch',
-      'The document file is not the type it says it is; upload the PDF or photo again.',
-    ],
-    [
-      fileRefusal(422, 'file_encrypted'),
-      'file_encrypted',
-      'The PDF is password-protected; upload a copy without a password.',
-    ],
-    [
-      fileRefusal(502, 'file_integrity'),
-      'file_integrity',
-      'The document file could not be read back from storage; start the run again with the document.',
-    ],
+    [fileRefusal(422, 'content_type_not_accepted'), 'file_type', FILE],
+    [fileRefusal(422, 'file_too_large'), 'file_too_large', FILE],
+    [fileRefusal(422, 'file_content_mismatch'), 'file_mismatch', FILE],
+    [fileRefusal(422, 'file_encrypted'), 'file_encrypted', FILE],
+    [fileRefusal(502, 'file_integrity'), 'file_integrity', FILE],
     [
       refusing({ status: 404, code: 'NOT_FOUND', detail: 'The requested resource was not found' }),
       'file_gone',
-      'The document file is no longer available; start the run again with the document.',
+      FILE,
     ],
   ] as const) {
     assertEndsWith(await ended(answer), reason, sentence, reason);
@@ -182,11 +132,7 @@ test("each of the run's file refusals, and a file the run was not given, has its
   const world = setUp();
   world.platform.readArtifact = () => Promise.resolve(pdf());
   world.platform.artifacts = [];
-  assert.deepEqual(await world.run(), {
-    outcome: 'failed',
-    failureReason:
-      'The document file is no longer available; start the run again with the document.',
-  });
+  assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: FILE });
   assert.deepEqual(world.platform.modelCalls, [], 'refused before the call was made');
 });
 
@@ -202,7 +148,7 @@ test("OpenRouter refusing the platform's key or credit (a 502 with its upstream 
         }),
       ),
       'model_account_refused',
-      'Model calls are unavailable on the platform right now; start the run again with the document later.',
+      UNAVAILABLE,
       upstreamStatus,
     );
   }
@@ -217,14 +163,13 @@ test("OpenRouter refusing the platform's key or credit (a 502 with its upstream 
       }),
     ),
     'no_answer',
-    EXTRACT_SENTENCES.no_answer,
+    BUSY,
     '404 upstream',
   );
 });
 
 test('a refusal of the request itself is a fault on our side; the deadline, out of time; the flood valve, busy', async () => {
-  const fault =
-    'The document could not be sent to be read because of a fault on our side; nothing was created.';
+  const fault = UNAVAILABLE;
   for (const [problem, reason, sentence] of [
     [
       { status: 400, code: 'BAD_REQUEST', detail: 'outputSchema uses pattern' },
@@ -275,23 +220,15 @@ test('a refusal of the request itself is a fault on our side; the deadline, out 
         details: { reason: 'deadline_exceeded' },
       },
       'out_of_time',
-      'The run ran out of time before the document was read; start it again with the document.',
+      UNAVAILABLE,
     ],
-    [
-      { status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' },
-      'busy',
-      'Autom8x is busy; run it again in a few minutes.',
-    ],
+    [{ status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' }, 'busy', BUSY],
     [
       { status: 503, code: 'DEPENDENCY_FAILURE', detail: 'Runs service is unavailable' },
       'no_answer',
-      EXTRACT_SENTENCES.no_answer,
+      BUSY,
     ],
-    [
-      { status: 504, code: 'DEPENDENCY_FAILURE', detail: 'timeout' },
-      'no_answer',
-      EXTRACT_SENTENCES.no_answer,
-    ],
+    [{ status: 504, code: 'DEPENDENCY_FAILURE', detail: 'timeout' }, 'no_answer', BUSY],
   ] as const) {
     assertEndsWith(await ended(refusing(problem)), reason, sentence, `${problem.status} ${reason}`);
   }
@@ -332,15 +269,16 @@ test('an answer a platform should have refused — not JSON, not an object, the 
     assertEndsWith(
       { world, result: await world.run(), line: lines(world.platform).at(-1) },
       'answer_unusable',
-      EXTRACT_SENTENCES.answer_unusable,
+      UNREADABLE,
       label,
     );
   }
 });
 
-test('every sentence fits the one-line bound; none carries the platform’s words or the model’s', async () => {
-  for (const sentence of Object.values(EXTRACT_SENTENCES))
-    assert.ok(sentence.length <= 200, sentence);
+test("every sentence is one of the spec's, within the one-line bound; none carries the platform's words or the model's", async () => {
+  for (const fail of Object.values(EXTRACT_FAILS)) {
+    assert.ok([UNREADABLE, BUSY, UNAVAILABLE, FILE].includes(RUN_FAILS[fail]), fail);
+  }
   const marker = 'QZ7LEAK';
   for (const answer of [
     (model: string) => Promise.resolve(completion(model, `{"vendorName":"${marker}"}`)),

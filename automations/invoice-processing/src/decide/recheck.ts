@@ -24,16 +24,14 @@ import type { RecordPlan } from './plan.js';
  *   QuickBooks numbers a credit itself, Intuit's model), so a search by it could never find a copy
  *   of this record: two uploads of one credit note, both approved, would make two;
  * - a company receipt and a card refund: the bank-feed check (D21), the charge most likely to
- *   arrive while a run waits — "possibly from your bank feed";
- * - an employee and an owner: the day's journal entries; a contractor: the bills to them for the
- *   total and date —
+ *   arrive while a run waits —
  *
  * the very search decide's lookup step sent, one row more and ordered by when QuickBooks created
  * each record, newest first (`ORDERBY MetaData.CreateTime DESC`, which Intuit applies before the
  * bound: sandbox G4–5 and the verifier's probe) — so a copy made while the run waited is never
  * hidden behind older matches past the bound — and the facts the one rule (`duplicate-rule.ts`)
  * compares. Built by decide and saved with the plan, so the re-check reads nothing else: not the
- * settings, not the document.
+ * chart, not the document.
  */
 export interface Recheck {
   readonly lookup: DuplicateLookup;

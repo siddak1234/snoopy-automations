@@ -14,7 +14,6 @@ import {
   expenseLine,
   firstRun,
   heldState,
-  journalLine,
   outputOf,
   runLine,
   writesOf,
@@ -23,9 +22,10 @@ import {
 /**
  * Every path end to end on the simulator (the plan's §2.6, §2.8, §5 "Writes"), straight through and
  * held then approved: exactly the record decide planned is created — one request, the body below,
- * the memo naming the run that wrote it (after an approval the continuation, the recommended
- * answer) — and nothing else; CurrencyRef USD with multicurrency on; a rejected or expired approval,
- * and a statement, create nothing; every output holds to the manifest's outputSchema.
+ * its accounts picked from the company's chart, the memo naming the run that wrote it (after an
+ * approval the continuation, the recommended answer) — and nothing else; CurrencyRef USD with
+ * multicurrency on; a rejected or expired approval, and a statement, create nothing; every output
+ * holds to the manifest's outputSchema.
  */
 
 const FIRST_RUN_ID = '11111111-1111-4111-8111-111111111111';
@@ -44,22 +44,22 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
         DueDate: '2026-10-14',
         DocNumber: 'HOS-1042',
         PrivateNote: runLine(runId),
-        Line: [expenseLine(413.34, 'Bill HOS-1042 from Harrowgate Office Supply', '57')],
+        Line: [expenseLine(413.34, 'Bill HOS-1042 from Harrowgate Office Supply', '64')],
       },
     ],
   ],
   [
-    'a company receipt on the card',
+    'a company receipt on the card named with its last four',
     { answer: receipt() },
     (runId) => [
       'purchase.create',
       {
         PaymentType: 'CreditCard',
-        AccountRef: { value: '41' },
+        AccountRef: { value: '42' },
         TxnDate: '2026-09-27',
         EntityRef: { value: '9', type: 'Vendor' },
         PrivateNote: `${runLine(runId)} Receipt 55120 from Tidewell Hardware.`,
-        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '57')],
+        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '305')],
       },
     ],
   ],
@@ -75,17 +75,13 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
         EntityRef: { value: '9', type: 'Vendor' },
         PrintStatus: 'NotSet',
         PrivateNote: `${runLine(runId)} Receipt 55120 from Tidewell Hardware.`,
-        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '57')],
+        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '305')],
       },
     ],
   ],
   [
-    'a company receipt paid by card from the bank, its seller no vendor',
-    {
-      answer: receipt(),
-      bare: true,
-      config: { ...PAID.bank.config, companyCardLast4: '4417' },
-    },
+    'a company receipt paid by card from the bank — the company has no card — its seller no vendor',
+    { answer: receipt(), bare: true, ...PAID.bank },
     (runId) => [
       'purchase.create',
       {
@@ -93,7 +89,7 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
         AccountRef: { value: '35' },
         TxnDate: '2026-09-27',
         PrivateNote: `${runLine(runId)} Receipt 55120 from Tidewell Hardware.`,
-        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '57')],
+        Line: [expenseLine(60.63, 'Receipt 55120 from Tidewell Hardware', '305')],
       },
     ],
   ],
@@ -104,12 +100,12 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
       'purchase.create',
       {
         PaymentType: 'CreditCard',
-        AccountRef: { value: '41' },
+        AccountRef: { value: '42' },
         TxnDate: '2026-10-02',
         EntityRef: { value: '9', type: 'Vendor' },
         Credit: true,
         PrivateNote: `${runLine(runId)} Refund R-6603 from Tidewell Hardware.`,
-        Line: [expenseLine(23.72, 'Refund R-6603 from Tidewell Hardware', '57')],
+        Line: [expenseLine(23.72, 'Refund R-6603 from Tidewell Hardware', '305')],
       },
     ],
   ],
@@ -122,57 +118,11 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
         VendorRef: { value: '7' },
         TxnDate: '2026-09-22',
         PrivateNote: `${runLine(runId)} Number CM-0077. Credits invoice HOS-1042.`,
-        Line: [expenseLine(203.2, 'Credit note CM-0077 from Harrowgate Office Supply', '57')],
-      },
-    ],
-  ],
-  [
-    'an employee who paid',
-    { answer: receipt(), ...PAID.employee },
-    (runId) => [
-      'journalEntry.create',
-      {
-        TxnDate: '2026-09-27',
-        PrivateNote: `${runLine(runId)} Robin Example paid Tidewell Hardware, receipt 55120.`,
-        Line: [
-          journalLine(60.63, 'Tidewell Hardware, receipt 55120', 'Debit', '57'),
-          journalLine(60.63, 'Tidewell Hardware, receipt 55120', 'Credit', '120', '55'),
-        ],
-      },
-    ],
-  ],
-  [
-    'an owner who paid',
-    { answer: receipt(), ...PAID.owner },
-    (runId) => [
-      'journalEntry.create',
-      {
-        TxnDate: '2026-09-27',
-        PrivateNote: `${runLine(runId)} Pat Owner paid Tidewell Hardware, receipt 55120.`,
-        Line: [
-          journalLine(60.63, 'Pat Owner paid Tidewell Hardware, receipt 55120', 'Debit', '57'),
-          journalLine(60.63, 'Pat Owner paid Tidewell Hardware, receipt 55120', 'Credit', '125'),
-        ],
-      },
-    ],
-  ],
-  [
-    'a contractor who paid',
-    { answer: receipt(), ...PAID.contractor },
-    (runId) => [
-      'bill.create',
-      {
-        VendorRef: { value: '31' },
-        TxnDate: '2026-09-27',
-        PrivateNote: `${runLine(runId)} Sam Lee paid Tidewell Hardware, receipt 55120.`,
-        Line: [expenseLine(60.63, 'Tidewell Hardware, receipt 55120', '57')],
+        Line: [expenseLine(203.2, 'Credit note CM-0077 from Harrowgate Office Supply', '64')],
       },
     ],
   ],
 ];
-
-/** The paths that always hold: a person who paid (D16). */
-const ALWAYS_HELD = new Set(['an employee who paid', 'an owner who paid', 'a contractor who paid']);
 
 /** The run held, whatever its amount. */
 const held = (run: RouteRun): RouteRun => ({
@@ -189,7 +139,6 @@ function assertNoRefusedField(body: JsonObject, label: string): void {
 
 test('straight through: each path creates exactly the record decide planned, in one request, the memo naming the run', async () => {
   for (const [label, run, body] of PATHS) {
-    if (ALWAYS_HELD.has(label)) continue;
     const world = await firstRun(run);
     const output = outputOf(world.result);
     assert.deepEqual(writesOf(world.platform.providerCalls), [body(FIRST_RUN_ID)], label);
@@ -202,7 +151,6 @@ test('straight through: each path creates exactly the record decide planned, in 
       'bill.create': world.simulator.company.bills,
       'purchase.create': world.simulator.company.purchases,
       'vendorCredit.create': world.simulator.company.vendorCredits,
-      'journalEntry.create': world.simulator.company.journalEntries,
     }[operation];
     assert.deepEqual(
       held?.map((row) => row.Id),
@@ -214,7 +162,7 @@ test('straight through: each path creates exactly the record decide planned, in 
 
 test('held, then approved: every path creates exactly the record decide saved — the continuation writes it, its memo naming the continuation', async () => {
   for (const [label, run, body] of PATHS) {
-    const first = await firstRun(ALWAYS_HELD.has(label) ? run : held(run));
+    const first = await firstRun(held(run));
     const state = heldState(first) as unknown as SavedState;
     assert.deepEqual(
       writesOf(first.platform.providerCalls),
@@ -226,14 +174,10 @@ test('held, then approved: every path creates exactly the record decide saved �
     assert.deepEqual(writesOf(approved.providerCalls), [body(CONTINUATION_RUN_ID)], label);
     assert.equal(output.decidedBy, 'after approval', label);
     assert.deepEqual(output.holdReasons, state.holdReasons, label);
-    // QuickBooks' total for the record; a journal entry's TotalAmt is always 0, so none.
-    assert.equal(
-      (output.record as JsonObject).quickBooksTotalCents,
-      state.plan.record === 'journal_entry' ? null : state.plan.amountCents,
-      label,
-    );
+    // QuickBooks' total for the record.
+    assert.equal((output.record as JsonObject).quickBooksTotalCents, state.plan.amountCents, label);
     assertOutputValid(output, label);
-    // The amount, date, accounts and memo words are the saved plan's, whatever the settings now say.
+    // The amount, date, accounts and memo words are the saved plan's, whatever QuickBooks now holds.
     const [, sent] = body(CONTINUATION_RUN_ID);
     assert.equal(sent.TxnDate, state.plan.date, label);
     assert.ok(String(sent.PrivateNote).endsWith(state.plan.memo), label);
@@ -241,20 +185,20 @@ test('held, then approved: every path creates exactly the record decide saved �
   }
 });
 
-test('approval writes the saved plan, never the settings as they are by then', async () => {
+test("approval writes the saved plan, never the company's accounts as they are by then", async () => {
   const first = await firstRun(held({ answer: receipt() }));
-  // Paid from and the category changed while it waited: the plan's accounts are still written.
+  // The card it was paid from and the category's account renamed or gone while it waited: the
+  // plan's accounts are still the ones written.
+  first.simulator.company.accounts = first.simulator.company.accounts.filter(
+    (account) => !['42', '305'].includes(String(account.Id)),
+  );
   const approved = await approve(first, {
-    config: {
-      expenseAccount: 'Office Supplies',
-      paidFromAccount: 'Checking',
-      categoryRepairsAndMaintenance: 'Meals',
-    },
+    config: { vendor: 'quickbooks', holdAboveAmount: 9999 },
   });
   const [[, body]] = writesOf(approved.providerCalls) as [[string, JsonObject]];
-  assert.deepEqual([body.PaymentType, body.AccountRef], ['CreditCard', { value: '41' }]);
+  assert.deepEqual([body.PaymentType, body.AccountRef], ['CreditCard', { value: '42' }]);
   assert.deepEqual((body.Line as JsonObject[])[0]?.AccountBasedExpenseLineDetail, {
-    AccountRef: { value: '57' },
+    AccountRef: { value: '305' },
   });
 });
 
@@ -267,7 +211,7 @@ test('with multicurrency on, every write sends CurrencyRef USD (sandbox S13); of
     },
   });
   for (const [label, run] of PATHS) {
-    const first = await firstRun(multicurrency(ALWAYS_HELD.has(label) ? run : held(run)));
+    const first = await firstRun(multicurrency(held(run)));
     const approved = await approve(first);
     const writes = writesOf(approved.providerCalls);
     assert.equal(writes.length, 1, label);
@@ -294,7 +238,7 @@ test('a new vendor approved: confirm-vendor finds none, create-vendor adds it as
         DueDate: '2026-10-14',
         DocNumber: 'HOS-1042',
         PrivateNote: runLine(CONTINUATION_RUN_ID),
-        Line: [expenseLine(413.34, 'Bill HOS-1042 from Harrowgate Office Supply', '57')],
+        Line: [expenseLine(413.34, 'Bill HOS-1042 from Harrowgate Office Supply', '64')],
       },
     ],
   ]);
@@ -307,11 +251,9 @@ test('a new vendor approved: confirm-vendor finds none, create-vendor adds it as
       ['confirm-no-duplicate', 'ok'],
       ['create-record', 'ok'],
     ],
+    'save-details skipped: the record is the result',
   );
-  assert.equal(
-    approved.steps[2]?.[2],
-    "Added vendor 'Harrowgate Office Supply' to QuickBooks (Id 1001)",
-  );
+  assert.equal(approved.steps[2]?.[2], 'Vendor added');
   const output = outputOf(approved.result);
   assert.deepEqual(output.newVendor, {
     how: 'created',
@@ -354,7 +296,7 @@ test('the same continuation dispatched twice — one key per step — makes one 
 
 test('no body a write sends names Id, SyncToken or sparse at the top level, in any case (the platform refuses one: refused_field)', async () => {
   for (const [label, run] of PATHS) {
-    const first = await firstRun(ALWAYS_HELD.has(label) ? run : held(run));
+    const first = await firstRun(held(run));
     const approved = await approve(first);
     for (const [operation, body] of writesOf(approved.providerCalls)) {
       assert.equal(refusedFieldOf(operation, body), undefined, label);

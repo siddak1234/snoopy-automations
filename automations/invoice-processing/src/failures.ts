@@ -1,99 +1,96 @@
-import { QUICKBOOKS_SENTENCES } from '@autom8x/automation-kit/quickbooks';
 import {
   CallbackRefusedError,
-  UNANSWERED_REASON,
   isUnanswered,
   isUnsent,
   type Automation,
+  type InvokeRequest,
   type Logger,
   type Step,
+  type StepContext,
   type StepResult,
 } from '@autom8x/automation-sdk';
 
-import { NOUNS } from './writes/lines.js';
-import { createdOf, vendorCreated } from './writes/saved-state.js';
-import { recordedUnfinished } from './writes/sentences.js';
+import { codeOf } from './outcome.js';
+import { runResult } from './output.js';
+import {
+  UNCONFIRMED_LINE,
+  notRecorded,
+  onQuickBooksPath,
+  quickBooksStateOf,
+  unconfirmed,
+} from './quickbooks-path.js';
+import { RUN_FAILS } from './words.js';
+import { createdOf } from './writes/saved-state.js';
 
 /**
- * A fixed sentence for a run that ends on a THROWN error.
+ * How a run ends when a step THROWS — and what the log keeps.
  *
- * A step throws a platform failure it cannot judge — no answer, a 502 that names no
- * reason — unchanged, so the SDK's step retry can repeat it; when the attempts are
- * spent the runner reports the step failed in fixed words and throws on, and the
- * serving shell would make the error's own message the run's reason: for a refusal,
- * `callback provider refused with 502: ` and the platform's raw problem. Instead each
- * step is wrapped to note which step threw — in a WeakMap keyed by the error object
- * itself, so the SDK's marks on it still hold and its retry still reads it — and the
- * run's `execute` turns the throw into a failed result with that step's sentence. One
- * log line keeps the error's name, status, code and reason, never its message.
+ * A step throws a platform failure it cannot judge — no answer, a 502 that names no reason —
+ * unchanged, so the SDK's step retry can repeat it. When the attempts are spent:
+ *
+ * - a QuickBooks step is ended by the run's `recover` (`recoverQuickBooks`): QuickBooks did not
+ *   answer, so the document is "not recorded in QuickBooks" — or, for a write, QuickBooks "didn't
+ *   confirm" — and the run goes on to save the details (the session's decision 6);
+ * - any other step ends the run, and the serving shell would make the error's own message its
+ *   reason. Instead each step is wrapped to note which step threw — in a WeakMap keyed by the error
+ *   object itself, so the SDK's marks on it still hold and its retry still reads it — and the run's
+ *   `execute` turns the throw into a failed result with one of the spec's sentences (§3.F).
  *
  * The runner reports each step AFTER it returns, and a report the platform refuses — the Edge's
- * 429 — throws outside any step: once a write was made the run must not say "run it again in a
- * few minutes", nor send the person to a timeline that lacks the line naming the record. So the
- * wrapper also notes, per run, what the steps have done (`RunNotes`), and the run ends saying it.
+ * 429 — throws outside any step: once a record was made, or a write QuickBooks may have made, the run
+ * must not say "Try again". So the wrapper also notes, per run, what a step made (`RunNotes`), and
+ * the run ends saying it. It
+ * logs each reason code a step's result carries (`src/outcome.ts`): codes reach the log, never a
+ * person.
  */
 
 const thrownBy = new WeakMap<object, string>();
-/** A sentence a step registered on the error it throws on unchanged: it wins over every other. */
-const sentences = new WeakMap<object, string>();
 
 /** What a run's steps have done that its end must not deny. */
 export interface RunNotes {
-  /** create-record made the record: its noun and QuickBooks Id. */
-  readonly recorded: { readonly noun: string; readonly id: string } | null;
-  /** create-vendor added the vendor: every later sentence says so. */
-  readonly vendorAdded: boolean;
+  /** create-record made the record: the result line naming it (§3.F). */
+  readonly recorded: string | null;
+  /** A write nothing answered: QuickBooks may hold it, and the run must not say "Try again". */
+  readonly unconfirmed: boolean;
   /** The sentence the last step to return ended the run with; the runner says it once reported. */
   readonly failureReason: string | undefined;
 }
 
-const NOTHING_DONE: RunNotes = { recorded: null, vendorAdded: false, failureReason: undefined };
+const NOTHING_DONE: RunNotes = { recorded: null, unconfirmed: false, failureReason: undefined };
 
 /** Per run, keyed by its request — the one object every step's context carries. */
 const runs = new WeakMap<object, RunNotes>();
 
-/** A step's result, noted against its run: a record made and a vendor added stay noted. */
-function noteResult(request: object, result: StepResult): void {
+/** The result line of the record a state holds, or null. */
+function recordedLine(request: InvokeRequest, result: StepResult): string | null {
+  const state = result.outcome === 'skipped' ? undefined : result.state;
+  if (state === undefined || !createdOf(state)) return null;
+  try {
+    return runResult(state, request).summary;
+  } catch {
+    return null;
+  }
+}
+
+/** A step's result, noted against its run: a record made, or a write unconfirmed, stays noted. */
+function noteResult(request: InvokeRequest, result: StepResult): void {
   const before = runs.get(request) ?? NOTHING_DONE;
   const state = result.outcome === 'skipped' ? undefined : result.state;
-  const created = state === undefined ? undefined : createdOf(state);
-  const noun = created && Object.hasOwn(NOUNS, created.record) ? NOUNS[created.record] : 'record';
+  const quickBooks = state === undefined ? null : quickBooksStateOf(state);
   runs.set(request, {
-    recorded: created ? { noun, id: created.id } : before.recorded,
-    vendorAdded: before.vendorAdded || (state !== undefined && vendorCreated(state)),
+    recorded: recordedLine(request, result) ?? before.recorded,
+    unconfirmed:
+      before.unconfirmed ||
+      (quickBooks !== null && quickBooks !== undefined && 'unconfirmed' in quickBooks),
     failureReason: result.outcome === 'failed' ? result.failureReason : undefined,
   });
 }
 
-export const THROWN_SENTENCES = {
-  /** The Edge's flood valve: a callback refused 429. */
-  busy: 'Autom8x is busy; run it again in a few minutes.',
-  receive:
-    'The document file could not be read. Run it again in a few minutes; if it repeats, upload the file again.',
-  quickbooks: QUICKBOOKS_SENTENCES.qb_unreachable,
-  /**
-   * `extract` or `verify-read`: no answer reached the step — a timeout, a reset, a cut connection —
-   * or its one repeat never reached the platform either. The SDK's own sentence for an answer that
-   * never came.
-   */
-  unanswered: UNANSWERED_REASON,
-  other:
-    "Bills & Receipts stopped before it finished. Check the run's timeline before running it again.",
-} as const;
-
-/**
- * Every step that READS QuickBooks: a throw there ends with QuickBooks' sentence. The writes —
- * create-vendor, create-record — throw on only what nothing answered, for the SDK's retry (sandbox
- * S6), and register their own "did not confirm" sentence on it (`noteSentence`), so a write that
- * QuickBooks may have made never ends "nothing was created"; any other throw there is a fault, and
- * the general sentence sends the person to the timeline. A record made, and a vendor added, the
- * run's end names itself (`RunNotes`): the line naming them may be the very report that failed.
- */
+/** Every step that calls QuickBooks; the two writes among them. */
 export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'read-company',
   'read-preferences',
   'find-accounts',
-  'find-payer',
   'find-vendor',
   'find-vendor-company',
   'find-similar-vendors',
@@ -105,26 +102,48 @@ export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
   'find-other-record',
   'confirm-company',
   'confirm-vendor',
+  'create-vendor',
   'confirm-no-duplicate',
+  'create-record',
 ]);
+export const WRITE_STEPS: ReadonlySet<string> = new Set(['create-vendor', 'create-record']);
 
-/** The steps that call a model: a throw there that got no answer ends with the SDK's sentence. */
+/** The steps that call a model: a throw there that got no answer is "AI is busy". */
 export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read']);
 
 /**
- * A step's own sentence for an error it throws on unchanged — for the SDK's retry to read — so that
- * when the attempts are spent the run ends with it: confirm-no-duplicate's, once this run added a
- * vendor, says so; create-vendor's and create-record's say QuickBooks did not confirm the write.
+ * The run's `recover`: a QuickBooks step that threw until the SDK's attempts were spent ends
+ * "not recorded in QuickBooks: QuickBooks didn't answer" — a write, "QuickBooks didn't confirm",
+ * since it may have been made — and the run goes on (decision 6). Any other step's throw ends the
+ * run as before (`undefined`).
  */
-export function noteSentence(error: unknown, sentence: string): void {
-  if (typeof error === 'object' && error !== null) sentences.set(error, sentence);
+export function recoverQuickBooks(log: Logger) {
+  return (stepId: string, error: unknown, context: StepContext): StepResult | undefined => {
+    if (!QUICKBOOKS_STEPS.has(stepId) || !onQuickBooksPath(context.request, context.state)) {
+      return undefined;
+    }
+    log('info', 'quickbooks_step_gave_up', {
+      runId: context.request.runId,
+      stepId,
+      ...shapeOf(error),
+    });
+    const result = WRITE_STEPS.has(stepId)
+      ? unconfirmed(context.state)
+      : notRecorded(context.state, 'no_answer');
+    noteResult(context.request, result);
+    return result;
+  };
 }
 
 /**
  * Each step, noting the step id against anything it throws, then throwing it on unchanged — and
- * what it returned against its run (`RunNotes`), before the runner reports it.
+ * what it returned against its run (`RunNotes`), before the runner reports it; a result carrying a
+ * reason code is logged with its step.
  */
-export function noteThrows(steps: Readonly<Record<string, Step>>): Record<string, Step> {
+export function noteThrows(
+  steps: Readonly<Record<string, Step>>,
+  log: Logger,
+): Record<string, Step> {
   return Object.fromEntries(
     Object.entries(steps).map(([stepId, step]): [string, Step] => [
       stepId,
@@ -135,6 +154,10 @@ export function noteThrows(steps: Readonly<Record<string, Step>>): Record<string
         } catch (error) {
           if (typeof error === 'object' && error !== null) thrownBy.set(error, stepId);
           throw error;
+        }
+        const code = codeOf(result);
+        if (code !== undefined) {
+          log('info', 'step_failed', { runId: context.request.runId, stepId, reason: code });
         }
         noteResult(context.request, result);
         return result;
@@ -174,27 +197,19 @@ export function sentenceFor(
   error: unknown,
   run: RunNotes = NOTHING_DONE,
 ): string {
-  // The record stands, whatever threw after it: say so, never "run it again".
-  if (run.recorded) {
-    return recordedUnfinished(run.recorded.noun, run.recorded.id, run.vendorAdded);
-  }
-  const registered = typeof error === 'object' && error !== null ? sentences.get(error) : undefined;
-  if (registered !== undefined) return registered;
-  // A step that ended the run, its report refused — a write QuickBooks did not confirm, say: the
-  // run ends as that step said.
+  // The record stands, whatever threw after it: say so, never "Try again" — nor after a write
+  // QuickBooks may have made.
+  if (run.recorded !== null) return run.recorded;
+  if (run.unconfirmed) return UNCONFIRMED_LINE;
+  // A step that ended the run, its report refused: the run ends as that step said.
   if (run.failureReason !== undefined) return run.failureReason;
-  // Only these two can end a run after create-vendor: every QuickBooks read but
-  // confirm-no-duplicate's, which registers its own sentence, and both model calls come before it.
-  const vendor = run.vendorAdded ? ' The new vendor was added to QuickBooks.' : '';
-  if (error instanceof CallbackRefusedError && error.status === 429) {
-    return `${THROWN_SENTENCES.busy}${vendor}`;
+  // The Edge's flood valve: busy, at whatever step — never "add the file again".
+  const busy = error instanceof CallbackRefusedError && error.status === 429;
+  if (stepId !== undefined && MODEL_STEPS.has(stepId)) {
+    if (busy || isUnanswered(error) || isUnsent(error)) return RUN_FAILS.ai_busy;
   }
-  if (stepId === 'receive') return THROWN_SENTENCES.receive;
-  if (stepId !== undefined && QUICKBOOKS_STEPS.has(stepId)) return THROWN_SENTENCES.quickbooks;
-  if (stepId !== undefined && MODEL_STEPS.has(stepId) && (isUnanswered(error) || isUnsent(error))) {
-    return THROWN_SENTENCES.unanswered;
-  }
-  return `${THROWN_SENTENCES.other}${vendor}`;
+  if (stepId === 'receive' && !busy) return RUN_FAILS.file;
+  return RUN_FAILS.other;
 }
 
 /** What the log keeps of an error. */

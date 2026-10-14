@@ -1,358 +1,150 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { FAULT_MARKER, faultAnswer, sampleAccount } from '@autom8x/automation-kit/testing';
+import { chartQuery } from '@autom8x/automation-kit/quickbooks';
+import { sampleAccount } from '@autom8x/automation-kit/testing';
+import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { find, failed, only, query } from './accounts-world.js';
-import { everythingSaid, type setUp } from './fixtures.js';
+import { UNCATEGORIZED_EXPENSE, chartOf, chartStateOf, type ChartState } from '../src/chart.js';
+import { NONE, callsOf, lines, setUp } from './fixtures.js';
 
 /**
- * `find-accounts`: one `query.run` — `FullyQualifiedName IN (…)` — turns every account the
- * flow's settings name into one QuickBooks account each, or ends the run with find-account's
- * sentence naming the setting (A1), before any model call. The default category's cases
- * here; each role's, the owners' and multicurrency's in `find-accounts-roles.test.ts`.
+ * `find-accounts` (v2): ONE query reads the company's accounts — no setting names one, so no setting
+ * can fail a run (U6, U7; the owner's build-19 run failed on "Parent:Child" before any AI step) —
+ * and keeps them, split by what each can be, for decide to pick from. Line (§3.E): `{n} accounts
+ * read`.
  */
 
-test('the default category alone: the exact IN text is sent, and the run continues with the account', async () => {
-  const { result, line, sent, platform } = await find(only('Utilities:Electric'));
-  assert.deepEqual(sent, [
+async function found(edit: (world: ReturnType<typeof setUp>) => void = () => undefined) {
+  const world = setUp();
+  edit(world);
+  const result = await world.run();
+  const line = lines(world.platform).find(([stepId]) => stepId === 'find-accounts');
+  const chart = result.outcome === 'success' ? chartStateOf(result.output?.chart) : undefined;
+  return { ...world, result, line, chart };
+}
+
+const ids = (accounts: readonly { id: string }[]) => accounts.map((account) => account.id);
+
+test("one query, the spec's own text, under the step's one key; the line counts what QuickBooks answered", async () => {
+  const { platform, request, line, chart } = await found();
+  assert.deepEqual(callsOf(platform, request, 'find-accounts'), [
+    { providerId: 'quickbooks', operation: 'query.run', input: { query: chartQuery() } },
+  ]);
+  assert.equal(
+    chartQuery(),
+    "SELECT * FROM Account WHERE AccountType IN ('Bank', 'Credit Card', 'Expense', 'Other Expense', 'Cost of Goods Sold') AND Active = true MAXRESULTS 1000",
+  );
+  assert.ok(chart);
+  assert.deepEqual(line, ['find-accounts', 'ok', `${chart.read} accounts read`]);
+});
+
+test('the chart, split by role: categories, banks, cards, and Uncategorized Expense found by its name', async () => {
+  const { chart } = await found();
+  assert.ok(chart);
+  assert.deepEqual(ids(chart.banks), ['35', '36']);
+  assert.deepEqual(ids(chart.cards), ['41', '42']);
+  assert.ok(ids(chart.categories).includes('300') && ids(chart.categories).includes('80'));
+  assert.deepEqual(chart.uncategorized, {
+    id: '300',
+    name: 'Uncategorized Expense',
+    fullName: 'Uncategorized Expense',
+    type: 'Expense',
+    detailType: 'OtherMiscellaneousServiceCost',
+  });
+  // A sub-account keeps its own name and its full name.
+  assert.deepEqual(
+    chart.categories.find((account) => account.id === '57'),
     {
-      providerId: 'quickbooks',
-      operation: 'query.run',
-      input: { query: query(['Utilities:Electric']) },
+      id: '57',
+      name: 'Electric',
+      fullName: 'Utilities:Electric',
+      type: 'Expense',
+      detailType: 'Utilities',
     },
-  ]);
-  assert.deepEqual(line, [
-    'find-accounts',
-    'ok',
-    'Default category: Utilities:Electric (QuickBooks Id 57)',
-  ]);
-  assert.ok(result.outcome === 'success');
-  assert.deepEqual(result.output?.accounts, {
-    defaultCategory: { id: '57', fullyQualifiedName: 'Utilities:Electric', accountType: 'Expense' },
-    categories: {},
-    paidFrom: null,
-    teamOwed: null,
-    ownerInvestment: null,
-    owners: [],
-  });
-  assert.equal(platform.modelCalls.length, 2, 'both reads');
-});
-
-test('every account setting in one query, each name once, two rows a name; each kept by its role', async () => {
-  const config = {
-    expenseAccount: 'Utilities:Electric',
-    paidFromAccount: 'Company Visa',
-    teamOwedAccount: 'Owed to Team Members',
-    ownerInvestmentAccount: 'Owner investments',
-    ownerNames: 'Pat Owner = Partner investments:Pat; Sam Partner',
-    categoryMeals: 'Meals',
-    categoryOfficeSupplies: 'Office Supplies',
-    categoryMaterials: 'Cost of Goods Sold',
-    // The same account as another setting is asked for once.
-    categoryUtilitiesAndPhone: 'Utilities:Electric',
-  };
-  const { result, line, sent } = await find(config, (world) =>
-    world.simulator.company.accounts.push(
-      sampleAccount('126', 'Partner investments:Pat', 'Equity', { Classification: 'Equity' }),
-    ),
-  );
-  assert.deepEqual(sent, [
-    {
-      providerId: 'quickbooks',
-      operation: 'query.run',
-      input: {
-        query: query([
-          'Utilities:Electric',
-          'Company Visa',
-          'Owed to Team Members',
-          'Owner investments',
-          'Meals',
-          'Office Supplies',
-          'Cost of Goods Sold',
-          'Partner investments:Pat',
-        ]),
-      },
-    },
-  ]);
-  assert.deepEqual(line, [
-    'find-accounts',
-    'ok',
-    'Default category: Utilities:Electric (QuickBooks Id 57); 8 more accounts found',
-  ]);
-  assert.ok(result.outcome === 'success');
-  const ref = (id: string, name: string, type: string) => ({
-    id,
-    fullyQualifiedName: name,
-    accountType: type,
-  });
-  assert.deepEqual(result.output?.accounts, {
-    defaultCategory: ref('57', 'Utilities:Electric', 'Expense'),
-    categories: {
-      meals: ref('66', 'Meals', 'Expense'),
-      office_supplies: ref('64', 'Office Supplies', 'Expense'),
-      utilities_and_phone: ref('57', 'Utilities:Electric', 'Expense'),
-      materials: ref('80', 'Cost of Goods Sold', 'Cost of Goods Sold'),
-    },
-    paidFrom: ref('41', 'Company Visa', 'Credit Card'),
-    teamOwed: ref('120', 'Owed to Team Members', 'Other Current Liability'),
-    ownerInvestment: ref('125', 'Owner investments', 'Equity'),
-    owners: [
-      { name: 'Pat Owner', account: ref('126', 'Partner investments:Pat', 'Equity') },
-      { name: 'Sam Partner', account: null },
-    ],
-  });
-});
-
-test('spaces around the colons go; the capitals must be QuickBooks’ own — IN on an account’s names compares with case (sandbox S1) — and the sentence says so', async () => {
-  const spaced = await find(only('  Utilities : Electric '));
-  assert.deepEqual(spaced.sent[0]?.input, { query: query(['Utilities:Electric']) });
-  assert.equal(spaced.result.outcome, 'success');
-  const lower = await find(only('utilities:electric'));
-  assert.deepEqual(lower.sent[0]?.input, { query: query(['utilities:electric']) });
-  assert.deepEqual(
-    lower.result,
-    failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
-    ),
-  );
-  // Two settings in two spellings are asked for once, as first typed: each holds to its own.
-  const right = await find({
-    expenseAccount: 'Utilities:Electric',
-    categoryRent: 'UTILITIES:ELECTRIC',
-  });
-  assert.deepEqual(right.sent[0]?.input, { query: query(['Utilities:Electric']) });
-  assert.deepEqual(
-    right.result,
-    failed(
-      "No QuickBooks account matches the 'Category for rent' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
-    ),
-  );
-  // An answer row in other capitals than the setting is no match either.
-  const cased = await find(only('Utilities:Electric'), (world) =>
-    world.simulator.script('query.run', [
-      {
-        status: 200,
-        body: {
-          QueryResponse: { Account: [sampleAccount('57', 'UTILITIES:ELECTRIC', 'Expense')] },
-        },
-      },
-    ]),
-  );
-  assert.equal(
-    cased.line?.[2],
-    'Default category "Utilities:Electric" not resolved (account_not_found)',
   );
 });
 
-test('an apostrophe is escaped and a backslash written four times in the text sent (sandbox G4–5)', async () => {
-  const add = (name: string) => (world: ReturnType<typeof setUp>) =>
-    world.simulator.company.accounts.push(sampleAccount('70', name, 'Expense'));
-  const apostrophes = await find(only("Legal:O'Brien's Fees"), add("Legal:O'Brien's Fees"));
-  assert.deepEqual(apostrophes.sent[0]?.input, { query: query(["Legal:O\\'Brien\\'s Fees"]) });
-  assert.equal(apostrophes.result.outcome, 'success');
-  const backslash = await find(only('Fees\\Misc'), add('Fees\\Misc'));
-  assert.deepEqual(backslash.sent[0]?.input, { query: query(['Fees\\\\\\\\Misc']) });
-  assert.equal(backslash.result.outcome, 'success');
-});
-
-test('no match fails as not found; an account number typed in front gets the hint', async () => {
-  const missing = await find(only('Utilities:Gas'));
-  assert.deepEqual(
-    missing.result,
-    failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
-    ),
-  );
-  assert.equal(
-    missing.line?.[2],
-    'Default category "Utilities:Gas" not resolved (account_not_found)',
-  );
-  assert.deepEqual(missing.platform.modelCalls, [], 'before any model call');
-  const numbered = await find(only('6100 Utilities:Electric'));
-  assert.deepEqual(
-    numbered.result,
-    failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the name without the number in front, exactly as QuickBooks shows it, capitals included, then run it again.",
-    ),
-  );
-  assert.equal(
-    numbered.line?.[2],
-    'Default category "6100 Utilities:Electric" not resolved (account_not_found_number)',
-  );
-});
-
-test('two matches fail as ambiguous, an inactive account as inactive — found by the name QuickBooks gives it, "(deleted)"', async () => {
-  const two = await find(only('Utilities:Electric'), (world) =>
-    world.simulator.company.accounts.push(
-      sampleAccount('58', 'Utilities:Electric', 'Expense', { Active: false }),
-    ),
-  );
-  assert.deepEqual(
-    two.result,
-    failed(
-      "Two QuickBooks accounts match the 'Default category' setting. Type the full Parent:Child name, or rename one in QuickBooks, then run it again.",
-    ),
-  );
-  const inactive = await find(only('Office Supplies'), (world) => {
-    world.simulator.company.accounts.find((row) => row.Id === '64')!.Active = false;
-  });
-  assert.deepEqual(
-    inactive.result,
-    failed(
-      "The account in the 'Default category' setting is inactive in QuickBooks. Make it active or choose another, then run it again.",
-    ),
-  );
-  // As QuickBooks keeps an inactive account (sandbox S1): renamed "<name> (deleted)". Found by that
-  // name, it is inactive — not missing.
-  const renamed = await find(only('Office Supplies'), (world) => {
-    const row = world.simulator.company.accounts.find((account) => account.Id === '64')!;
-    Object.assign(row, {
-      Name: 'Office Supplies (deleted)',
-      FullyQualifiedName: 'Office Supplies (deleted)',
-      Active: false,
-    });
-  });
-  assert.deepEqual(renamed.sent[0]?.input, { query: query(['Office Supplies']) });
-  assert.deepEqual(renamed.result, inactive.result);
-  assert.equal(
-    renamed.line?.[2],
-    'Default category "Office Supplies" not resolved (account_inactive)',
-  );
-  // An active account made with the name an inactive one had is that account.
-  const remade = await find(only('Utilities:Electric'), (world) =>
-    world.simulator.company.accounts.push(
-      sampleAccount('59', 'Utilities:Electric (deleted)', 'Expense', { Active: false }),
-    ),
-  );
-  assert.ok(remade.result.outcome === 'success');
-  assert.equal(
-    (remade.result.output?.accounts as { defaultCategory: { id: string } }).defaultCategory.id,
-    '57',
-  );
-  // A row with no Active field is Intuit's default: active.
-  const unmarked = await find(only('Office Supplies'), (world) => {
-    delete world.simulator.company.accounts.find((row) => row.Id === '64')!.Active;
-  });
-  assert.equal(unmarked.result.outcome, 'success');
-});
-
-test('a category may be an Expense, Other Expense or Cost of Goods Sold account; anything else fails as the wrong kind', async () => {
-  for (const accountType of ['Expense', 'Other Expense', 'Cost of Goods Sold']) {
-    const { result } = await find(only('Office Supplies'), (world) => {
-      world.simulator.company.accounts.find((row) => row.Id === '64')!.AccountType = accountType;
-    });
-    assert.equal(result.outcome, 'success', accountType);
-  }
-  for (const accountType of ['Bank', 'Equity', 'expense', 'Income', 'Other Current Liability']) {
-    const { result, line } = await find(only('Office Supplies'), (world) => {
-      world.simulator.company.accounts.find((row) => row.Id === '64')!.AccountType = accountType;
-    });
-    assert.deepEqual(
-      result,
-      failed(
-        "The account in the 'Default category' setting is not an Expense, Other Expense or Cost of Goods Sold account in QuickBooks. Choose one that is, then run it again.",
-      ),
-      accountType,
-    );
-    assert.equal(line?.[2], 'Default category "Office Supplies" not resolved (account_wrong_kind)');
-  }
-  const untyped = await find(only('Office Supplies'), (world) => {
-    delete world.simulator.company.accounts.find((row) => row.Id === '64')!.AccountType;
-  });
-  assert.equal(
-    untyped.line?.[2],
-    'Default category "Office Supplies" not resolved (account_wrong_kind)',
-  );
-});
-
-test('a returned name that differs at all is no match', async () => {
-  const { result } = await find(only('Utilities:Electric'), (world) =>
-    world.simulator.script('query.run', [
-      {
-        status: 200,
-        body: {
-          QueryResponse: { Account: [sampleAccount('57', 'Utilities:Electric2', 'Expense')] },
-        },
-      },
-    ]),
-  );
-  assert.deepEqual(
-    result,
-    failed(
-      "No QuickBooks account matches the 'Default category' setting. Type the full name exactly as QuickBooks shows it, capitals included, without its number, then run it again.",
-    ),
-  );
-});
-
-test('a default category missing, blank or not text fails without any call; one with an empty part, or over 1,000 characters, too', async () => {
-  const unset = failed("Set 'Default category' in this flow's settings, then run it again.");
-  for (const setting of [undefined, '', '   ', 42, null]) {
-    const { result, line, sent } = await find(only(setting));
-    assert.deepEqual(result, unset, String(setting));
-    assert.equal(line?.[2], 'Default category not set (account_setting_missing)');
-    assert.deepEqual(sent, []);
-  }
-  const invalid = failed(
-    "The 'Default category' setting is not a QuickBooks account name. Type the full name, such as Utilities:Electric, then run it again.",
-  );
-  for (const setting of [
-    'Utilities:',
-    ':Electric',
-    'Utilities::Electric',
-    'Utilities: :Electric',
-    'A'.repeat(1_001),
+test("no setting is read: whatever the flow's settings say — v1's account names, garbage, nothing — the chart is the same", async () => {
+  const charts: (ChartState | undefined)[] = [];
+  for (const config of [
+    { vendor: 'quickbooks' },
+    { vendor: 'quickbooks', expenseAccount: 'Parent:Child', paidFromAccount: 'Nope' },
+    { vendor: 'quickbooks', companyCardLast4: '44 17', ownerNames: '=;=' },
   ]) {
-    const { result, sent } = await find(only(setting));
-    assert.deepEqual(result, invalid, setting.slice(0, 20));
-    assert.deepEqual(sent, []);
+    const world = setUp({ config });
+    const result = await world.run();
+    assert.equal(result.outcome, 'success', JSON.stringify(config));
+    charts.push(result.outcome === 'success' ? chartStateOf(result.output?.chart) : undefined);
   }
-  const over = await find(only('A'.repeat(1_001)));
-  assert.equal(
-    over.line?.[2],
-    `Default category "${'A'.repeat(80)}" not resolved (account_setting_invalid)`,
-  );
-  const exact = await find(only('A'.repeat(1_000)));
-  assert.equal(exact.sent.length, 1);
+  assert.deepEqual(charts[1], charts[0]);
+  assert.deepEqual(charts[2], charts[0]);
 });
 
-test('a query Fault fails by its number with the unusual-characters hint; its text appears nowhere', async () => {
-  const { result, line, platform } = await find(only('Repairs & Maintenance'), (world) =>
-    world.simulator.script('query.run', [{ status: 400, body: faultAnswer('4000') }]),
-  );
-  assert.deepEqual(
-    result,
-    failed(
-      "QuickBooks answered with error 4000 while looking up the accounts in this flow's settings. Remove unusual characters from them, then run it again.",
-    ),
-  );
-  assert.equal(
-    line?.[2],
-    "The accounts in this flow's settings were not looked up (qb_error 4000)",
-  );
-  assert.ok(!everythingSaid(platform, result).includes(FAULT_MARKER));
-  // The typed value may be in a timeline line, never in the run's reason.
-  assert.ok(result.outcome === 'failed' && !result.failureReason.includes('Repairs'));
+test('with the vendor "None" it never runs: no query, no line', async () => {
+  const world = setUp({ config: NONE });
+  const result = await world.run();
+  assert.equal(result.outcome, 'success');
+  assert.deepEqual(world.platform.providerCalls, []);
+  assert.ok(!lines(world.platform).some(([stepId]) => stepId === 'find-accounts'));
 });
 
-test('no QueryResponse, or a matched row without an Id, is an unexpected answer', async () => {
-  const unexpected = failed(
-    'QuickBooks answered in an unexpected way. Run it again; if it repeats, reconnect QuickBooks.',
-  );
-  const noResponse = await find(only('Utilities:Electric'), (world) =>
-    world.simulator.script('query.run', [{ status: 200, body: { Account: [] } }]),
-  );
-  assert.deepEqual(noResponse.result, unexpected);
-  for (const id of [undefined, '', 57]) {
-    const { result, line } = await find(only('Utilities:Electric'), (world) => {
-      const row = world.simulator.company.accounts.find((account) => account.Id === '57')!;
-      if (id === undefined) delete row.Id;
-      else row.Id = id;
-    });
-    assert.deepEqual(result, unexpected, String(id));
-    assert.equal(
-      line?.[2],
-      "The accounts in this flow's settings were not looked up (unexpected_answer)",
-    );
+test('a company with no account of those types is an answer with none: nothing to pick, decided later', async () => {
+  const { chart, line } = await found((world) => {
+    world.simulator.company.accounts = [];
+  });
+  assert.deepEqual(chart, { categories: [], banks: [], cards: [], uncategorized: null, read: 0 });
+  assert.deepEqual(line, ['find-accounts', 'ok', '0 accounts read']);
+});
+
+test('chartOf: inactive accounts and other types left out; with multicurrency on, USD accounts alone; a row missing its Id or type left out', () => {
+  const rows: JsonObject[] = [
+    sampleAccount('1', 'Checking', 'Bank'),
+    sampleAccount('2', 'Old Bank', 'Bank', { Active: false }),
+    sampleAccount('3', 'Euro Card', 'Credit Card', { CurrencyRef: { value: 'EUR' } }),
+    sampleAccount('4', 'Freight', 'Other Expense'),
+    sampleAccount('5', 'A/P', 'Accounts Payable'),
+    { Id: '6', FullyQualifiedName: 'No Type' },
+    { AccountType: 'Expense', FullyQualifiedName: 'No Id' },
+    sampleAccount('7', '  uncategorized expense ', 'Expense'),
+  ];
+  const single = chartOf(rows, false);
+  assert.deepEqual(ids(single.banks), ['1']);
+  assert.deepEqual(ids(single.cards), ['3']);
+  assert.deepEqual(ids(single.categories), ['4', '7']);
+  assert.equal(single.uncategorized?.id, '7', 'its full name trimmed, in any capitals');
+  assert.equal(single.read, rows.length);
+  const multi = chartOf(rows, true);
+  assert.deepEqual(ids(multi.cards), [], 'not USD');
+  // Uncategorized Expense must be an Expense account.
+  const cogs = chartOf([sampleAccount('8', UNCATEGORIZED_EXPENSE, 'Cost of Goods Sold')], false);
+  assert.equal(cogs.uncategorized, null);
+});
+
+test('an answer that is no query answer keeps the document out of QuickBooks; the run goes on', async () => {
+  const { result, line } = await found((world) => {
+    world.simulator.script('query.run', [{ status: 200, body: { Account: [] } }]);
+  });
+  assert.ok(result.outcome === 'success');
+  assert.deepEqual(result.output?.quickBooks, { notRecorded: "QuickBooks didn't answer" });
+  assert.deepEqual(line, [
+    'find-accounts',
+    'failed',
+    "Not recorded in QuickBooks: QuickBooks didn't answer",
+  ]);
+});
+
+test('chartStateOf reads back only a chart as find-accounts keeps it', () => {
+  const chart = chartOf([sampleAccount('1', 'Checking', 'Bank')], false);
+  assert.deepEqual(chartStateOf(JSON.parse(JSON.stringify(chart))), chart);
+  for (const broken of [
+    undefined,
+    {},
+    { ...chart, banks: 'none' },
+    { ...chart, cards: [{ id: '1' }] },
+    { ...chart, uncategorized: 'x' },
+    { ...chart, read: '1' },
+  ]) {
+    assert.equal(chartStateOf(broken), undefined, JSON.stringify(broken));
   }
 });

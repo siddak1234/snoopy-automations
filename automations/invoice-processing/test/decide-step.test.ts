@@ -6,14 +6,14 @@ import { RecordingPlatform, invokeFixture } from '@autom8x/automation-sdk/testin
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
 import { decide as decideStep } from '../src/decide/step.js';
-import { bill, paidBy, receipt, statement } from './check-world.js';
+import { bill, receipt, statement } from './check-world.js';
 import { RUN_ID, VENDOR, decideState, type DecideSetUp } from './decide-world.js';
 import { manifests } from './fixtures.js';
 
 /**
- * decide as a step on the SDK's runner — step 18 of v1, after Group 4's lookups: one held result at
- * most, failed with the fixed sentence, a statement compared and done, and an approval resuming
- * after decide with the saved plan.
+ * decide as a step on the SDK's runner — after the lookups: one held result at most, its reason the
+ * hold phrases; not recorded, the run going on; a statement compared and done; and an approval
+ * resuming after decide with the saved plan. Lines (§3.E): `Ready to record`, `Waiting for approval`.
  */
 
 /** decide between a seed and the step after it, as the pipeline will hold it. */
@@ -24,7 +24,7 @@ function world(setUp: DecideSetUp, input: JsonObject = {}) {
     manifests: [
       {
         templateId: TEMPLATE_ID,
-        version: 1,
+        version: 2,
         requiredCapabilities: [],
         pipeline: [{ id: 'seed' }, { id: 'decide' }, { id: 'after' }],
       },
@@ -43,34 +43,28 @@ function world(setUp: DecideSetUp, input: JsonObject = {}) {
   const request = invokeFixture({
     runId: RUN_ID,
     templateId: TEMPLATE_ID,
-    templateVersion: 1,
+    templateVersion: 2,
     config: setUp.config ?? {},
     input,
   });
   return { platform, request, seen, run: () => automation.execute(request, platform), automation };
 }
 
-test('held: one result, held at decide, its reason line, the wording under its line, the saved plan', async () => {
-  const { platform, run } = world(
-    { answer: receipt(), check: paidBy('employee', { paidFrom: null }) },
-    { paidPersonally: true },
-  );
+test('held: one result, held at decide, its reason the hold phrases, the saved plan', async () => {
+  const { platform, run } = world({ answer: receipt({ paymentMethod: 'cash' }) });
   const result = await run();
   assert.equal(result.outcome, 'held');
   assert.ok(result.outcome === 'held');
   assert.equal(result.held.stepId, 'decide');
-  assert.equal(result.held.reason, 'Paid personally: Robin Example paid Tidewell Hardware, $60.63');
+  assert.equal(result.held.reason, 'Paid from Checking?');
   const line = platform.steps.at(-1);
   assert.deepEqual(
-    [line?.stepId, line?.outcome, line?.heldReason],
-    [
-      'decide',
-      'held',
-      'Approve to record this expense and that the company owes Robin Example $60.63',
-    ],
+    [line?.stepId, line?.outcome, line?.summary, line?.heldReason],
+    ['decide', 'held', 'Waiting for approval', 'Paid from Checking?'],
   );
-  assert.equal((result.held.state as JsonObject).v, 1);
-  assert.deepEqual((result.held.state as JsonObject).holdReasons, ['paid_personally']);
+  assert.equal((result.held.state as JsonObject).v, 2);
+  assert.deepEqual((result.held.state as JsonObject).holdReasons, ['paid_from_pick']);
+  assert.equal((result.held.state as JsonObject).chart, undefined, 'the chart left behind');
   assert.deepEqual([platform.providerCalls, platform.modelCalls, platform.mails], [[], [], []]);
 });
 
@@ -101,27 +95,33 @@ test('approval resumes after decide with the saved plan, and nothing before it r
   );
 });
 
-test('straight through: ok, the state replaced by the saved plan; a fail: the fixed sentence', async () => {
+test('straight through: ok, the state replaced by the saved plan; a rule QuickBooks keeps: not recorded, the run going on', async () => {
   const straight = world({ answer: bill() });
   const result = await straight.run();
   assert.equal(result.outcome, 'success');
   assert.equal((straight.seen[0] as JsonObject).route, 'bill');
-  assert.ok(
-    straight.platform.steps
-      .find((step) => step.stepId === 'decide')
-      ?.summary.startsWith('No reason to hold'),
+  assert.equal(
+    straight.platform.steps.find((step) => step.stepId === 'decide')?.summary,
+    'Ready to record',
   );
   const closed = world({ answer: bill(), preferences: { bookCloseDate: '2026-12-31' } });
-  assert.deepEqual(await closed.run(), {
-    outcome: 'failed',
-    failureReason: "The document's date is in a period closed in QuickBooks. Nothing was created.",
-  });
-  assert.deepEqual(closed.platform.steps.at(-1)?.summary, 'Not recorded (period_closed)');
+  assert.equal((await closed.run()).outcome, 'success');
+  assert.deepEqual(
+    closed.platform.steps.at(-2)?.summary,
+    'Not recorded in QuickBooks: that date is in closed books',
+  );
+  const after = closed.seen[0] as JsonObject;
+  assert.deepEqual(after.quickBooks, { notRecorded: 'that date is in closed books' });
+  assert.equal(after.chart, undefined, 'the chart left behind');
+  assert.ok(after.document, 'the document kept, for its details');
   const incomplete = world({
     answer: bill(),
     state: { vendor: undefined } as unknown as JsonObject,
   });
-  assert.equal((await incomplete.run()).outcome, 'failed');
+  assert.deepEqual(await incomplete.run(), {
+    outcome: 'failed',
+    failureReason: 'Something went wrong. Try again.',
+  });
 });
 
 test('a statement: compared, the run done with no approval, its comparison the state the output carries', async () => {
@@ -136,10 +136,10 @@ test('a statement: compared, the run done with no approval, its comparison the s
   ]);
 });
 
-test('in v1: decide is step 18 of the 24, after the nine lookups whose records it reads and before the steps an approval resumes at', () => {
+test('in v2: decide is step 17 of the 24, after the nine lookups whose records it reads and before the steps an approval resumes at', () => {
   const automation = define(manifests);
-  assert.equal(automation.steps.indexOf('decide'), 17);
-  assert.deepEqual(manifests[0]?.pipeline.map((step) => step.id).slice(7), [
+  assert.equal(automation.steps.indexOf('decide'), 16);
+  assert.deepEqual(manifests[0]?.pipeline.map((step) => step.id).slice(6), [
     'verify-read',
     'find-vendor',
     'find-vendor-company',
@@ -156,6 +156,7 @@ test('in v1: decide is step 18 of the 24, after the nine lookups whose records i
     'create-vendor',
     'confirm-no-duplicate',
     'create-record',
+    'save-details',
     'notify',
   ]);
   assert.equal(manifests[0]?.pipeline.length, 24);

@@ -1,37 +1,23 @@
-import {
-  QUICKBOOKS_SENTENCES,
-  entityOf,
-  nameValueOf,
-  readQuickBooks,
-  type Clock,
-} from '@autom8x/automation-kit/quickbooks';
-import { isObject, truncateText, type Step } from '@autom8x/automation-sdk';
+import { entityOf, readQuickBooks, type Clock } from '@autom8x/automation-kit/quickbooks';
+import { isObject, type Step } from '@autom8x/automation-sdk';
 
-import { failedWith, quickBooksFailed } from '../outcome.js';
+import { notRecorded, readFailed } from '../quickbooks-path.js';
 import type { CompanyState } from '../state.js';
+import { lineWith } from '../words.js';
 
 /**
- * `read-company` — prove the workspace's QuickBooks connection works and that the
- * company is a US company (v1 serves US companies only: a record elsewhere needs tax
- * settings this automation does not send), and keep its names for the later checks
- * that compare them, and whether it runs QuickBooks Payroll: CompanyInfo's
- * `PayrollFeature`, in Intuit's sample, for the note that an employee is repaid through a
- * Reimbursement pay item — and, from the same answer, when the company file was created
- * (`MetaData.CreateTime`), which confirm-company compares after an approval. One
- * `companyInfo.get`.
+ * `read-company` — the first QuickBooks step, on the QuickBooks path only: prove the workspace's
+ * QuickBooks connection works and that the company is a US company (this automation serves US
+ * companies only: a record elsewhere needs tax settings it does not send), and keep its names for
+ * the later checks that compare them, and — from the same answer — when the company file was
+ * created (`MetaData.CreateTime`), which confirm-company compares after an approval. One
+ * `companyInfo.get`. Anything that keeps QuickBooks from recording the document — not connected,
+ * no usable answer, another country — is "not recorded in QuickBooks", and the run goes on to
+ * save the details (decision 6).
  */
-
-export const READ_COMPANY_SENTENCES = {
-  company_not_us:
-    'Bills & Receipts works only with US QuickBooks companies, and this company is set up for another country.',
-  company_country_unknown:
-    'QuickBooks did not say which country this company is in, so Bills & Receipts cannot use it. Nothing was created.',
-} as const;
 
 /** `CompanyInfo.Country` for a US company: Intuit's samples show `USA` and `US`. */
 const UNITED_STATES = new Set(['US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA']);
-
-const WHAT = 'QuickBooks company not checked';
 
 export function readCompany(clock: Clock): Step {
   return async ({ request, state, platform }) => {
@@ -43,37 +29,28 @@ export function readCompany(clock: Clock): Step {
       input: {},
       purpose: 'reading the company',
     });
-    if (!read.ok) return quickBooksFailed(WHAT, read);
+    if (!read.ok) return readFailed(state, read);
     const info = entityOf(read.body, 'CompanyInfo');
     const name = info?.CompanyName;
     if (!info || typeof name !== 'string' || name.trim() === '') {
-      return failedWith(WHAT, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer);
+      return notRecorded(state, 'no_answer');
     }
     const country = String(info.Country ?? '');
     const normalized = country.trim().toUpperCase();
-    if (normalized === '') {
-      return failedWith(
-        WHAT,
-        'company_country_unknown',
-        READ_COMPANY_SENTENCES.company_country_unknown,
-      );
-    }
-    if (!UNITED_STATES.has(normalized)) {
-      return failedWith(WHAT, 'company_not_us', READ_COMPANY_SENTENCES.company_not_us);
-    }
+    // A company that does not say where it is answered unusably; one elsewhere cannot be used.
+    if (normalized === '') return notRecorded(state, 'no_answer');
+    if (!UNITED_STATES.has(normalized)) return notRecorded(state, 'not_us');
     const legalName = info.LegalName;
-    const payroll = nameValueOf(info.NameValue, 'PayrollFeature');
     const created = isObject(info.MetaData) ? info.MetaData.CreateTime : undefined;
     const company: CompanyState = {
       name,
       legalName: typeof legalName === 'string' && legalName.trim() !== '' ? legalName : null,
       country,
-      payrollFeature: payroll === 'true' ? true : payroll === 'false' ? false : null,
       createdAt: typeof created === 'string' && created.trim() !== '' ? created.trim() : null,
     };
     return {
       outcome: 'ok',
-      summary: `QuickBooks company: ${truncateText(name.trim(), 120)} (US)`,
+      summary: lineWith('QuickBooks: ', name.trim()),
       state: { ...state, company },
     };
   };

@@ -33,7 +33,10 @@ export interface Matches {
   readonly duplicates: readonly string[];
   /** A company receipt's bill from the same seller, open or paid (hold 6). */
   readonly matchedBill: MatchedBill | null;
-  /** A company bank or card charge for a paid-personally amount (hold 7). */
+  /**
+   * The bank or card charges for this amount on the account a receipt or a refund is paid from, in
+   * the bank-feed window (D21): "a bank or card charge matches" (hold 7's words, §2.6).
+   */
   readonly companyCharges: number;
   /** The document's number is already another record's of the kind it would be sent on. */
   readonly numberTaken: boolean;
@@ -75,7 +78,7 @@ export function matchesOf(state: DecideState): Matches {
   const amount = document.amountCents ?? 0;
   const date = document.date ?? '';
   const number = document.number;
-  const vendorId = vendor?.status === 'matched' ? vendor.id : null;
+  const vendorId = vendor.status === 'matched' ? vendor.id : null;
   const duplicates: string[] = [];
   let matchedBill: MatchedBill | null = null;
   let companyCharges = 0;
@@ -84,10 +87,12 @@ export function matchesOf(state: DecideState): Matches {
     if (found && !duplicates.includes(words)) duplicates.push(words);
   };
   const facts = document.route === 'statement' ? null : duplicateFactsOf(state);
-  /** Whether the lookup found a record the one rule calls a duplicate of the planned record. */
-  const found = (lookup: DuplicateLookup) =>
-    facts !== null &&
-    (state[lookup]?.records ?? []).some((record) => isDuplicate(facts, lookup, record));
+  /** The records the lookup found that the one rule calls duplicates of the planned record. */
+  const duplicatesIn = (lookup: DuplicateLookup) =>
+    facts === null
+      ? []
+      : (state[lookup]?.records ?? []).filter((record) => isDuplicate(facts, lookup, record));
+  const found = (lookup: DuplicateLookup) => duplicatesIn(lookup).length > 0;
 
   switch (document.route) {
     case 'bill': {
@@ -132,8 +137,8 @@ export function matchesOf(state: DecideState): Matches {
         ),
         "another vendor's bill for this amount",
       );
-      // D21: the bank-feed check on the Paid from account.
-      note(found('amountLookup'), 'a charge for this amount on the Paid from account');
+      // D21: the bank-feed check on the account it is paid from.
+      companyCharges = duplicatesIn('amountLookup').length;
       // D32: someone's reimbursement for the same purchase.
       note(
         rows(otherRecordLookup, 'journal_entry').some(
@@ -145,7 +150,8 @@ export function matchesOf(state: DecideState): Matches {
     }
     case 'card_refund':
       note(found('numberLookup'), 'a vendor credit with this number');
-      note(found('amountLookup'), 'a refund for this amount on the card');
+      // D21: a refund for this amount on the card.
+      companyCharges = duplicatesIn('amountLookup').length;
       break;
     case 'vendor_credit':
       numberTaken = rows(numberLookup, 'vendor_credit').some((credit) =>
@@ -154,22 +160,6 @@ export function matchesOf(state: DecideState): Matches {
       note(found('numberLookup'), 'a vendor credit with this number');
       note(found('amountLookup'), 'a vendor credit for this total and date');
       break;
-    case 'employee':
-    case 'owner':
-    case 'contractor': {
-      note(document.type === 'bill' && found('numberLookup'), 'a bill with this number');
-      note(
-        found('amountLookup'),
-        document.route === 'contractor'
-          ? 'a bill to them for this total and date'
-          : 'an entry owing them this amount',
-      );
-      companyCharges = rows(relatedLookup, 'expense').filter(
-        (expense) =>
-          !expense.credit && expense.totalCents === amount && inFeedWindow(expense.txnDate, date),
-      ).length;
-      break;
-    }
     case 'statement':
       break;
   }
@@ -202,7 +192,7 @@ export function originalBillAccount(
 ): { id: string; name: string; billId: string } | null {
   const { document, vendor, relatedLookup } = state;
   if (document.originalInvoiceNumber === null) return null;
-  const vendorId = vendor?.status === 'matched' ? vendor.id : null;
+  const vendorId = vendor.status === 'matched' ? vendor.id : null;
   const bills = rows(relatedLookup, 'bill').filter(
     (bill) => bill.vendorId === vendorId && sameNumber(bill, document.originalInvoiceNumber),
   );

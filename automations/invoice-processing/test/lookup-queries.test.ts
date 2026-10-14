@@ -24,7 +24,6 @@ import {
   check,
   creditNote,
   documentOf,
-  paidBy,
   receipt,
   sampleAnswer,
   statement,
@@ -203,33 +202,6 @@ test("a vendor credit: its number and its total and date among vendor credits �
   assert.equal(
     relatedSearch(doc(creditNote({ originalInvoiceNumber: most })), VENDOR, 'amount').query,
     `SELECT * FROM Bill WHERE DocNumber = '${most}' AND VendorRef = '7' MAXRESULTS 3`,
-  );
-});
-
-test('paid personally: a bill document’s number; an employee’s or owner’s entries on the day; a contractor’s bills; the company charge (hold 7; S4)', () => {
-  const employee = doc(receipt(), paidBy('employee', { paidFrom: null }));
-  assert.equal(
-    amountSearch(employee, null, 'amount').query,
-    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' MAXRESULTS 10",
-  );
-  assert.equal(
-    relatedSearch(employee, null, 'amount').query,
-    "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' MAXRESULTS 3",
-  );
-  assert.equal(
-    relatedSearch(employee, null, 'window').query,
-    "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY TxnDate DESC MAXRESULTS 50",
-  );
-  const owner = doc(bill(), paidBy('owner', { paidFrom: null }));
-  assert.equal(
-    numberSearch(owner, null).query,
-    "SELECT * FROM Bill WHERE DocNumber = 'HOS-1042' MAXRESULTS 3",
-  );
-  const samLee: VendorState = { ...VENDOR, id: '31', displayName: 'Sam Lee', vendor1099: true };
-  const contractor = doc(receipt(), paidBy('not_employee', { paidFrom: null }));
-  assert.equal(
-    amountSearch(contractor, samLee, 'amount').query,
-    "SELECT * FROM Bill WHERE TotalAmt = '60.63' AND TxnDate = '2026-09-27' AND VendorRef = '31' MAXRESULTS 3",
   );
 });
 

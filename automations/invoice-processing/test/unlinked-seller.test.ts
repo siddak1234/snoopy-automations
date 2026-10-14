@@ -11,9 +11,8 @@ import { lineOf, queriesOf, routeRun, sampleVendor, stateOf } from './lookups-wo
 /**
  * A company receipt's or a card refund's seller that an inactive vendor has, or two vendors have
  * (the owner's "complete all", 2026-10-11): the seller is looked up only to link an existing vendor
- * (D20), so it is not linked rather than failed — find-vendor's line says why, the record has no
- * payee and the seller in its memo and line text, and decide's line says "vendor not linked". A
- * bill, a credit note, a statement and a contractor still fail (find-vendor.test.ts).
+ * (D20), so it is not linked rather than kept out — the record has no payee and the seller in its
+ * memo and line text. A bill's, a credit note's or a statement's is not recorded (find-vendor.test.ts).
  */
 
 const THROUGH = 'find-vendor-company';
@@ -24,14 +23,14 @@ function saved(decision: Decision) {
 }
 const plan = (setUp: DecideSetUp) => saved(decide(setUp)).plan;
 
-test("a company receipt's or a card refund's seller that an inactive vendor has, or two vendors have, is not linked: the line says why, the record has no payee, and the run goes on (D20)", async () => {
+test("a company receipt's or a card refund's seller that an inactive vendor has, or two vendors have, is not linked: the record has no payee, and the run goes on (D20)", async () => {
   type Company = NonNullable<Parameters<typeof routeRun>[0]['company']>;
   const cases: [string, Company, string, string, JsonObject][] = [
     [
       'inactive',
       (sim) => sim.company.vendors.push(sampleVendor('9', 'Tidewell Hardware', { Active: false })),
       'find-vendor',
-      "An inactive vendor has the name 'Tidewell Hardware' in QuickBooks, so it is not linked: no payee",
+      'Vendor found',
       { status: 'not_linked', reason: 'inactive', matchedBy: 'display name' },
     ],
     [
@@ -42,7 +41,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
           sampleVendor('19', 'TIDEWELL HARDWARE'),
         ),
       'find-vendor',
-      "Two vendors have the name 'Tidewell Hardware' in QuickBooks, so it is not linked: no payee",
+      'Vendor found',
       { status: 'not_linked', reason: 'ambiguous', matchedBy: 'display name' },
     ],
     [
@@ -52,7 +51,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
           sampleVendor('61', 'Tidewell', { CompanyName: 'Tidewell Hardware', Active: false }),
         ),
       'find-vendor-company',
-      "An inactive vendor has the company name 'Tidewell Hardware' in QuickBooks, so it is not linked: no payee",
+      'Vendor found',
       { status: 'not_linked', reason: 'inactive', matchedBy: 'company name' },
     ],
     [
@@ -63,7 +62,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
           sampleVendor('62', 'Tidewell West', { CompanyName: 'Tidewell Hardware' }),
         ),
       'find-vendor-company',
-      "Two vendors have the company name 'Tidewell Hardware' in QuickBooks, so it is not linked: no payee",
+      'Vendor found',
       { status: 'not_linked', reason: 'ambiguous', matchedBy: 'company name' },
     ],
   ];
@@ -87,11 +86,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
       assert.equal(world.result.outcome, 'success', `${named}: ${JSON.stringify(world.result)}`);
       const record = (stateOf(world.result).record ?? {}) as JsonObject;
       assert.deepEqual(record.payee, { kind: 'none' }, named);
-      assert.match(
-        lineOf(world, 'decide') ?? '',
-        /^No reason to hold: \$\d+\.\d{2} within the \$500 limit, vendor not linked, so no payee, no duplicate; /u,
-        named,
-      );
+      assert.equal(lineOf(world, 'decide'), 'Ready to record', named);
     }
   }
 });
@@ -110,10 +105,11 @@ test("a receipt's or a card refund's seller not linked — an inactive vendor's 
         'Receipt 55120 from Tidewell Hardware',
       ],
     );
-    assert.equal(
-      (receiptDecision as Extract<Decision, { outcome: 'ok' }>).summary,
-      'No reason to hold: $60.63 within the $500 limit, vendor not linked, so no payee, no duplicate; recording the expense; category Utilities:Electric (no category set for repairs and maintenance)',
-    );
+    assert.deepEqual(expense.accounts.category, {
+      id: '305',
+      name: 'Repairs & Maintenance',
+      why: 'its name',
+    });
     const refund = plan({ answer: sampleAnswer('card-refund'), vendor });
     assert.deepEqual(
       [refund.payee, refund.memo, refund.lineDescription],
@@ -124,10 +120,6 @@ test("a receipt's or a card refund's seller not linked — an inactive vendor's 
       ],
     );
   }
-  // A seller nobody has, as before: "no vendor to link".
-  const none = decide({ answer: receipt(), vendor: { status: 'new' } });
-  assert.match(
-    (none as Extract<Decision, { outcome: 'ok' }>).summary,
-    /within the \$500 limit, no vendor to link, so no payee, no duplicate; /u,
-  );
+  // A seller nobody has, as before: no payee.
+  assert.deepEqual(plan({ answer: receipt(), vendor: { status: 'new' } }).payee, { kind: 'none' });
 });

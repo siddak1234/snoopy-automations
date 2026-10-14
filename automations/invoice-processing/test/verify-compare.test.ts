@@ -13,7 +13,6 @@ import {
   check,
   creditNote,
   documentOf,
-  paidBy,
   receipt,
   sampleAnswer,
   statement,
@@ -58,15 +57,6 @@ test("the fields each route compares: the plan's §4 table", () => {
     'cashBackPrinted',
     'spendType',
   ]);
-  for (const route of ['employee', 'owner', 'contractor'] as const) {
-    assert.deepEqual(COMPARED_FIELDS[route], [
-      ...core,
-      'amountDue',
-      'cardLast4',
-      'cashBackPrinted',
-      'spendType',
-    ]);
-  }
   assert.deepEqual(COMPARED_FIELDS.vendor_credit, [...core, 'refundMethod', 'spendType']);
   assert.deepEqual(COMPARED_FIELDS.card_refund, [
     ...core,
@@ -81,9 +71,6 @@ test('two reads of the same document agree on every route', () => {
   const cases: [JsonObject, Partial<CheckInput>?][] = [
     [bill()],
     [receipt()],
-    [receipt(), paidBy('employee')],
-    [bill(), paidBy('owner')],
-    [receipt(), paidBy('not_employee')],
     [creditNote()],
     [sampleAnswer('card-refund')],
     [statement()],
@@ -112,9 +99,8 @@ test('each field a route writes holds when the reads part; a field it does not w
   assert.deepEqual(differs(receipt(), { paymentMethod: 'cash' }), ['paymentMethod']);
   assert.deepEqual(differs(receipt(), { cardLast4: '9999' }), ['cardLast4']);
   assert.deepEqual(differs(receipt(), { cashBackPrinted: true }), ['cashBackPrinted']);
-  // A receipt has no due date to compare; paid personally, no payment method.
+  // A receipt has no due date to compare.
   assert.deepEqual(differs(receipt(), { dueDate: '2026-10-30' }), []);
-  assert.deepEqual(differs(receipt(), { paymentMethod: 'cash' }, paidBy('employee')), []);
   assert.deepEqual(differs(creditNote(), { refundMethod: 'refund_to_card' }), ['refundMethod']);
   assert.deepEqual(differs(creditNote(), { cardLast4: '4417' }), [], 'a vendor credit has no card');
   assert.deepEqual(differs(sampleAnswer('card-refund'), { cardLast4: '1111' }), ['cardLast4']);
@@ -199,11 +185,11 @@ test("the tie-break (D4): the totals differ — the second read's is recorded on
   assert.equal(compared(before, { total: 54.47 }).comparison.totalPicked, 'first');
 });
 
-test('the re-check after the tie-break (D9): the arithmetic follows the recorded total, and a fail rule it meets ends the run', () => {
+test('the re-check after the tie-break (D9): the arithmetic follows the recorded total, and a recording rule it meets is said', () => {
   const misread: DocumentState = documentOf(check(bill({ total: 431.34 })));
   assert.ok(misread.findings.includes('amounts_mismatch'));
   const rechecked = recheckedWith(misread, 41334);
-  assert.ok(rechecked.outcome === 'ok');
+  assert.equal(rechecked.rule, undefined);
   assert.deepEqual(
     [rechecked.document.totalCents, rechecked.document.amountCents, rechecked.document.findings],
     [41334, 41334, []],
@@ -228,17 +214,19 @@ test('the re-check after the tie-break (D9): the arithmetic follows the recorded
     check(sampleAnswer('restaurant-tip-under-total', { total: 23.48 })),
   );
   const tip = recheckedWith(receiptMisread, 3248);
-  assert.ok(tip.outcome === 'ok');
+  assert.equal(tip.rule, undefined);
   assert.deepEqual(
     [tip.document.tip, tip.document.amountCents, tip.document.findings],
     ['added', 3848, ['tip_added']],
   );
-  // An amount due now below the recorded charges: C15, with check-document's sentence.
+  // An amount due now below the recorded charges: C15, which keeps it out of QuickBooks; the
+  // document still follows the new total, for its details.
   const due = documentOf(check(bill({ total: 400, amountDue: 400, subtotal: 370.75 })));
-  assert.deepEqual(recheckedWith(due, 41334), { outcome: 'failed', rule: 'C15' });
+  const stopped = recheckedWith(due, 41334);
+  assert.deepEqual([stopped.rule, stopped.document.totalCents], ['C15', 41334]);
   // An earlier balance follows the new total.
   const earlier = documentOf(check(bill({ total: 400, amountDue: 500 })));
   const followed = recheckedWith(earlier, 41334);
-  assert.ok(followed.outcome === 'ok');
+  assert.equal(followed.rule, undefined);
   assert.equal(followed.document.earlierBalanceCents, 8666);
 });

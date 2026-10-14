@@ -9,9 +9,8 @@ import { recordPlan } from '../src/decide/plan.js';
 import { createdBefore, recheckLookup, recheckOf } from '../src/decide/recheck.js';
 import type { ExpenseSearch } from '../src/lookups/expense-search.js';
 import { amountSearch, numberSearch } from '../src/lookups/queries.js';
-import { bill, creditNote, paidBy, receipt, sampleAnswer } from './check-world.js';
+import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import {
-  CHECKING,
   VENDOR,
   billRow,
   decideState,
@@ -37,8 +36,11 @@ const stateOf = (setUp: DecideSetUp) => {
   return state;
 };
 /** The re-check decide saves for a state, built from the plan it makes. */
-const recheckFor = (state: DecideState, how: ExpenseSearch = 'amount') =>
-  recheckOf(state, recordPlan(state, matchesOf(state)), how);
+const recheckFor = (state: DecideState, how: ExpenseSearch = 'amount') => {
+  const planned = recordPlan(state, matchesOf(state));
+  assert.ok(planned.kind === 'plan', planned.kind);
+  return recheckOf(state, planned.plan, how);
+};
 
 const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', string][] = [
   [
@@ -95,28 +97,6 @@ const PATHS: readonly [string, DecideSetUp, 'numberLookup' | 'amountLookup', str
     'amountLookup',
     "SELECT * FROM VendorCredit WHERE TotalAmt = '203.20' AND TxnDate = '2026-09-22' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   ],
-  [
-    "an employee's: the day's journal entries",
-    { answer: receipt(), check: paidBy('employee', { paidFrom: null }) },
-    'amountLookup',
-    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' ORDERBY MetaData.CreateTime DESC MAXRESULTS 11",
-  ],
-  [
-    "an owner's: the day's journal entries",
-    { answer: receipt(), check: paidBy('owner', { paidFrom: null }) },
-    'amountLookup',
-    "SELECT * FROM JournalEntry WHERE TxnDate = '2026-09-27' ORDERBY MetaData.CreateTime DESC MAXRESULTS 11",
-  ],
-  [
-    "a contractor's: the bills to them for its total and date",
-    {
-      answer: bill(),
-      check: paidBy('not_employee', { paidFrom: null }),
-      vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee' },
-    },
-    'amountLookup',
-    "SELECT * FROM Bill WHERE TotalAmt = '413.34' AND TxnDate = '2026-09-14' AND VendorRef = '31' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
-  ],
 ];
 
 test("each path's re-check: its own duplicate lookup, the text the lookup step sent with one row more, the newest created first", () => {
@@ -163,7 +143,7 @@ const RECORDS: readonly FoundRecord[] = [
   billRow({ id: '156', vendorId: '31', docNumber: null }),
   expenseRow(),
   expenseRow({ id: '202', credit: true, totalCents: 2372, txnDate: '2026-10-02' }),
-  expenseRow({ id: '203', accountId: CHECKING.id }),
+  expenseRow({ id: '203', accountId: '35' }),
   expenseRow({ id: '204', txnDate: '2026-10-18' }),
   // A refund of the receipt's amount, and a charge of the refund's: each the other kind.
   expenseRow({ id: '205', credit: true }),
@@ -187,7 +167,7 @@ const VERDICTS: readonly string[][] = [
   ['151', '154'],
   // A new vendor's: any vendor's bill for the total and date (D5).
   ['151', '152', '154', '156'],
-  // A charge for the amount on the Paid from card, in the window (D21): not a refund, not the bank's.
+  // A charge for the amount on the card it is paid from, in the window (D21): not a refund, not the bank's.
   ['201'],
   // A refund for the amount on the card, in the window.
   ['202'],
@@ -197,12 +177,6 @@ const VERDICTS: readonly string[][] = [
   ['301', '302'],
   // The vendor's credit for the total and date, numbered or not.
   ['301', '302'],
-  // An entry that day crediting the amount to Owed to team members under this employee.
-  ['401'],
-  // An entry that day crediting the amount to the owner's equity account.
-  ['402'],
-  // A bill to the contractor for the total and date.
-  ['156'],
 ];
 
 test("the one rule's verdicts, per path: which records duplicate the planned one", () => {
@@ -216,11 +190,13 @@ test("the one rule's verdicts, per path: which records duplicate the planned one
   }
 });
 
-test("decide's possible duplicate and the re-check's verdict are one rule: for every record, on every path, the same", () => {
+test("decide's hold and the re-check's verdict are one rule: for every record, on every path, the same", () => {
   for (const [label, setUp, lookup] of PATHS) {
     for (const record of RECORDS) {
       const state = stateOf({ ...setUp, lookups: { [lookup]: found(record) } });
-      const held = matchesOf(state).duplicates.length > 0;
+      // A receipt's or a refund's bank-feed match holds as "a bank or card charge matches".
+      const matches = matchesOf(state);
+      const held = matches.duplicates.length > 0 || matches.companyCharges > 0;
       const facts = recheckFor(state).facts;
       assert.equal(
         isDuplicate(facts, lookup, record),
@@ -231,7 +207,7 @@ test("decide's possible duplicate and the re-check's verdict are one rule: for e
   }
 });
 
-test("the rule's facts are decide's: the document's number, amount and date, the vendor matched (none for a new one), the account and the person", () => {
+test("the rule's facts are decide's: the document's number, amount and date, the vendor matched (none for a new one), and the account it is paid from", () => {
   assert.deepEqual(recheckFor(stateOf({ answer: bill(), vendor: { status: 'new' } })).facts, {
     route: 'bill',
     number: 'HOS-1042',
@@ -239,21 +215,8 @@ test("the rule's facts are decide's: the document's number, amount and date, the
     date: '2026-09-14',
     vendorId: null,
     accountId: null,
-    employeeId: null,
   });
-  assert.deepEqual(
-    recheckFor(stateOf({ answer: receipt(), check: paidBy('employee', { paidFrom: null }) })).facts,
-    {
-      route: 'employee',
-      number: '55120',
-      amountCents: 6063,
-      date: '2026-09-27',
-      vendorId: null,
-      accountId: '120',
-      employeeId: '55',
-    },
-  );
-  assert.equal(recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL })).facts.accountId, '41');
+  assert.equal(recheckFor(stateOf({ answer: receipt(), vendor: TIDEWELL })).facts.accountId, '42');
 });
 
 /** QuickBooks' time on an answer, with milliseconds as Intuit writes it. */

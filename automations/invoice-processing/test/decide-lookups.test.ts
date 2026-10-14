@@ -6,13 +6,11 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 import type { VendorState } from '../src/decide/contract.js';
 import { lookupUses, requiredLookups } from '../src/decide/lookup-uses.js';
 import { decideRun } from '../src/decide/decide.js';
-import { DECIDE_SENTENCES } from '../src/decide/fails.js';
 import {
   bill,
   check,
   creditNote,
   documentOf,
-  paidBy,
   receipt,
   sampleAnswer,
   statement,
@@ -24,7 +22,7 @@ import { VENDOR, decideState } from './decide-world.js';
  * contract): per route, each lookup runs, says "Not checked" (no number QuickBooks could hold —
  * the document's own, a credit's original, or every one a statement lists: G4-4), or is skipped; a
  * vendor credit's or a statement's vendor not in QuickBooks skips them all, so decide reaches F5 or
- * F6 rather than "could not finish its checks"; S4's fallback drops a bill's D32 lookup.
+ * F6 — not recorded — rather than its guard; S4's fallback drops a bill's D32 lookup.
  */
 
 const doc = (answer: JsonObject, options = {}) => documentOf(check(answer, options));
@@ -66,18 +64,6 @@ test('per route, under D21: run, "Not checked" for a number QuickBooks could not
   assert.deepEqual(
     lookupUses('vendor_credit', doc(creditNote({ originalInvoiceNumber: null })), VENDOR),
     uses('run', 'run', 'skip', 'skip'),
-  );
-  assert.deepEqual(
-    lookupUses('employee', doc(receipt(), paidBy('employee', { paidFrom: null })), null),
-    uses('skip', 'run', 'run', 'skip'),
-  );
-  assert.deepEqual(
-    lookupUses(
-      'owner',
-      doc(bill({ documentNumber: null }), paidBy('owner', { paidFrom: null })),
-      null,
-    ),
-    uses('not_checked', 'run', 'run', 'skip'),
   );
   assert.deepEqual(
     lookupUses('statement', doc(statement()), VENDOR),
@@ -148,25 +134,17 @@ test("a seller not linked is a seller with no vendor: a receipt's number lookup 
   );
 });
 
-test("a vendor credit's or a statement's vendor not in QuickBooks: nothing runs, and decide fails F5 or F6", () => {
+test("a vendor credit's or a statement's vendor not in QuickBooks: nothing runs, and decide does not record it (F5, F6)", () => {
   const none = uses('skip', 'skip', 'skip', 'skip');
   assert.deepEqual(lookupUses('vendor_credit', doc(creditNote()), NEW), none);
   assert.deepEqual(lookupUses('statement', doc(statement()), NEW), none);
   assert.deepEqual(requiredLookups('statement', doc(statement()), NEW), []);
-  for (const [answer, rule] of [
-    [creditNote(), 'F5'],
-    [statement(), 'F6'],
+  for (const [answer, reason] of [
+    [creditNote(), 'credit_needs_vendor'],
+    [statement(), 'vendor_not_in_quickbooks'],
   ] as const) {
-    const decision = decideRun({
-      state: decideState({ answer, vendor: NEW }),
-      config: {},
-      switchOn: false,
-    });
-    assert.deepEqual(decision, {
-      outcome: 'failed',
-      failure: rule,
-      sentence: DECIDE_SENTENCES[rule],
-    });
+    const decision = decideRun({ state: decideState({ answer, vendor: NEW }), config: {} });
+    assert.deepEqual(decision, { outcome: 'not_recorded', reason });
   }
 });
 
@@ -186,7 +164,7 @@ test("S4's fallback drops a bill's D32 lookup, and decide then needs it not; not
   );
   const { otherRecordLookup: _dropped, ...state } = decideState({ answer: bill() });
   const run = (expenseSearch: 'amount' | 'window') =>
-    decideRun({ state, config: {}, switchOn: false, expenseSearch }).outcome;
+    decideRun({ state, config: {}, expenseSearch }).outcome;
   assert.equal(run('window'), 'ok');
-  assert.equal(run('amount'), 'failed', 'under D21 its absence is "could not finish its checks"');
+  assert.equal(run('amount'), 'failed', 'under D21 its absence is the guard state_incomplete');
 });

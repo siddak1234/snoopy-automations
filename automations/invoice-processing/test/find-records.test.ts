@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
-import { DECIDE_SENTENCES } from '../src/decide/fails.js';
+import { RESULTS } from '../src/words.js';
 import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
 import { lines } from './fixtures.js';
 import {
-  PAID,
   REF,
   lineOf,
   queriesOf,
@@ -18,9 +17,10 @@ import {
 } from './lookups-world.js';
 
 /**
- * Steps 14–17 per document type (the plan's §5): which lookups run, which say "Not checked" when no
+ * The record lookups per document type (the plan's §5): which run, which search nothing when no
  * number QuickBooks could hold was read (G4-4), which are skipped; an answer at its bound (D6); and
- * a statement's missing numbers. What each keeps is `lookup-records.test.ts`'s.
+ * a statement's missing numbers. What each keeps is `lookup-records.test.ts`'s. Lines (§3.E): `No
+ * duplicate`, `Possible duplicate`; a statement's, what was checked.
  */
 
 const RECORD_STEPS = [
@@ -42,9 +42,11 @@ async function usesOf(run: RouteRun): Promise<Record<string, string>> {
   );
 }
 
-const NO_NUMBER = 'Not checked by number: no number was read';
-const LONG_NUMBER =
-  'Not checked by number: the number is longer than the 21 characters QuickBooks holds';
+/** A lookup with no number QuickBooks could hold searches nothing, so finds nothing. */
+const NO_NUMBER = 'No duplicate';
+const LONG_NUMBER = 'No duplicate';
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
 const uses = (number: string, amount: string, related: string, other: string) => ({
   'find-duplicate-number': number,
   'find-duplicate-amount': amount,
@@ -91,7 +93,7 @@ test('a card refund: its number and the card feed; the original bill only from a
   );
 });
 
-test('a vendor credit: its number, its total and date, its original bill; a vendor not in QuickBooks: nothing, and decide fails F5', async () => {
+test('a vendor credit: its number, its total and date, its original bill; a vendor not in QuickBooks: nothing, and decide does not record it (F5)', async () => {
   assert.deepEqual(await usesOf({ answer: creditNote() }), uses('run', 'run', 'run', 'skip'));
   assert.deepEqual(
     await usesOf({ answer: creditNote({ originalInvoiceNumber: null }) }),
@@ -102,10 +104,13 @@ test('a vendor credit: its number, its total and date, its original bill; a vend
     uses('skip', 'skip', 'skip', 'skip'),
   );
   const world = await routeRun({ answer: creditNote(), bare: true });
-  assert.deepEqual(world.result, { outcome: 'failed', failureReason: DECIDE_SENTENCES.F5 });
+  assert.equal(
+    summaryOf(world.result),
+    RESULTS.notRecorded('credit notes need an existing vendor'),
+  );
 });
 
-test('a statement: the listed numbers and the open bills; none listed, the open bills alone; a vendor not in QuickBooks: nothing, and decide fails F6', async () => {
+test('a statement: the listed numbers and the open bills; none listed, the open bills alone; a vendor not in QuickBooks: nothing, and decide does not compare it (F6)', async () => {
   assert.deepEqual(await usesOf({ answer: statement() }), uses('run', 'run', 'skip', 'skip'));
   assert.deepEqual(
     await usesOf({
@@ -116,22 +121,8 @@ test('a statement: the listed numbers and the open bills; none listed, the open 
     uses('skip', 'run', 'skip', 'skip'),
   );
   const world = await routeRun({ answer: statement(), bare: true });
-  assert.deepEqual(world.result, { outcome: 'failed', failureReason: DECIDE_SENTENCES.F6 });
+  assert.equal(summaryOf(world.result), RESULTS.notRecorded("the vendor isn't in QuickBooks"));
   assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor', 'find-vendor-company']);
-});
-
-test('paid personally: the day’s entries or the contractor’s bills, and the company charge; a number only on a bill document', async () => {
-  for (const paid of [PAID.employee, PAID.owner, PAID.contractor]) {
-    assert.deepEqual(
-      await usesOf({ answer: receipt(), ...paid }),
-      uses('skip', 'run', 'run', 'skip'),
-    );
-    assert.deepEqual(await usesOf({ answer: bill(), ...paid }), uses('run', 'run', 'run', 'skip'));
-  }
-  assert.deepEqual(
-    await usesOf({ answer: bill({ documentNumber: null }), ...PAID.employee }),
-    uses(NO_NUMBER, 'run', 'run', 'skip'),
-  );
 });
 
 test("three bills with the number, none the vendor's: reachedMax, so decide holds a possible duplicate (G4-3, D6)", async () => {
@@ -143,12 +134,9 @@ test("three bills with the number, none the vendor's: reachedMax, so decide hold
       ),
   });
   assert.ok(world.result.outcome === 'held');
-  assert.equal(
-    world.result.held.reason,
-    'Possible duplicate: Harrowgate Office Supply, HOS-1042, $413.34',
-  );
-  assert.match(lineOf(world, 'find-duplicate-number') ?? '', /; maybe more$/u);
-  assert.match(lineOf(world, 'decide') ?? '', /possible duplicate: too many to check/u);
+  assert.equal(world.result.held.reason, 'May already be in QuickBooks.');
+  assert.equal(lineOf(world, 'find-duplicate-number'), 'Possible duplicate');
+  assert.equal(lineOf(world, 'decide'), 'Waiting for approval');
   // Two of them: no hold — the number goes in the memo.
   const two = await routeRun({
     answer: bill(),
@@ -160,26 +148,12 @@ test("three bills with the number, none the vendor's: reachedMax, so decide hold
   assert.equal(two.result.outcome, 'success');
 });
 
-test("a bill's expenses with its number, by how each was paid and to whom — no payee, a card refund — three at most, 'maybe more' kept (decision 6, G4-5)", async () => {
-  const check = samplePurchase('139', REF.checking, {
-    PaymentType: 'Check',
-    DocNumber: 'HOS-1042',
-    TxnDate: '2026-08-02',
-    TotalAmt: 1200,
-    EntityRef: { type: 'Vendor', ...REF.other },
-  });
+test("a bill's expense with its number is a possible duplicate (decision 6, G4-5); none, no duplicate", async () => {
   const cash = samplePurchase('140', REF.checking, {
     PaymentType: 'Cash',
     DocNumber: 'HOS-1042',
     TxnDate: '2026-08-03',
     TotalAmt: 413.34,
-  });
-  const refund = samplePurchase('141', REF.visa, {
-    DocNumber: 'hos-1042',
-    TxnDate: '2026-08-04',
-    TotalAmt: 20,
-    Credit: true,
-    EntityRef: { type: 'Vendor', ...REF.tidewell },
   });
   const relatedLine = async (purchases: JsonObject[]) =>
     lineOf(
@@ -190,23 +164,11 @@ test("a bill's expenses with its number, by how each was paid and to whom — no
       }),
       'find-related',
     );
-  assert.equal(
-    await relatedLine([cash, refund]),
-    "Expenses with number 'HOS-1042': Id 140 (Cash, no payee, 2026-08-03, $413.34); Id 141 (CreditCard refund from Tidewell Hardware, 2026-08-04, $20.00)",
-  );
-  // A payment type Intuit does not list is not shown as given.
-  assert.equal(
-    await relatedLine([{ ...check, PaymentType: 'Wire' }]),
-    "Expenses with number 'HOS-1042': Id 139 (Expense to Pacific Gas, 2026-08-02, $1,200.00)",
-  );
-  // A full answer: the payees shortened first, so the line keeps 200 characters and "maybe more".
-  assert.equal(
-    await relatedLine([check, cash, refund]),
-    "Expenses with number 'HOS-1042': Id 139 (Check to Pacifi…, 2026-08-02, $1,200.00); Id 140 (Cash, no payee, 2026-08-03, $413.34); Id 141 (CreditCard refund from Tidewe…, 2026-08-04, $20.00); maybe more",
-  );
+  assert.equal(await relatedLine([cash]), 'Possible duplicate');
+  assert.equal(await relatedLine([]), 'No duplicate');
 });
 
-test('a row decide could not weigh — a bill without its vendor — fails as an unexpected answer', async () => {
+test('a row decide could not weigh — a bill without its vendor — is an answer QuickBooks gave unusably: not recorded, the details saved', async () => {
   const world = await routeRun({
     answer: bill(),
     company: (sim) =>
@@ -218,19 +180,14 @@ test('a row decide could not weigh — a bill without its vendor — fails as an
         Balance: 1,
       }),
   });
-  assert.deepEqual(world.result, {
-    outcome: 'failed',
-    failureReason:
-      'QuickBooks answered in an unexpected way. Run it again; if it repeats, reconnect QuickBooks.',
-  });
-  assert.deepEqual(lines(world.platform).at(-1), [
-    'find-duplicate-number',
-    'failed',
-    'Number not searched (unexpected_answer)',
-  ]);
+  assert.equal(summaryOf(world.result), RESULTS.notRecorded("QuickBooks didn't answer"));
+  assert.deepEqual(
+    lines(world.platform).find(([stepId]) => stepId === 'find-duplicate-number'),
+    ['find-duplicate-number', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+  );
 });
 
-test("a statement's line lists the invoice numbers QuickBooks lacks as far as 200 characters go, then +N more; the output, every one", async () => {
+test("a statement's lookup says what it checked; the output lists every invoice number QuickBooks lacks", async () => {
   const listed = Array.from({ length: 40 }, (_, index) => ({
     reference: `HOS-${2000 + index}`,
     amount: 10,
@@ -243,9 +200,8 @@ test("a statement's line lists the invoice numbers QuickBooks lacks as far as 20
         sampleBill('70', REF.harrowgate, { DocNumber: 'hos-2000', Balance: 0 }),
       ),
   });
-  const line = lineOf(world, 'find-duplicate-number') ?? '';
-  assert.ok(line.length <= 200, line);
-  assert.match(line, /^Listed invoices not in QuickBooks: HOS-2001, HOS-2002, .* \+\d+ more$/u);
+  assert.equal(lineOf(world, 'find-duplicate-number'), 'Number checked');
+  assert.equal(lineOf(world, 'find-duplicate-amount'), 'Amount checked');
   assert.ok(world.result.outcome === 'success');
   const output = world.result.output as { statement: { listedNotInQuickBooks: string[] } };
   assert.deepEqual(

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { sampleVendor } from '@autom8x/automation-kit/testing';
 
-import { everythingSaid } from './fixtures.js';
+import { NONE, everythingSaid } from './fixtures.js';
 import { PAID, routeRun } from './lookups-world.js';
 import { SAMPLES } from './sample-maker/samples.js';
 import { SAMPLE_ROUTES } from './sample-routes.js';
@@ -11,7 +11,8 @@ import { SAMPLE_ROUTES } from './sample-routes.js';
 /**
  * The planted marker (the plan's §2.9), printed on each made-up sample where the automation must
  * never pass it on — a line's text or a notes box: through the whole run, every route's lookups
- * included, it is in no QuickBooks query, no timeline line, no reason and no output — and the
+ * included, it is in no QuickBooks query, no timeline line, no reason, no details and no output — with QuickBooks
+ * chosen or not — and the
  * lookups ask by the seller's name and the document's number, carried by design, which never hold it.
  */
 
@@ -22,10 +23,8 @@ test("no sample's marker reaches a query, a line, a reason or the run's output, 
   let routed = 0;
   for (const sample of SAMPLES) {
     const [route] = SAMPLE_ROUTES[sample.name] ?? [''];
-    const runs = [
-      PAID.company,
-      ...(sample.answer.documentType === 'receipt' ? [PAID.employee] : []),
-    ];
+    // QuickBooks chosen, and the vendor "None": the details saved carry no marker either.
+    const runs = [PAID.company, { config: NONE }];
     for (const paid of runs) {
       const world = await routeRun({
         answer: sample.answer,
@@ -48,7 +47,7 @@ test("no sample's marker reaches a query, a line, a reason or the run's output, 
       }
     }
   }
-  assert.ok(routed >= 20, `${routed} routed runs`);
+  assert.ok(routed >= 40, `${routed} routed runs`);
 });
 
 test('the rows a bill lists, only counted (hold 5), never reach a query, a line or the output', async () => {

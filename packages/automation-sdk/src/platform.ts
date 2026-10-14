@@ -18,6 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
+import { boundedDetails } from './details.js';
 import { floodClock, floodWaitMs, isFloodRefusal, waitEndsBefore } from './flood.js';
 import { modelRequestProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
@@ -347,13 +348,18 @@ export class PlatformClient implements AutomationPlatform {
   }
 }
 
-/** The result with every one-line field normalised to what the wire accepts. */
+/** The result with every one-line field, and each line of its `details`, normalised to what the wire accepts. */
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
-    case 'success':
-      return result.summary === undefined
-        ? result
-        : { ...result, summary: oneLine(result.summary, 'summary') };
+    case 'success': {
+      const { details, ...rest } = result;
+      const lines = boundedDetails(details);
+      return {
+        ...rest,
+        ...(result.summary === undefined ? {} : { summary: oneLine(result.summary, 'summary') }),
+        ...(lines === undefined ? {} : { details: lines }),
+      };
+    }
     case 'held':
       return {
         ...result,

@@ -11,6 +11,7 @@ import type {
   ProviderRequest,
   RunResult,
 } from './contract.js';
+import type { RunDetail } from './details.js';
 import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import type { PromptModule } from './prompt.js';
@@ -86,8 +87,14 @@ export interface AutomationDefinition {
   steps: Readonly<Record<string, Step>>;
   /** Every prompt a step may send. Unregistered prompts are refused before the wire. */
   prompts?: readonly PromptModule[];
-  /** The success result once the pipeline has run: the output and the one-line summary. */
-  result: (state: JsonObject, request: InvokeRequest) => { output?: JsonObject; summary?: string };
+  /**
+   * The success result once the pipeline has run: the output, the one-line summary, and the
+   * `details` a person reads beside it (platform ADR-0037), which the client bounds.
+   */
+  result: (
+    state: JsonObject,
+    request: InvokeRequest,
+  ) => { output?: JsonObject; summary?: string; details?: readonly RunDetail[] };
   /**
    * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):
    * a step absent here runs once. Declare one only where a repeat is safe — a read;
@@ -97,6 +104,14 @@ export interface AutomationDefinition {
    * has none at all: repeated, it is made and counted again.
    */
   retry?: Readonly<Record<string, RetryPolicy>>;
+  /**
+   * A step that THREW, once its attempts are spent (`retry`): the result the automation ends it
+   * with instead, or `undefined` to let the throw end the run as before. The runner reports the
+   * result under the step's id and goes on exactly as if the step had returned it — so an
+   * automation that can do without a provider (an optional connection, platform ADR-0037) says
+   * so once here, and never sooner than the SDK's retry has given up.
+   */
+  recover?: (stepId: string, error: unknown, context: StepContext) => StepResult | undefined;
 }
 
 export interface Automation {

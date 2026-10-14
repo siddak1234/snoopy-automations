@@ -19,14 +19,16 @@ import {
 } from '../src/decide/contract.js';
 import { decideRun, type Decision } from '../src/decide/decide.js';
 import { requiredLookups } from '../src/decide/lookup-uses.js';
+import type { ChartState } from '../src/chart.js';
 import type { DocumentState, VerificationState } from '../src/state.js';
-import { CHECKING, OWNER_EQUITY, TEAM_OWED, VISA, check, documentOf } from './check-world.js';
-import { DEFAULT_ACCOUNTS, SEEDED_STATE } from './extract-world.js';
+import { check, documentOf } from './check-world.js';
+import { CHART, SEEDED_STATE } from './extract-world.js';
 
 /**
- * decide's world: a whole run state for one path — what every step before decide leaves,
- * Group 4's lookups as the contract (`src/decide/contract.ts`) has them — built from a first
- * read through check-document, so the document is what that step would keep.
+ * decide's world: a whole run state for one path — what every step before decide leaves, the
+ * company's chart the simulator holds, the lookups as the contract (`src/decide/contract.ts`) has
+ * them — built from a first read through check-document, so the document is what that step would
+ * keep.
  */
 
 export const RUN_ID = '77777777-7777-4777-8777-777777777777';
@@ -42,33 +44,39 @@ export const VENDOR: Extract<VendorState, { status: 'matched' }> = {
   vendor1099: null,
 };
 
-/** The accounts every setting is filled in with. */
-export const ACCOUNTS: JsonObject = {
-  ...DEFAULT_ACCOUNTS,
-  categories: {
-    office_supplies: { id: '64', fullyQualifiedName: 'Office Supplies', accountType: 'Expense' },
-    meals: { id: '66', fullyQualifiedName: 'Meals', accountType: 'Expense' },
-  },
-  paidFrom: VISA,
-  teamOwed: TEAM_OWED,
-  ownerInvestment: OWNER_EQUITY,
-  owners: [{ name: 'Pat Owner', account: null }],
-};
+/** The chart's accounts the suites name. */
+export const ACCOUNT = {
+  visa: CHART.cards.find((account) => account.id === '41')!,
+  visa4417: CHART.cards.find((account) => account.id === '42')!,
+  checking: CHART.banks.find((account) => account.id === '35')!,
+  savings: CHART.banks.find((account) => account.id === '36')!,
+  officeSupplies: CHART.categories.find((account) => account.id === '64')!,
+  uncategorized: CHART.uncategorized!,
+} as const;
+
+/** The chart with only `ids` among the banks and cards: one of each picks without asking. */
+export function chartWith(...ids: string[]): ChartState {
+  return {
+    ...CHART,
+    banks: CHART.banks.filter((account) => ids.includes(account.id)),
+    cards: CHART.cards.filter((account) => ids.includes(account.id)),
+  };
+}
 
 export interface DecideSetUp {
   /** Read 1's answer, cleaned by check-document. */
   readonly answer: JsonObject;
   readonly check?: Partial<CheckInput>;
   readonly verification?: VerificationState;
-  /** The vendor, or null for none found at all (the employee and owner paths). */
-  readonly vendor?: VendorState | null;
+  readonly vendor?: VendorState;
   readonly lookups?: Partial<Record<LookupKey, LookupState | null>>;
   readonly similarVendors?: readonly string[];
   readonly customerNameClash?: NameClash;
   readonly employeeNameClash?: NameClash;
   readonly preferences?: JsonObject;
   readonly company?: JsonObject;
-  readonly accounts?: JsonObject;
+  /** The company's chart; by default the simulator's, two banks and two cards. */
+  readonly chart?: ChartState;
   readonly config?: JsonObject;
   /** Changes made to the whole state last. */
   readonly state?: JsonObject;
@@ -89,12 +97,12 @@ export function billRow(changes: Partial<BillRow> = {}): BillRow {
   };
 }
 
-/** An expense QuickBooks holds: paid from the company card, unless changed. */
+/** An expense QuickBooks holds: paid from the card ending 4417, unless changed. */
 export function expenseRow(changes: Partial<ExpenseRow> = {}): ExpenseRow {
   return {
     kind: 'expense',
     id: '201',
-    accountId: VISA.id,
+    accountId: '42',
     txnDate: '2026-09-27',
     totalCents: 6063,
     credit: false,
@@ -153,10 +161,8 @@ export function agreed(document: DocumentState): Extract<VerificationState, { st
 }
 
 export function decideState(setUp: DecideSetUp): JsonObject {
-  const paidFrom = setUp.check && 'paidFrom' in setUp.check ? setUp.check.paidFrom : VISA;
-  const document = documentOf(check(setUp.answer, { paidFrom: paidFrom ?? null, ...setUp.check }));
-  const personal = document.route === 'employee' || document.route === 'owner';
-  const vendor = setUp.vendor === undefined ? (personal ? null : VENDOR) : setUp.vendor;
+  const document = documentOf(check(setUp.answer, setUp.check));
+  const vendor = setUp.vendor ?? VENDOR;
   const lookups: Partial<Record<LookupKey, LookupState>> = {};
   for (const key of requiredLookups(document.route, document, vendor)) lookups[key] = found();
   for (const key of LOOKUP_KEYS) {
@@ -164,17 +170,16 @@ export function decideState(setUp: DecideSetUp): JsonObject {
     if (given === null) delete lookups[key];
     else if (given !== undefined) lookups[key] = given;
   }
-  const newVendorBill = document.route === 'bill' && vendor?.status === 'new';
+  const newVendorBill = document.route === 'bill' && vendor.status === 'new';
   const state: JsonObject = {
     ...SEEDED_STATE,
     company: { ...(SEEDED_STATE.company as JsonObject), ...setUp.company },
     preferences: { ...(SEEDED_STATE.preferences as JsonObject), ...setUp.preferences },
-    accounts: { ...ACCOUNTS, paidFrom: paidFrom ?? null, ...setUp.accounts },
+    chart: (setUp.chart ?? CHART) as unknown as JsonObject,
     modelServed: 'anthropic/claude-haiku-4.5',
     document: document as unknown as JsonObject,
     verification: (setUp.verification ?? agreed(document)) as unknown as JsonObject,
-    ...(setUp.check?.payer ? { payer: setUp.check.payer as unknown as JsonObject } : {}),
-    ...(vendor === null ? {} : { vendor: vendor as unknown as JsonObject }),
+    vendor: vendor as unknown as JsonObject,
     ...(newVendorBill || setUp.similarVendors
       ? { similarVendors: { names: [...(setUp.similarVendors ?? [])] } }
       : {}),
@@ -191,11 +196,7 @@ export function decideState(setUp: DecideSetUp): JsonObject {
 }
 
 export function decide(setUp: DecideSetUp): Decision {
-  return decideRun({
-    state: decideState(setUp),
-    config: setUp.config ?? { expenseAccount: 'Utilities:Electric' },
-    switchOn: setUp.check?.switchOn === true,
-  });
+  return decideRun({ state: decideState(setUp), config: setUp.config ?? {} });
 }
 
 /** The decision, held: fails the test otherwise. */
@@ -209,5 +210,3 @@ export function holdCodes(decision: Decision): string[] {
   if (decision.outcome === 'ok') return [];
   return heldOf(decision).holds.map((hold) => hold.code);
 }
-
-export { CHECKING, VISA };

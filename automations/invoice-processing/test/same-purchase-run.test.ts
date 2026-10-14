@@ -8,6 +8,7 @@ import {
   PAID,
   REF,
   lineOf,
+  onlyChecking,
   routeRun,
   sampleBill,
   sampleJournalEntry,
@@ -16,7 +17,8 @@ import {
 
 /**
  * The same purchase met as another kind of record, through the whole run on the simulator (the
- * plan's §2.9; D22, D32) — each of the five held, with what the approver reads.
+ * plan's §2.9; D22, D32) — each of the five held, with what the approver reads (v2's §2.6 phrases).
+ * v2 makes no journal entry and no reimbursement bill, but a company may hold v1's, or its own.
  */
 
 const held = (result: RunResult) => {
@@ -28,7 +30,9 @@ test('a bill created and paid, then its payment confirmation uploaded: held "alr
   const world = await routeRun({
     answer: sampleAnswer('paid-invoice'),
     ...PAID.bank,
-    company: (sim) =>
+    // Checking the one account to pay from, as PAID.bank's company; and the bill, paid.
+    company: (sim) => {
+      onlyChecking(sim);
       sim.company.bills.push(
         sampleBill('170', REF.wrenfield, {
           DocNumber: 'LH-2609',
@@ -36,16 +40,15 @@ test('a bill created and paid, then its payment confirmation uploaded: held "alr
           TotalAmt: 480,
           Balance: 0,
         }),
-      ),
+      );
+    },
   });
   const hold = held(world.result);
-  assert.equal(
-    hold.reason,
-    'Matches bill LH-2609, already paid: Wrenfield & Pike Bookkeeping, $480.00 from Checking',
-  );
+  assert.equal(hold.reason, 'Matches a paid bill.');
+  assert.deepEqual((hold.state as JsonObject).holdReasons, ['matches_bill']);
   assert.equal(
     world.platform.steps.find((step) => step.stepId === 'decide')?.heldReason,
-    'Approve only if this is a different purchase. Bill LH-2609 for this amount is already recorded and paid.',
+    'Matches a paid bill.',
   );
 });
 
@@ -62,15 +65,9 @@ test('an open bill, then a receipt for it: held, the hold 6 wording', async () =
       ),
   });
   const hold = held(world.result);
-  assert.equal(hold.reason, 'Matches open bill TH-88: Tidewell Hardware, $60.63 from Company Visa');
-  assert.equal(
-    world.platform.steps.find((step) => step.stepId === 'decide')?.heldReason,
-    'Approve only if this is a different purchase. If it pays bill TH-88, reject it and record the payment in Pay bills.',
-  );
-  assert.equal(
-    lineOf(world, 'find-related'),
-    'Bills for $60.63, newest first: Id 171 (this vendor, 2026-09-20, $60.63, open)',
-  );
+  assert.equal(hold.reason, 'Matches an open bill.');
+  assert.equal(lineOf(world, 'find-related'), 'Possible duplicate');
+  assert.equal(lineOf(world, 'decide'), 'Waiting for approval');
 });
 
 test("a receipt recorded, then the supplier's invoice uploaded: held as a possible duplicate (D32)", async () => {
@@ -83,11 +80,11 @@ test("a receipt recorded, then the supplier's invoice uploaded: held as a possib
   });
   const hold = held(world.result);
   assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.match(lineOf(world, 'decide') ?? '', /possible duplicate: an expense for this amount/u);
+  assert.equal(hold.reason, 'May already be in QuickBooks.');
   assert.deepEqual(((hold.state as JsonObject).duplicates as JsonObject).expenseIds, ['205']);
 });
 
-test("an employee's reimbursement recorded, then the same receipt uploaded as the company's: held (D32)", async () => {
+test("an employee's reimbursement recorded (v1's journal entry), then the same receipt uploaded as the company's: held (D32)", async () => {
   const world = await routeRun({
     answer: receipt(),
     company: (sim) =>
@@ -103,10 +100,8 @@ test("an employee's reimbursement recorded, then the same receipt uploaded as th
   });
   const hold = held(world.result);
   assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.match(
-    lineOf(world, 'decide') ?? '',
-    /possible duplicate: a reimbursement for this amount/u,
-  );
+  assert.deepEqual(((hold.state as JsonObject).duplicates as JsonObject).journalEntryIds, ['402']);
+  assert.equal(hold.reason, 'May already be in QuickBooks.');
 });
 
 test("a contractor's reimbursement bill, then the same receipt: held", async () => {
@@ -119,8 +114,5 @@ test("a contractor's reimbursement bill, then the same receipt: held", async () 
   });
   const hold = held(world.result);
   assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.match(
-    lineOf(world, 'decide') ?? '',
-    /possible duplicate: another vendor's bill for this amount/u,
-  );
+  assert.equal(hold.reason, 'May already be in QuickBooks.');
 });

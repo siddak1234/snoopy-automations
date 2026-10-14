@@ -8,13 +8,14 @@ import { requiredLookups } from '../src/decide/lookup-uses.js';
 import type { ExpenseSearch } from '../src/lookups/expense-search.js';
 import type { DocumentState } from '../src/state.js';
 import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
-import { PAID, routeRun, sampleVendor, stateOf, type RouteRun } from './lookups-world.js';
+import { routeRun, sampleVendor, stateOf, type RouteRun } from './lookups-world.js';
 
 /**
- * decide's whole input, per path (the plan's §2.9): the state the real steps 1–17 leave on the
- * simulator, read by decide's contract (`src/decide/contract.ts`) — complete, holding exactly the
- * lookups the route requires and no other, the vendor where a route has one, the name checks for a
- * new vendor's bill alone — under both of sandbox S4's answers.
+ * decide's whole input, per path (the plan's §2.9): the state the real steps before it leave on
+ * the simulator, read by decide's contract (`src/decide/contract.ts`) — complete, holding exactly
+ * the lookups the route requires and no other, the vendor, the name checks for a new vendor's bill
+ * alone, the chart — under both of sandbox S4's answers. A second read is in it only when one was
+ * due.
  */
 
 const PATHS: readonly [string, RouteRun][] = [
@@ -27,9 +28,6 @@ const PATHS: readonly [string, RouteRun][] = [
   ['card refund, the seller no vendor', { answer: sampleAnswer('card-refund'), bare: true }],
   ['vendor credit', { answer: creditNote() }],
   ['vendor credit, the vendor not in QuickBooks', { answer: creditNote(), bare: true }],
-  ['employee', { answer: receipt(), ...PAID.employee }],
-  ['owner, a bill', { answer: bill(), ...PAID.owner }],
-  ['contractor', { answer: receipt(), ...PAID.contractor }],
   ['statement', { answer: statement() }],
   ['statement, the vendor not in QuickBooks', { answer: statement(), bare: true }],
   [
@@ -68,15 +66,7 @@ const PATHS: readonly [string, RouteRun][] = [
 ];
 
 /** The keys the steps before decide write, besides the lookups and the name checks. */
-const EARLIER = [
-  'file',
-  'company',
-  'preferences',
-  'accounts',
-  'modelServed',
-  'document',
-  'verification',
-];
+const EARLIER = ['file', 'company', 'preferences', 'chart', 'modelServed', 'document'];
 
 for (const how of ['amount', 'window'] as const satisfies readonly ExpenseSearch[]) {
   test(`every path leaves decide a whole input, its lookups exactly those required (S4: ${how})`, async () => {
@@ -86,28 +76,22 @@ for (const how of ['amount', 'window'] as const satisfies readonly ExpenseSearch
       const read = readDecideState(state, how);
       assert.ok(read, `${label}: decide reads it whole`);
       const document = state.document as unknown as DocumentState;
-      const vendor = (state.vendor ?? null) as VendorState | null;
-      const personal = document.route === 'employee' || document.route === 'owner';
-      assert.equal(vendor === null, personal, `${label}: a vendor exactly where the route has one`);
+      const vendor = state.vendor as VendorState;
+      assert.ok(vendor, `${label}: a vendor on every route`);
       const required = requiredLookups(document.route, document, vendor, how);
       assert.deepEqual(
         LOOKUP_KEYS.filter((key) => key in state).sort(),
         [...required].sort(),
         `${label}: the lookups present`,
       );
-      const newVendorBill = document.route === 'bill' && vendor?.status === 'new';
+      const newVendorBill = document.route === 'bill' && vendor.status === 'new';
       for (const key of ['similarVendors', 'customerNameClash', 'employeeNameClash']) {
         assert.equal(key in state, newVendorBill, `${label}: ${key}`);
       }
-      assert.equal(
-        'payer' in state,
-        document.route !== 'bill' && run.input !== undefined,
-        `${label}: payer`,
-      );
       const expected = [
         ...EARLIER,
-        ...(vendor === null ? [] : ['vendor']),
-        ...('payer' in state ? ['payer'] : []),
+        'vendor',
+        ...('verification' in state ? ['verification'] : []),
         ...(newVendorBill ? ['similarVendors', 'customerNameClash', 'employeeNameClash'] : []),
         ...required,
       ];

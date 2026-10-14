@@ -1,23 +1,19 @@
-import { capitalised, cleanText, fitLine, formatMoney } from '@autom8x/automation-kit/values';
+import { cleanText } from '@autom8x/automation-kit/values';
 import {
   MAIL_BODY_MAX_LENGTH,
   MAIL_SUBJECT_MAX_LENGTH,
   truncateText,
+  type RunDetail,
 } from '@autom8x/automation-sdk';
 
-import type { SavedState } from '../decide/saved.js';
-import type { StatementResult } from '../decide/statement.js';
-import { NOUNS, nextStepOf, payeeNameOf } from './lines.js';
-import type { CreatedState, NewVendorState } from './saved-state.js';
+import { nameWords } from '../words.js';
 
 /**
- * notify's mail (the plan's §5, "notify, per type"; ip-review design-after-approval-writes-notify-
- * tests.json steps[5]): plain text, fixed labels, one value a line, built from what QuickBooks
- * answered and decide saved — never the model's answer, a line item, a hold reason, the file or a
- * link — and no timestamp, so the same run and key always give the same words, which the platform
- * turns into one mail however often the step runs. The subject names the vendor, the number and
- * the total (the design's open question, its recommended answer applied: the address is one the
- * owner typed for this, and the platform refuses one inside the workspace).
+ * notify's mail (v2's §3.F): plain text — a subject, a first line saying what Invoice Processing
+ * did, then the run's details as `Label: value` lines, and nothing else. Built from the run's
+ * result alone — never the model's answer, a line item, the file or a link — and no timestamp, so
+ * the same run and key always give the same words, which the platform turns into one mail however
+ * often the step runs.
  */
 
 export interface Mail {
@@ -26,101 +22,47 @@ export interface Mail {
 }
 
 /** A value on one line: line breaks and control characters made spaces, trimmed. */
-const value = (text: string | null | undefined) => cleanText(text) ?? '';
+const value = (text: string) => cleanText(text) ?? '';
 
-/** Intuit's warning (H5): a bank rule set to add a charge on its own leaves no review to match it in. */
-export const BANK_RULE_NOTE =
-  'A bank rule set to add matching charges automatically skips that review.';
+/** What the mail is about, by the result's kind. */
+export type MailKind =
+  | {
+      readonly kind: 'recorded';
+      readonly noun: string;
+      readonly vendor: string;
+      readonly total: string;
+    }
+  | { readonly kind: 'saved'; readonly seller: string; readonly total: string | null }
+  | { readonly kind: 'compared'; readonly vendor: string };
 
-function finished(subject: (string | { name: string })[], lines: readonly string[]): Mail {
+/** The subject (§3.F), one line. */
+function subjectOf(about: MailKind): string {
+  switch (about.kind) {
+    case 'recorded':
+      return `Recorded in QuickBooks: ${about.noun} from ${nameWords(value(about.vendor))}, ${about.total}`;
+    case 'saved':
+      return `Saved: ${nameWords(value(about.seller))}${about.total === null ? '' : `, ${about.total}`}`;
+    case 'compared':
+      return `Statement from ${nameWords(value(about.vendor))} compared`;
+  }
+}
+
+/** The body's first line (§3.F). */
+const FIRST_LINES: Readonly<Record<MailKind['kind'], string>> = {
+  recorded: 'Invoice Processing recorded this in QuickBooks.',
+  saved: 'Invoice Processing saved these details.',
+  compared: 'Invoice Processing compared this statement with QuickBooks.',
+};
+
+/** The mail for a run's result: its subject, its first line, its details. */
+export function mailOf(about: MailKind, details: readonly RunDetail[]): Mail {
+  const lines = [
+    FIRST_LINES[about.kind],
+    '',
+    ...details.map((line) => `${value(line.label)}: ${value(line.value)}`),
+  ];
   return {
-    subject: fitLine(subject, MAIL_SUBJECT_MAX_LENGTH),
+    subject: truncateText(subjectOf(about), MAIL_SUBJECT_MAX_LENGTH),
     body: truncateText(lines.join('\n'), MAIL_BODY_MAX_LENGTH),
   };
-}
-
-/** "a bill", "an expense". */
-const withArticle = (noun: string) => `${/^[aeiou]/u.test(noun) ? 'an' : 'a'} ${noun}`;
-
-/**
- * The mail for a record made: what it is in QuickBooks — its Id, the vendor it names, or the seller
- * when it names none (an expense with no payee, a journal entry) or names the person who paid (a
- * contractor's bill) — who paid, the document's number ("in the memo" when the record was not sent
- * it), QuickBooks' own number when it gave the record one, date, total and due date as QuickBooks
- * answered them, and the next step. With own numbers off QuickBooks numbers an expense or a vendor
- * credit itself ("system generated", Intuit's model): that number is never the document's.
- */
-export function recordMail(
-  saved: SavedState,
-  created: CreatedState,
-  newVendor: NewVendorState | null,
-  decidedBy: 'automatically' | 'after approval',
-): Mail {
-  const { plan } = saved;
-  const noun = NOUNS[plan.record];
-  const person =
-    saved.route === 'employee' || saved.route === 'owner' || saved.route === 'contractor';
-  const vendorNamed = plan.payee.kind === 'vendor' || plan.payee.kind === 'new_vendor';
-  const vendor = vendorNamed ? value(payeeNameOf(saved, created, newVendor)) : null;
-  const seller = value(saved.seller);
-  const total = formatMoney(created.totalCents ?? plan.amountCents);
-  const number = saved.documentNumber;
-  const ownNumber =
-    created.docNumber !== null && created.docNumber !== plan.docNumber ? created.docNumber : null;
-  const next = nextStepOf(saved);
-  const lines = [
-    `${capitalised(withArticle(noun))} was recorded in your QuickBooks Online company by Autom8x Bills & Receipts.`,
-    '',
-    `${capitalised(noun)} in QuickBooks: ${value(created.id)}`,
-    ...(vendor === null ? [] : [`Vendor: ${vendor}`]),
-    ...(vendor === null || saved.route === 'contractor' ? [`Seller: ${seller}`] : []),
-    ...(person ? [`Paid by: ${value(saved.payer?.name)}`] : []),
-    ...(number === null
-      ? []
-      : [`Number: ${value(number)}${plan.docNumber === null ? ' (in the memo)' : ''}`]),
-    ...(ownNumber === null ? [] : [`QuickBooks number: ${value(ownNumber)}`]),
-    `Date: ${created.txnDate}`,
-    `Total: ${total}`,
-    ...(saved.route === 'bill' ? [`Due date: ${created.dueDate ?? 'not set'}`] : []),
-    ...(plan.accounts.paidFrom === null
-      ? []
-      : [`Paid from: ${value(plan.accounts.paidFrom.name)}`]),
-    `Category: ${value(plan.accounts.category.name)}`,
-    `Decided: ${decidedBy}`,
-    ...(next === null ? [] : ['', `Next step: ${next}`]),
-    ...(saved.route === 'company_receipt' || saved.route === 'card_refund' ? [BANK_RULE_NOTE] : []),
-  ];
-  const subject = [
-    `${capitalised(noun)} ${value(created.id)} recorded in QuickBooks: `,
-    { name: vendor ?? seller },
-    `${number === null ? '' : `, ${value(number)}`}, ${total}`,
-  ];
-  return finished(subject, lines);
-}
-
-const counted = (count: number, checkable: boolean) =>
-  `${count}${checkable ? '' : ' (too many to check)'}`;
-
-/**
- * The mail for a statement compared: the counts and what QuickBooks shows open for the vendor. The
- * statement's own figures and the invoice numbers stay in the run's timeline and output.
- */
-export function statementMail(result: StatementResult): Mail {
-  const vendor = value(result.vendor.displayName);
-  const open = result.openBillsNotListed;
-  const lines = [
-    "A supplier's statement was compared with your QuickBooks Online company by Autom8x Bills & Receipts. Nothing was recorded.",
-    '',
-    `Vendor: ${vendor}`,
-    `Invoices it lists that are not in QuickBooks: ${counted(result.listedNotInQuickBooks.length, result.listedCheckable)}`,
-    open === null
-      ? 'Open bills in QuickBooks it does not list: not compared, as its list is not complete'
-      : `Open bills in QuickBooks it does not list: ${counted(open.count, result.openBillsCheckable)}`,
-    `QuickBooks shows open for this vendor: ${
-      result.quickBooksOpenCents === null ? 'not shown' : formatMoney(result.quickBooksOpenCents)
-    }`,
-    '',
-    "The statement's own figures and the invoice numbers are in the run's timeline in Autom8x.",
-  ];
-  return finished(['Statement from ', { name: vendor }, ' compared with QuickBooks'], lines);
 }

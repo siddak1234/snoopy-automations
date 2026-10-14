@@ -12,12 +12,12 @@ import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import type { ExpenseSearch } from '../src/lookups/expense-search.js';
-import { FILE_ID, callsOf, lines, reads, setUp } from './fixtures.js';
+import { QUICKBOOKS, callsOf, lines, reads, setUp } from './fixtures.js';
 
 /**
- * Group 4's world: a whole run of v1 — steps 1–18 — on the kit's simulator, holding the made-up
- * company's vendors, customers and records the samples name, with the run's settings and inputs for
- * each route; and readers for what each lookup step sent and wrote.
+ * The lookups' world: a whole run of v2 on the kit's simulator, holding the made-up company's
+ * vendors, customers and records the samples name, with QuickBooks chosen; and readers for what
+ * each lookup step sent and wrote.
  */
 
 /** The lookup steps, in the pipeline's order. */
@@ -41,6 +41,7 @@ export const REF = {
   samLee: { value: '31', name: 'Sam Lee' },
   other: { value: '88', name: 'Pacific Gas' },
   visa: { value: '41', name: 'Company Visa' },
+  visa4417: { value: '42', name: 'Visa 4417' },
   checking: { value: '35', name: 'Checking' },
   electric: { value: '57', name: 'Utilities:Electric' },
   teamOwed: { value: '120', name: 'Owed to Team Members' },
@@ -67,35 +68,29 @@ export interface RouteRun {
   /** Changes to the made-up company before the run. */
   readonly company?: (simulator: QuickBooksSimulator) => void;
   readonly expenseSearch?: ExpenseSearch;
-  /** The last step run; the whole of v1 by default. */
+  /** The last step run; the whole of v2 by default. */
   readonly through?: string;
   /** No vendor in the company: every seller is new. */
   readonly bare?: boolean;
 }
 
-/** Settings and inputs per way of paying. */
+/**
+ * The flow's settings, and the made-up company's accounts, per way of paying: no setting names an
+ * account in v2 — what a receipt was paid from is picked from the company's chart (decision 1).
+ */
 export const PAID = {
-  /** The company, from its card. */
-  company: { config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' } },
-  /** The company, from its bank account. */
-  bank: { config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Checking' } },
-  employee: {
-    config: { expenseAccount: 'Utilities:Electric', teamOwedAccount: 'Owed to Team Members' },
-    input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Robin Example' },
-  },
-  owner: {
-    config: {
-      expenseAccount: 'Utilities:Electric',
-      ownerNames: 'Pat Owner',
-      ownerInvestmentAccount: 'Owner investments',
-    },
-    input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Pat Owner' },
-  },
-  contractor: {
-    config: { expenseAccount: 'Utilities:Electric' },
-    input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Sam Lee' },
-  },
+  /** QuickBooks chosen; the chart as the simulator holds it — a card named "Visa 4417". */
+  company: { config: QUICKBOOKS },
+  /** A company with one bank account and no card: a receipt is paid from Checking. */
+  bank: { config: QUICKBOOKS, company: onlyChecking },
 } as const;
+
+/** The made-up company with Checking alone to pay from. */
+export function onlyChecking(simulator: QuickBooksSimulator): void {
+  simulator.company.accounts = simulator.company.accounts.filter(
+    (account) => !['36', '41', '42'].includes(String(account.Id)),
+  );
+}
 
 /** A whole run of one document, on the seeded company. */
 export async function routeRun(run: RouteRun) {

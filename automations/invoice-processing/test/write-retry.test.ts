@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { writeSentences, type QuickBooksWriteFailure } from '@autom8x/automation-kit/quickbooks';
 import {
   PROVIDER_REFUSALS,
   faultAnswer,
   type ScriptedAnswer,
 } from '@autom8x/automation-kit/testing';
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 import type { ProblemInput } from '@autom8x/automation-sdk/testing';
 
-import { AFTER_APPROVAL_SENTENCES } from '../src/writes/sentences.js';
+import { UNCONFIRMED_LINE } from '../src/quickbooks-path.js';
+import { RESULTS } from '../src/words.js';
 import { bill, receipt } from './check-world.js';
 import { PAID } from './lookups-world.js';
 import { approve, firstRun, noTimeToRepeat, outputOf, writesOf } from './writes-world.js';
@@ -21,12 +21,14 @@ import { approve, firstRun, noTimeToRepeat, outputOf, writesOf } from './writes-
  * sends the same `requestid` — and QuickBooks answers it with the first record (sandbox S6), never a
  * second. The SDK's 10-second floor is not a clock a suite can replace, so each test that repeats
  * a create waits it, once, for every case at the same time; with no time left for that wait, the
- * run ends with the step's own "did not confirm" sentence, registered on what the write threw. A
- * repeat the platform refuses after a lost answer says "did not confirm" too, never "nothing was
- * created": the lost attempt may have made the record (Gate 25's AUT-38-1).
+ * run's `recover` ends the step "QuickBooks didn't confirm", the details saved (decision 6). A repeat
+ * the platform refuses after a lost answer says "didn't confirm" too, never "not recorded": the lost
+ * attempt may have made the record (Gate 25's AUT-38-1).
  */
 
 const HELD = { ...PAID.company.config, holdAboveAmount: 0 };
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
 
 test('a create whose answer was lost is repeated 10 s later under the same key, and QuickBooks answers the first record: one vendor, one bill, one expense', async () => {
   // A new vendor's bill: create-vendor's answer lost before Connections recorded it.
@@ -62,11 +64,7 @@ test('a create whose answer was lost is repeated 10 s later under the same key, 
   assert.equal(vendorRun.simulator.company.vendors.length, 1);
   assert.deepEqual(
     vendored.steps.find(([stepId]) => stepId === 'create-vendor'),
-    [
-      'create-vendor',
-      'ok',
-      "Added vendor 'Harrowgate Office Supply' to QuickBooks (Id 1001) (after 2 attempts)",
-    ],
+    ['create-vendor', 'ok', 'Vendor added (after 2 attempts)'],
   );
   assert.deepEqual(outputOf(vendored.result).newVendor, {
     how: 'created',
@@ -106,23 +104,15 @@ const TRANSIENT: readonly [string, ScriptedAnswer][] = [
   ['a reasonless 502 before QuickBooks', { refuse: PROVIDER_REFUSALS.noAnswer() }],
 ];
 
-test('with no time left to repeat it, a create that got no answer ends "did not confirm" in create-record’s own sentence: one request', async () => {
+test("with no time left to repeat it, a create that got no answer: QuickBooks didn't confirm it — the details saved, one request", async () => {
   for (const [label, script] of TRANSIENT) {
     const first = await firstRun({ answer: bill(), config: HELD });
     first.simulator.script('bill.create', [script]);
     const approved = await approve(first, { deadline: noTimeToRepeat() });
+    assert.equal(summaryOf(approved.result), RESULTS.unconfirmed, label);
     assert.deepEqual(
-      approved.result,
-      {
-        outcome: 'failed',
-        failureReason:
-          'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.',
-      },
-      label,
-    );
-    assert.deepEqual(
-      approved.steps.at(-1),
-      ['create-record', 'failed', 'The create-record step failed'],
+      approved.steps.find(([stepId]) => stepId === 'create-record'),
+      ['create-record', 'failed', UNCONFIRMED_LINE],
       label,
     );
     assert.equal(writesOf(approved.providerCalls).length, 1, `${label}: one request`);
@@ -131,19 +121,15 @@ test('with no time left to repeat it, a create that got no answer ends "did not 
   }
 });
 
-test('with no time left to repeat it, a new vendor that got no answer ends "did not confirm" in create-vendor’s own sentence, the bill never sent', async () => {
+test("with no time left to repeat it, a new vendor that got no answer: QuickBooks didn't confirm it, the bill never sent", async () => {
   for (const [label, script] of TRANSIENT) {
     const first = await firstRun({ answer: bill(), bare: true });
     first.simulator.script('vendor.create', [script]);
     const approved = await approve(first, { deadline: noTimeToRepeat() });
+    assert.equal(summaryOf(approved.result), RESULTS.unconfirmed, label);
     assert.deepEqual(
-      approved.result,
-      { outcome: 'failed', failureReason: AFTER_APPROVAL_SENTENCES.vendor_unconfirmed },
-      label,
-    );
-    assert.deepEqual(
-      approved.steps.at(-1),
-      ['create-vendor', 'failed', 'The create-vendor step failed'],
+      approved.steps.find(([stepId]) => stepId === 'create-vendor'),
+      ['create-vendor', 'failed', UNCONFIRMED_LINE],
       label,
     );
     assert.deepEqual(
@@ -156,32 +142,27 @@ test('with no time left to repeat it, a new vendor that got no answer ends "did 
 
 /**
  * The platform refusing a create — certain on its first answer, nothing having reached QuickBooks —
- * with the reason the kit gives it and the word a repeat's "did not confirm" names: no live
- * connection (the connection retired while the run waited), the Edge's flood valve with no time
- * left to wait it out, a 400, and a 403 at the deadline.
+ * with the reason it is not recorded for, and the word a repeat's "didn't confirm" names in the log:
+ * no live connection (the connection retired while the run waited), the Edge's flood valve with no
+ * time left to wait it out, a 400, and a 403 at the deadline.
  */
-const REFUSED: readonly [
-  string,
-  (operation: string) => ProblemInput,
-  QuickBooksWriteFailure,
-  string,
-][] = [
+const REFUSED: readonly [string, (operation: string) => ProblemInput, string, string][] = [
   [
     'no live connection (404)',
     () => PROVIDER_REFUSALS.notConnected(),
-    'qb_not_connected',
+    "QuickBooks isn't connected",
     'qb_not_connected',
   ],
   [
     "the Edge's flood valve (429)",
     () => ({ status: 429, code: 'TOO_MANY_REQUESTS', detail: 'Too many requests' }),
-    'platform_busy',
+    "QuickBooks didn't answer",
     'platform_busy',
   ],
   [
     'a 400',
     (operation) => PROVIDER_REFUSALS.badRequest(operation, 'refused_field'),
-    'platform_refused',
+    "QuickBooks didn't answer",
     'refused_field',
   ],
   [
@@ -192,7 +173,7 @@ const REFUSED: readonly [
       detail: 'x',
       details: { reason: 'deadline_exceeded' },
     }),
-    'platform_refused',
+    "QuickBooks didn't answer",
     'deadline_exceeded',
   ],
 ];
@@ -217,28 +198,21 @@ const REPEATED: readonly [string, (operation: string) => ScriptedAnswer, string]
   ],
 ];
 
-/** Each write a step repeats: its operation, a first run that reaches it, and its line's words. */
+/** Each write a step repeats: its operation, and a first run that reaches it. */
 const WRITES = [
   {
     stepId: 'create-record',
     operation: 'bill.create',
     run: () => firstRun({ answer: bill(), config: HELD }),
-    what: 'Not recorded',
-    noun: 'bill',
-    unconfirmed:
-      'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.',
   },
   {
     stepId: 'create-vendor',
     operation: 'vendor.create',
     run: () => firstRun({ answer: bill(), bare: true }),
-    what: 'New vendor not added',
-    noun: 'vendor',
-    unconfirmed: AFTER_APPROVAL_SENTENCES.vendor_unconfirmed,
   },
 ] as const;
 
-test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403, a Fault — ends "did not confirm", never "nothing was created": QuickBooks made it', async () => {
+test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403, a Fault — is "didn\'t confirm", never "not recorded": QuickBooks made it', async () => {
   // Every case at once: one 10-second wait.
   const cases = await Promise.all(
     REPEATED.flatMap(([name, answer, word]) =>
@@ -249,20 +223,16 @@ test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403,
           { lost: 'before_record' },
           answer(write.operation),
         ]);
-        return { name, word, write, first, approved: await approve(first) };
+        return { name, write, first, approved: await approve(first), word };
       }),
     ),
   );
-  for (const { name, word, write, first, approved } of cases) {
+  for (const { name, write, first, approved } of cases) {
     const label = `${write.stepId}, ${name}`;
+    assert.equal(summaryOf(approved.result), RESULTS.unconfirmed, label);
     assert.deepEqual(
-      approved.result,
-      { outcome: 'failed', failureReason: write.unconfirmed },
-      label,
-    );
-    assert.deepEqual(
-      approved.steps.at(-1),
-      [write.stepId, 'failed', `${write.what} (qb_unconfirmed ${word}) (after 2 attempts)`],
+      approved.steps.find(([stepId]) => stepId === write.stepId),
+      [write.stepId, 'failed', `${UNCONFIRMED_LINE} (after 2 attempts)`],
       label,
     );
     const writes = writesOf(approved.providerCalls);
@@ -280,21 +250,20 @@ test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403,
   }
 });
 
-test('a create refused on its first answer is still certain: nothing reached QuickBooks, one request, "No … was created"', async () => {
+test('a create refused on its first answer is still certain: nothing reached QuickBooks, one request, not recorded', async () => {
   for (const [name, problem, reason] of REFUSED) {
     for (const write of WRITES) {
       const first = await write.run();
       first.simulator.script(write.operation, [{ refuse: problem(write.operation) }]);
       const approved = await approve(first);
       const label = `${write.stepId}, ${name}`;
-      assert.deepEqual(
-        approved.result,
-        { outcome: 'failed', failureReason: writeSentences(write.noun)[reason] },
+      assert.equal(summaryOf(approved.result), RESULTS.notRecorded(reason), label);
+      assert.equal(writesOf(approved.providerCalls).length, 1, `${label}: one request`);
+      assert.doesNotMatch(
+        approved.steps.find(([stepId]) => stepId === write.stepId)?.[2] ?? '',
+        /attempts/u,
         label,
       );
-      assert.match(writeSentences(write.noun)[reason], /\bno (bill|vendor) was created\b/iu, label);
-      assert.equal(writesOf(approved.providerCalls).length, 1, `${label}: one request`);
-      assert.doesNotMatch(approved.steps.at(-1)?.[2] ?? '', /attempts/u, label);
     }
   }
 });

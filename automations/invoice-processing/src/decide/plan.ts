@@ -1,25 +1,26 @@
-import { CATEGORY_SETTINGS } from '../spend-types.js';
+import type { NotRecordedReason } from '../quickbooks-path.js';
 import type { DecideState } from './contract.js';
 import { newVendorName } from './fails.js';
 import { originalBillAccount, type Matches } from './matches.js';
+import { pickCategory } from './picks.js';
 
 /**
  * The record decide plans, built once, saved for after approval, and written exactly as it is
- * (the plan's §2.6 and §2.8): the operation, the payment type, the accounts by role, the payee,
- * the amount, the date, the memo, the number or none, and the currency rule. Approval writes from
- * this plan, never from the settings as they are by then (create-record, `src/writes/bodies.ts`).
- * The one thing the write adds is the run that writes it, first in the memo — after an approval
- * the continuation's id, the run whose timeline shows the record (the design's open question, its
- * recommended answer applied).
+ * (the plan's §2.6 and §2.8): the operation, the payment type, the accounts — picked from the
+ * company's chart, never from a setting (v2's §2.5) — the payee, the amount, the date, the memo,
+ * the number or none, and the currency rule. Approval writes from this plan (create-record,
+ * `src/writes/bodies.ts`). The one thing the write adds is the run that writes it, first in the
+ * memo — after an approval the continuation's id, the run whose timeline shows the record.
  */
 
 /** An account as the plan names it. */
 export interface PlannedAccount {
   readonly id: string;
+  /** Its full name, as QuickBooks shows it. */
   readonly name: string;
 }
 
-/** The category used (D27) and why, for the line every approval shows. */
+/** The category used (§2.5) and why, kept in the run's output. */
 export interface CategoryChoice extends PlannedAccount {
   readonly why: string;
 }
@@ -32,14 +33,11 @@ export type Payee =
       readonly printedName: string;
       readonly nameInUseBy: 'customer' | 'employee' | null;
     }
-  | { readonly kind: 'employee'; readonly id: string; readonly name: string }
-  | { readonly kind: 'owner'; readonly name: string }
   | { readonly kind: 'none' };
 
 export interface RecordPlan {
-  readonly operation:
-    'bill.create' | 'purchase.create' | 'vendorCredit.create' | 'journalEntry.create';
-  readonly record: 'bill' | 'expense' | 'card_refund' | 'vendor_credit' | 'journal_entry';
+  readonly operation: 'bill.create' | 'purchase.create' | 'vendorCredit.create';
+  readonly record: 'bill' | 'expense' | 'card_refund' | 'vendor_credit';
   /** An expense's: CreditCard from a card account; from a bank account Check for a check, else Cash. */
   readonly paymentType: 'Cash' | 'Check' | 'CreditCard' | null;
   /** A card refund: an expense with `Credit` true. */
@@ -48,11 +46,8 @@ export interface RecordPlan {
   readonly printStatus: 'NotSet' | null;
   readonly accounts: {
     readonly category: CategoryChoice;
+    /** What a receipt or a refund was paid from (decision 1); null on a bill or a vendor credit. */
     readonly paidFrom: PlannedAccount | null;
-    /** "Owed to team members": an employee's journal entry credits it. */
-    readonly liability: PlannedAccount | null;
-    /** The owner's own account, or "Owner's investment account". */
-    readonly equity: PlannedAccount | null;
   };
   readonly payee: Payee;
   /** With any tip code added. */
@@ -62,8 +57,8 @@ export interface RecordPlan {
   /** The number QuickBooks is sent as the record's own; null keeps it in the memo. */
   readonly docNumber: string | null;
   /**
-   * The memo's words after the sentence naming the run that writes it ("Created by Autom8x Bills &
-   * Receipts, run <id>.", which create-record puts first); empty when nothing follows it.
+   * The memo's words after the sentence naming the run that writes it ("Created by Autom8x Invoice
+   * Processing, run <id>.", which create-record puts first); empty when nothing follows it.
    */
   readonly memo: string;
   readonly lineDescription: string;
@@ -71,28 +66,27 @@ export interface RecordPlan {
   readonly currencyRef: 'USD' | null;
 }
 
-const account = (ref: { id: string; fullyQualifiedName: string }): PlannedAccount => ({
-  id: ref.id,
-  name: ref.fullyQualifiedName,
-});
+/** The plan, or why QuickBooks cannot take the record: the company has no account it could use. */
+export type Planned =
+  | { readonly kind: 'plan'; readonly plan: RecordPlan }
+  | { readonly kind: 'not_recordable'; readonly reason: NotRecordedReason };
 
-/** The category (D27): the original bill's for a credit, else the spend type's setting, else the default. */
-export function categoryOf(state: DecideState): CategoryChoice {
-  const { document, accounts, verification } = state;
-  const fallback = (why: string): CategoryChoice => ({ ...account(accounts.defaultCategory), why });
+/**
+ * The category (§2.5): for a credit, the original bill's account (D25); else the account picked
+ * for the spend type from the chart — by name, by detail type, else Uncategorized Expense, which
+ * also takes `other` and a spend type unclear or disputed by the two reads. None at all: undefined.
+ */
+export function categoryOf(state: DecideState): CategoryChoice | undefined {
+  const { document, verification, chart } = state;
   if (document.type === 'credit_note') {
     const original = originalBillAccount(state);
     if (original) return { id: original.id, name: original.name, why: 'the original bill used it' };
   }
-  if (document.spendTypeUnclear) return fallback('spend type unclear');
-  if (verification.status === 'made' && verification.spendTypeDisputed) {
-    return fallback('the reads disagree on the spend type');
-  }
-  if (document.spendType === 'other') return fallback('spend type other');
-  const setting = CATEGORY_SETTINGS.find((each) => each.spendType === document.spendType);
-  const mapped = accounts.categories[document.spendType];
-  const words = setting?.title.replace('Category for ', '') ?? document.spendType;
-  return mapped ? { ...account(mapped), why: words } : fallback(`no category set for ${words}`);
+  const disputed = verification.status === 'made' && verification.spendTypeDisputed;
+  const pick = pickCategory(chart, document.spendType, document.spendTypeUnclear || disputed);
+  return pick.kind === 'picked'
+    ? { id: pick.account.id, name: pick.account.fullName, why: pick.why }
+    : undefined;
 }
 
 const TYPE_WORDS = {
@@ -102,32 +96,21 @@ const TYPE_WORDS = {
   supplier_statement: 'statement',
 } as const;
 
-/**
- * Who paid, as the record names them: an employee as QuickBooks shows them, an owner as "Owners and
- * partners" writes them, and a contractor as the vendor find-vendor matched — QuickBooks' name,
- * never as typed in "Who paid", as decide's wording names them (Group 3's review fix; the owner's
- * "complete all", 2026-10-11).
- */
-export function payerNameOf(state: DecideState): string {
-  if (state.document.route === 'contractor' && state.vendor?.status === 'matched') {
-    return state.vendor.displayName;
-  }
-  return state.payer?.name ?? '';
-}
-
-/** The plan for a record that is written; a statement has none. */
-export function recordPlan(state: DecideState, matches: Matches): RecordPlan {
-  const { document, accounts, vendor, payer, preferences } = state;
+export function recordPlan(state: DecideState, matches: Matches): Planned {
+  const { document, vendor, preferences } = state;
   const route = document.route;
   const typeWords = TYPE_WORDS[document.type];
   const number = document.number;
   const seller = document.seller;
   const what = number === null ? typeWords : `${typeWords} ${number}`;
   const category = categoryOf(state);
-  const paidFrom = accounts.paidFrom ? account(accounts.paidFrom) : null;
-  const card = accounts.paidFrom?.accountType === 'Credit Card';
+  if (category === undefined) return { kind: 'not_recordable', reason: 'no_uncategorized' };
+  const pick = state.paidFrom;
+  if (pick?.kind === 'none') return { kind: 'not_recordable', reason: pick.reason };
+  const paidFrom = pick === null ? null : { id: pick.account.id, name: pick.account.fullName };
+  const card = pick !== null && pick.account.type === 'Credit Card';
   const vendorPayee: Payee =
-    vendor?.status === 'matched'
+    vendor.status === 'matched'
       ? { kind: 'vendor', id: vendor.id, name: vendor.displayName }
       : { kind: 'none' };
   const base = {
@@ -138,120 +121,88 @@ export function recordPlan(state: DecideState, matches: Matches): RecordPlan {
     dueDate: null,
     docNumber: null,
     currencyRef: preferences.multiCurrencyEnabled ? ('USD' as const) : null,
-    accounts: { category, paidFrom: null, liability: null, equity: null },
+    accounts: { category, paidFrom: null },
   };
-  switch (route) {
-    case 'bill': {
-      const sent = document.numberUsable && !matches.numberTaken ? number : null;
-      const fresh = newVendorName(state);
-      const payee: Payee =
-        vendor?.status === 'new'
-          ? {
-              kind: 'new_vendor',
-              name: fresh.name,
-              printedName: seller,
-              nameInUseBy: fresh.inUseBy,
-            }
-          : vendorPayee;
-      const name = payee.kind === 'none' ? seller : payee.name;
-      return {
-        ...base,
-        operation: 'bill.create',
-        record: 'bill',
-        paymentType: null,
-        payee,
-        dueDate: document.dueDate,
-        docNumber: sent,
-        memo: number !== null && sent === null ? `Number ${number}.` : '',
-        lineDescription: `${number === null ? 'Bill' : `Bill ${number}`} from ${name}`,
-      };
-    }
-    case 'company_receipt':
-    case 'card_refund': {
-      const refund = route === 'card_refund';
-      const paymentType = card
-        ? 'CreditCard'
-        : document.paymentMethod === 'check'
-          ? 'Check'
-          : 'Cash';
-      const words = refund
-        ? number === null
-          ? 'Refund'
-          : `Refund ${number}`
-        : `${what[0]!.toUpperCase()}${what.slice(1)}`;
-      return {
-        ...base,
-        operation: 'purchase.create',
-        record: refund ? 'card_refund' : 'expense',
-        paymentType,
-        credit: refund,
-        printStatus: paymentType === 'Check' ? 'NotSet' : null,
-        accounts: { ...base.accounts, paidFrom },
-        payee: vendorPayee,
-        memo: `${words} from ${seller}.`,
-        lineDescription: `${words} from ${seller}`,
-      };
-    }
-    case 'vendor_credit': {
-      const sent =
-        document.numberUsable &&
-        !matches.numberTaken &&
-        preferences.purchaseCustomTxnNumbers === true
-          ? number
-          : null;
-      const notes = [
-        ...(number !== null && sent === null ? [`Number ${number}.`] : []),
-        ...(document.originalInvoiceNumber === null
-          ? []
-          : [`Credits invoice ${document.originalInvoiceNumber}.`]),
-      ];
-      return {
-        ...base,
-        operation: 'vendorCredit.create',
-        record: 'vendor_credit',
-        paymentType: null,
-        payee: vendorPayee,
-        docNumber: sent,
-        memo: notes.join(' '),
-        lineDescription: `${number === null ? 'Credit note' : `Credit note ${number}`} from ${vendorPayee.kind === 'vendor' ? vendorPayee.name : seller}`,
-      };
-    }
-    case 'employee':
-    case 'owner':
-    case 'contractor': {
-      const name = payerNameOf(state);
-      const paid = `${name} paid ${seller}, ${what}`;
-      if (route === 'contractor') {
+  const plan = ((): RecordPlan => {
+    switch (route) {
+      case 'bill': {
+        const sent = document.numberUsable && !matches.numberTaken ? number : null;
+        const fresh = newVendorName(state);
+        const payee: Payee =
+          vendor.status === 'new'
+            ? {
+                kind: 'new_vendor',
+                name: fresh.name,
+                printedName: seller,
+                nameInUseBy: fresh.inUseBy,
+              }
+            : vendorPayee;
+        const name = payee.kind === 'none' ? seller : payee.name;
         return {
           ...base,
           operation: 'bill.create',
           record: 'bill',
           paymentType: null,
-          payee: vendorPayee,
-          memo: `${paid}.`,
-          lineDescription: `${seller}, ${what}`,
+          payee,
+          dueDate: document.dueDate,
+          docNumber: sent,
+          memo: number !== null && sent === null ? `Number ${number}.` : '',
+          lineDescription: `${number === null ? 'Bill' : `Bill ${number}`} from ${name}`,
         };
       }
-      const owed = payer?.account ? account(payer.account) : null;
-      return {
-        ...base,
-        operation: 'journalEntry.create',
-        record: 'journal_entry',
-        paymentType: null,
-        accounts: {
-          ...base.accounts,
-          liability: route === 'employee' ? owed : null,
-          equity: route === 'owner' ? owed : null,
-        },
-        payee:
-          route === 'employee'
-            ? { kind: 'employee', id: payer?.employeeId ?? '', name }
-            : { kind: 'owner', name },
-        memo: `${paid}.`,
-        lineDescription: route === 'owner' ? paid : `${seller}, ${what}`,
-      };
+      case 'company_receipt':
+      case 'card_refund': {
+        const refund = route === 'card_refund';
+        const paymentType = card
+          ? 'CreditCard'
+          : document.paymentMethod === 'check'
+            ? 'Check'
+            : 'Cash';
+        const words = refund
+          ? number === null
+            ? 'Refund'
+            : `Refund ${number}`
+          : `${what[0]!.toUpperCase()}${what.slice(1)}`;
+        return {
+          ...base,
+          operation: 'purchase.create',
+          record: refund ? 'card_refund' : 'expense',
+          paymentType,
+          credit: refund,
+          printStatus: paymentType === 'Check' ? 'NotSet' : null,
+          accounts: { ...base.accounts, paidFrom },
+          payee: vendorPayee,
+          memo: `${words} from ${seller}.`,
+          lineDescription: `${words} from ${seller}`,
+        };
+      }
+      case 'vendor_credit': {
+        const sent =
+          document.numberUsable &&
+          !matches.numberTaken &&
+          preferences.purchaseCustomTxnNumbers === true
+            ? number
+            : null;
+        const notes = [
+          ...(number !== null && sent === null ? [`Number ${number}.`] : []),
+          ...(document.originalInvoiceNumber === null
+            ? []
+            : [`Credits invoice ${document.originalInvoiceNumber}.`]),
+        ];
+        return {
+          ...base,
+          operation: 'vendorCredit.create',
+          record: 'vendor_credit',
+          paymentType: null,
+          payee: vendorPayee,
+          docNumber: sent,
+          memo: notes.join(' '),
+          lineDescription: `${number === null ? 'Credit note' : `Credit note ${number}`} from ${vendorPayee.kind === 'vendor' ? vendorPayee.name : seller}`,
+        };
+      }
+      case 'statement':
+        throw new Error('a statement is compared, never recorded');
     }
-    case 'statement':
-      throw new Error('a statement is compared, never recorded');
-  }
+  })();
+  return { kind: 'plan', plan };
 }

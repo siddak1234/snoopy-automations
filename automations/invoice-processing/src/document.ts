@@ -47,17 +47,19 @@ export const KEPT_TYPES = ['bill', 'receipt', 'credit_note', 'supplier_statement
 export type KeptType = (typeof KEPT_TYPES)[number];
 
 /**
- * What a document becomes (the plan's §2.1): `check-document` routes it by read 1's type, the
- * switch "I paid for this with my own money" and who paid.
+ * What a document becomes (the plan's §2.1): `check-document` routes it by read 1's type, and for
+ * a credit note how it is given back. v2 has no "I paid with my own money" (the session's decision
+ * 4, approved in advance by the owner's "approve. complete", 2026-10-14): it returns with the
+ * platform's run starter (26.2.4).
  *
  * - `bill`: a Bill, owed to the supplier through accounts payable.
- * - `company_receipt`: an expense (Intuit's Purchase) from the "Paid from" bank or card account.
- * - `card_refund`: an expense with `Credit` true on the "Paid from" card account.
+ * - `company_receipt`: an expense (Intuit's Purchase) from the bank or card account picked from
+ *   the company's accounts (decision 1).
+ * - `card_refund`: an expense with `Credit` true on a card account.
  * - `vendor_credit`: a vendor credit for an existing vendor.
  * - `statement`: a supplier's statement, compared with QuickBooks and never recorded.
- * - `employee`, `owner`: a journal entry — the cost to its category, the money owed to the
- *   employee on "Owed to team members", or invested by the owner on their equity account.
- * - `contractor`: a bill payable to the person who paid, found among vendors by find-vendor.
+ *
+ * With the vendor "None" the route only names what the document is: nothing is recorded.
  */
 export const ROUTES = [
   'bill',
@@ -65,14 +67,8 @@ export const ROUTES = [
   'card_refund',
   'vendor_credit',
   'statement',
-  'employee',
-  'owner',
-  'contractor',
 ] as const;
 export type Route = (typeof ROUTES)[number];
-
-/** The routes where someone paid with their own money: each always waits for approval (D16). */
-export const PAID_PERSONALLY: ReadonlySet<Route> = new Set(['employee', 'owner', 'contractor']);
 
 /** The answer's 27 fields, in the schema's order. */
 export const ANSWER_FIELDS = [

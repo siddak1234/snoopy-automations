@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
+import { RESULTS } from '../src/words.js';
 import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import { PAID, REF, sampleBill, samplePurchase, type RouteRun } from './lookups-world.js';
 import { approve, firstRun, heldState, ownNumbers, writesOf } from './writes-world.js';
@@ -12,15 +13,23 @@ import { approve, firstRun, heldState, ownNumbers, writesOf } from './writes-wor
  * approval-writes-notify-tests.json, its whole-path case "an approval while a new run of the same
  * invoice is in flight (exactly one bill)"): two uploads of one document, held and both approved
  * before either wrote, make ONE record on every path — the re-check searches by the document's
- * number only when the record carries it — and after a full lookup ("too many to check") a match
- * QuickBooks made before the hold is allowed, one made while it waited is not.
+ * number only when the record carries it; the second is not recorded, its details saved — and after
+ * a full lookup ("too many to check") a match QuickBooks made before the hold is allowed, one made
+ * while it waited is not.
  */
 
 const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
-const DUPLICATE =
-  'A matching record was added in QuickBooks while this waited for approval, possibly from your bank feed. Nothing was created.';
+/** Not recorded, the details saved: the record may already be in QuickBooks (decision 6). */
+const DUPLICATE = RESULTS.notRecorded('may already be in QuickBooks');
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
+const STOPPED = [
+  'confirm-no-duplicate',
+  'failed',
+  'Not recorded in QuickBooks: may already be in QuickBooks',
+];
 
-/** Every path, held whatever its amount: a person who paid always is (D16). */
+/** Every path, held whatever its amount. */
 const PATHS: readonly [string, RouteRun][] = [
   ['a bill, its number sent', { answer: bill() }],
   [
@@ -38,8 +47,8 @@ const PATHS: readonly [string, RouteRun][] = [
     { answer: receipt({ paymentMethod: 'check' }), ...PAID.bank },
   ],
   [
-    'a company receipt paid by card from the bank, its seller no vendor',
-    { answer: receipt(), bare: true, config: { ...PAID.bank.config, companyCardLast4: '4417' } },
+    'a company receipt paid by card from the bank — the company has no card — its seller no vendor',
+    { answer: receipt(), bare: true, ...PAID.bank },
   ],
   ['a card refund', { answer: sampleAnswer('card-refund') }],
   ['a vendor credit, own numbers unstated: its number in the memo', { answer: creditNote() }],
@@ -48,9 +57,6 @@ const PATHS: readonly [string, RouteRun][] = [
     'a vendor credit, own numbers on: its number sent',
     { answer: creditNote(), company: ownNumbers('true') },
   ],
-  ['an employee who paid', { answer: receipt(), ...PAID.employee }],
-  ['an owner who paid', { answer: receipt(), ...PAID.owner }],
-  ['a contractor who paid', { answer: receipt(), ...PAID.contractor }],
 ];
 
 test('two uploads of one document, held and both approved before either wrote, make ONE record on every path: the second approval finds the first', async () => {
@@ -67,7 +73,7 @@ test('two uploads of one document, held and both approved before either wrote, m
     assert.equal(one.result.outcome, 'success', label);
     // The second upload's hold: the same decision, made before the first approval wrote anything.
     const two = await approve(first, { runId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' });
-    assert.deepEqual(two.result, { outcome: 'failed', failureReason: DUPLICATE }, label);
+    assert.equal(summaryOf(two.result), DUPLICATE, label);
     assert.deepEqual(writesOf(two.providerCalls), [], label);
     assert.equal(records(), before + 1, label);
   }
@@ -77,7 +83,7 @@ test('two uploads of one document, held and both approved before either wrote, m
 const charges = (count: number) => (sim: Parameters<NonNullable<RouteRun['company']>>[0]) => {
   for (let index = 0; index < count; index += 1) {
     sim.company.purchases.push(
-      samplePurchase(String(300 + index), REF.visa, {
+      samplePurchase(String(300 + index), REF.visa4417, {
         TxnDate: `2026-09-${26 + index}`,
         TotalAmt: 60.63,
       }),
@@ -87,7 +93,7 @@ const charges = (count: number) => (sim: Parameters<NonNullable<RouteRun['compan
 
 /** The bank feed's charge, made while the run waited: after decide's answer, by QuickBooks' clock. */
 const fedWhileWaiting = (id: string) =>
-  samplePurchase(id, REF.visa, {
+  samplePurchase(id, REF.visa4417, {
     TxnDate: '2026-09-30',
     TotalAmt: 60.63,
     MetaData: {
@@ -96,39 +102,36 @@ const fedWhileWaiting = (id: string) =>
     },
   });
 
-test('confirm-no-duplicate after a full lookup ("too many to check"): a match QuickBooks made before the hold is allowed, one made while it waited fails', async () => {
+test('confirm-no-duplicate after a full lookup ("too many to check"): a match QuickBooks made before the hold is allowed, one made while it waited keeps it out', async () => {
   // Identical charges on the card, all there before the run: decide's bank-feed check read three,
   // its bound, so the re-check's fourth row was never shown to the approver.
   const four = await firstRun({ answer: receipt(), company: charges(4) });
   const held = heldState(four);
-  assert.deepEqual(held.holdReasons, ['possible_duplicate']);
+  assert.deepEqual(held.holdReasons, ['possible_duplicate', 'company_charge_found']);
   assert.deepEqual((held.duplicates as JsonObject).expenseIds, ['300', '301', '302']);
   const approved = await approve(four);
   assert.equal(approved.result.outcome, 'success');
   assert.equal(
     approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
-    'No matching record added since this was held; 3 already shown to the approver; 1 already in QuickBooks before the hold, not shown; the search was full, so more may exist',
+    'No duplicate',
   );
   assert.deepEqual(writesOf(approved.providerCalls).length, 1);
   // Three before the run, and the bank feed's fourth while it waited, made after decide's answer.
   const three = await firstRun({ answer: receipt(), company: charges(3) });
   three.simulator.company.purchases.push(fedWhileWaiting('303'));
   const fed = await approve(three);
-  assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
-  assert.equal(
-    fed.steps.at(-1)?.[2],
-    'A matching record was added while this waited: Id 303 (duplicate_appeared)',
+  assert.equal(summaryOf(fed.result), DUPLICATE);
+  assert.deepEqual(
+    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
+    STOPPED,
   );
   // A match decide's lookup did not show though it was not full was changed, or added, meanwhile:
   // it fails however old QuickBooks says it is.
   const notFull = await firstRun({ answer: receipt(), config: HOLD_ALL, company: charges(2) });
   notFull.simulator.company.purchases.push(
-    samplePurchase('309', REF.visa, { TxnDate: '2026-09-30', TotalAmt: 60.63 }),
+    samplePurchase('309', REF.visa4417, { TxnDate: '2026-09-30', TotalAmt: 60.63 }),
   );
-  assert.deepEqual((await approve(notFull)).result, {
-    outcome: 'failed',
-    failureReason: DUPLICATE,
-  });
+  assert.equal(summaryOf((await approve(notFull)).result), DUPLICATE);
 });
 
 test('the re-check asks for the newest created first, so a match made while the run waited is found however many older ones lie past its bound (sandbox G4–5)', async () => {
@@ -136,16 +139,22 @@ test('the re-check asks for the newest created first, so a match made while the 
   // the feed's sixth while it waited: in the order QuickBooks holds them it would be the sixth row,
   // past the re-check's four.
   const five = await firstRun({ answer: receipt(), company: charges(5) });
-  assert.deepEqual(heldState(five).holdReasons, ['possible_duplicate']);
+  assert.deepEqual(heldState(five).holdReasons, ['possible_duplicate', 'company_charge_found']);
   five.simulator.company.purchases.push(fedWhileWaiting('305'));
   const fed = await approve(five);
-  assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
-  assert.equal(
-    fed.steps.at(-1)?.[2],
-    'A matching record was added while this waited: Id 305 (duplicate_appeared)',
+  assert.equal(summaryOf(fed.result), DUPLICATE);
+  assert.deepEqual(
+    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
+    STOPPED,
   );
   assert.match(
-    String(fed.providerCalls.at(-1)?.input.query),
+    String(
+      fed.providerCalls.find(
+        (call) =>
+          call.operation === 'query.run' &&
+          String(call.input.query).includes('ORDERBY MetaData.CreateTime DESC'),
+      )?.input.query,
+    ),
     / ORDERBY MetaData\.CreateTime DESC MAXRESULTS 4$/u,
   );
 });

@@ -1,18 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { UNANSWERED_REASON, isUnanswered, isUnsent } from '@autom8x/automation-sdk';
+import { isUnanswered, isUnsent } from '@autom8x/automation-sdk';
 import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
-import { everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
+import { RUN_FAILS } from '../src/words.js';
+import { QUICKBOOKS, everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
 import { proxyPage, refusedConnection, timedOut } from './wire.js';
 
 /**
  * The second read's one retry, as `extract`'s, on a real wire: `{ attempts: 2, backoffMs: 10_000,
  * when: 'unsent' }` repeats the step once, 10 s later in real time, only when the call provably
  * never reached the platform; twice, or an answer that never came, is the platform's fault, and
- * fails the run in the SDK's one sentence (Group 2's D6, D8).
+ * fails the run: "AI is busy" (Group 2's D6, D8). A second read is made only when due: here, the
+ * amount over a limit of 0 on the QuickBooks path.
  */
+
+/** A run whose second read is due: over the approval limit, QuickBooks chosen. */
+const due = () => setUp({ config: { ...QUICKBOOKS, holdAboveAmount: 0 } });
 
 /** The second read fails its first `failures.length` calls in turn; the first read is answered. */
 function failingSecond(platform: RecordingPlatform, failures: readonly unknown[]): void {
@@ -39,13 +44,13 @@ test('repeated once, 10 s later, when nothing reached the platform; twice, the r
   assert.ok(isUnsent(refused) && isUnsent(page) && isUnsent(again));
   assert.ok(isUnanswered(timeout) && !isUnsent(timeout));
 
-  const once = setUp();
+  const once = due();
   failingSecond(once.platform, [refused]);
-  const paged = setUp();
+  const paged = due();
   failingSecond(paged.platform, [page]);
-  const both = setUp();
+  const both = due();
   failingSecond(both.platform, [again, twice]);
-  const unanswered = setUp();
+  const unanswered = due();
   failingSecond(unanswered.platform, [timeout]);
 
   const started = Date.now();
@@ -67,11 +72,11 @@ test('repeated once, 10 s later, when nothing reached the platform; twice, the r
     assert.deepEqual(verifyLine(world.platform), [
       'verify-read',
       'ok',
-      'Read again by google/gemini-3.1-flash-lite: the 9 fields compared agree (after 2 attempts)',
+      'Second read matches (after 2 attempts)',
     ]);
   }
   // Twice unsent: the platform is not there — a fault, not a hold.
-  assert.deepEqual(bothResult, { outcome: 'failed', failureReason: UNANSWERED_REASON });
+  assert.deepEqual(bothResult, { outcome: 'failed', failureReason: RUN_FAILS.ai_busy });
   assert.equal(both.platform.modelCalls.length, 3);
   assert.deepEqual(verifyLine(both.platform), [
     'verify-read',
@@ -80,7 +85,7 @@ test('repeated once, 10 s later, when nothing reached the platform; twice, the r
   ]);
   assert.ok(!everythingSaid(both.platform, bothResult).includes('127.0.0.1'));
   // No answer after it was sent: never repeated — it may have been made and billed.
-  assert.deepEqual(unansweredResult, { outcome: 'failed', failureReason: UNANSWERED_REASON });
+  assert.deepEqual(unansweredResult, { outcome: 'failed', failureReason: RUN_FAILS.ai_busy });
   assert.equal(unanswered.platform.modelCalls.length, 2, 'read 1 and one read 2');
   assert.deepEqual(unanswered.logs.at(-1)?.[2], {
     runId: unanswered.request.runId,

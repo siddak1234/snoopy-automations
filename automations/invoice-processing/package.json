@@ -2,7 +2,7 @@
   "name": "@autom8x/invoice-processing",
   "version": "0.1.0",
   "private": true,
-  "description": "Bills & Receipts: records a bill, receipt or credit note from a PDF or photo in QuickBooks Online, and compares a supplier's statement with it. It checks the file, the QuickBooks company, its settings, the accounts in the flow's settings and who paid, has the platform's model read the document, checks and routes what it read, has another maker's model read it again, looks up the vendor and the records the document may repeat or relate to in QuickBooks, and decides: the record planned, one hold for approval, a statement compared, or a fixed sentence. After the checks an approval calls for, it creates the one record planned, and emails a summary when an address is set.",
+  "description": "Invoice Processing (v2): reads a bill, receipt, credit note or statement from a PDF or photo, then saves its details for the team, or records it in QuickBooks Online when the flow's vendor is QuickBooks. One AI read, a second only when the first shows a problem; accounts read from QuickBooks, never typed; QuickBooks failing mid-run saves the details instead. After the checks an approval calls for, it creates the one record planned, and emails a summary when an address is set.",
   "type": "module",
   "engines": {
     "node": ">=22"

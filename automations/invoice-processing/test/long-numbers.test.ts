@@ -9,15 +9,16 @@ import { REF, lineOf, queriesOf, routeRun, sampleBill, type RouteRun } from './l
 /**
  * Numbers QuickBooks could not hold are never sent (Group 4's G4-4), end to end on the simulator:
  * a credit's original invoice number past the 21 characters a bill's number holds makes
- * find-related say "Not checked" — its category then not the original bill's (D25) — and a
+ * find-related search nothing — its category then not the original bill's (D25) — and a
  * statement's listed numbers past 21 characters are left out of the IN query and counted as not in
  * QuickBooks; and a statement's number listed twice, in any case, is asked for, counted and listed
  * once (N1).
  */
 
-const NO_NUMBER = 'Not checked by number: no number was read';
+/** A lookup with no number QuickBooks could hold searches nothing, and finds nothing (§3.E). */
+const NO_NUMBER = 'No duplicate';
 
-test("a credit's original invoice number past the 21 characters a bill's holds: find-related says \"Not checked\" and sends nothing, and the category is not the original bill's (G4-4, D25)", async () => {
+test("a credit's original invoice number past the 21 characters a bill's holds: find-related sends nothing, and the category is not the original bill's (G4-4, D25)", async () => {
   const long = `HOS-${'1042'.repeat(5)}-X`;
   assert.equal(long.length, 26);
   for (const answer of [
@@ -34,10 +35,7 @@ test("a credit's original invoice number past the 21 characters a bill's holds: 
           sampleBill('152', REF.tidewell, { DocNumber: long }),
         ),
     });
-    assert.equal(
-      lineOf(world, 'find-related'),
-      'Original bill not checked: its number is longer than the 21 characters QuickBooks holds',
-    );
+    assert.equal(lineOf(world, 'find-related'), NO_NUMBER);
     assert.equal(queriesOf(world)['find-related'], undefined, 'no query');
     assert.ok(world.result.outcome === 'success', JSON.stringify(world.result));
     const category = ((world.result.output as JsonObject).record as JsonObject)
@@ -63,7 +61,7 @@ test("a credit's original invoice number past the 21 characters a bill's holds: 
   assert.ok(queriesOf(unnumbered)['find-related'], 'the original bill searched');
 });
 
-test('a statement\'s listed numbers: each once whatever its case, those past 21 characters left out of the IN query and counted as not in QuickBooks; none it could hold: "Not checked" (N1, G4-4)', async () => {
+test("a statement's listed numbers: each once whatever its case, those past 21 characters left out of the IN query and counted as not in QuickBooks; none it could hold: nothing searched (N1, G4-4)", async () => {
   const long = `HOS-${'0'.repeat(18)}50`;
   const rows = (third: string, first = 'HOS-1031') => [
     { reference: 'Balance forward', amount: 214.2, kind: 'balance_forward' },
@@ -86,10 +84,7 @@ test('a statement\'s listed numbers: each once whatever its case, those past 21 
     queriesOf(twice)['find-duplicate-number'],
     "SELECT * FROM Bill WHERE DocNumber IN ('HOS-1031', 'HOS-1042') AND VendorRef = '7' MAXRESULTS 3",
   );
-  assert.equal(
-    lineOf(twice, 'find-duplicate-number'),
-    'Listed invoices not in QuickBooks: HOS-1031',
-  );
+  assert.equal(lineOf(twice, 'find-duplicate-number'), 'Number checked');
   /** The statement the run's output compares, and the run's summary. */
   const compared = (world: typeof twice) => {
     assert.ok(world.result.outcome === 'success', JSON.stringify(world.result));
@@ -97,7 +92,7 @@ test('a statement\'s listed numbers: each once whatever its case, those past 21 
     return { statement: (output as { statement: JsonObject }).statement, summary: summary ?? '' };
   };
   assert.deepEqual(compared(twice).statement.listedNotInQuickBooks, ['HOS-1031']);
-  assert.match(compared(twice).summary, /; 1 listed invoice not in QuickBooks[;.]/u);
+  assert.equal(compared(twice).summary, 'Compared with QuickBooks: 1 invoice not in QuickBooks.');
   // A number past 21 characters: left out of the query, and not in QuickBooks.
   const longer = await routeRun({
     answer: statement({ listedItems: rows(long) }),
@@ -108,7 +103,7 @@ test('a statement\'s listed numbers: each once whatever its case, those past 21 
     "SELECT * FROM Bill WHERE DocNumber IN ('HOS-1031', 'HOS-1042') AND VendorRef = '7' MAXRESULTS 3",
   );
   assert.deepEqual(compared(longer).statement.listedNotInQuickBooks, ['HOS-1031', long]);
-  assert.match(compared(longer).summary, /; 2 listed invoices not in QuickBooks[;.]/u);
+  assert.equal(compared(longer).summary, 'Compared with QuickBooks: 2 invoices not in QuickBooks.');
   // Every listed number past 21 characters: nothing to search, each not in QuickBooks.
   const longest = `HOS-${'0'.repeat(18)}31`;
   const none = await routeRun({
@@ -120,9 +115,6 @@ test('a statement\'s listed numbers: each once whatever its case, those past 21 
     company: seeded,
   });
   assert.equal(queriesOf(none)['find-duplicate-number'], undefined);
-  assert.equal(
-    lineOf(none, 'find-duplicate-number'),
-    'Not checked by number: every invoice number the statement lists is longer than the 21 characters QuickBooks holds, so none is in QuickBooks',
-  );
+  assert.equal(lineOf(none, 'find-duplicate-number'), 'Number checked');
   assert.equal((compared(none).statement.listedNotInQuickBooks as string[]).length, 3);
 });

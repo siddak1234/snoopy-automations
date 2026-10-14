@@ -5,44 +5,37 @@ import { routeOf } from '../src/checks/route.js';
 import { DOCUMENT_TYPES, REFUND_METHODS } from '../src/document.js';
 import { checkedSummary } from '../src/steps/check-document.js';
 import {
-  PAYERS,
+  NONE_PATH,
   bill,
   check,
   creditNote,
   documentOf,
-  paidBy,
   receipt,
   ruleOf,
   statement,
 } from './check-world.js';
 
 /**
- * The routing table (the plan's §2.1, §2.9 "Routing"): every document type, with the switch off
- * and on for each payer route, gives the expected path or its exact fail rule.
+ * The routing table (the plan's §2.1, as v2 keeps it — no "I paid with my own money", the session's
+ * decision 4): every document type gives the expected path, the vendor QuickBooks or "None", or the
+ * exact rule that ends it.
  */
-
-const ON = Object.keys(PAYERS) as (keyof typeof PAYERS)[];
-const PERSONAL = { owner: 'owner', employee: 'employee', not_employee: 'contractor' } as const;
 
 /** What a route of each kind is, with the rule that ends it otherwise. */
 function routeOrRule(answer: object, options = {}): string {
   const outcome = check(answer, options);
-  return outcome.outcome === 'ok' ? outcome.document.route : outcome.rule;
+  if (outcome.outcome === 'failed') return outcome.rule;
+  return outcome.recordingRule ?? outcome.document.route;
 }
 
-test('a bill: a Bill with the switch off; with it on, the paid-personally record find-payer chose', () => {
-  assert.equal(routeOrRule(bill()), 'bill');
-  for (const payer of ON) assert.equal(routeOrRule(bill(), paidBy(payer)), PERSONAL[payer], payer);
-});
-
-test('a receipt: an expense from Paid from with the switch off; with it on, the paid-personally record', () => {
-  assert.equal(routeOrRule(receipt()), 'company_receipt');
-  for (const payer of ON) {
-    assert.equal(routeOrRule(receipt(), paidBy(payer, { paidFrom: null })), PERSONAL[payer], payer);
+test('a bill is a Bill, a receipt an expense, on either path', () => {
+  for (const options of [{}, NONE_PATH]) {
+    assert.equal(routeOrRule(bill(), options), 'bill');
+    assert.equal(routeOrRule(receipt(), options), 'company_receipt');
   }
 });
 
-test('a credit note: a vendor credit, a card refund for a refund to a card, C19 by check or cash; C7 with the switch on', () => {
+test('a credit note: a vendor credit, a card refund for a refund to a card; by check or cash, C19 — which QuickBooks alone cannot take', () => {
   const expected: Record<(typeof REFUND_METHODS)[number], string> = {
     credit_on_account: 'vendor_credit',
     not_shown: 'vendor_credit',
@@ -52,10 +45,12 @@ test('a credit note: a vendor credit, a card refund for a refund to a card, C19 
   };
   for (const method of REFUND_METHODS) {
     assert.equal(routeOrRule(creditNote({ refundMethod: method })), expected[method], method);
-    for (const payer of ON) {
-      assert.equal(routeOrRule(creditNote({ refundMethod: method }), paidBy(payer)), 'C7', payer);
-    }
   }
+  assert.equal(
+    routeOrRule(creditNote({ refundMethod: 'refund_by_check_or_cash' }), NONE_PATH),
+    'vendor_credit',
+    'with "None" the details are kept',
+  );
   // Not shown, or a value only another document has: recorded as a vendor credit, and held.
   for (const method of ['not_shown', 'not_applicable']) {
     assert.ok(
@@ -70,30 +65,25 @@ test('a credit note: a vendor credit, a card refund for a refund to a card, C19 
   );
 });
 
-test("a supplier statement: compared only, the switch ignored — its line says the switch doesn't apply", () => {
+test('a supplier statement: compared only, its checks passed', () => {
   assert.equal(routeOrRule(statement()), 'statement');
-  for (const payer of ON) assert.equal(routeOrRule(statement(), paidBy(payer)), 'statement', payer);
-  const on = documentOf(check(statement(), paidBy('employee')));
-  assert.match(checkedSummary(on, true), /a supplier statement \(the switch doesn't apply\)/u);
-  assert.doesNotMatch(checkedSummary(on, false), /switch/u);
+  assert.equal(checkedSummary(documentOf(check(statement()))), 'Checks passed');
 });
 
-test('a bank or card statement, a quote, an order or anything else fails, the switch on or off', () => {
+test('a bank or card statement, a quote, an order or anything else fails, on either path', () => {
   const rules = { bank_statement: 'C1', quote: 'C2', purchase_order: 'C3', other: 'C4' } as const;
   for (const [type, rule] of Object.entries(rules)) {
     assert.equal(ruleOf(check(bill({ documentType: type }))), rule, type);
-    for (const payer of ON) {
-      assert.equal(ruleOf(check(bill({ documentType: type }), paidBy(payer))), rule, type);
-    }
+    assert.equal(ruleOf(check(bill({ documentType: type }), NONE_PATH)), rule, type);
   }
   // Every type is one of the eight, and each has its row.
   assert.equal(DOCUMENT_TYPES.length, 8);
 });
 
-test('the routing table itself: the switch off ignores who paid; on, a payer is required', () => {
-  assert.equal(routeOf('bill', false, PAYERS.owner, 'not_applicable'), 'bill');
-  assert.equal(routeOf('receipt', false, null, 'not_applicable'), 'company_receipt');
-  assert.equal(routeOf('supplier_statement', true, PAYERS.employee, 'not_applicable'), 'statement');
-  assert.equal(routeOf('credit_note', false, null, 'refund_to_card'), 'card_refund');
-  assert.throws(() => routeOf('receipt', true, null, 'not_applicable'), /kept no payer/u);
+test('the routing table itself', () => {
+  assert.equal(routeOf('bill', 'not_applicable'), 'bill');
+  assert.equal(routeOf('receipt', 'not_applicable'), 'company_receipt');
+  assert.equal(routeOf('supplier_statement', 'not_applicable'), 'statement');
+  assert.equal(routeOf('credit_note', 'refund_to_card'), 'card_refund');
+  assert.equal(routeOf('credit_note', 'credit_on_account'), 'vendor_credit');
 });

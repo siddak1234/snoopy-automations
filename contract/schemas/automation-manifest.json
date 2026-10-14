@@ -35,9 +35,24 @@
           "maxLength": 200
         },
         "category": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 40
+          "enum": [
+            "HR",
+            "Accounting",
+            "Finance",
+            "Legal",
+            "Compliance",
+            "Data",
+            "Operations",
+            "Sales",
+            "Marketing",
+            "Customer Support",
+            "IT",
+            "Engineering",
+            "Product",
+            "Procurement",
+            "Administration",
+            "Research"
+          ]
         },
         "icon": {
           "type": "string",
@@ -169,6 +184,9 @@
               "minLength": 1,
               "maxLength": 200
             }
+          },
+          "optional": {
+            "type": "boolean"
           }
         }
       }
@@ -266,7 +284,8 @@
               "money",
               "text",
               "email",
-              "resource-picker"
+              "resource-picker",
+              "connection"
             ]
           },
           "defaultValue": {},
@@ -280,6 +299,37 @@
               "run-failed",
               "run-succeeded"
             ]
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
           }
         }
       }
@@ -319,6 +369,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "group": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
           }
         }
       }

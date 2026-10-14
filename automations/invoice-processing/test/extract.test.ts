@@ -11,29 +11,35 @@ import { NO_ANSWER } from '@autom8x/automation-sdk/testing';
 
 import { ANSWER_FIELDS } from '../src/document.js';
 import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
-import { EXTRACT_INPUT, MODELS } from '../src/steps/extract.js';
+import { EXTRACT_INPUT, MODELS, readLine } from '../src/steps/extract.js';
+import { RUN_FAILS } from '../src/words.js';
 import { SEEDED_STATE, extractWorld } from './extract-world.js';
-import { FILE_ID, GOOD_ANSWER, completion, isSecondRead, lines, reads, setUp } from './fixtures.js';
+import {
+  FILE_ID,
+  GOOD_ANSWER,
+  QUICKBOOKS,
+  completion,
+  isSecondRead,
+  lines,
+  reads,
+  setUp,
+} from './fixtures.js';
 
 /**
- * `extract` when an answer comes: the one request it sends, the platform's fallback to the
- * second model, answers kept whole whatever they say, the time guard, and a continuation,
- * which never calls the model. The prompt file itself: `prompt.test.ts`.
+ * `extract` when an answer comes: the one request it sends — the one model call a run makes unless
+ * the first read shows a problem (decision 3) — the platform's fallback to the second model, answers
+ * kept whole whatever they say, its line, the time guard, and a continuation, which never calls the
+ * model. The prompt file itself: `prompt.test.ts`.
  */
+
+const READ = 'Read: bill from Harrowgate Office Supply, $461.53';
 
 function extractLine(world: ReturnType<typeof setUp>) {
   return lines(world.platform).find(([stepId]) => stepId === 'extract');
 }
 
-test("it sends one model request: the registered extract-document v1, the fixed task, MODELS and the run's file, nothing else; the second read is verify-read's", async () => {
-  const world = setUp({
-    config: {
-      expenseAccount: 'Utilities:Electric',
-      ownerInvestmentAccount: 'Owner investments',
-      ownerNames: 'Pat Owner',
-    },
-    input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Pat Owner' },
-  });
+test("it sends one model request: the registered extract-document v1, the fixed task, MODELS and the run's file, nothing else; a second read only on a problem", async () => {
+  const world = setUp({ config: { ...QUICKBOOKS, holdAboveAmount: 0 } });
   assert.equal((await world.run()).outcome, 'success');
   const [first, ...rest] = world.platform.modelCalls;
   assert.deepEqual(first, {
@@ -47,15 +53,17 @@ test("it sends one model request: the registered extract-document v1, the fixed 
   assert.deepEqual(
     rest.map((call) => isSecondRead(call)),
     [true],
-    'the one other call is the second read',
+    'over the limit: the one other call is the second read',
   );
-  // The template is sent as it is: it has no placeholder, so no input can change it, and
-  // "Who paid" never reaches the model.
+  // The template is sent as it is: it has no placeholder, so no input can change it.
   assert.equal(
     renderPrompt(EXTRACT_DOCUMENT_V1, EXTRACT_INPUT).prompt,
     EXTRACT_DOCUMENT_V1.template,
   );
-  assert.ok(!JSON.stringify(world.platform.modelCalls).includes('Pat Owner'));
+  // Nothing wrong with the first read, within the limit: one model call, and no other.
+  const plain = setUp();
+  assert.equal((await plain.run()).outcome, 'success');
+  assert.equal(plain.platform.modelCalls.length, 1);
 });
 
 test('it makes no provider call and sends no mail', async () => {
@@ -70,7 +78,7 @@ test('it makes no provider call and sends no mail', async () => {
   assert.deepEqual(world.platform.mails, []);
 });
 
-test('the line names the model that served and two counts; the state keeps the answer whole, every earlier key, and the model', async () => {
+test("the line (§3.E) says what was read — the type, the seller, the total — never a line or the model's other words; the state keeps the answer whole, every earlier key, and the model", async () => {
   const world = extractWorld();
   const answer = {
     ...GOOD_ANSWER,
@@ -85,19 +93,22 @@ test('the line names the model that served and two counts; the state keeps the a
     extraction: answer,
     modelServed: 'anthropic/claude-haiku-4.5-20261001',
   });
-  assert.deepEqual(
-    world.platform.steps.at(-1)?.summary,
-    'Read the document with anthropic/claude-haiku-4.5-20261001: 1 line (more on the document), 2 unclear',
+  assert.deepEqual(world.platform.steps.at(-1)?.summary, READ);
+  // A seller's name past 60 characters is shortened; a total not read is left out; a credit's
+  // negative total read as its size; another currency named.
+  assert.equal(
+    readLine({ ...GOOD_ANSWER, vendorName: 'V'.repeat(80), total: null }),
+    `Read: bill from ${'V'.repeat(59)}…`,
   );
-  // A served id however long leaves the counts in the line.
-  const long = extractWorld();
-  long.platform.model = (_call) => Promise.resolve(completion(`vendor/${'m'.repeat(150)}`, answer));
-  await long.state();
-  assert.match(
-    long.platform.steps.at(-1)?.summary ?? '',
-    /: 1 line \(more on the document\), 2 unclear$/u,
+  assert.equal(
+    readLine({ ...GOOD_ANSWER, documentType: 'credit_note', total: -12.5, currency: 'CAD' }),
+    'Read: credit note from Harrowgate Office Supply, 12.50 CAD',
   );
-  // A statement's listed rows are counted too, never quoted.
+  assert.equal(
+    readLine({ ...GOOD_ANSWER, documentType: 'quote', vendorName: null }),
+    'Read: quote, $461.53',
+  );
+  // A statement's listed rows are never quoted.
   const listing = extractWorld();
   const rows = Array.from({ length: 3 }, (_, index) => ({
     reference: `INV-${index}`,
@@ -116,7 +127,7 @@ test('the line names the model that served and two counts; the state keeps the a
   await listing.state();
   assert.equal(
     listing.platform.steps.at(-1)?.summary,
-    'Read the document with anthropic/claude-haiku-4.5: 2 lines, 3 listed (more listed), 0 unclear',
+    'Read: statement from Harrowgate Office Supply, $461.53',
   );
   const full = setUp();
   const result = await full.run();
@@ -126,24 +137,18 @@ test('the line names the model that served and two counts; the state keeps the a
   );
 });
 
-test('fallback: the first model answers off the schema, the second reads it, and the line names the second', async () => {
+test('fallback: the first model answers off the schema, and the second reads it', async () => {
   const world = setUp();
   world.platform.model = (call, model) =>
     !isSecondRead(call) && model === MODELS[0]
       ? Promise.resolve(completion(model, { ...GOOD_ANSWER, total: 'twelve' }))
       : reads()(call, model);
   assert.equal((await world.run()).outcome, 'success');
-  // Then the second read, by the maker the first read's model was not.
   assert.deepEqual(world.platform.modelAttempts, [
     { model: 'anthropic/claude-haiku-4.5', outcome: 'refused' },
     { model: 'google/gemini-3.1-flash-lite', outcome: 'ok' },
-    { model: 'anthropic/claude-haiku-4.5', outcome: 'ok' },
   ]);
-  assert.deepEqual(extractLine(world), [
-    'extract',
-    'ok',
-    'Read the document with google/gemini-3.1-flash-lite: 2 lines, 0 unclear',
-  ]);
+  assert.deepEqual(extractLine(world), ['extract', 'ok', READ]);
 });
 
 test('fallback: the first model gets no answer in time, and the second reads it', async () => {
@@ -153,7 +158,7 @@ test('fallback: the first model gets no answer in time, and the second reads it'
   assert.equal((await world.run()).outcome, 'success');
   assert.deepEqual(
     world.platform.modelAttempts.map((attempt) => attempt.outcome),
-    ['unanswered', 'ok', 'ok'],
+    ['unanswered', 'ok'],
   );
 });
 
@@ -210,14 +215,9 @@ test('the time guard: with less than 260 s to the deadline no model call is boug
   const late = setUp({ deadlineInMs: 200_000 });
   assert.deepEqual(await late.run(), {
     outcome: 'failed',
-    failureReason:
-      'The run ran out of time before the document was read; start it again with the document.',
+    failureReason: RUN_FAILS.ai_unavailable,
   });
-  assert.deepEqual(extractLine(late), [
-    'extract',
-    'failed',
-    'The document could not be read (out_of_time)',
-  ]);
+  assert.deepEqual(extractLine(late), ['extract', 'failed', RUN_FAILS.ai_unavailable]);
   assert.deepEqual(late.platform.modelCalls, []);
   const inTime = setUp({ deadlineInMs: 300_000 });
   assert.equal((await inTime.run()).outcome, 'success');
@@ -251,22 +251,18 @@ test('a continuation after approval never calls the model', async () => {
   assert.deepEqual(world.platform.steps, []);
 });
 
-test('a state without the upload ends with the fault-on-our-side sentence, and no model call', async () => {
+test("a state without the upload ends as the document can't be read right now, and no model call", async () => {
   for (const file of [undefined, {}, { artifactId: 'invoice.pdf' }, { artifactId: 42 }]) {
     const world = setUp();
     const { file: _kept, ...rest } = SEEDED_STATE;
     const state = file === undefined ? rest : { ...rest, file };
     const result = await world.automation.execute(
-      continuing(world.request, 'find-payer', state),
+      continuing(world.request, 'find-accounts', state),
       world.platform,
     );
     assert.deepEqual(
       result,
-      {
-        outcome: 'failed',
-        failureReason:
-          'The document could not be sent to be read because of a fault on our side; nothing was created.',
-      },
+      { outcome: 'failed', failureReason: RUN_FAILS.ai_unavailable },
       JSON.stringify(file),
     );
     assert.deepEqual(world.platform.modelCalls, []);
