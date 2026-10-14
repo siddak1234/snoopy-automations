@@ -38,6 +38,15 @@ import { refusalOf } from './read.js';
  * context (`packages/automation-sdk/src/runner.ts`) — so the write notes, against that
  * object, an attempt it threw on; a step's first answer is judged as it always was.
  *
+ * **The mark is kept per step, not per write.** It is keyed by the step's platform object
+ * alone, which is right because every step makes at most one QuickBooks write: today
+ * Invoice Processing's `create-vendor` (the vendor; `src/steps/confirm-vendor.ts`) and
+ * `create-record` (the bill, expense, vendor credit or journal entry; its
+ * `src/steps/create-record.ts`) each make one. A step that made two would have its second
+ * write's own certain refusal reported as not confirmed, because of the first write's
+ * unanswered attempt: such a step needs the mark keyed by write kind (the platform object
+ * and `kind`), changed here with that step.
+ *
  * A Fault is named by its number alone, in `detail`: the caller maps the codes it knows
  * (Group 5's 6140, 6210, …) to its own sentences. Intuit's `Message` and `Detail` are
  * never read.
@@ -121,7 +130,8 @@ type Failed = (
 /**
  * The step platforms whose write was thrown on unanswered — no answer, or a refusal the
  * platform did not decide — so that the step's next attempt, handed the same object, knows
- * an earlier one may have made the record.
+ * an earlier one may have made the record. Per step, not per write: every step makes at most
+ * one write (above).
  */
 const unanswered = new WeakSet<object>();
 
