@@ -4,16 +4,17 @@ import { test } from 'node:test';
 import { idempotencyKeyFor, type JsonObject, type MailRequest } from '@autom8x/automation-sdk';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
-import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
+import { bill, receipt, statement } from './check-world.js';
+import { NONE, setUp, reads } from './fixtures.js';
 import { PAID, type RouteRun } from './lookups-world.js';
-import { approve, firstRun, outputOf, ownNumbers } from './writes-world.js';
+import { approve, firstRun, outputOf } from './writes-world.js';
 
 /**
- * notify (step 24; the plan's §5 "notify, per type"): one plain-text mail to the "Also email"
- * address — skipped, unreported, when it is empty — built from QuickBooks' answer, never the model's
- * words or a hold reason, with each path's next step; a statement's with its counts and what
- * QuickBooks shows open; a mail that fails never fails the run, and the step's line never carries
- * the address or the mail's words.
+ * notify (the last step; v2's §3.F): one plain-text mail to the "Also email" address — skipped,
+ * unreported, when it is empty. Its subject is the result line; its body one first line saying what
+ * Invoice Processing did, then the run's details as `Label: value` lines, and nothing else — never
+ * the model's words or a hold reason. A mail that fails never fails the run, and the step's line
+ * (§3.E: `Summary emailed`) never carries the address or the mail's words.
  */
 
 const TO = 'books@example.com';
@@ -24,7 +25,7 @@ const withMail = (run: RouteRun, mail: JsonObject = { notifyEmail: TO }): RouteR
 
 /** The mail a whole run sent — approved, when it held — and the notify line. */
 async function mailed(run: RouteRun) {
-  const first = await firstRun(run);
+  const first = await firstRun({ ...run, through: 'all' });
   if (first.result.outcome === 'held') {
     const approved = await approve(first);
     return {
@@ -52,134 +53,75 @@ test('no "Also email" address — none, empty, or spaces — no mail, no line, a
   }
 });
 
-test("a bill's mail, straight through: QuickBooks' Id, vendor, number, date, total and due date, under notify's own key", async () => {
+test("a bill's mail, straight through: the result line as its subject, the first line, the details — under notify's own key", async () => {
   const { mails, line, runId } = await mailed(withMail({ answer: bill() }));
   assert.deepEqual(mails, [
     {
       to: TO,
-      subject: 'Bill 1001 recorded in QuickBooks: Harrowgate Office Supply, HOS-1042, $413.34',
+      subject: 'Recorded in QuickBooks: bill from Harrowgate Office Supply, $413.34',
       body: [
-        'A bill was recorded in your QuickBooks Online company by Autom8x Bills & Receipts.',
+        'Invoice Processing recorded this in QuickBooks.',
         '',
-        'Bill in QuickBooks: 1001',
+        'Recorded as: Bill',
         'Vendor: Harrowgate Office Supply',
         'Number: HOS-1042',
-        'Date: 2026-09-14',
+        'Date: Sep 14, 2026',
+        'Due: Oct 14, 2026',
         'Total: $413.34',
-        'Due date: 2026-10-14',
-        'Category: Utilities:Electric',
-        'Decided: automatically',
+        'Category: Office Supplies',
+        'Decided: Automatically',
       ].join('\n'),
       idempotencyKey: idempotencyKeyFor(runId, 'notify'),
     },
   ]);
-  assert.deepEqual(line, ['notify', 'ok', 'Emailed the summary to the "Also email" address']);
+  assert.deepEqual(line, ['notify', 'ok', 'Summary emailed']);
 });
 
-test("each path's mail says its next step; a receipt's, the bank rule that skips the review", async () => {
-  const cases: [RouteRun, string[]][] = [
-    [
-      { answer: receipt() },
-      [
-        'An expense was recorded in your QuickBooks Online company by Autom8x Bills & Receipts.',
-        '',
-        'Expense in QuickBooks: 1001',
-        'Vendor: Tidewell Hardware',
-        'Number: 55120 (in the memo)',
-        'Date: 2026-09-27',
-        'Total: $60.63',
-        'Paid from: Company Visa',
-        'Category: Utilities:Electric',
-        'Decided: automatically',
-        '',
-        'Next step: When this charge arrives in your bank feed, choose Match, not Add.',
-        'A bank rule set to add matching charges automatically skips that review.',
-      ],
-    ],
-    [
-      { answer: receipt(), ...PAID.employee },
-      [
-        'A journal entry was recorded in your QuickBooks Online company by Autom8x Bills & Receipts.',
-        '',
-        'Journal entry in QuickBooks: 1001',
-        'Seller: Tidewell Hardware',
-        'Paid by: Robin Example',
-        'Number: 55120 (in the memo)',
-        'Date: 2026-09-27',
-        'Total: $60.63',
-        'Category: Utilities:Electric',
-        'Decided: after approval',
-        '',
-        'Next step: Repay with a check or expense using Owed to Team Members as the category.',
-      ],
-    ],
-  ];
-  for (const [run, body] of cases) {
-    const { mails } = await mailed(withMail(run));
-    assert.equal(mails[0]?.body, body.join('\n'));
-  }
-  const next: [RouteRun, string, string][] = [
-    [
-      { answer: sampleAnswer('card-refund') },
-      'Refund 1001 recorded in QuickBooks: Tidewell Hardware, R-6603, $23.72',
-      'A bank rule set to add matching charges automatically skips that review.',
-    ],
-    [
-      { answer: creditNote() },
-      'Vendor credit 1001 recorded in QuickBooks: Harrowgate Office Supply, CM-0077, $203.20',
-      'Decided: automatically',
-    ],
-    [
-      { answer: receipt(), ...PAID.owner },
-      'Journal entry 1001 recorded in QuickBooks: Tidewell Hardware, 55120, $60.63',
-      'Next step: Categorise the repayment to Owner investments.',
-    ],
-    [
-      { answer: receipt(), ...PAID.contractor },
-      'Bill 1001 recorded in QuickBooks: Sam Lee, 55120, $60.63',
-      'Next step: Pay it in Pay bills.',
-    ],
-  ];
-  for (const [run, subject, last] of next) {
-    const { mails } = await mailed(withMail(run));
-    assert.equal(mails[0]?.subject, subject);
-    assert.equal(mails[0]?.body.split('\n').at(-1), last, subject);
-  }
-  const { mails } = await mailed(withMail({ answer: sampleAnswer('card-refund') }));
-  assert.ok(
-    mails[0]?.body.includes(
-      '\nNext step: When this charge arrives in your bank feed, choose Match, not Add.\n',
-    ),
+test("a receipt's mail: Paid from, and the next step", async () => {
+  const { mails } = await mailed(withMail({ answer: receipt() }));
+  assert.equal(mails[0]?.subject, 'Recorded in QuickBooks: expense from Tidewell Hardware, $60.63');
+  const body = mails[0]?.body.split('\n') ?? [];
+  assert.equal(body[0], 'Invoice Processing recorded this in QuickBooks.');
+  assert.ok(body.includes('Paid from: Visa 4417'), body.join('\n'));
+  assert.equal(
+    body.at(-1),
+    'Next: When this charge arrives in your bank feed, choose Match, not Add.',
   );
 });
 
-test("a statement's mail: the counts and what QuickBooks shows open — never its own figures or invoice numbers", async () => {
+test("a statement's mail: compared, with what QuickBooks shows — never the statement's invoice numbers", async () => {
   const { mails, result } = await mailed(withMail({ answer: statement() }));
   assert.equal(outputOf(result).outcome, 'compared');
-  assert.deepEqual(
-    mails.map(({ subject, body }) => ({ subject, body })),
-    [
-      {
-        subject: 'Statement from Harrowgate Office Supply compared with QuickBooks',
-        body: [
-          "A supplier's statement was compared with your QuickBooks Online company by Autom8x Bills & Receipts. Nothing was recorded.",
-          '',
-          'Vendor: Harrowgate Office Supply',
-          'Invoices it lists that are not in QuickBooks: 3',
-          'Open bills in QuickBooks it does not list: 0',
-          'QuickBooks shows open for this vendor: $980.00',
-          '',
-          "The statement's own figures and the invoice numbers are in the run's timeline in Autom8x.",
-        ].join('\n'),
-      },
-    ],
-  );
-  for (const own of ['$686.54', 'HOS-1031', 'HOS-1050']) {
+  assert.equal(mails[0]?.subject, 'Statement from Harrowgate Office Supply compared');
+  const body = mails[0]?.body.split('\n') ?? [];
+  assert.deepEqual(body.slice(0, 3), [
+    'Invoice Processing compared this statement with QuickBooks.',
+    '',
+    'Vendor: Harrowgate Office Supply',
+  ]);
+  assert.ok(body.some((each) => /^Not in QuickBooks: \d+ invoices?$/u.test(each)));
+  for (const own of ['HOS-1031', 'HOS-1050']) {
     assert.ok(!mails[0]?.body.includes(own), own);
   }
 });
 
-test("QuickBooks' answer wins over what was read: its total, due date and the vendor's name as it wrote them", async () => {
+test('the vendor "None": the saved details mailed, and still nothing calls QuickBooks', async () => {
+  const world = setUp({ through: 'all', config: { ...NONE, notifyEmail: TO } });
+  world.platform.model = reads(bill());
+  const result = await world.run();
+  assert.equal(result.outcome, 'success');
+  assert.deepEqual(world.platform.providerCalls, []);
+  const [mail] = world.platform.mails as [MailRequest];
+  assert.equal(mail.subject, 'Saved: Harrowgate Office Supply, $413.34');
+  assert.deepEqual(mail.body.split('\n').slice(0, 4), [
+    'Invoice Processing saved these details.',
+    '',
+    'Type: Bill',
+    'Seller: Harrowgate Office Supply',
+  ]);
+});
+
+test("QuickBooks' answer wins over what was read: its total and the vendor's name as it wrote them", async () => {
   const answer = {
     Bill: {
       Id: '151',
@@ -199,47 +141,13 @@ test("QuickBooks' answer wins over what was read: its total, due date and the ve
   );
   assert.equal(
     mails[0]?.subject,
-    'Bill 151 recorded in QuickBooks: Harrowgate Office Supply Co., HOS-1042, $413.35',
+    'Recorded in QuickBooks: bill from Harrowgate Office Supply Co., $413.35',
   );
-  assert.match(mails[0]?.body ?? '', /\nTotal: \$413\.35\nDue date: 2026-10-15\n/u);
+  assert.match(mails[0]?.body ?? '', /\nDue: Oct 15, 2026\nTotal: \$413\.35\n/u);
   assert.equal(
     (result as { summary?: string }).summary,
-    'Recorded bill 151 from Harrowgate Office Supply Co., HOS-1042, $413.34, due 2026-10-15; QuickBooks shows $413.35.',
+    'Recorded in QuickBooks: bill from Harrowgate Office Supply Co., $413.35.',
   );
-});
-
-test("QuickBooks' own number — an expense or a vendor credit it numbers itself, own numbers off — has its own label: the document's number keeps its line, in the memo, and the subject", async () => {
-  const numbers = (body = '') =>
-    body.split('\n').filter((line) => /^(Number|QuickBooks number):/u.test(line));
-  const cases: [RouteRun, string, string[], [string | null, string]][] = [
-    [
-      { answer: receipt(), company: ownNumbers('false') },
-      'Expense 1001 recorded in QuickBooks: Tidewell Hardware, 55120, $60.63',
-      ['Number: 55120 (in the memo)', 'QuickBooks number: 1'],
-      ['1', '55120'],
-    ],
-    [
-      { answer: creditNote(), company: ownNumbers('false') },
-      'Vendor credit 1001 recorded in QuickBooks: Harrowgate Office Supply, CM-0077, $203.20',
-      ['Number: CM-0077 (in the memo)', 'QuickBooks number: 1'],
-      ['1', 'CM-0077'],
-    ],
-    // Own numbers on: the credit is sent its number, which QuickBooks keeps.
-    [
-      { answer: creditNote(), company: ownNumbers('true') },
-      'Vendor credit 1001 recorded in QuickBooks: Harrowgate Office Supply, CM-0077, $203.20',
-      ['Number: CM-0077'],
-      ['CM-0077', 'CM-0077'],
-    ],
-  ];
-  for (const [run, subject, lines, [docNumber, documentNumber]] of cases) {
-    const { mails, result } = await mailed(withMail(run));
-    assert.equal(mails[0]?.subject, subject);
-    assert.deepEqual(numbers(mails[0]?.body), lines, subject);
-    // The output keeps both: the record's number in QuickBooks, and the document's.
-    const record = outputOf(result).record as JsonObject;
-    assert.deepEqual([record.docNumber, record.documentNumber], [docNumber, documentNumber]);
-  }
 });
 
 test('a mail refused for certain, or never answered, fails only its own line: the run succeeds, the record stands', async () => {
@@ -252,7 +160,7 @@ test('a mail refused for certain, or never answered, fails only its own line: th
         detail: 'x',
         details: { reason: 'recipient_inside_workspace' },
       }),
-      'The summary was not emailed: the platform refused it (recipient_inside_workspace)',
+      'Summary not emailed',
     ],
     [
       'the daily cap',
@@ -262,26 +170,22 @@ test('a mail refused for certain, or never answered, fails only its own line: th
         detail: 'x',
         details: { reason: 'per_workspace_daily_cap' },
       }),
-      'The summary was not emailed: the platform refused it (per_workspace_daily_cap)',
+      'Summary not emailed',
     ],
     [
       'mail not configured',
       refusalFixture('mail', { status: 503, code: 'NOT_CONFIGURED', detail: 'x' }),
-      'The summary was not emailed: the platform refused it (HTTP 503)',
+      'Summary not emailed',
     ],
-    [
-      'no answer',
-      new TypeError('fetch failed'),
-      'The summary may have been emailed: the platform did not answer. Do not re-send it by hand.',
-    ],
+    ['no answer', new TypeError('fetch failed'), 'Summary may have been emailed'],
     [
       'a reasonless 502',
       refusalFixture('mail', { status: 502, code: 'DEPENDENCY_FAILURE', detail: 'x' }),
-      'The summary may have been emailed: the platform did not answer. Do not re-send it by hand.',
+      'Summary may have been emailed',
     ],
   ];
   for (const [label, error, summary] of cases) {
-    const first = await firstRun(withMail({ answer: bill() }));
+    const first = await firstRun({ ...withMail({ answer: bill() }), through: 'all' });
     assert.ok(first.result.outcome === 'success');
     // The same run once more on a platform that refuses the mail: the bill is replayed, not made again.
     first.platform.mail = () => Promise.reject(error);
@@ -299,7 +203,7 @@ test('a mail refused for certain, or never answered, fails only its own line: th
   }
 });
 
-test('the subject stays at most 200 characters, the Id, number and total whole; no line break from a name reaches it; the same run mails the same words', async () => {
+test('the subject stays one short line: a long name shortened, no line break from a name reaches it; the same run mails the same words', async () => {
   // QuickBooks answers with the vendor's name at its 500 characters, a line break inside it.
   const long = `Harrowgate ${'Office '.repeat(68)}Supply`;
   const answer = {
@@ -319,9 +223,10 @@ test('the subject stays at most 200 characters, the Id, number and total whole; 
   });
   const { mails } = await mailed(run);
   const subject = mails[0]?.subject ?? '';
-  assert.ok(subject.length <= 200, String(subject.length));
-  assert.match(subject, /^Bill 151 recorded in QuickBooks: Harrowgate .+…, HOS-1042, \$413\.34$/u);
+  assert.ok(subject.length <= 120, String(subject.length));
+  assert.match(subject, /^Recorded in QuickBooks: bill from Harrowgate .+…, \$413\.34$/u);
   assert.ok(!/[\r\n]/u.test(subject));
+  assert.ok(!(mails[0]?.body ?? '').includes('\nBcc:'));
   assert.ok((mails[0]?.body.length ?? 0) <= 10_000);
   const twice = await mailed(run);
   assert.deepEqual(
@@ -331,13 +236,14 @@ test('the subject stays at most 200 characters, the Id, number and total whole; 
 });
 
 test("the mail never carries a hold reason or a line's text; after an approval it says so", async () => {
-  const first = await firstRun(
-    withMail({ answer: bill(), config: { ...PAID.company.config, holdAboveAmount: 0 } }),
-  );
+  const first = await firstRun({
+    ...withMail({ answer: bill(), config: { ...PAID.company.config, holdAboveAmount: 0 } }),
+    through: 'all',
+  });
   const approved = await approve(first);
   const [mail] = approved.mails as [MailRequest];
-  for (const absent of ['over the', 'limit', 'Held', 'held', 'category Utilities']) {
+  for (const absent of ['over the', 'limit', 'Waiting', 'approval.', 'Checks passed']) {
     assert.ok(!mail.body.includes(absent) && !mail.subject.includes(absent), absent);
   }
-  assert.ok(mail.body.includes('Decided: after approval'));
+  assert.ok(mail.body.includes('Decided: After approval'));
 });

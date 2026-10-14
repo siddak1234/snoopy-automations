@@ -19,14 +19,13 @@ import type { Payee, RecordPlan } from '../decide/plan.js';
  *   the due date), line Ids, `TotalAmt` (QuickBooks computes it), an attachment (D29: none in v1).
  *
  * Sandbox points the bodies rest on: S2 (the account types an expense line takes), S3 (Cash for a
- * debit card or transfer from a bank account), S5 (a journal entry's liability line naming the
- * employee), S8 (a check expense with print status "NotSet"), S13 (CurrencyRef USD with
- * multicurrency on).
+ * debit card or transfer from a bank account), S8 (a check expense with print status "NotSet"),
+ * S13 (CurrencyRef USD with multicurrency on).
  */
 
-/** The memo's first sentence: the run that writes the record — after an approval, the continuation. */
+/** The memo's first sentence (v2: "Invoice Processing"): the run that writes the record — after an approval, the continuation. */
 export function runLine(runId: string): string {
-  return `Created by Autom8x Bills & Receipts, run ${runId}.`;
+  return `Created by Autom8x Invoice Processing, run ${runId}.`;
 }
 
 /** The memo QuickBooks keeps: the run that wrote it, then the plan's words. */
@@ -47,29 +46,6 @@ function expenseLine(plan: RecordPlan): JsonObject {
   };
 }
 
-/** A journal entry's line: the category debited, or what is owed or invested credited. */
-function journalLine(
-  plan: RecordPlan,
-  posting: 'Debit' | 'Credit',
-  accountId: string,
-  employeeId: string | null,
-): JsonObject {
-  return {
-    DetailType: 'JournalEntryLineDetail',
-    Amount: amountOf(plan.amountCents),
-    Description: plan.lineDescription,
-    JournalEntryLineDetail: {
-      PostingType: posting,
-      AccountRef: { value: accountId },
-      // The employee is the liability line's Name (H6; sandbox S5). An owner cannot be a line's
-      // Name — only a vendor, an employee or a customer can (I4) — so theirs is in the text.
-      ...(employeeId === null
-        ? {}
-        : { Entity: { Type: 'Employee', EntityRef: { value: employeeId } } }),
-    },
-  };
-}
-
 /** CurrencyRef USD when the company has multicurrency on (sandbox S13); nothing otherwise. */
 const currencyOf = (plan: RecordPlan): JsonObject =>
   plan.currencyRef === null ? {} : { CurrencyRef: { value: plan.currencyRef } };
@@ -83,8 +59,6 @@ export function writeKindOf(plan: RecordPlan): QuickBooksWriteKind {
       return 'expense';
     case 'vendorCredit.create':
       return 'vendorCredit';
-    case 'journalEntry.create':
-      return 'journalEntry';
   }
 }
 
@@ -131,20 +105,6 @@ export function recordBody(plan: RecordPlan, vendorId: string | null, runId: str
         ...currencyOf(plan),
         Line: [expenseLine(plan)],
       };
-    case 'journalEntry.create': {
-      const owed = plan.accounts.liability ?? plan.accounts.equity;
-      const employeeId = plan.payee.kind === 'employee' ? plan.payee.id : null;
-      // Debits equal credits: one line each way, the same amount (Intuit's 2300 otherwise).
-      return {
-        TxnDate: plan.date,
-        PrivateNote: memo,
-        ...currencyOf(plan),
-        Line: [
-          journalLine(plan, 'Debit', plan.accounts.category.id, null),
-          journalLine(plan, 'Credit', owed?.id ?? '', employeeId),
-        ],
-      };
-    }
   }
 }
 

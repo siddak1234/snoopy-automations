@@ -1,16 +1,12 @@
-import {
-  QUICKBOOKS_SENTENCES,
-  entityOf,
-  readQuickBooks,
-  type Clock,
-} from '@autom8x/automation-kit/quickbooks';
-import { cleanText, fitLine } from '@autom8x/automation-kit/values';
+import { entityOf, readQuickBooks, type Clock } from '@autom8x/automation-kit/quickbooks';
+import { cleanText } from '@autom8x/automation-kit/values';
 import { isObject, type JsonObject, type Step } from '@autom8x/automation-sdk';
 
 import type { SavedState } from '../decide/saved.js';
-import { failedWith, quickBooksFailed } from '../outcome.js';
+import { runFails } from '../outcome.js';
+import { notRecorded, readFailed } from '../quickbooks-path.js';
+import { lineWith } from '../words.js';
 import { readSaved } from '../writes/saved-state.js';
-import { AFTER_APPROVAL_SENTENCES } from '../writes/sentences.js';
 
 /**
  * `confirm-company` (step 19) — after an approval, before anything is written, that QuickBooks is
@@ -25,9 +21,9 @@ import { AFTER_APPROVAL_SENTENCES } from '../writes/sentences.js';
  * or a sandbox company with the same names apart (the design's open question, its recommended
  * answer applied, at no extra call; whether production answers carry it and a rename leaves it
  * unchanged is for the sandbox). A first run — straight through, its lookups moments old — skips.
+ * Another company, or no answer, is "not recorded in QuickBooks" — the flow's company is not the
+ * one connected — and the details are saved (decision 6). Its line is read-company's (§3.E).
  */
-
-const WHAT = 'Company not confirmed';
 
 /** Two creation times are one instant, however QuickBooks writes its offset. */
 function sameInstant(left: string, right: string): boolean {
@@ -58,9 +54,7 @@ export function confirmCompany(clock: Clock): Step {
   return async ({ request, state, platform }) => {
     if (!request.continuation) return { outcome: 'skipped' };
     const saved = readSaved(state);
-    if (!saved) {
-      return failedWith(WHAT, 'state_incomplete', AFTER_APPROVAL_SENTENCES.state_incomplete);
-    }
+    if (!saved) return runFails('other', 'state_incomplete');
     const read = await readQuickBooks({
       platform,
       deadline: request.deadline,
@@ -69,25 +63,13 @@ export function confirmCompany(clock: Clock): Step {
       input: {},
       purpose: 'checking the company again',
     });
-    if (!read.ok) return quickBooksFailed(WHAT, read);
+    if (!read.ok) return readFailed(state, read);
     const info = entityOf(read.body, 'CompanyInfo');
-    if (!info) {
-      return failedWith(WHAT, 'unexpected_answer', QUICKBOOKS_SENTENCES.unexpected_answer);
-    }
-    const differ = differences(saved.company, info);
-    if (differ.length > 0) {
-      return failedWith(
-        `${WHAT}: its ${differ.join(', ')} changed`,
-        'company_changed',
-        AFTER_APPROVAL_SENTENCES.company_changed,
-      );
-    }
+    if (!info) return notRecorded(state, 'no_answer');
+    if (differences(saved.company, info).length > 0) return notRecorded(state, 'not_connected');
     return {
       outcome: 'ok',
-      summary: fitLine([
-        'Same QuickBooks company as when this was held: ',
-        { name: cleanText(saved.company.name) ?? '' },
-      ]),
+      summary: lineWith('QuickBooks: ', cleanText(saved.company.name) ?? ''),
     };
   };
 }

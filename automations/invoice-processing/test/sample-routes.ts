@@ -19,7 +19,7 @@ export const SAMPLE_ROUTES: Readonly<Record<string, readonly [string, readonly s
   'store-receipt': ['company_receipt', []],
   'restaurant-tip-written-total': ['company_receipt', []],
   'restaurant-tip-under-total': ['company_receipt', ['tip_added']],
-  'card-slip-tip-only': ['C28', []],
+  'card-slip-tip-only': ['C28', ['not_cross_checked']],
   'card-slip': ['company_receipt', []],
   'handwritten-cash-receipt': ['company_receipt', ['not_cross_checked']],
   'long-thermal-receipt': ['company_receipt', []],

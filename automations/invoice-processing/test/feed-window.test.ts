@@ -1,28 +1,32 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
 import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-search.js';
-import { LOOKUP_SENTENCES } from '../src/lookups/read.js';
+import { RESULTS } from '../src/words.js';
 import { bill, receipt, sampleAnswer } from './check-world.js';
 import { lines } from './fixtures.js';
-import { PAID, REF, lineOf, queriesOf, routeRun, samplePurchase } from './lookups-world.js';
+import { REF, lineOf, queriesOf, routeRun, samplePurchase } from './lookups-world.js';
 
 /**
  * The bank-feed check (D21) at the edges of its window — 2 days before, 1 day before, 20 days
  * after, 21 days after — for a receipt and a card refund, under both of sandbox S4's answers: by
  * amount (D21, the default), and §5's fallback, the window alone, newest first, a full answer a
- * possible duplicate ("too many expenses to check"), a bill's D32 check dropped.
+ * possible duplicate, a bill's D32 check dropped. The receipt and the refund are paid from the card
+ * named with their last four, "Visa 4417".
  */
+
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
 
 const BOTH: readonly ExpenseSearch[] = ['amount', 'window'];
 
-test('S4 is decided by the sandbox before v1 registers; until then, D21: expenses searched by amount', () => {
+test("S4 is the sandbox's answer (2026-10-12): D21, expenses searched by amount", () => {
   assert.equal(EXPENSE_SEARCH, 'amount');
 });
 
-test("a receipt's bank-feed check: a charge on Paid from 1 day before to 20 days after holds; 2 before or 21 after does not", async () => {
+test("a receipt's bank-feed check: a charge on its card 1 day before to 20 days after holds; 2 before or 21 after does not", async () => {
   // The receipt is dated 2026-09-27.
   const edges: [string, boolean][] = [
     ['2026-09-25', false],
@@ -37,7 +41,7 @@ test("a receipt's bank-feed check: a charge on Paid from 1 day before to 20 days
         expenseSearch: how,
         company: (sim) =>
           sim.company.purchases.push(
-            samplePurchase('201', REF.visa, { TxnDate: date, TotalAmt: 60.63 }),
+            samplePurchase('201', REF.visa4417, { TxnDate: date, TotalAmt: 60.63 }),
           ),
       });
       const label = `${how}: a charge on ${date}`;
@@ -46,16 +50,8 @@ test("a receipt's bank-feed check: a charge on Paid from 1 day before to 20 days
         continue;
       }
       assert.ok(world.result.outcome === 'held', label);
-      assert.equal(
-        world.result.held.reason,
-        'Possible duplicate: Tidewell Hardware, $60.63 from Company Visa',
-        label,
-      );
-      assert.match(
-        lineOf(world, 'decide') ?? '',
-        /possible duplicate: a charge for this amount on the Paid from account/u,
-        label,
-      );
+      assert.equal(world.result.held.reason, 'A bank or card charge matches.', label);
+      assert.equal(lineOf(world, 'decide'), 'Waiting for approval', label);
     }
   }
 });
@@ -76,19 +72,23 @@ test("a card refund's check: a refund on the card in the window holds; outside i
         expenseSearch: how,
         company: (sim) =>
           sim.company.purchases.push(
-            samplePurchase('202', REF.visa, { TxnDate: date, TotalAmt: 23.72, Credit: credit }),
+            samplePurchase('202', REF.visa4417, {
+              TxnDate: date,
+              TotalAmt: 23.72,
+              Credit: credit,
+            }),
           ),
       });
       const label = `${how}: ${credit ? 'a refund' : 'a charge'} on ${date}`;
       assert.equal(world.result.outcome, holds ? 'held' : 'success', label);
-      if (holds) {
-        assert.match(lineOf(world, 'decide') ?? '', /a refund for this amount on the card/u, label);
+      if (holds && world.result.outcome === 'held') {
+        assert.equal(world.result.held.reason, 'A bank or card charge matches.', label);
       }
     }
   }
 });
 
-test('the fallback reads the window newest first, 50 at most; a full answer holds, its line "too many expenses to check" (D6)', async () => {
+test('the fallback reads the window newest first, 50 at most; a full answer holds as a possible duplicate (D6)', async () => {
   const world = await routeRun({
     answer: receipt(),
     expenseSearch: 'window',
@@ -107,12 +107,9 @@ test('the fallback reads the window newest first, 50 at most; a full answer hold
     queriesOf(world)['find-duplicate-amount'],
     "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY TxnDate DESC MAXRESULTS 50",
   );
-  assert.equal(
-    lineOf(world, 'find-duplicate-amount'),
-    'Expenses from 2026-09-26 to 2026-10-17: 50 read, 0 for $60.63; too many expenses to check',
-  );
+  assert.equal(lineOf(world, 'find-duplicate-amount'), 'Possible duplicate');
   assert.ok(world.result.outcome === 'held');
-  assert.match(lineOf(world, 'decide') ?? '', /possible duplicate: too many to check/u);
+  assert.equal(world.result.held.reason, 'May already be in QuickBooks.');
   // 49 rows: read whole, compared in code, no hold.
   const fewer = await routeRun({
     answer: receipt(),
@@ -129,10 +126,7 @@ test('the fallback reads the window newest first, 50 at most; a full answer hold
     },
   });
   assert.equal(fewer.result.outcome, 'success');
-  assert.equal(
-    lineOf(fewer, 'find-duplicate-amount'),
-    'Expenses from 2026-09-26 to 2026-10-17: 49 read, 0 for $60.63',
-  );
+  assert.equal(lineOf(fewer, 'find-duplicate-amount'), 'No duplicate', 'none for this amount');
 });
 
 test("under the fallback a bill's D32 check is dropped, and decide needs it not; decision 6's number check remains", async () => {
@@ -166,42 +160,18 @@ test("under the fallback a bill's D32 check is dropped, and decide needs it not;
   assert.deepEqual((primary.result.held.state as JsonObject).holdReasons, ['possible_duplicate']);
 });
 
-test('a purchase someone paid personally: a company charge for the amount in the window holds 7, under either answer', async () => {
-  for (const how of BOTH) {
-    const world = await routeRun({
-      answer: receipt(),
-      ...PAID.employee,
-      expenseSearch: how,
-      company: (sim) =>
-        sim.company.purchases.push(
-          samplePurchase('204', REF.visa, { TxnDate: '2026-09-28', TotalAmt: 60.63 }),
-        ),
-    });
-    assert.ok(world.result.outcome === 'held', how);
-    assert.equal(
-      world.result.held.reason,
-      'Paid personally; a company card or bank charge matches: Robin Example paid Tidewell Hardware, $60.63',
-      how,
-    );
-  }
-});
-
-test('if Intuit does not search an expense by amount, as its model file reads, D21 is refused — what sandbox S4 settles', async () => {
+test('if Intuit does not search an expense by amount, as its model file reads, D21 is refused — not recorded, the details saved — what sandbox S4 settles', async () => {
   const world = await routeRun({
     answer: receipt(),
     company: (sim) => {
       sim.expenseAmountSearchable = false;
     },
   });
-  assert.deepEqual(world.result, {
-    outcome: 'failed',
-    failureReason: LOOKUP_SENTENCES.amount_refused,
-  });
-  assert.deepEqual(lines(world.platform).at(-1), [
-    'find-duplicate-amount',
-    'failed',
-    'Amount not searched (qb_error 4000)',
-  ]);
+  assert.equal(summaryOf(world.result), RESULTS.notRecorded("QuickBooks didn't answer"));
+  assert.deepEqual(
+    lines(world.platform).find(([stepId]) => stepId === 'find-duplicate-amount'),
+    ['find-duplicate-amount', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+  );
   // The fallback asks only what Intuit marks searchable.
   const fallback = await routeRun({
     answer: receipt(),

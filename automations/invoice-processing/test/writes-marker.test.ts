@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
+import { NONE } from './fixtures.js';
 import { PAID, type RouteRun } from './lookups-world.js';
 import { SAMPLES } from './sample-maker/samples.js';
 import { approve, firstRun, writesOf } from './writes-world.js';
@@ -35,24 +36,25 @@ function planted(answer: JsonObject, marker: string, fields: readonly string[]):
 }
 
 /**
- * The paths a sample's document can take, as each is run: the company's — for a bill, its vendor
- * also new, so the vendor is created — and paid personally.
+ * The paths a sample's document can take, as each is run: QuickBooks — for a bill, its vendor also
+ * new, so the vendor is created — and "None", its details saved.
  */
 function pathsOf(answer: JsonObject): [string, Partial<RouteRun>][] {
-  const company: [string, Partial<RouteRun>] = ['company', PAID.company];
-  if (answer.documentType !== 'bill' && answer.documentType !== 'receipt') return [company];
   return [
-    company,
+    ['QuickBooks', PAID.company],
     ...(answer.documentType === 'bill'
-      ? [['company, a new vendor', { ...PAID.company, bare: true }] as [string, Partial<RouteRun>]]
+      ? [
+          ['QuickBooks, a new vendor', { ...PAID.company, bare: true }] as [
+            string,
+            Partial<RouteRun>,
+          ],
+        ]
       : []),
-    ['employee', PAID.employee],
-    ['owner', PAID.owner],
-    ['contractor', PAID.contractor],
+    ['None', { config: NONE }],
   ];
 }
 
-test("every sample's marker, planted where the code must not pass it on, reaches no QuickBooks request, mail, line or result — on every path, held and approved or straight through", async () => {
+test("every sample's marker, planted where the code must not pass it on, reaches no QuickBooks request, mail, line, result or saved detail — on every path, held and approved or straight through", async () => {
   const written = new Map<string, number>();
   for (const sample of SAMPLES) {
     for (const fields of [[], ['currency', 'cardLast4', 'listedItems']] as const) {
@@ -89,7 +91,6 @@ test("every sample's marker, planted where the code must not pass it on, reaches
     'bill.create',
     'purchase.create',
     'vendorCredit.create',
-    'journalEntry.create',
   ]) {
     assert.ok((written.get(operation) ?? 0) > 0, operation);
   }

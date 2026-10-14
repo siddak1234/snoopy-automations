@@ -1,5 +1,5 @@
 import { unmarkedName } from '@autom8x/automation-kit/quickbooks';
-import { cleanText, fitLine, shorten, type LinePiece } from '@autom8x/automation-kit/values';
+import { cleanText } from '@autom8x/automation-kit/values';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { sellerKey } from '../names.js';
@@ -116,20 +116,8 @@ export function similarNamesOf(
   return [...names.filter((each) => each.likelySame), ...names.filter((each) => !each.likelySame)];
 }
 
-/**
- * The step's line, at most 200 characters: "Vendors with 'acme' in the name: 'ACME Supplies Inc'
- * (likely the same); 'Acme Tools'; 'Acme Corp' (inactive); maybe more" — each name cut to 50
- * characters, then shortened further if the line needs it.
- */
-export function similarLine(word: string, names: readonly SimilarName[], more: boolean): string {
-  const shown = shorten(word, 30);
-  if (names.length === 0) return `No vendor in QuickBooks has '${shown}' in its name`;
-  const pieces: LinePiece[] = [`Vendors with '${shown}' in the name: `];
-  names.forEach((each, index) => {
-    if (index > 0) pieces.push('; ');
-    const marks = `${each.likelySame ? ' (likely the same)' : ''}${each.inactive ? ' (inactive)' : ''}`;
-    pieces.push("'", { name: shorten(each.name, 50) }, `'${marks}`);
-  });
-  if (more) pieces.push('; maybe more');
-  return fitLine(pieces);
+/** find-similar-vendors' line (§2.6's hold phrase): `New vendor`, or `New vendor, 2 similar names`. */
+export function similarLine(similar: number): string {
+  if (similar === 0) return 'New vendor';
+  return `New vendor, ${similar} similar ${similar === 1 ? 'name' : 'names'}`;
 }

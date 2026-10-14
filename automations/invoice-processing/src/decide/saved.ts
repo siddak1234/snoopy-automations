@@ -3,8 +3,9 @@ import { Buffer } from 'node:buffer';
 import type { KeptType, PaymentMethod, RefundMethod, Route } from '../document.js';
 import type { DecideState } from './contract.js';
 import type { HoldCode } from './holds.js';
+import { readOf, type SavedRead } from '../details.js';
 import { originalBillAccount, type Matches } from './matches.js';
-import { payerNameOf, type RecordPlan } from './plan.js';
+import type { RecordPlan } from './plan.js';
 import type { Recheck } from './recheck.js';
 
 /**
@@ -20,7 +21,8 @@ import type { Recheck } from './recheck.js';
 export const SAVED_MAXIMUM_BYTES = 32 * 1024;
 
 export interface SavedState {
-  readonly v: 1;
+  /** 2: v2's shape — the read kept for the details, no payer. A held v1 state is v1's container's. */
+  readonly v: 2;
   readonly documentType: KeptType;
   readonly route: Route;
   /** The seller as printed, cleaned — carried by design, as on every line (the plan's §2.9). */
@@ -29,15 +31,11 @@ export interface SavedState {
   readonly documentNumber: string | null;
   readonly plan: RecordPlan;
   /**
-   * Who paid: the route, their QuickBooks Id ("owner" for an owner), their name as the record names
-   * them (a contractor as QuickBooks shows the vendor), and a contractor's 1099 mark.
+   * The document as read and checked, as the saved details show it (v2's §2.8): kept so a document
+   * QuickBooks does not record after all — a failure after the approval (decision 6) — still has
+   * its details saved.
    */
-  readonly payer: {
-    readonly route: 'employee' | 'owner' | 'contractor';
-    readonly id: string;
-    readonly name: string;
-    readonly vendor1099: boolean | null;
-  } | null;
+  readonly read: SavedRead;
   /** What a receipt's holds used. */
   readonly receipt: {
     readonly paymentMethod: PaymentMethod;
@@ -74,35 +72,18 @@ export function savedStateOf(
   holdReasons: readonly HoldCode[],
   recheck: Recheck,
 ): SavedState {
-  const { document, payer, vendor, company, preferences, verification } = state;
+  const { document, company, preferences, verification } = state;
   const route = document.route;
-  const personal = route === 'employee' || route === 'owner' || route === 'contractor';
   const receipt = document.type === 'receipt';
   const credit = document.type === 'credit_note';
   return {
-    v: 1,
+    v: 2,
     documentType: document.type,
     route,
     seller: document.seller,
     documentNumber: document.number,
     plan,
-    payer:
-      personal && payer !== null
-        ? {
-            route,
-            id:
-              route === 'owner'
-                ? 'owner'
-                : route === 'employee'
-                  ? (payer.employeeId ?? '')
-                  : vendor?.status === 'matched'
-                    ? vendor.id
-                    : '',
-            name: payerNameOf(state),
-            vendor1099:
-              route === 'contractor' && vendor?.status === 'matched' ? vendor.vendor1099 : null,
-          }
-        : null,
+    read: readOf(document),
     receipt: receipt
       ? {
           paymentMethod: document.paymentMethod,

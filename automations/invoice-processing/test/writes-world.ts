@@ -6,7 +6,7 @@ import { lines } from './fixtures.js';
 import { routeRun, type RouteRun } from './lookups-world.js';
 
 /**
- * Group 5's world: a whole run of v1 on the kit's simulator (`routeRun`), and — when decide held it
+ * The writes' world: a whole run of v2 on the kit's simulator (`routeRun`), and — when decide held it
  * — the approval's continuation the platform mints, run by the same automation against the same
  * QuickBooks: a new run, its own id and keys, `input` empty, the held state handed back verbatim,
  * the settings as they are at approval (ip-review design-after-approval-writes-notify-tests.json
@@ -43,7 +43,7 @@ export interface Approval {
 
 /**
  * A continuation's deadline too near for the SDK's step retry, which waits at least 10 s before a
- * repeat: a write that throws is not repeated, and the run ends with the sentence it registered.
+ * repeat: a write that throws is not repeated, and the run's `recover` ends the step at once.
  */
 export const noTimeToRepeat = () => new Date(Date.now() + 5_000).toISOString();
 
@@ -116,7 +116,7 @@ export const ownNumbers =
   };
 
 /** The memo's first sentence for a run. */
-export const runLine = (runId: string) => `Created by Autom8x Bills & Receipts, run ${runId}.`;
+export const runLine = (runId: string) => `Created by Autom8x Invoice Processing, run ${runId}.`;
 
 /** One account-based expense line, as create-record sends it. */
 export function expenseLine(amount: number, description: string, account: string): JsonObject {
@@ -125,27 +125,5 @@ export function expenseLine(amount: number, description: string, account: string
     Amount: amount,
     Description: description,
     AccountBasedExpenseLineDetail: { AccountRef: { value: account } },
-  };
-}
-
-/** One journal entry line, as create-record sends it. */
-export function journalLine(
-  amount: number,
-  description: string,
-  posting: 'Debit' | 'Credit',
-  account: string,
-  employee?: string,
-): JsonObject {
-  return {
-    DetailType: 'JournalEntryLineDetail',
-    Amount: amount,
-    Description: description,
-    JournalEntryLineDetail: {
-      PostingType: posting,
-      AccountRef: { value: account },
-      ...(employee === undefined
-        ? {}
-        : { Entity: { Type: 'Employee', EntityRef: { value: employee } } }),
-    },
   };
 }

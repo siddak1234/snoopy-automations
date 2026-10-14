@@ -123,7 +123,7 @@ function search(
 }
 
 /**
- * A vendor by the exact name printed, or typed in "Who paid" — and by the name QuickBooks gives
+ * A vendor by the exact name printed — and by the name QuickBooks gives
  * a vendor made inactive, "<name> (deleted)" (sandbox G4–5), so an inactive vendor is found as
  * inactive and not as no vendor: `SELECT * FROM Vendor WHERE DisplayName IN ('…', '… (deleted)')
  * AND Active IN (true, false) MAXRESULTS 4`. Still one query: Intuit's IN on a vendor's name
@@ -171,10 +171,6 @@ function feedParts(amountCents: number, date: string, how: ExpenseSearch): Parts
     : parts('Purchase', window, MAX_RESULTS.windowExpenses, true);
 }
 
-/** Expenses of an amount in the feed window (D21) — or, under S4's fallback, the window alone, newest first. */
-export const feedExpenses = (amountCents: number, date: string, how: ExpenseSearch): Search =>
-  written(feedParts(amountCents, date, how));
-
 /** The vendor's Id, which every lookup that names the vendor is only run with (`lookupUses`). */
 function vendorIdOf(vendor: VendorState | null): string {
   if (vendor?.status !== 'matched')
@@ -212,7 +208,7 @@ function numberParts(document: DocumentState, vendor: VendorState | null): Parts
       );
     }
     default:
-      // A bill, and a bill document someone paid personally: any vendor's bill with the number.
+      // A bill: any vendor's bill with the number.
       return parts('Bill', [equals('DocNumber', number)], MAX_RESULTS.records);
   }
 }
@@ -229,9 +225,8 @@ function amountParts(
   const amount = queryAmount(document.amountCents ?? 0);
   const date = document.date ?? '';
   switch (document.route) {
-    case 'bill':
-    case 'contractor': {
-      // The vendor's own bills when it is matched; any vendor's for a new one. A contractor is always matched.
+    case 'bill': {
+      // The vendor's own bills when it is matched; any vendor's for a new one.
       const where = [equals('TotalAmt', amount), equals('TxnDate', date)];
       if (vendor?.status === 'matched') where.push(equals('VendorRef', vendor.id));
       return parts('Bill', where, MAX_RESULTS.records);
@@ -239,9 +234,6 @@ function amountParts(
     case 'company_receipt':
     case 'card_refund':
       return feedParts(document.amountCents ?? 0, date, how);
-    case 'employee':
-    case 'owner':
-      return parts('JournalEntry', [equals('TxnDate', date)], MAX_RESULTS.journalEntries);
     case 'vendor_credit':
       return parts(
         'VendorCredit',
@@ -285,13 +277,12 @@ export function recheckSearch(
   return written(found, 1, true);
 }
 
-/** find-related's search per route (§5). */
+/** find-related's search per route (§5); `_how` unused since v2 makes no reimbursement, kept for the lookups' one signature. */
 export function relatedSearch(
   document: DocumentState,
   vendor: VendorState | null,
-  how: ExpenseSearch,
+  _how: ExpenseSearch,
 ): Search {
-  const date = document.date ?? '';
   switch (document.route) {
     case 'bill':
       // Decision 6: an expense already entered with this number, whoever the payee (G4-5).
@@ -315,11 +306,6 @@ export function relatedSearch(
         ],
         MAX_RESULTS.records,
       );
-    case 'employee':
-    case 'owner':
-    case 'contractor':
-      // Hold 7: a company bank or card charge for what the person paid.
-      return feedExpenses(document.amountCents ?? 0, date, how);
     case 'statement':
       throw new Error('a statement has no related lookup');
   }

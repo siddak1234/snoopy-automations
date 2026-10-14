@@ -2,7 +2,8 @@
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
 (`snoopy-backend`, private) at commit `df4bbad`, re-pinned 2026-10-11 — the platform's
-`main` after its #198 and #199. The platform emits them with `npm run schemas:emit` and
+`main` after its #198 and #199 — two files since refreshed from its unmerged #210 at `9516c0e`
+(2026-10-14, below). The platform emits them with `npm run schemas:emit` and
 verifies the committed files against its TypeScript types byte for byte, so this copy is the
 contract it publishes to external automation authors. To refresh: copy the directory again
 and update the commit above in the same change.
@@ -147,6 +148,28 @@ only the commit above moves. Between `7086e5e` and `df4bbad` only that file chan
 platform's `test/wire-schema.test.ts` and `manifest-validation.ts` did not. Until a promotion
 carries `c2d6c6b`, the live platform answers `excludeModelAuthors` with a 400.
 
+Refreshed 2026-10-14 at `9516c0e` — the head of the platform's branch
+`round-17/ip-update-platform` (its #210, the Invoice Processing update's PR 1: BUILD-PLAN
+25.4.13–25.4.26, ADR-0036 and ADR-0037), not yet merged — as `dcb8ddb` and `1137ac9` were above,
+this repository's half built beside the platform's. Two files moved, additively:
+
+- `automation-manifest.json`: `display.category` is one of the sixteen team kinds (ADR-0036 —
+  a flow goes to the team of its category; `templates/automation/example.v1.json` moves from
+  "Examples" to "Operations"); `requiredConnections[].optional`; the setup control
+  `connection`; `pipeline[].group` and the manifest's `groups` (2–6, each an id, a title of
+  1–40 and a description of 1–120 characters).
+- `automation-run-result.json`: the success branch's optional `details`, 1–20 lines, each a
+  `label` of 1–40 and a `value` of 1–200 characters, nothing else. The SDK's
+  `boundedDetails` (`packages/automation-sdk/src/details.ts`) bounds what an automation
+  returns to it and sends none when there are none.
+
+The other six files are byte-identical to `df4bbad`'s; all eight are `cmp`-equal to
+`9516c0e`'s. The rules the schema cannot say are below, and `test/manifest-rules.test.ts`
+holds every manifest here to them. Until #210 merges and a promotion carries it, the live
+platform refuses a manifest declaring any of these, and v2 of `invoice-processing` cannot be
+registered; this copy is re-pinned to the merge commit then, its bytes unchanged unless a
+review changed them.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -195,6 +218,23 @@ registration.
 
 **`pipeline`** — "must declare at least the trigger step"; a step `id` "is declared more
 than once" refused; "only the first step may be a TRIGGER".
+
+**Optional connections and the vendor choice** (ADR-0037, from `9516c0e`) —
+`requiredConnections[].optional` "must be a boolean"; a `connection` setup field "must be
+'connections' for a connection control" (its `section`), "must be false for a connection
+control" (`required`) and "must be 'none' for a connection control" (`defaultValue`); "only
+one setup field may have control 'connection'", and it "is only meaningful when
+requiredConnections has an optional entry"; a manifest with an optional connection and setup
+fields but none of them a choice: "an optional connection needs one setup field with control
+'connection'"; a `provider-event` trigger "must name a required, not optional, connection".
+
+**Step groups** (ADR-0037, from `9516c0e`) — `groups` "must declare at least 2 groups", an
+id "is declared more than once" refused, a key besides `id`, `title` and `description` "is
+not a group property"; each step's `group`: "every step needs a group when groups are
+declared", "must name a declared group", "the trigger step belongs to the first group", and
+without `groups`, "group is only meaningful when groups are declared"; a group no step names:
+"group '<id>' has no step". Steps may come back to a group — v2's `verify-read` follows
+`check-document`.
 
 **`artifacts`** — media types "must be a media type, optionally with a \* subtype"; an
 empty list "must declare at least one media type — omit `artifacts` entirely to accept no

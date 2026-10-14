@@ -3,9 +3,8 @@ import { test } from 'node:test';
 
 import { matchesOf } from '../src/decide/matches.js';
 import { readDecideState } from '../src/decide/contract.js';
-import { bill, creditNote, paidBy, receipt, sampleAnswer } from './check-world.js';
+import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import {
-  CHECKING,
   VENDOR,
   billRow,
   decide,
@@ -20,7 +19,8 @@ import {
 /**
  * "Possible duplicate", per type (the plan's §2.4, §5; D5, D6, D21, D22, D32): what each lookup's
  * records mean on each path — compared in code by vendor, account, window and lines — the
- * bank-feed window's edges, and the same purchase met as another kind of record.
+ * bank-feed window's edges on the account the receipt is paid from ("a bank or card charge
+ * matches"), and the same purchase met as another kind of record.
  */
 
 const TIDEWELL = { ...VENDOR, id: '9', displayName: 'Tidewell Hardware' };
@@ -46,7 +46,6 @@ test("a bill: the same vendor's bill with this number, a bill with this total an
     lookups: { numberLookup: found(billRow({ vendorId: '88' })) },
   });
   assert.ok(plan.outcome === 'ok' && plan.saved.plan.docNumber === null);
-  assert.match(plan.outcome === 'ok' ? plan.summary : '', /number kept in the memo/u);
   // A new vendor: any bill with the number (D5).
   assert.deepEqual(
     duplicates({
@@ -110,21 +109,20 @@ test("a bill: the same vendor's bill with this number, a bill with this total an
   assert.deepEqual(near('2026-10-05', undated), []);
 });
 
-test('a company receipt: the bank-feed check on Paid from (D21), at its edges', () => {
+test('a company receipt: the bank-feed check on the account it is paid from (D21), at its edges', () => {
   const feed = (txnDate: string, changes = {}) =>
-    duplicates({
+    matches({
       answer: receipt(),
       vendor: TIDEWELL,
       lookups: { amountLookup: found(expenseRow({ txnDate, ...changes })) },
-    });
-  const words = ['a charge for this amount on the Paid from account'];
-  assert.deepEqual(feed('2026-09-25'), [], '2 days before');
-  assert.deepEqual(feed('2026-09-26'), words, '1 day before');
-  assert.deepEqual(feed('2026-10-17'), words, '20 days after');
-  assert.deepEqual(feed('2026-10-18'), [], '21 days after');
-  assert.deepEqual(feed('2026-09-27', { accountId: CHECKING.id }), [], 'another account');
-  assert.deepEqual(feed('2026-09-27', { credit: true }), [], 'a refund');
-  assert.deepEqual(feed('2026-09-27', { totalCents: 6064 }), [], 'another amount');
+    }).companyCharges;
+  assert.equal(feed('2026-09-25'), 0, '2 days before');
+  assert.equal(feed('2026-09-26'), 1, '1 day before');
+  assert.equal(feed('2026-10-17'), 1, '20 days after');
+  assert.equal(feed('2026-10-18'), 0, '21 days after');
+  assert.equal(feed('2026-09-27', { accountId: '41' }), 0, 'another card: not the one picked');
+  assert.equal(feed('2026-09-27', { credit: true }), 0, 'a refund');
+  assert.equal(feed('2026-09-27', { totalCents: 6064 }), 0, 'another amount');
   // Another vendor's bill for this amount in the window — a contractor's reimbursement, say.
   assert.deepEqual(
     duplicates({
@@ -160,16 +158,15 @@ test('a company receipt: the bank-feed check on Paid from (D21), at its edges', 
 test("a card refund: the card feed's refunds in the window, and a vendor credit with its number", () => {
   const answer = sampleAnswer('card-refund');
   const refund = (txnDate: string, credit = true) =>
-    duplicates({
+    matches({
       answer,
       lookups: { amountLookup: found(expenseRow({ txnDate, totalCents: 2372, credit })) },
-    });
-  const words = ['a refund for this amount on the card'];
-  assert.deepEqual(refund('2026-09-30'), [], '2 days before');
-  assert.deepEqual(refund('2026-10-01'), words, '1 day before');
-  assert.deepEqual(refund('2026-10-22'), words, '20 days after');
-  assert.deepEqual(refund('2026-10-23'), [], '21 days after');
-  assert.deepEqual(refund('2026-10-02', false), [], 'a charge, not a refund');
+    }).companyCharges;
+  assert.equal(refund('2026-09-30'), 0, '2 days before');
+  assert.equal(refund('2026-10-01'), 1, '1 day before');
+  assert.equal(refund('2026-10-22'), 1, '20 days after');
+  assert.equal(refund('2026-10-23'), 0, '21 days after');
+  assert.equal(refund('2026-10-02', false), 0, 'a charge, not a refund');
   assert.deepEqual(
     duplicates({
       answer,
@@ -198,63 +195,6 @@ test("a vendor credit: this vendor's credit with its number or its total and dat
   );
 });
 
-test('paid personally: an entry owing the same person the same amount, a bill to the contractor, a company charge (hold 7)', () => {
-  const employee = { answer: receipt(), check: paidBy('employee', { paidFrom: null }) } as const;
-  const owing = (
-    entity: { type: 'Employee'; id: string } | null,
-    accountId = '120',
-    txnDate = '2026-09-27',
-  ) =>
-    duplicates({
-      ...employee,
-      lookups: { amountLookup: found(journalRow(6063, accountId, { txnDate }, entity)) },
-    });
-  assert.deepEqual(owing({ type: 'Employee', id: '55' }), ['an entry owing them this amount']);
-  assert.deepEqual(owing({ type: 'Employee', id: '56' }), [], 'another employee');
-  assert.deepEqual(owing({ type: 'Employee', id: '55' }, '125'), [], 'another account');
-  assert.deepEqual(owing({ type: 'Employee', id: '55' }, '120', '2026-09-28'), [], 'another day');
-  assert.deepEqual(
-    duplicates({
-      answer: receipt(),
-      check: paidBy('owner', { paidFrom: null }),
-      lookups: { amountLookup: found(journalRow(6063, '125')) },
-    }),
-    ['an entry owing them this amount'],
-  );
-  assert.deepEqual(
-    duplicates({
-      answer: receipt(),
-      check: paidBy('not_employee', { paidFrom: null }),
-      lookups: { amountLookup: found(billRow({ totalCents: 6063, txnDate: '2026-09-27' })) },
-    }),
-    ['a bill to them for this total and date'],
-  );
-  assert.deepEqual(
-    duplicates({
-      answer: bill(),
-      check: paidBy('employee', { paidFrom: null }),
-      lookups: { numberLookup: found(billRow({ vendorId: '88' })) },
-    }),
-    ['a bill with this number'],
-  );
-  assert.equal(
-    matches({
-      ...employee,
-      lookups: {
-        relatedLookup: found(expenseRow(), expenseRow({ id: '202', accountId: CHECKING.id })),
-      },
-    }).companyCharges,
-    2,
-  );
-  assert.equal(
-    matches({
-      ...employee,
-      lookups: { relatedLookup: found(expenseRow({ txnDate: '2026-10-18' })) },
-    }).companyCharges,
-    0,
-  );
-});
-
 test('a lookup that reached its maximum may hide a match: a possible duplicate, "too many to check" (D6)', () => {
   for (const key of [
     'numberLookup',
@@ -268,12 +208,4 @@ test('a lookup that reached its maximum may hide a match: a possible duplicate, 
       key,
     );
   }
-  assert.deepEqual(
-    duplicates({
-      answer: receipt(),
-      check: paidBy('employee', { paidFrom: null }),
-      lookups: { relatedLookup: { reachedMax: true, records: [] } },
-    }),
-    ['too many to check'],
-  );
 });

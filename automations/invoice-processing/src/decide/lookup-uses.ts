@@ -44,11 +44,11 @@ export function listedInvoiceNumbers(document: DocumentState): string[] {
 /**
  * Each lookup's use per route, from what the document and the vendor are (the plan's §5):
  * - a number lookup only for a number QuickBooks could hold — a receipt's only for a seller already
- *   a vendor, a purchase paid personally only for a bill document; a statement's when it lists
+ *   a vendor; a statement's when it lists
  *   invoices, searching those QuickBooks could hold — when it holds none, "Not checked", and each
  *   counts as not in QuickBooks;
  * - an amount lookup on every route;
- * - a related lookup for a bill's number, a receipt, a payer, and — from a linked vendor — a
+ * - a related lookup for a bill's number, a receipt, and — from a linked vendor — a
  *   credit's original invoice number, "Not checked" past the 21 characters a bill's number holds,
  *   so the category is not the original bill's (D25);
  * - the other-record lookup (D32) for a bill — only while expenses are searched by amount (S4's
@@ -85,10 +85,6 @@ export function lookupUses(
       return uses(when(linked, byNumber), 'run', 'run');
     case 'card_refund':
       return uses(byNumber, when(linked, byOriginal));
-    case 'employee':
-    case 'owner':
-    case 'contractor':
-      return uses(when(document.type === 'bill', byNumber), 'run');
     case 'vendor_credit':
     case 'statement': {
       if (!linked) {

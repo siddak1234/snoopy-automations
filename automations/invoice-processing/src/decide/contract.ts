@@ -1,20 +1,15 @@
 import { isObject, type JsonObject } from '@autom8x/automation-sdk';
 
+import { chartStateOf, type ChartState } from '../chart.js';
 import { EXPENSE_SEARCH, type ExpenseSearch } from '../lookups/expense-search.js';
-import type {
-  AccountsState,
-  CompanyState,
-  DocumentState,
-  PayerState,
-  PreferencesState,
-  VerificationState,
-} from '../state.js';
+import type { CompanyState, DocumentState, PreferencesState, VerificationState } from '../state.js';
 import { requiredLookups } from './lookup-uses.js';
+import { pickPaidFrom, type PaidFromPick } from './picks.js';
 
 /**
- * decide's whole input (the plan's §2.6 and §5): the run state every step before it leaves — steps
- * 1–8's keys, then the keys Group 4's lookups (steps 9–17) write, which this file is the contract
- * of. decide reads nothing else, and a key it needs that is missing or malformed fails the run
+ * decide's whole input (the plan's §2.6 and §5): the run state every step before it leaves — the
+ * company, its settings and its chart of accounts, the document as read and checked, then the keys
+ * the lookups write, which this file is the contract of. decide reads nothing else, and a key it needs that is missing or malformed fails the run
  * ("could not finish its checks") rather than guess (ip-review design-checks-rules-and-approval.json,
  * cross_cutting[10]).
  *
@@ -25,7 +20,7 @@ import { requiredLookups } from './lookup-uses.js';
  * drift apart.
  */
 
-/** find-vendor, then find-vendor-company: the supplier or seller — or, for a contractor, the person who paid. */
+/** find-vendor, then find-vendor-company: the supplier or seller. */
 export type VendorState =
   | {
       readonly status: 'matched';
@@ -45,8 +40,8 @@ export type VendorState =
   /**
    * A company receipt's or a card refund's seller whose name an inactive vendor has, or two
    * vendors have: the seller is looked up only to link an existing vendor (D20), so it is not
-   * linked — no payee, the seller in the memo and the line text — where a bill, a credit note, a
-   * statement or a contractor fails.
+   * linked — no payee, the seller in the memo and the line text — where a bill, a credit note or
+   * a statement is not recorded.
    */
   | {
       readonly status: 'not_linked';
@@ -151,14 +146,20 @@ export interface DecideState {
   readonly file: { readonly artifactId: string };
   readonly company: CompanyState;
   readonly preferences: PreferencesState;
-  readonly accounts: AccountsState;
-  readonly payer: PayerState | null;
+  /** find-accounts' chart, which decide picks from (`picks.ts`). */
+  readonly chart: ChartState;
+  /**
+   * What a company receipt or a card refund was paid from, picked from the chart (decision 1):
+   * read here once, so the duplicate rule, the holds and the plan see the same pick; null on a route
+   * paid from nothing.
+   */
+  readonly paidFrom: PaidFromPick | null;
   /** The model that served the first read. */
   readonly modelServed: string;
   readonly document: DocumentState;
+  /** `{ status: 'not_needed' }` when verify-read was not due, and so wrote nothing. */
   readonly verification: VerificationState;
-  /** Absent on the employee and owner routes, which have no vendor. */
-  readonly vendor: VendorState | null;
+  readonly vendor: VendorState;
   readonly similarVendors: SimilarVendorsState | null;
   readonly customerNameClash: NameClash | null;
   readonly employeeNameClash: NameClash | null;
@@ -268,7 +269,10 @@ export function readDecideState(
   state: JsonObject,
   expenseSearch: ExpenseSearch = EXPENSE_SEARCH,
 ): DecideState | undefined {
-  const { file, company, preferences, accounts, document, verification, modelServed } = state;
+  const { file, company, preferences, document, modelServed } = state;
+  const chart = chartStateOf(state.chart);
+  // verify-read writes nothing when it is not due: no second read was needed.
+  const verification = state.verification ?? { status: 'not_needed' };
   if (
     !isObject(file) ||
     !isText(file.artifactId) ||
@@ -277,15 +281,12 @@ export function readDecideState(
     !isObject(preferences) ||
     !isText(preferences.homeCurrency) ||
     typeof preferences.multiCurrencyEnabled !== 'boolean' ||
-    !isObject(accounts) ||
-    !isObject(accounts.defaultCategory) ||
-    !isObject(accounts.categories) ||
-    !Array.isArray(accounts.owners) ||
+    !chart ||
     !isObject(document) ||
     typeof document.route !== 'string' ||
     !isObject(document.arithmetic) ||
     !isObject(verification) ||
-    (verification.status !== 'made' && verification.status !== 'not_made') ||
+    !['made', 'not_made', 'not_needed'].includes(String(verification.status)) ||
     !isText(modelServed)
   ) {
     return undefined;
@@ -300,16 +301,11 @@ export function readDecideState(
   ) as Record<LookupKey, LookupState | null | undefined>;
   if (vendor === undefined || customer === undefined || employee === undefined) return undefined;
   if (Object.values(lookups).some((lookup) => lookup === undefined)) return undefined;
-  const personal = doc.route === 'employee' || doc.route === 'owner';
-  if (personal ? vendor !== null : vendor === null) return undefined;
-  if (doc.route === 'contractor' && vendor?.status !== 'matched') return undefined;
+  if (vendor === null) return undefined;
   // A seller left unlinked is a company receipt's or a card refund's alone (D20).
   const linkOnly = doc.route === 'company_receipt' || doc.route === 'card_refund';
-  if (vendor?.status === 'not_linked' && !linkOnly) return undefined;
-  // A route that records who paid needs find-payer's answer.
-  const paidPersonally = personal || doc.route === 'contractor';
-  if (paidPersonally && !isObject(state.payer)) return undefined;
-  const newVendorBill = doc.route === 'bill' && vendor?.status === 'new';
+  if (vendor.status === 'not_linked' && !linkOnly) return undefined;
+  const newVendorBill = doc.route === 'bill' && vendor.status === 'new';
   const similarVendors =
     isObject(similar) && Array.isArray(similar.names) && similar.names.every(isText)
       ? (similar as unknown as SimilarVendorsState)
@@ -322,8 +318,8 @@ export function readDecideState(
     file: { artifactId: file.artifactId },
     company: company as unknown as CompanyState,
     preferences: preferences as unknown as PreferencesState,
-    accounts: accounts as unknown as AccountsState,
-    payer: isObject(state.payer) ? (state.payer as unknown as PayerState) : null,
+    chart,
+    paidFrom: linkOnly ? pickPaidFrom(chart, doc) : null,
     modelServed,
     document: doc,
     verification: verification as unknown as VerificationState,

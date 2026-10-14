@@ -291,13 +291,57 @@ export function sampleCompany(): SimulatedCompany {
       sparse: false,
       MetaData: META,
     },
+    // A chart an automation can pick from (Invoice Processing v2's 25.4.19): one expense account
+    // for each spend type's names, "Uncategorized Expense" — which QuickBooks Online makes in every
+    // company, its type to be read in sandbox S13 — and two of each kind that pays, one card
+    // named with its last four digits.
     accounts: [
-      sampleAccount('56', 'Utilities', 'Expense'),
-      sampleAccount('57', 'Utilities:Electric', 'Expense', { ParentRef: { value: '56' } }),
-      sampleAccount('64', 'Office Supplies', 'Expense'),
-      sampleAccount('80', 'Cost of Goods Sold', 'Cost of Goods Sold'),
-      sampleAccount('35', 'Checking', 'Bank', { Classification: 'Asset' }),
-      sampleAccount('41', 'Company Visa', 'Credit Card', { Classification: 'Liability' }),
+      sampleAccount('56', 'Utilities', 'Expense', { AccountSubType: 'Utilities' }),
+      sampleAccount('57', 'Utilities:Electric', 'Expense', {
+        ParentRef: { value: '56' },
+        AccountSubType: 'Utilities',
+      }),
+      sampleAccount('64', 'Office Supplies', 'Expense', {
+        AccountSubType: 'OfficeGeneralAdministrativeExpenses',
+      }),
+      sampleAccount('80', 'Cost of Goods Sold', 'Cost of Goods Sold', {
+        AccountSubType: 'SuppliesMaterialsCogs',
+      }),
+      sampleAccount('35', 'Checking', 'Bank', {
+        Classification: 'Asset',
+        AccountSubType: 'Checking',
+      }),
+      sampleAccount('36', 'Savings', 'Bank', {
+        Classification: 'Asset',
+        AccountSubType: 'Savings',
+      }),
+      sampleAccount('41', 'Company Visa', 'Credit Card', {
+        Classification: 'Liability',
+        AccountSubType: 'CreditCard',
+      }),
+      sampleAccount('42', 'Visa 4417', 'Credit Card', {
+        Classification: 'Liability',
+        AccountSubType: 'CreditCard',
+      }),
+      sampleAccount('300', 'Uncategorized Expense', 'Expense', {
+        AccountSubType: 'OtherMiscellaneousServiceCost',
+      }),
+      sampleAccount('301', 'Travel', 'Expense', { AccountSubType: 'Travel' }),
+      sampleAccount('302', 'Car & Truck', 'Expense', { AccountSubType: 'Auto' }),
+      sampleAccount('303', 'Software & Apps', 'Expense', { AccountSubType: 'DuesSubscriptions' }),
+      sampleAccount('304', 'Rent & Lease', 'Expense', { AccountSubType: 'RentOrLeaseOfBuildings' }),
+      sampleAccount('305', 'Repairs & Maintenance', 'Expense', {
+        AccountSubType: 'RepairMaintenance',
+      }),
+      sampleAccount('306', 'Legal & Professional Services', 'Expense', {
+        AccountSubType: 'LegalProfessionalFees',
+      }),
+      sampleAccount('307', 'Supplies & Materials', 'Cost of Goods Sold', {
+        AccountSubType: 'SuppliesMaterialsCogs',
+      }),
+      sampleAccount('308', 'Advertising & Marketing', 'Expense', {
+        AccountSubType: 'AdvertisingPromotional',
+      }),
       sampleAccount('33', 'Accounts Payable (A/P)', 'Accounts Payable', {
         Classification: 'Liability',
       }),
@@ -305,7 +349,7 @@ export function sampleCompany(): SimulatedCompany {
         Classification: 'Liability',
       }),
       sampleAccount('125', 'Owner investments', 'Equity', { Classification: 'Equity' }),
-      sampleAccount('66', 'Meals', 'Expense'),
+      sampleAccount('66', 'Meals', 'Expense', { AccountSubType: 'EntertainmentMeals' }),
     ],
     employees: [sampleEmployee('55', 'Robin Example')],
     vendors: [],

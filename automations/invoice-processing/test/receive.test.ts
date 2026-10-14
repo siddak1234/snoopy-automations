@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import type { ArtifactReference } from '@autom8x/automation-sdk';
 
 import { FILE_LIMITS, measurementsOf } from '../src/file.js';
+import { RUN_FAILS } from '../src/words.js';
 import {
   FILE_ID,
   FILENAME,
@@ -21,8 +22,13 @@ import {
 
 /**
  * `receive` holds the platform's measurements of the upload to the owner's limits,
- * before any QuickBooks call or model call — and never downloads the file.
+ * before any QuickBooks call or model call — and never downloads the file. Its line (§3.E): `PDF, 2
+ * pages` or `Photo`; a file it cannot take ends the run in one of the spec's two sentences (§3.F),
+ * the reason in the log alone.
  */
+
+const NO_FILE = RUN_FAILS.no_file;
+const FILE = RUN_FAILS.file;
 
 async function received(file: ArtifactReference | null, input?: Record<string, unknown>) {
   const world = setUp({ file, ...(input === undefined ? {} : { input }) });
@@ -32,9 +38,13 @@ async function received(file: ArtifactReference | null, input?: Record<string, u
 
 function refusedWith(sentence: string, reason: string) {
   return async (file: ArtifactReference | null, input?: Record<string, unknown>) => {
-    const { result, first, platform } = await received(file, input);
+    const { result, first, platform, logs } = await received(file, input);
     assert.deepEqual(result, { outcome: 'failed', failureReason: sentence });
-    assert.deepEqual(first, ['receive', 'failed', `Document file not accepted (${reason})`]);
+    assert.deepEqual(first, ['receive', 'failed', sentence]);
+    assert.ok(
+      logs.some(([, message, fields]) => message === 'step_failed' && fields?.reason === reason),
+      `${reason} in the log`,
+    );
     assert.equal(platform.steps.length, 1, 'nothing after receive runs');
     assert.deepEqual(platform.providerCalls, [], 'no QuickBooks call');
     assert.deepEqual(platform.modelCalls, [], 'no model call');
@@ -42,9 +52,9 @@ function refusedWith(sentence: string, reason: string) {
   };
 }
 
-test('a 2-page PDF continues: the line names the kind, the pages and the bytes; the state keeps the file', async () => {
+test('a 2-page PDF continues: the line names it and its pages; the state keeps the file', async () => {
   const { result, first, platform } = await received(pdf());
-  assert.deepEqual(first, ['receive', 'ok', 'Received a 2-page PDF, 184,203 bytes']);
+  assert.deepEqual(first, ['receive', 'ok', 'PDF, 2 pages']);
   assert.equal(result.outcome, 'success');
   assert.deepEqual(result.outcome === 'success' ? result.output?.file : undefined, {
     artifactId: FILE_ID,
@@ -56,13 +66,9 @@ test('a 2-page PDF continues: the line names the kind, the pages and the bytes; 
   assert.deepEqual(platform.artifactReads, [FILE_ID]);
 });
 
-test('a JPEG and a PNG continue with their pixels and no pages; a missing digest is null', async () => {
+test('a JPEG and a PNG continue as a photo, no pages; a missing digest is null', async () => {
   const photo = await received(jpeg({ sha256: null }));
-  assert.deepEqual(photo.first, [
-    'receive',
-    'ok',
-    'Received a JPEG photo, 2,576 x 1,932 px, 812,004 bytes',
-  ]);
+  assert.deepEqual(photo.first, ['receive', 'ok', 'Photo']);
   const file = photo.result.outcome === 'success' ? photo.result.output?.file : undefined;
   assert.deepEqual(file, {
     artifactId: FILE_ID,
@@ -72,20 +78,13 @@ test('a JPEG and a PNG continue with their pixels and no pages; a missing digest
     sha256: null,
   });
   const image = await received(png());
-  assert.deepEqual(image.first, [
-    'receive',
-    'ok',
-    'Received a PNG image, 1,200 x 900 px, 95,310 bytes',
-  ]);
+  assert.deepEqual(image.first, ['receive', 'ok', 'Photo']);
   const one = await received(pdf({ pageCount: 1, sizeBytes: 999 }));
-  assert.deepEqual(one.first, ['receive', 'ok', 'Received a 1-page PDF, 999 bytes']);
+  assert.deepEqual(one.first, ['receive', 'ok', 'PDF, 1 page']);
 });
 
 test('no document file — missing, null, not text, empty or blank — fails with no callback at all', async () => {
-  const noFile = refusedWith(
-    'No document file was given. Start the run again with the document.',
-    'no_file',
-  );
+  const noFile = refusedWith(NO_FILE, 'no_file');
   for (const input of [
     {},
     { invoiceFile: null },
@@ -103,19 +102,13 @@ test('no document file — missing, null, not text, empty or blank — fails wit
 });
 
 test('a file the run was not given, or one that is gone (404), fails as no longer available', async () => {
-  const gone = refusedWith(
-    'The document file is no longer available. Upload it again and start a new run.',
-    'file_gone',
-  );
+  const gone = refusedWith(FILE, 'file_gone');
   const platform = await gone(null);
   assert.deepEqual(platform.artifactReads, [FILE_ID]);
 });
 
 test('a measurement that is missing or malformed fails closed', async () => {
-  const unchecked = refusedWith(
-    'This file could not be checked; upload it again.',
-    'file_unchecked',
-  );
+  const unchecked = refusedWith(FILE, 'file_unchecked');
   const cases: Overrides[] = [
     { measuredKind: undefined },
     { measuredKind: null },
@@ -142,10 +135,7 @@ test('a measurement that is missing or malformed fails closed', async () => {
 });
 
 test('a type other than PDF, JPEG or PNG fails, whether the upload declared it or the platform measured it', async () => {
-  const unsupported = refusedWith(
-    'The document must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
-    'unsupported_type',
-  );
+  const unsupported = refusedWith(FILE, 'unsupported_type');
   for (const contentType of ['text/plain', 'image/heic', 'application/octet-stream', '']) {
     await unsupported(pdf({ contentType }));
   }
@@ -156,10 +146,7 @@ test('a type other than PDF, JPEG or PNG fails, whether the upload declared it o
 });
 
 test('a measured kind that is not the declared type fails as not a real PDF, JPEG or PNG', async () => {
-  const mismatch = refusedWith(
-    'This file is not a real PDF, JPEG or PNG. Save the document again as a PDF, or take a photo of it.',
-    'content_mismatch',
-  );
+  const mismatch = refusedWith(FILE, 'content_mismatch');
   await mismatch(jpeg({ contentType: 'application/pdf' }));
   await mismatch(png({ contentType: 'image/jpeg' }));
   await mismatch(jpeg({ contentType: 'image/png' }));
@@ -168,28 +155,16 @@ test('a measured kind that is not the declared type fails as not a real PDF, JPE
 
 test('3,500,000 bytes passes and 3,500,001 fails', async () => {
   assert.equal((await received(pdf({ sizeBytes: 3_500_000 }))).first?.[1], 'ok');
-  await refusedWith(
-    'The document file is larger than 3.5 MB. Upload a smaller file or a photo of the document.',
-    'file_too_large',
-  )(jpeg({ sizeBytes: 3_500_001 }));
+  await refusedWith(FILE, 'file_too_large')(jpeg({ sizeBytes: 3_500_001 }));
 });
 
 test('a PDF of 10 pages passes and one of 11 fails', async () => {
-  assert.deepEqual(
-    (await received(pdf({ pageCount: 10 }))).first?.[2],
-    'Received a 10-page PDF, 184,203 bytes',
-  );
-  await refusedWith(
-    'This PDF has more than 10 pages. Upload only the document pages, at most 10.',
-    'too_many_pages',
-  )(pdf({ pageCount: 11 }));
+  assert.deepEqual((await received(pdf({ pageCount: 10 }))).first?.[2], 'PDF, 10 pages');
+  await refusedWith(FILE, 'too_many_pages')(pdf({ pageCount: 11 }));
 });
 
 test('an image of 8,000 px on a side passes and 8,001 fails, on width and on height, JPEG and PNG', async () => {
-  const tooLarge = refusedWith(
-    'This image is more than 8,000 pixels on a side. Upload a smaller photo or the PDF.',
-    'image_too_large',
-  );
+  const tooLarge = refusedWith(FILE, 'image_too_large');
   for (const image of [jpeg, png]) {
     const fits = await received(image({ widthPixels: 8_000, heightPixels: 8_000 }));
     assert.equal(fits.first?.[1], 'ok');
@@ -211,7 +186,7 @@ test("the limits are the manifest's artifacts block, the pages and pixels the pl
   // Without a page or pixel limit the platform measures nothing (its BUILD-PLAN 25.2.28), and
   // receive, failing closed, would refuse every file.
   const manifest = JSON.parse(
-    readFileSync(join(manifestsRoot, 'invoice-processing.v1.json'), 'utf8'),
+    readFileSync(join(manifestsRoot, 'invoice-processing.v2.json'), 'utf8'),
   ) as { artifacts: unknown };
   assert.deepEqual(manifest.artifacts, {
     acceptedContentTypes: FILE_LIMITS.acceptedContentTypes,

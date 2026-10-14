@@ -19,59 +19,79 @@ import {
 
 import { secondReadOf } from '../checks/answers.js';
 import { namedFields } from '../checks/fields.js';
-import { CHECK_DOCUMENT_REASONS, CHECK_DOCUMENT_SENTENCES } from '../checks/rules.js';
-import { THROWN_SENTENCES } from '../failures.js';
-import { failedWith } from '../outcome.js';
+import { RECORDING_RULES, type RecordingRule } from '../checks/rules.js';
+import { limitCentsOf } from '../decide/holds.js';
+import { runFails } from '../outcome.js';
+import { notRecorded, onQuickBooksPath } from '../quickbooks-path.js';
 import { compareReads, recheckedWith } from '../reads/compare.js';
-import type { DocumentState, NotMadeReason, VerificationState } from '../state.js';
+import type { DocumentState, Finding, NotMadeReason, VerificationState } from '../state.js';
+import { LINE_MAXIMUM, type RunFail } from '../words.js';
 import { MODELS } from './extract.js';
 
 /**
- * `verify-read` (step 8, the second AI step) — a second, blind read of the document by another
- * maker's model, compared with the first by code (the plan's §4; Group 2's D1–D6, Group 3's D8
- * and D9). It sends `prompts/verify-document.v1.json` — read 1's own definitions for the fields
- * that go into QuickBooks, and for a statement the type — with the same fixed task, `MODELS` and
- * the run's file, and leaves out the maker of the model that served the first read, whatever list
- * serves. Nothing of the first read reaches it, nor "Who paid".
+ * `verify-read` (the second AI step) — made ONLY when the first read shows a problem (the
+ * session's decision 3, approved in advance by the owner's "approve. complete"; the owner's "Why
+ * are there so many ai steps", build 19): after check-document, its findings include totals that
+ * don't add up, unclear fields or a total not cross-checked — or, on the QuickBooks path, the
+ * amount is over the flow's approval limit (`secondReadDue`). Otherwise it is skipped, and there is
+ * no second read (`{ status: 'not_needed' }`). One model call per document, then; two only on a
+ * problem.
  *
- * Where the reads part, the run holds at decide, with both values and what will be written —
- * the first read's, unless the totals differ and only the second agrees with the document's own
- * arithmetic, when it is recorded and the arithmetic is run again. On a statement only the type
- * is compared, and a disagreement fails at decide (F7).
+ * When due: a second, blind read of the document by another maker's model, compared with the first
+ * by code (the plan's §4; Group 2's D1–D6, Group 3's D8 and D9). It sends
+ * `prompts/verify-document.v1.json` — unchanged, so its recordings stay valid — with the same
+ * fixed task, `MODELS` and the run's file, and leaves out the maker of the model that served the
+ * first read. Where the reads part, the run holds at decide on the QuickBooks path, with both
+ * values and what will be written — the first read's, unless the totals differ and only the second
+ * agrees with the document's own arithmetic, when it is recorded and the arithmetic run again. On
+ * a statement only the type is compared, and a disagreement keeps it from being recorded (F7).
  *
  * A second read that cannot be made — no other maker, a refusal, no usable answer — is recorded,
- * and the run holds at decide: "second check not made" (Group 2's D6). It is never made without
- * the exclusion. Out of time, and a fault on the platform's side, fail. An answer that never came,
- * and a 503 naming no code, are thrown on unchanged, so the runner repeats the call once when
- * nothing was sent, as `extract` does.
+ * and the run holds at decide: "second read not made" (Group 2's D6). Out of time, and a fault on
+ * the platform's side, fail. An answer that never came, and a 503 naming no code, are thrown on
+ * unchanged, so the runner repeats the call once when nothing was sent, as `extract` does.
  */
+
+/** The findings that call for a second read (decision 3). */
+const PROBLEMS: ReadonlySet<Finding> = new Set([
+  'amounts_mismatch',
+  'unclear_fields',
+  'not_cross_checked',
+]);
+
+/**
+ * Whether a second read is due: the first read's checks found a problem, or — on the QuickBooks
+ * path, where a person approves what is recorded — the amount is over the flow's approval limit
+ * (`config.holdAboveAmount`, $500 when it is not a usable amount).
+ */
+export function secondReadDue(
+  document: Pick<DocumentState, 'findings' | 'amountCents'>,
+  config: JsonObject,
+  quickBooks: boolean,
+): boolean {
+  if (document.findings.some((finding) => PROBLEMS.has(finding))) return true;
+  return quickBooks && (document.amountCents ?? 0) > limitCentsOf(config);
+}
 
 /** The user message, fixed, as read 1's: blind — nothing of the first read, nothing a person typed. */
 export const VERIFY_INPUT: JsonObject = {
   task: 'Extract the fields of the attached document.',
 };
 
-/** The ways the second read fails the run: out of time, or a fault on the platform's side. */
-export const VERIFY_READ_SENTENCES = {
-  out_of_time:
-    'The run ran out of time before the document was checked a second time; start it again with the document.',
-  platform_fault:
-    'The document could not be checked a second time because of a fault on our side; nothing was created.',
-  file_gone: 'The document file is no longer available; start the run again with the document.',
-  model_account_refused:
-    'Model calls are unavailable on the platform right now; start the run again with the document later.',
-  state_incomplete:
-    'Bills & Receipts could not finish its checks. Run it again. Nothing was created.',
-} as const;
+/** The ways the second read fails the run, each a code for the log and the spec's sentence (§3.F). */
+export const VERIFY_READ_FAILS = {
+  out_of_time: 'ai_unavailable',
+  platform_fault: 'ai_unavailable',
+  model_account_refused: 'ai_unavailable',
+  busy: 'ai_busy',
+  file_gone: 'file',
+  state_incomplete: 'other',
+} as const satisfies Readonly<Record<string, RunFail>>;
 
-type Fails = keyof typeof VERIFY_READ_SENTENCES;
-
-const WHAT = 'The document was not checked a second time';
-/** The re-check after the tie-break (D9) met one of check-document's fail rules. */
-const RECHECKED = 'Checked again, not recorded';
+type Fails = keyof typeof VERIFY_READ_FAILS;
 
 function failed(reason: Fails): StepResult {
-  return failedWith(WHAT, reason, VERIFY_READ_SENTENCES[reason]);
+  return runFails(VERIFY_READ_FAILS[reason], reason);
 }
 
 /**
@@ -95,12 +115,12 @@ const SECOND_READ_REFUSALS: Readonly<Record<ModelRefusalReason, NotMadeReason | 
     file_integrity: 'platform_fault',
   };
 
-/** The run goes on, the second check not made: decide holds it ("second check not made"). */
+/** The run goes on, the second read not made: decide holds it ("second read not made"). */
 function notMade(reason: NotMadeReason, state: JsonObject): StepResult {
   const verification: VerificationState = { status: 'not_made', reason };
   return {
     outcome: 'ok',
-    summary: `A second check could not be made (${reason})`,
+    summary: 'Second read not made',
     state: { ...state, verification: verification as unknown as JsonObject },
   };
 }
@@ -112,7 +132,7 @@ function refused(error: CallbackRefusedError, state: JsonObject): StepResult {
     return reason === 'platform_fault' ? failed(reason) : notMade(reason, state);
   }
   const { status, code, reason } = error;
-  if (status === 429) return failedWith(WHAT, 'busy', THROWN_SENTENCES.busy);
+  if (status === 429) return failed('busy');
   if (status === 404) return failed('file_gone');
   if (status === 403 && reason === 'deadline_exceeded') return failed('out_of_time');
   if (status === 503 && code === 'NOT_CONFIGURED') return failed('platform_fault');
@@ -134,27 +154,16 @@ function documentOf(state: JsonObject): DocumentState | undefined {
     : undefined;
 }
 
-/** The timeline line of a second read made: what it compared, where the reads part, whose total stands. */
+/** The timeline line of a second read made (§3.E): `Second read matches`, or where the reads part. */
 export function verifiedSummary(
-  model: string,
   verification: Extract<VerificationState, { status: 'made' }>,
 ): string {
-  const head = `Read again by ${truncateText(model, 100)}`;
-  const { compared, differences, totalPicked, spendTypeDisputed } = verification;
-  const notes: string[] = [];
-  if (differences.length === 0) {
-    notes.push(
-      compared.length === 1
-        ? 'the document type agrees'
-        : `the ${compared.length} fields compared agree`,
-    );
-  } else {
-    notes.push(`the reads differ on ${namedFields(differences.map((each) => each.field))}`);
-  }
-  if (totalPicked === 'second') notes.push("the second read's total adds up and is kept");
-  if (totalPicked === 'first') notes.push("the first read's total is kept");
-  if (spendTypeDisputed) notes.push('spend type disputed, the default category used');
-  return truncateText(`${head}: ${notes.join('; ')}`, 200);
+  const { differences } = verification;
+  if (differences.length === 0) return 'Second read matches';
+  return truncateText(
+    `Second read differs: ${namedFields(differences.map((each) => each.field))}`,
+    LINE_MAXIMUM,
+  );
 }
 
 export function verifyRead(prompt: PromptModule): Step {
@@ -162,6 +171,8 @@ export function verifyRead(prompt: PromptModule): Step {
     const document = documentOf(state);
     const firstModel = state.modelServed;
     if (!document || typeof firstModel !== 'string') return failed('state_incomplete');
+    const quickBooks = onQuickBooksPath(request, state);
+    if (!secondReadDue(document, request.config, quickBooks)) return { outcome: 'skipped' };
     const fileId = isObject(state.file) ? state.file.artifactId : undefined;
     if (typeof fileId !== 'string' || artifactIdProblem(fileId) !== undefined) {
       return failed('platform_fault');
@@ -198,16 +209,12 @@ export function verifyRead(prompt: PromptModule): Step {
 
     const comparison = compareReads(document, second);
     let kept = document;
+    let rule: RecordingRule | undefined;
     if (comparison.totalPicked === 'second' && comparison.secondTotalCents !== null) {
       const rechecked = recheckedWith(document, comparison.secondTotalCents);
-      if (rechecked.outcome === 'failed') {
-        return failedWith(
-          RECHECKED,
-          CHECK_DOCUMENT_REASONS[rechecked.rule],
-          CHECK_DOCUMENT_SENTENCES[rechecked.rule],
-        );
-      }
       kept = rechecked.document;
+      // A recording rule the new total meets keeps it out of QuickBooks; with "None", none applies.
+      rule = quickBooks ? rechecked.rule : undefined;
     }
     const verification: VerificationState = {
       status: 'made',
@@ -217,14 +224,12 @@ export function verifyRead(prompt: PromptModule): Step {
       totalPicked: comparison.totalPicked,
       spendTypeDisputed: comparison.spendTypeDisputed,
     };
-    return {
-      outcome: 'ok',
-      summary: verifiedSummary(completion.model, verification),
-      state: {
-        ...state,
-        document: kept as unknown as JsonObject,
-        verification: verification as unknown as JsonObject,
-      },
+    const next = {
+      ...state,
+      document: kept as unknown as JsonObject,
+      verification: verification as unknown as JsonObject,
     };
+    if (rule !== undefined) return notRecorded(next, RECORDING_RULES[rule], 'ok');
+    return { outcome: 'ok', summary: verifiedSummary(verification), state: next };
   };
 }

@@ -6,18 +6,15 @@ import {
   faultAnswer,
   type ScriptedAnswer,
 } from '@autom8x/automation-kit/testing';
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
-import { DECIDE_SENTENCES } from '../src/decide/fails.js';
-import { LOOKUP_SENTENCES } from '../src/lookups/read.js';
-import { AFTER_APPROVAL_SENTENCES } from '../src/writes/sentences.js';
+import { RESULTS } from '../src/words.js';
 import { bill, receipt } from './check-world.js';
 import {
   PAID,
   REF,
   sampleBill,
   sampleCustomer,
-  sampleJournalEntry,
   samplePurchase,
   sampleVendor,
   type RouteRun,
@@ -25,22 +22,23 @@ import {
 import { approve, firstRun, heldState, outputOf, writesOf } from './writes-world.js';
 
 /**
- * The checks a wait calls for, after an approval and before anything is written (the plan's §2.0
- * steps 19–22, §5; ip-review design-after-approval-writes-notify-tests.json steps[0]–[3]): the same
- * company, the new vendor added meanwhile, the vendor added now, no matching record added
- * meanwhile — each skipped in a first run, each ending the run in a fixed sentence before any write
- * when it must, and a held state that does not read back whole stopped before any QuickBooks call.
+ * The checks a wait calls for, after an approval and before anything is written (the plan's §2.0,
+ * §5; ip-review design-after-approval-writes-notify-tests.json steps[0]–[3]): the same company, the
+ * new vendor added meanwhile, the vendor added now, no matching record added meanwhile — each
+ * skipped in a first run; each, when it must, keeping the record out of QuickBooks before any write
+ * — the details saved, "Saved. Not recorded in QuickBooks: …" (decision 6) — and a held state that
+ * does not read back whole stopped before any QuickBooks call.
  */
 
 const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
 const heldBill = (run: Partial<RouteRun> = {}) =>
   firstRun({ answer: bill(), config: HOLD_ALL, ...run });
 
-const COMPANY = AFTER_APPROVAL_SENTENCES.company_changed;
-const DUPLICATE =
-  'A matching record was added in QuickBooks while this waited for approval, possibly from your bank feed. Nothing was created.';
-const DUPLICATE_AFTER_VENDOR =
-  'A matching record was added in QuickBooks while this waited for approval, possibly from your bank feed. No bill was created. The new vendor was added to QuickBooks.';
+/** The run's summary: the result line a person reads. */
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
+const notRecorded = (reason: string) => RESULTS.notRecorded(reason);
+const DUPLICATE = notRecorded('may already be in QuickBooks');
 
 test('a first run — straight through — reports none of the four checks and makes no call for them', async () => {
   const world = await firstRun({ answer: bill(), bare: false });
@@ -62,7 +60,7 @@ test('a first run — straight through — reports none of the four checks and m
 
 test('confirm-company: the same company continues; another name, legal name, country or creation time fails before anything is written', async () => {
   const same = await approve(await heldBill());
-  assert.equal(same.steps[0]?.[2], 'Same QuickBooks company as when this was held: Sample Bakery');
+  assert.equal(same.steps[0]?.[2], 'QuickBooks: Sample Bakery');
   assert.equal(same.result.outcome, 'success');
   const changes: [string, (info: JsonObject) => void][] = [
     ['name', (info) => (info.CompanyName = 'Other Bakery')],
@@ -77,11 +75,12 @@ test('confirm-company: the same company continues; another name, legal name, cou
     const first = await heldBill();
     change(first.simulator.company.companyInfo);
     const approved = await approve(first);
-    assert.deepEqual(approved.result, { outcome: 'failed', failureReason: COMPANY }, label);
-    assert.match(
-      approved.steps[0]?.[2] ?? '',
-      /^Company not confirmed: its .+ changed \(company_changed\)$/u,
-    );
+    assert.equal(summaryOf(approved.result), notRecorded("QuickBooks isn't connected"), label);
+    assert.deepEqual(approved.steps[0], [
+      'confirm-company',
+      'failed',
+      "Not recorded in QuickBooks: QuickBooks isn't connected",
+    ]);
     assert.deepEqual(writesOf(approved.providerCalls), [], label);
   }
   // Cleaned on both sides; the same instant in another offset; a creation time one answer lacks.
@@ -96,25 +95,20 @@ test('confirm-company: the same company continues; another name, legal name, cou
   }
 });
 
-test('confirm-company: QuickBooks disconnected while it waited, or refusing, ends with its sentence and no write', async () => {
+test('confirm-company: QuickBooks disconnected while it waited: not recorded, the details saved, no write', async () => {
   const first = await heldBill();
   first.simulator.connected = false;
   const approved = await approve(first);
-  assert.deepEqual(approved.result, {
-    outcome: 'failed',
-    failureReason: 'Reconnect QuickBooks in Connections, then run it again.',
-  });
+  assert.equal(summaryOf(approved.result), notRecorded("QuickBooks isn't connected"));
   assert.deepEqual(approved.providerCalls.length, 1);
+  assert.deepEqual(outputOf(approved.result).outcome, 'saved');
 });
 
 test('confirm-vendor: the new vendor added while it waited, in any case, is linked and never created', async () => {
   const first = await firstRun({ answer: bill(), bare: true });
   first.simulator.company.vendors.push(sampleVendor('77', 'HARROWGATE OFFICE SUPPLY'));
   const approved = await approve(first);
-  assert.equal(
-    approved.steps.find(([stepId]) => stepId === 'confirm-vendor')?.[2],
-    "Vendor 'HARROWGATE OFFICE SUPPLY' was added to QuickBooks while this waited (Id 77); the bill will use it",
-  );
+  assert.equal(approved.steps.find(([stepId]) => stepId === 'confirm-vendor')?.[2], 'Vendor found');
   assert.equal(
     approved.steps.find(([stepId]) => stepId === 'create-vendor'),
     undefined,
@@ -141,7 +135,7 @@ test('confirm-vendor: the new vendor added while it waited, in any case, is link
   );
 });
 
-test("confirm-vendor: '(vendor)' is the name looked up; inactive, two, or in another currency fails before anything is written", async () => {
+test("confirm-vendor: '(vendor)' is the name looked up; inactive, two, or in another currency is not recorded, before anything is written", async () => {
   const named = await firstRun({
     answer: bill(),
     bare: true,
@@ -155,15 +149,12 @@ test("confirm-vendor: '(vendor)' is the name looked up; inactive, two, or in ano
       CompanyName: 'Harrowgate Office Supply',
     },
   ]);
-  assert.match(
-    approved.steps.find(([id]) => id === 'create-vendor')?.[2] ?? '',
-    /because a customer has that name$/u,
-  );
+  assert.equal(approved.steps.find(([id]) => id === 'create-vendor')?.[2], 'Vendor added');
   const cases: [string, JsonObject[], string][] = [
     [
       'inactive',
       [sampleVendor('77', 'Harrowgate Office Supply', { Active: false })],
-      LOOKUP_SENTENCES.vendor_inactive,
+      "the vendor isn't in QuickBooks",
     ],
     [
       'two',
@@ -171,20 +162,20 @@ test("confirm-vendor: '(vendor)' is the name looked up; inactive, two, or in ano
         sampleVendor('77', 'Harrowgate Office Supply'),
         sampleVendor('78', 'harrowgate office supply'),
       ],
-      LOOKUP_SENTENCES.vendor_ambiguous,
+      "the vendor isn't in QuickBooks",
     ],
     [
       'in CAD',
       [sampleVendor('77', 'Harrowgate Office Supply', { CurrencyRef: { value: 'CAD' } })],
-      DECIDE_SENTENCES.F2,
+      'the vendor uses another currency',
     ],
   ];
-  for (const [label, vendors, sentence] of cases) {
+  for (const [label, vendors, reason] of cases) {
     const first = await firstRun({ answer: bill(), bare: true });
     first.simulator.company.vendors.push(...vendors);
-    const failed = await approve(first);
-    assert.deepEqual(failed.result, { outcome: 'failed', failureReason: sentence }, label);
-    assert.deepEqual(writesOf(failed.providerCalls), [], label);
+    const stopped = await approve(first);
+    assert.equal(summaryOf(stopped.result), notRecorded(reason), label);
+    assert.deepEqual(writesOf(stopped.providerCalls), [], label);
   }
 });
 
@@ -199,40 +190,33 @@ test('create-vendor: a printed name past 100 characters is no company name, and 
   assert.equal(approved.result.outcome, 'success');
 });
 
-test('create-vendor: QuickBooks refusing, or not confirming, ends the run in a fixed sentence, the bill never sent (a lost answer: test/write-retry.test.ts)', async () => {
+test('create-vendor: QuickBooks refusing is not recorded, not confirming is "didn\'t confirm" — the details saved, the bill never sent (a lost answer: test/write-retry.test.ts)', async () => {
+  const unconfirmed = RESULTS.unconfirmed;
   const cases: [string, ScriptedAnswer[], string][] = [
     [
       '6240',
       [{ status: 400, body: faultAnswer('6240') }],
-      AFTER_APPROVAL_SENTENCES.vendor_name_in_use,
+      notRecorded('name used by a customer or employee'),
     ],
     [
       '2050',
       [{ status: 400, body: faultAnswer('2050') }],
-      AFTER_APPROVAL_SENTENCES.vendor_name_too_long,
+      notRecorded("the vendor's name is too long"),
     ],
-    [
-      '6190',
-      [{ status: 400, body: faultAnswer('6190') }],
-      AFTER_APPROVAL_SENTENCES.vendor_subscription_ended,
-    ],
+    ['6190', [{ status: 400, body: faultAnswer('6190') }], notRecorded("QuickBooks didn't answer")],
     [
       'another code',
       [{ status: 400, body: faultAnswer('6000') }],
-      AFTER_APPROVAL_SENTENCES.vendor_refused,
+      notRecorded("QuickBooks didn't answer"),
     ],
-    ['a 429', [{ status: 429 }], AFTER_APPROVAL_SENTENCES.vendor_unconfirmed],
-    [
-      'Fault 600',
-      [{ status: 400, body: faultAnswer('600') }],
-      AFTER_APPROVAL_SENTENCES.vendor_unconfirmed,
-    ],
+    ['a 429', [{ status: 429 }], unconfirmed],
+    ['Fault 600', [{ status: 400, body: faultAnswer('600') }], unconfirmed],
   ];
   for (const [label, script, sentence] of cases) {
     const first = await firstRun({ answer: bill(), bare: true });
     first.simulator.script('vendor.create', script);
     const approved = await approve(first);
-    assert.deepEqual(approved.result, { outcome: 'failed', failureReason: sentence }, label);
+    assert.equal(summaryOf(approved.result), sentence, label);
     assert.deepEqual(
       writesOf(approved.providerCalls).map(([operation]) => operation),
       ['vendor.create'],
@@ -241,18 +225,18 @@ test('create-vendor: QuickBooks refusing, or not confirming, ends the run in a f
   }
 });
 
-test('confirm-no-duplicate: a record the rule matches, added while it waited — by hand or from the bank feed — fails; what the approver saw is allowed', async () => {
+test('confirm-no-duplicate: a record the rule matches, added while it waited — by hand or from the bank feed — keeps it out; what the approver saw is allowed', async () => {
   // A bill: the same vendor's bill with its number.
   const billRun = await heldBill();
   billRun.simulator.company.bills.push(
     sampleBill('160', REF.harrowgate, { DocNumber: 'hos-1042', TotalAmt: 413.34 }),
   );
   const billed = await approve(billRun);
-  assert.deepEqual(billed.result, { outcome: 'failed', failureReason: DUPLICATE });
+  assert.equal(summaryOf(billed.result), DUPLICATE);
   assert.deepEqual(writesOf(billed.providerCalls), []);
-  assert.equal(
-    billed.steps.at(-1)?.[2],
-    'A matching record was added while this waited: Id 160 (duplicate_appeared)',
+  assert.deepEqual(
+    billed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
+    ['confirm-no-duplicate', 'failed', 'Not recorded in QuickBooks: may already be in QuickBooks'],
   );
   // The query: find-duplicate-number's, one row more, the newest created first.
   assert.equal(
@@ -262,27 +246,14 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
   // A company receipt: the bank feed brought the charge.
   const receiptRun = await firstRun({ answer: receipt(), config: HOLD_ALL });
   receiptRun.simulator.company.purchases.push(
-    samplePurchase('210', REF.visa, { TxnDate: '2026-09-28', TotalAmt: 60.63 }),
+    samplePurchase('210', REF.visa4417, { TxnDate: '2026-09-28', TotalAmt: 60.63 }),
   );
   const fed = await approve(receiptRun);
-  assert.deepEqual(fed.result, { outcome: 'failed', failureReason: DUPLICATE });
+  assert.equal(summaryOf(fed.result), DUPLICATE);
   assert.equal(
     fed.providerCalls.at(-1)?.input.query,
     "SELECT * FROM Purchase WHERE TotalAmt = '60.63' AND TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY MetaData.CreateTime DESC MAXRESULTS 4",
   );
-  // An employee's: an entry that day owing them the amount.
-  const employeeRun = await firstRun({ answer: receipt(), ...PAID.employee });
-  employeeRun.simulator.company.journalEntries.push(
-    sampleJournalEntry(
-      '410',
-      60.63,
-      { debit: REF.electric, credit: REF.teamOwed },
-      { TxnDate: '2026-09-27' },
-      { Type: 'Employee', EntityRef: { value: '55', name: 'Robin Example' } },
-    ),
-  );
-  const owed = await approve(employeeRun);
-  assert.deepEqual(owed.result, { outcome: 'failed', failureReason: DUPLICATE });
   // Not a match — another vendor's bill with the number, a charge on another account — goes on.
   const other = await heldBill();
   other.simulator.company.bills.push(sampleBill('161', REF.other, { DocNumber: 'HOS-1042' }));
@@ -294,7 +265,7 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
   assert.equal((await approve(otherCard)).result.outcome, 'success');
 });
 
-test('confirm-no-duplicate: the possible duplicate the approver saw and approved is allowed; a full answer with nothing new goes on, saying more may exist', async () => {
+test('confirm-no-duplicate: the possible duplicate the approver saw and approved is allowed; a full answer with nothing new goes on', async () => {
   // The vendor's bill with the number, the total and the date: the number is then kept in the
   // memo, so the re-check repeats the total-and-date lookup, which finds the bill the approver saw.
   const seen = await firstRun({
@@ -313,7 +284,7 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
   assert.equal(approved.result.outcome, 'success');
   assert.equal(
     approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
-    'No matching record added since this was held; 1 already shown to the approver',
+    'No duplicate',
   );
   // Four of the vendor's bills for the total and date, one with the number: the first run's amount
   // lookup read three (its bound), its number lookup the fourth, so the re-check's four rows were
@@ -339,39 +310,38 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
   assert.equal(many.result.outcome, 'success');
   assert.equal(
     many.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
-    'No matching record added since this was held; 4 already shown to the approver; the search was full, so more may exist',
+    'No duplicate',
   );
 });
 
-test('after create-vendor added the vendor, a later failure says so: a match added meanwhile, a refusal, a thrown read', async () => {
+test('after create-vendor added the vendor, a later stop keeps the bill out and the vendor in: a match added meanwhile, a refusal, a thrown read', async () => {
   const first = await firstRun({ answer: bill(), bare: true });
   first.simulator.company.bills.push(sampleBill('162', REF.other, { DocNumber: 'HOS-1042' }));
   const approved = await approve(first);
-  assert.deepEqual(approved.result, { outcome: 'failed', failureReason: DUPLICATE_AFTER_VENDOR });
+  assert.equal(summaryOf(approved.result), DUPLICATE);
   assert.equal(first.simulator.company.vendors.length, 1, 'the vendor stays: a real supplier');
   const refused = await firstRun({ answer: bill(), bare: true });
   refused.simulator.script('query.run', [{ status: 200 }, { status: 403 }]);
-  assert.deepEqual((await approve(refused)).result, {
-    outcome: 'failed',
-    failureReason:
-      'QuickBooks refused access to this company. Reconnect QuickBooks in Connections as a company admin, then run it again. No bill was created. The new vendor was added to QuickBooks.',
-  });
+  assert.equal(
+    summaryOf((await approve(refused)).result),
+    notRecorded("QuickBooks isn't connected"),
+  );
   const thrown = await firstRun({ answer: bill(), bare: true });
   thrown.simulator.script('query.run', [{ status: 200 }, { refuse: PROVIDER_REFUSALS.noAnswer() }]);
   // Too close to the deadline for the SDK's 10-second retry: the first throw is the last.
   const deadline = new Date(Date.now() + 5_000).toISOString();
-  assert.deepEqual((await approve(thrown, { deadline })).result, {
-    outcome: 'failed',
-    failureReason:
-      'Autom8x could not reach QuickBooks. Run it again in a few minutes. No bill was created. The new vendor was added to QuickBooks.',
-  });
+  assert.equal(
+    summaryOf((await approve(thrown, { deadline })).result),
+    notRecorded("QuickBooks didn't answer"),
+  );
 });
 
-test('a held state that does not read back whole is stopped before any QuickBooks call: "could not finish its checks"', async () => {
+test('a held state that does not read back whole is stopped before any QuickBooks call: "Something went wrong"', async () => {
   const first = await heldBill();
   const state = heldState(first);
   const broken: JsonObject[] = [
-    { ...state, v: 2 },
+    { ...state, v: 1 },
+    { ...state, read: undefined },
     { ...state, plan: { ...(state.plan as JsonObject), amountCents: 0 } },
     { ...state, recheck: undefined },
     { ...state, recheck: { ...(state.recheck as JsonObject), fullAt: 7 } },
@@ -383,7 +353,7 @@ test('a held state that does not read back whole is stopped before any QuickBook
     const approved = await approve(first, { state: held });
     assert.deepEqual(approved.result, {
       outcome: 'failed',
-      failureReason: AFTER_APPROVAL_SENTENCES.state_incomplete,
+      failureReason: 'Something went wrong. Try again.',
     });
     assert.deepEqual(approved.providerCalls, []);
   }

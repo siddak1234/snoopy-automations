@@ -6,15 +6,15 @@ import { test } from 'node:test';
 import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { secondReadOf } from '../src/checks/answers.js';
-import { CHECK_DOCUMENT_REASONS, CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
 import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 import { compareReads, recheckedWith } from '../src/reads/compare.js';
 import type { VerificationState } from '../src/state.js';
 import { checkedSummary } from '../src/steps/check-document.js';
 import { verifiedSummary } from '../src/steps/verify-read.js';
-import { VISA, check } from './check-world.js';
+import { RUN_FAILS } from '../src/words.js';
+import { check } from './check-world.js';
 import { decide } from './decide-world.js';
-import { everythingSaid, lines, reads, secondAnswer, setUp } from './fixtures.js';
+import { QUICKBOOKS, everythingSaid, lines, reads, secondAnswer, setUp } from './fixtures.js';
 import {
   FIRST_READ,
   READS,
@@ -113,10 +113,13 @@ test(
     for (const { sample, recording } of recordings(FIRST_READ)) {
       const outcome = check(JSON.parse(recording.text));
       const [route, findings] = SAMPLE_ROUTES[sample.name]!;
-      const got = outcome.outcome === 'failed' ? outcome.rule : outcome.document.route;
+      const got =
+        outcome.outcome === 'failed'
+          ? outcome.rule
+          : (outcome.recordingRule ?? outcome.document.route);
       assert.equal(got, route, sample.name);
       if (outcome.outcome === 'ok') {
-        assert.ok(!checkedSummary(outcome.document, false).includes(sample.marker), sample.name);
+        assert.ok(!checkedSummary(outcome.document).includes(sample.marker), sample.name);
         const differ = outcome.document.findings.join() !== findings.join();
         if (differ)
           t.diagnostic(`${sample.name}: findings ${outcome.document.findings.join(', ')}`);
@@ -137,12 +140,10 @@ test(
     for (const { sample, recording } of recordings(SECOND_READ)) {
       const second = secondReadOf(JSON.parse(recording.text));
       assert.ok(second, `${sample.name}: the read-2 schema`);
-      const first = check(sample.answer, {
-        paidFrom: { id: '41', fullyQualifiedName: 'Company Visa', accountType: 'Credit Card' },
-      });
+      const first = check(sample.answer);
       if (first.outcome === 'failed') continue;
       const comparison = compareReads(first.document, second);
-      const line = verifiedSummary('a recording', {
+      const line = verifiedSummary({
         status: 'made',
         modelServed: 'a recording',
         ...comparison,
@@ -179,7 +180,7 @@ test(
 );
 
 test(
-  "each sample's two recordings through steps 1–8 and decide — the vendor matched, nothing found: no line, sentence, reason, wording or saved data carries its marker",
+  "each sample's two recordings through the first steps and decide — the vendor matched, nothing found: no line, sentence, reason or saved data carries its marker",
   {
     skip:
       firstFiles.length === 0 || secondFiles.length === 0
@@ -194,23 +195,26 @@ test(
       const answer = JSON.parse(first.text) as JsonObject;
       const secondText = JSON.parse(second.text) as JsonObject;
       // The run as far as it goes today, the model answering each read as it was recorded.
-      const run = setUp({
-        config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
-      });
+      const run = setUp({ config: QUICKBOOKS });
       run.platform.model = reads(answer, secondText);
       const result = await run.run();
       const said = everythingSaid(run.platform, result);
       assert.ok(!said.includes(sample.marker), `${sample.name}: the run's lines and result`);
-      const checked = check(answer, { paidFrom: VISA });
+      const checked = check(answer);
       if (checked.outcome === 'failed') {
         const { rule } = checked;
         assert.notEqual(rule, 'answer_unusable', sample.name);
         if (rule !== 'answer_unusable') {
-          const failureReason = CHECK_DOCUMENT_SENTENCES[rule];
-          assert.deepEqual(result, { outcome: 'failed', failureReason }, sample.name);
+          assert.deepEqual(
+            result,
+            { outcome: 'failed', failureReason: RUN_FAILS[rule] },
+            sample.name,
+          );
         }
         continue;
       }
+      // Not recorded in QuickBooks: decide never runs, and the details are saved.
+      if (checked.recordingRule !== undefined) continue;
       // decide, on what verify-read keeps: the comparison, and the arithmetic again on a total
       // the tie-break took from read 2.
       const read = secondReadOf(secondText);
@@ -219,7 +223,7 @@ test(
       let document = checked.document;
       if (comparison.totalPicked === 'second' && comparison.secondTotalCents !== null) {
         const rechecked = recheckedWith(document, comparison.secondTotalCents);
-        if (rechecked.outcome === 'failed') continue;
+        if (rechecked.rule !== undefined) continue;
         document = rechecked.document;
       }
       const verification: VerificationState = {
@@ -234,7 +238,7 @@ test(
         const decision = decide({
           answer,
           verification,
-          config: { expenseAccount: 'Utilities:Electric', holdAboveAmount },
+          config: { holdAboveAmount },
           state: { document: document as unknown as JsonObject },
         });
         assert.ok(
@@ -271,17 +275,11 @@ test(
       ],
     );
     assert.deepEqual(check(answers[0]), { outcome: 'failed', rule: 'C1' });
-    const run = setUp({
-      config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
-    });
+    const run = setUp({ config: QUICKBOOKS });
     run.platform.model = reads(answers[0], answers[1]);
     const result = await run.run();
-    assert.deepEqual(result, { outcome: 'failed', failureReason: CHECK_DOCUMENT_SENTENCES.C1 });
-    assert.deepEqual(lines(run.platform).at(-1), [
-      'check-document',
-      'failed',
-      `Checked, not recorded (${CHECK_DOCUMENT_REASONS.C1})`,
-    ]);
+    assert.deepEqual(result, { outcome: 'failed', failureReason: RUN_FAILS.C1 });
+    assert.deepEqual(lines(run.platform).at(-1), ['check-document', 'failed', RUN_FAILS.C1]);
     assert.equal(run.platform.modelCalls.length, 1, 'read 2 is not made for a document that fails');
     assert.ok(!everythingSaid(run.platform, result).includes(sample.marker));
   },

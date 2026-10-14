@@ -3,52 +3,29 @@ import { test } from 'node:test';
 
 import { PROVIDER_REFUSALS, type ScriptedAnswer } from '@autom8x/automation-kit/testing';
 
-import { FILE_ID, callsOf, lines, setUp, type SetUp } from './fixtures.js';
+import { callsOf, lines, setUp } from './fixtures.js';
 
 /**
- * The connection and busy cases, the same at each of the four QuickBooks steps: each
- * ends with the kit's sentence, nothing after the step runs, no model call is made, and
- * every call the step made is its one request under its one key.
+ * The connection and busy cases, the same at each of the three QuickBooks steps before the
+ * document is read: each keeps the document out of QuickBooks — "Not recorded in QuickBooks:
+ * QuickBooks isn't connected", or "… didn't answer" (the session's decision 6) — no later QuickBooks
+ * step runs, the document is still read, and every call the step made is its one request under its
+ * one key.
  */
 
-const STEPS: {
-  stepId: string;
-  operation: string;
-  what: string;
-  /** The answers before the step's own: find-accounts' lookup, before find-payer's. */
-  before?: ScriptedAnswer[];
-  world?: SetUp;
-}[] = [
-  { stepId: 'read-company', operation: 'companyInfo.get', what: 'QuickBooks company not checked' },
-  {
-    stepId: 'read-preferences',
-    operation: 'preferences.get',
-    what: 'QuickBooks settings not read',
-  },
-  {
-    stepId: 'find-accounts',
-    operation: 'query.run',
-    what: "The accounts in this flow's settings were not looked up",
-  },
-  {
-    stepId: 'find-payer',
-    operation: 'query.run',
-    what: 'Who paid not accepted',
-    before: [{ status: 200 }],
-    world: {
-      config: { expenseAccount: 'Utilities:Electric', teamOwedAccount: 'Owed to Team Members' },
-      input: { invoiceFile: FILE_ID, paidPersonally: true, paidBy: 'Robin Example' },
-    },
-  },
+const STEPS: { stepId: string; operation: string }[] = [
+  { stepId: 'read-company', operation: 'companyInfo.get' },
+  { stepId: 'read-preferences', operation: 'preferences.get' },
+  { stepId: 'find-accounts', operation: 'query.run' },
 ];
 
-const RECONNECT = 'Reconnect QuickBooks in Connections, then run it again.';
-const BUSY = 'QuickBooks is busy; run it again in a few minutes.';
+const NOT_CONNECTED = "QuickBooks isn't connected";
+const NO_ANSWER = "QuickBooks didn't answer";
+const QUICKBOOKS_STEPS = ['read-company', 'read-preferences', 'find-accounts'];
 
 const CASES: {
   name: string;
   script: (operation: string) => ScriptedAnswer[];
-  sentence: string;
   reason: string;
   calls: number;
   waits?: number[];
@@ -56,89 +33,67 @@ const CASES: {
   {
     name: 'no live connection',
     script: () => [{ refuse: PROVIDER_REFUSALS.notConnected() }],
-    sentence: RECONNECT,
-    reason: 'qb_not_connected',
+    reason: NOT_CONNECTED,
     calls: 1,
   },
-  {
-    name: 'QuickBooks 401',
-    script: () => [{ status: 401 }],
-    sentence: RECONNECT,
-    reason: 'qb_reauthorize',
-    calls: 1,
-  },
-  {
-    name: 'QuickBooks 403',
-    script: () => [{ status: 403 }],
-    sentence:
-      'QuickBooks refused access to this company. Reconnect QuickBooks in Connections as a company admin, then run it again.',
-    reason: 'qb_forbidden',
-    calls: 1,
-  },
+  { name: 'QuickBooks 401', script: () => [{ status: 401 }], reason: NOT_CONNECTED, calls: 1 },
+  { name: 'QuickBooks 403', script: () => [{ status: 403 }], reason: NOT_CONNECTED, calls: 1 },
   {
     name: 'the accounting scope missing',
     script: (operation) => [
       { refuse: PROVIDER_REFUSALS.badRequest(operation, 'insufficient_scope') },
     ],
-    sentence:
-      'QuickBooks was connected without accounting access. Reconnect QuickBooks in Connections, then run it again.',
-    reason: 'qb_missing_scope',
+    reason: NOT_CONNECTED,
     calls: 1,
   },
   {
     name: 'Connections not configured',
     script: (operation) => [{ refuse: PROVIDER_REFUSALS.notConfigured(operation) }],
-    sentence:
-      'QuickBooks calls are not available on Autom8x right now. Nothing was created; run it again later.',
-    reason: 'qb_not_configured',
+    reason: NO_ANSWER,
     calls: 1,
   },
   {
     name: 'the provider undeclared',
     script: () => [{ refuse: PROVIDER_REFUSALS.providerNotDeclared() }],
-    sentence: 'Autom8x could not ask QuickBooks (provider_not_declared). Nothing was created.',
-    reason: 'platform_refused provider_not_declared',
+    reason: NO_ANSWER,
     calls: 1,
   },
   {
     name: '429 three times',
     script: () => [{ status: 429 }, { status: 429 }, { status: 429 }],
-    sentence: BUSY,
-    reason: 'qb_busy 429',
+    reason: NO_ANSWER,
     calls: 3,
     waits: [60_000, 60_000],
   },
   {
     name: '500 twice',
     script: () => [{ status: 500 }, { status: 500 }],
-    sentence: BUSY,
-    reason: 'qb_busy 500',
+    reason: NO_ANSWER,
     calls: 2,
   },
-  {
-    name: 'a 425',
-    script: () => [{ status: 425 }],
-    sentence: BUSY,
-    reason: 'qb_busy 425',
-    calls: 1,
-  },
+  { name: 'a 425', script: () => [{ status: 425 }], reason: NO_ANSWER, calls: 1 },
 ];
 
-for (const { stepId, operation, what, before = [], world: options = {} } of STEPS) {
-  test(`${stepId}: every connection and busy case ends with its sentence`, async () => {
-    for (const { name, script, sentence, reason, calls, waits } of CASES) {
-      const world = setUp(options);
-      world.simulator.script(operation, [...before, ...script(operation)]);
+for (const { stepId, operation } of STEPS) {
+  test(`${stepId}: every connection and busy case keeps the document out of QuickBooks, and the run goes on`, async () => {
+    for (const { name, script, reason, calls, waits } of CASES) {
+      const world = setUp();
+      world.simulator.script(operation, script(operation));
       const result = await world.run();
-      assert.deepEqual(
-        result,
-        { outcome: 'failed', failureReason: sentence },
-        `${stepId}: ${name}`,
-      );
+      assert.ok(result.outcome === 'success', `${stepId}: ${name}`);
+      assert.deepEqual(result.output?.quickBooks, { notRecorded: reason }, `${stepId}: ${name}`);
       const reported = lines(world.platform);
-      assert.deepEqual(reported.at(-1), [stepId, 'failed', `${what} (${reason})`], name);
-      assert.equal(reported.at(-1)?.[0], stepId, 'nothing after the step runs');
-      assert.deepEqual(world.platform.modelCalls, [], 'none of the allowance is spent');
+      assert.deepEqual(
+        reported.find(([id]) => id === stepId),
+        [stepId, 'failed', `Not recorded in QuickBooks: ${reason}`],
+        name,
+      );
+      const after = QUICKBOOKS_STEPS.slice(QUICKBOOKS_STEPS.indexOf(stepId) + 1);
+      assert.ok(
+        !reported.some(([id]) => after.includes(id)),
+        `${name}: no QuickBooks step after it`,
+      );
+      assert.equal(world.platform.modelCalls.length, 1, `${name}: the document is still read`);
       const sent = callsOf(world.platform, world.request, stepId);
       assert.equal(sent.length, calls, name);
       assert.equal(new Set(sent.map((call) => JSON.stringify(call))).size, 1, 'one request');
@@ -148,22 +103,21 @@ for (const { stepId, operation, what, before = [], world: options = {} } of STEP
   });
 
   test(`${stepId}: 429, 429, then an answer continues after two minute-long waits`, async () => {
-    const world = setUp(options);
-    world.simulator.script(operation, [
-      ...before,
-      { status: 429 },
-      { status: 429 },
-      { status: 200 },
-    ]);
-    assert.equal((await world.run()).outcome, 'success');
+    const world = setUp();
+    world.simulator.script(operation, [{ status: 429 }, { status: 429 }, { status: 200 }]);
+    const result = await world.run();
+    assert.ok(result.outcome === 'success');
+    assert.equal(result.output?.quickBooks, undefined);
     assert.deepEqual(world.waits, [60_000, 60_000]);
     assert.equal(callsOf(world.platform, world.request, stepId).length, 3);
   });
 
-  test(`${stepId}: a 429 with less than six minutes left fails at once`, async () => {
-    const world = setUp({ ...options, deadlineInMs: 5 * 60_000 });
-    world.simulator.script(operation, [...before, { status: 429 }, { status: 200 }]);
-    assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: BUSY });
+  test(`${stepId}: a 429 with less than six minutes left does not wait: QuickBooks did not answer`, async () => {
+    const world = setUp({ deadlineInMs: 5 * 60_000 });
+    world.simulator.script(operation, [{ status: 429 }, { status: 200 }]);
+    const result = await world.run();
+    assert.ok(result.outcome === 'success');
+    assert.deepEqual(result.output?.quickBooks, { notRecorded: NO_ANSWER });
     assert.deepEqual(world.waits, []);
     assert.equal(callsOf(world.platform, world.request, stepId).length, 1);
   });

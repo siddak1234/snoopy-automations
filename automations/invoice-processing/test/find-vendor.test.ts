@@ -1,31 +1,25 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
-import { LOOKUP_SENTENCES } from '../src/lookups/read.js';
+import { RESULTS } from '../src/words.js';
 import { bill, creditNote, receipt, statement } from './check-world.js';
 import { lines } from './fixtures.js';
-import {
-  PAID,
-  lineOf,
-  queriesOf,
-  reported,
-  routeRun,
-  sampleVendor,
-  stateOf,
-} from './lookups-world.js';
+import { lineOf, queriesOf, reported, routeRun, sampleVendor, stateOf } from './lookups-world.js';
 
 /**
- * find-vendor and find-vendor-company (steps 9–10): the seller by its exact name, active or not,
- * then by company name; a contractor who paid, the same way; the fails — an inactive vendor, two
- * with the name, V1 — each its sentence with nothing after it, but for a company receipt's or a
- * card refund's seller, which is then not linked (D20; unlinked-seller.test.ts); a near-miss
- * ignored; and names escaped as Intuit reads them.
+ * find-vendor and find-vendor-company: the seller by its exact name, active or not, then by company
+ * name; a bill's, a credit note's or a statement's vendor inactive, or two with the name, keeps it
+ * out of QuickBooks — the details saved (decision 6) — but for a company receipt's or a card
+ * refund's seller, which is then not linked (D20; unlinked-seller.test.ts); a near-miss ignored; and
+ * names escaped as Intuit reads them. Lines (§3.E): `Vendor found`, `New vendor`.
  */
 
 const THROUGH = 'find-vendor-company';
-const failed = (sentence: string) => ({ outcome: 'failed', failureReason: sentence });
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
+const NOT_IN_QUICKBOOKS = RESULTS.notRecorded("the vendor isn't in QuickBooks");
 
 test("one vendor with the name, capital letters aside: matched with QuickBooks' name, balance, currency and 1099 mark; the company-name lookup skipped", async () => {
   const world = await routeRun({
@@ -50,10 +44,7 @@ test("one vendor with the name, capital letters aside: matched with QuickBooks' 
     balanceCents: 98050,
     vendor1099: true,
   });
-  assert.equal(
-    lineOf(world, 'find-vendor'),
-    "Found vendor 'HARROWGATE OFFICE SUPPLY' in QuickBooks by its name (Id 7)",
-  );
+  assert.equal(lineOf(world, 'find-vendor'), 'Vendor found');
   assert.equal(lineOf(world, 'find-vendor-company'), undefined, 'skipped: no line');
   assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor']);
 });
@@ -83,37 +74,28 @@ test('no vendor by name: one by company name is matched; none at all is a new ve
     'find-vendor-company':
       "SELECT * FROM Vendor WHERE CompanyName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
   });
-  assert.equal(
-    lineOf(byCompany, 'find-vendor-company'),
-    "Found vendor 'Harrowgate' (Id 61) by its company name 'Harrowgate Office Supply'",
-  );
+  assert.equal(lineOf(byCompany, 'find-vendor-company'), 'Vendor found');
   const none = await routeRun({ answer: bill(), through: THROUGH, bare: true });
   assert.deepEqual(stateOf(none.result).vendor, { status: 'new' });
   assert.deepEqual(lines(none.platform).slice(-2), [
-    ['find-vendor', 'ok', "No vendor named 'Harrowgate Office Supply' in QuickBooks"],
-    [
-      'find-vendor-company',
-      'ok',
-      "No vendor has the company name 'Harrowgate Office Supply' either: new vendor",
-    ],
+    ['find-vendor', 'ok', 'New vendor'],
+    ['find-vendor-company', 'ok', 'New vendor'],
   ]);
-  // A receipt's seller nobody has: no vendor to link (D20).
+  // A receipt's seller nobody has: no vendor to link (D20), the same line.
   const seller = await routeRun({ answer: receipt(), through: THROUGH, bare: true });
-  assert.match(lineOf(seller, 'find-vendor-company') ?? '', /either: no vendor to link$/u);
+  assert.equal(lineOf(seller, 'find-vendor-company'), 'New vendor');
 });
 
-test("a bill's, a credit note's or a statement's vendor: an inactive one fails \"reactivate it\", and two with the name fail; by company name too; nothing after the step runs", async () => {
+test("a bill's, a credit note's or a statement's vendor inactive, or two with the name — by company name too: not recorded, no QuickBooks step after it, the details saved", async () => {
   const cases: [
     string,
     (sim: Parameters<NonNullable<Parameters<typeof routeRun>[0]['company']>>[0]) => void,
-    string,
     string,
   ][] = [
     [
       'inactive',
       (sim) =>
         sim.company.vendors.push(sampleVendor('7', 'Harrowgate Office Supply', { Active: false })),
-      LOOKUP_SENTENCES.vendor_inactive,
       'find-vendor',
     ],
     [
@@ -123,7 +105,6 @@ test("a bill's, a credit note's or a statement's vendor: an inactive one fails \
           sampleVendor('7', 'Harrowgate Office Supply'),
           sampleVendor('8', 'harrowgate office supply'),
         ),
-      LOOKUP_SENTENCES.vendor_ambiguous,
       'find-vendor',
     ],
     [
@@ -132,7 +113,6 @@ test("a bill's, a credit note's or a statement's vendor: an inactive one fails \
         sim.company.vendors.push(
           sampleVendor('61', 'HOS', { CompanyName: 'Harrowgate Office Supply', Active: false }),
         ),
-      LOOKUP_SENTENCES.vendor_company_inactive,
       'find-vendor-company',
     ],
     [
@@ -142,25 +122,31 @@ test("a bill's, a credit note's or a statement's vendor: an inactive one fails \
           sampleVendor('61', 'HOS East', { CompanyName: 'Harrowgate Office Supply' }),
           sampleVendor('62', 'HOS West', { CompanyName: 'Harrowgate Office Supply' }),
         ),
-      LOOKUP_SENTENCES.vendor_company_ambiguous,
       'find-vendor-company',
     ],
   ];
-  for (const [label, company, sentence, stepId] of cases) {
+  for (const [label, company, stepId] of cases) {
     const world = await routeRun({ answer: bill(), bare: true, company });
-    assert.deepEqual(world.result, failed(sentence), label);
-    assert.equal(reported(world).at(-1), stepId, `${label}: nothing after it runs`);
-    assert.match(lines(world.platform).at(-1)?.[2] ?? '', /^Vendor not accepted \(vendor_/u);
-    assert.ok(sentence.endsWith('then run it again. Nothing was created.'), label);
+    assert.equal(summaryOf(world.result), NOT_IN_QUICKBOOKS, label);
+    assert.deepEqual(
+      reported(world).slice(-2),
+      [stepId, 'save-details'],
+      `${label}: no QuickBooks step after it`,
+    );
+    assert.deepEqual(lines(world.platform).at(-2), [
+      stepId,
+      'failed',
+      "Not recorded in QuickBooks: the vendor isn't in QuickBooks",
+    ]);
   }
-  // A credit note's and a statement's vendor must be QuickBooks' own: they fail the same way.
+  // A credit note's and a statement's vendor must be QuickBooks' own: the same.
   const inactive = await routeRun({
     answer: creditNote(),
     bare: true,
     company: (sim) =>
       sim.company.vendors.push(sampleVendor('7', 'Harrowgate Office Supply', { Active: false })),
   });
-  assert.deepEqual(inactive.result, failed(LOOKUP_SENTENCES.vendor_inactive));
+  assert.equal(summaryOf(inactive.result), NOT_IN_QUICKBOOKS);
   const two = await routeRun({
     answer: statement(),
     bare: true,
@@ -170,7 +156,7 @@ test("a bill's, a credit note's or a statement's vendor: an inactive one fails \
         sampleVendor('8', 'HARROWGATE OFFICE SUPPLY'),
       ),
   });
-  assert.deepEqual(two.result, failed(LOOKUP_SENTENCES.vendor_ambiguous));
+  assert.equal(summaryOf(two.result), NOT_IN_QUICKBOOKS);
 });
 
 test('a row QuickBooks returns under another name is a near-miss, ignored: the vendor is new', async () => {
@@ -194,10 +180,7 @@ test('a row QuickBooks returns under another name is a near-miss, ignored: the v
       ]),
   });
   assert.deepEqual(stateOf(world.result).vendor, { status: 'new' });
-  assert.equal(
-    lineOf(world, 'find-vendor'),
-    "No vendor named 'Harrowgate Office Supply' in QuickBooks; 1 near-miss ignored",
-  );
+  assert.equal(lineOf(world, 'find-vendor'), 'New vendor');
 });
 
 test('names with an apostrophe, an ampersand or a backslash are sent escaped and matched as printed', async () => {
@@ -233,64 +216,6 @@ test('a name past the 100 characters a company name holds is not searched by com
   });
   assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor']);
   assert.deepEqual(stateOf(world.result).vendor, { status: 'new' });
-});
-
-test('a contractor who paid is found among vendors by name or company name; nobody is V1; inactive or two have their own sentences', async () => {
-  const found = await routeRun({ answer: receipt(), through: THROUGH, ...PAID.contractor });
-  assert.equal(
-    lineOf(found, 'find-vendor'),
-    "Found the person who paid, 'Sam Lee', among QuickBooks vendors (Id 31)",
-  );
-  assert.equal((stateOf(found.result).vendor as JsonObject).vendor1099, true);
-  const byCompany = await routeRun({
-    answer: receipt(),
-    through: THROUGH,
-    ...PAID.contractor,
-    input: { ...PAID.contractor.input, paidBy: 'Lee Fixtures' },
-  });
-  assert.equal((stateOf(byCompany.result).vendor as JsonObject).matchedBy, 'company name');
-  const nobody = await routeRun({
-    answer: receipt(),
-    ...PAID.contractor,
-    input: { ...PAID.contractor.input, paidBy: 'Nobody Known' },
-  });
-  assert.deepEqual(nobody.result, failed(LOOKUP_SENTENCES.payer_not_found));
-  assert.equal(
-    LOOKUP_SENTENCES.payer_not_found,
-    "The name in 'Who paid' isn't an employee or vendor in QuickBooks, or an owner in this flow's settings. Type it as QuickBooks shows it, then run it again. Nothing was created.",
-  );
-  assert.deepEqual(Object.keys(queriesOf(nobody)), ['find-vendor', 'find-vendor-company']);
-  const longName = await routeRun({
-    answer: receipt(),
-    ...PAID.contractor,
-    input: { ...PAID.contractor.input, paidBy: 'N'.repeat(101) },
-  });
-  assert.deepEqual(longName.result, failed(LOOKUP_SENTENCES.payer_not_found));
-  assert.deepEqual(Object.keys(queriesOf(longName)), ['find-vendor'], 'no company name that long');
-  const inactive = await routeRun({
-    answer: receipt(),
-    ...PAID.contractor,
-    bare: true,
-    company: (sim) => sim.company.vendors.push(sampleVendor('31', 'Sam Lee', { Active: false })),
-  });
-  assert.deepEqual(inactive.result, failed(LOOKUP_SENTENCES.payer_inactive));
-  const two = await routeRun({
-    answer: receipt(),
-    ...PAID.contractor,
-    bare: true,
-    company: (sim) =>
-      sim.company.vendors.push(sampleVendor('31', 'Sam Lee'), sampleVendor('32', 'SAM LEE')),
-  });
-  assert.deepEqual(two.result, failed(LOOKUP_SENTENCES.payer_ambiguous));
-});
-
-test('an employee or an owner who paid has no vendor: both vendor lookups are skipped, with no line and no call', async () => {
-  for (const paid of [PAID.employee, PAID.owner]) {
-    const world = await routeRun({ answer: receipt(), through: THROUGH, ...paid });
-    assert.deepEqual(queriesOf(world), {});
-    assert.ok(!reported(world).some((stepId) => stepId.startsWith('find-vendor')));
-    assert.equal(stateOf(world.result).vendor, undefined);
-  }
 });
 
 test('a row QuickBooks returns under another company name is ignored too: the vendor stays new', async () => {

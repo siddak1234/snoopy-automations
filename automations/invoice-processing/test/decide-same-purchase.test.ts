@@ -44,12 +44,9 @@ test('the same purchase met as another kind of record holds', () => {
   );
   assert.deepEqual(
     confirmation.holds.map((hold) => hold.phrase),
-    ['matches bill LH-2609, already paid', 'paid by check, recorded from Company Visa'],
+    ['matches a paid bill', 'paid from Checking?'],
   );
-  assert.equal(
-    confirmation.heldReason,
-    'Approve only if this is a different purchase. Bill LH-2609 for this amount is already recorded and paid.',
-  );
+  assert.equal(confirmation.reason, 'Matches a paid bill, paid from Checking?');
   // An open bill, then a receipt for it.
   const open = heldOf(
     decide({
@@ -62,12 +59,9 @@ test('the same purchase met as another kind of record holds', () => {
   );
   assert.deepEqual(
     open.holds.map((hold) => hold.phrase),
-    ['matches open bill TH-88'],
+    ['matches an open bill'],
   );
-  assert.equal(
-    open.heldReason,
-    'Approve only if this is a different purchase. If it pays bill TH-88, reject it and record the payment in Pay bills.',
-  );
+  assert.equal(open.reason, 'Matches an open bill.');
   // A receipt recorded first, then the supplier's invoice (D32).
   assert.deepEqual(
     holdCodes(
@@ -80,7 +74,7 @@ test('the same purchase met as another kind of record holds', () => {
     ),
     ['possible_duplicate'],
   );
-  // An employee's reimbursement recorded, then the same receipt as a company receipt (D32).
+  // Someone's reimbursement recorded, then the same receipt as a company receipt (D32).
   assert.deepEqual(
     holdCodes(
       decide({
@@ -93,7 +87,7 @@ test('the same purchase met as another kind of record holds', () => {
     ),
     ['possible_duplicate'],
   );
-  // A contractor's reimbursement bill, then the same receipt.
+  // Another vendor's bill for the amount in the window — a reimbursement to a contractor, say.
   assert.deepEqual(
     holdCodes(
       decide({
@@ -108,7 +102,7 @@ test('the same purchase met as another kind of record holds', () => {
     ),
     ['possible_duplicate'],
   );
-  // A bill from the seller without a number, paid: the wording names no number.
+  // A bill from the seller without a number, paid.
   const unnumbered = heldOf(
     decide({
       answer: receipt(),
@@ -122,11 +116,7 @@ test('the same purchase met as another kind of record holds', () => {
   );
   assert.deepEqual(
     unnumbered.holds.map((hold) => hold.phrase),
-    ['matches a bill, already paid'],
-  );
-  assert.equal(
-    unnumbered.heldReason,
-    'Approve only if this is a different purchase. A bill from this seller for this amount is already recorded and paid.',
+    ['matches a paid bill'],
   );
   // An open bill and a paid one from the seller: the open one is named.
   const both = heldOf(
@@ -151,7 +141,7 @@ test('the same purchase met as another kind of record holds', () => {
   );
   assert.deepEqual(
     both.holds.map((hold) => hold.phrase),
-    ['matches open bill TH-90'],
+    ['matches an open bill'],
   );
   // A seller that is no vendor: nothing to match a bill of.
   assert.deepEqual(

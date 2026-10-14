@@ -6,7 +6,7 @@
  * out other totals and days outside it, so it stays `amount`; the `window` fallback worked too.
  *
  * - `amount` — D21 as the owner decided it, and the default: the bank-feed checks (a company
- *   receipt's, a card refund's, and hold 7's for a purchase someone paid personally) ask for
+ *   receipt's and a card refund's) ask for
  *   expenses of the amount (`TotalAmt =`) dated from 1 day before the document to 20 days after,
  *   at most 3; the account and `Credit` are compared in code. A bill's D32 check asks for expenses
  *   of its total from 1 day before its date to 20 days after its due date.

@@ -50,6 +50,10 @@ import {
  * for everything new); no prompt or step id repeats; and every retry policy names
  * an implemented step, counts its attempts and its wait in whole numbers, and waits
  * at least `MIN_STEP_BACKOFF_MS` before a repeat.
+ *
+ * A step that throws until its attempts are spent ends the run — unless the definition's
+ * `recover` gives a result for it, which is reported and acted on as if the step had
+ * returned it (platform ADR-0037: a flow may run without an optional connection).
  */
 export function defineAutomation(definition: AutomationDefinition): Automation {
   const { templateId, manifests, steps, result } = definition;
@@ -169,8 +173,13 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
         retryableUnder(policy),
       );
       const { attempts } = attempted;
-      if (attempted.threw) {
-        const { error } = attempted;
+      // A step that threw until its attempts were spent: the automation's own result for it, if
+      // it gives one (`recover`); otherwise the throw ends the run.
+      const outcome = attempted.threw
+        ? definition.recover?.(stepId, attempted.error, context)
+        : attempted.result;
+      if (outcome === undefined) {
+        const error = attempted.threw ? attempted.error : undefined;
         // The timeline names the step the run died in. The summary is fixed text:
         // an error's message may embed the document, and serve() already turns the
         // message into the run's bounded failure reason. A model refusal the
@@ -191,7 +200,6 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
           .catch(() => undefined);
         throw error;
       }
-      const outcome = attempted.result;
       switch (outcome.outcome) {
         case 'skipped':
           continue;
@@ -229,11 +237,12 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       }
     }
 
-    const { output, summary } = result(state, request);
+    const { output, summary, details } = result(state, request);
     return {
       outcome: 'success',
       ...(output === undefined ? {} : { output }),
       ...(summary === undefined ? {} : { summary }),
+      ...(details === undefined ? {} : { details }),
     };
   }
 

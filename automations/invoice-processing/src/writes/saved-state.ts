@@ -10,7 +10,7 @@ import type { StatementResult } from '../decide/statement.js';
 import { KEPT_TYPES, PAYMENT_METHODS, REFUND_METHODS, ROUTES } from '../document.js';
 
 /**
- * The run's state after decide, as steps 19–24 read it (the plan's §2.8): decide's saved data —
+ * The run's state after decide, as the steps after it read it (the plan's §2.8): decide's saved data —
  * the ONLY input of the writes, held or straight through — and the two keys the steps after it
  * add: `newVendor`, the vendor a bill's new name turned out to be (found while the run waited, or
  * created after the approval), and `created`, the record as QuickBooks answered it. A held state
@@ -37,7 +37,7 @@ export interface CreatedState {
   readonly txnDate: string;
   /** A bill's `DueDate` as QuickBooks set it; null on any other record. */
   readonly dueDate: string | null;
-  /** QuickBooks' `TotalAmt` in cents; null for a journal entry, whose `TotalAmt` is always 0. */
+  /** QuickBooks' `TotalAmt` in cents; null when it gave none usable. */
   readonly totalCents: number | null;
   /** The payee as QuickBooks names it on the record (`VendorRef.name`, `EntityRef.name`), if it does. */
   readonly payeeName: string | null;
@@ -49,12 +49,11 @@ const isDay = (value: unknown): value is string =>
   typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value);
 const isIds = (value: unknown) => Array.isArray(value) && value.every(isText);
 const isAccount = (value: unknown) => isObject(value) && isText(value.id) && isText(value.name);
-const isAccountOrNull = (value: unknown) => value === null || isAccount(value);
 const isCents = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAXIMUM_CENTS;
 const among = (list: readonly unknown[], value: unknown) => list.includes(value);
 
-/** What each route records: its operation, its record, the payees it may name, the account it needs. */
+/** What each route records: its operation, its record, the payees it may name, whether it is paid from an account. */
 const SHAPES: Readonly<
   Record<
     RecordRoute,
@@ -62,41 +61,33 @@ const SHAPES: Readonly<
       readonly operation: RecordPlan['operation'];
       readonly record: RecordPlan['record'];
       readonly payees: readonly Payee['kind'][];
-      readonly needs: 'paidFrom' | 'liability' | 'equity' | null;
+      readonly paidFrom: boolean;
     }
   >
 > = {
-  bill: { operation: 'bill.create', record: 'bill', payees: ['vendor', 'new_vendor'], needs: null },
-  contractor: { operation: 'bill.create', record: 'bill', payees: ['vendor'], needs: null },
+  bill: {
+    operation: 'bill.create',
+    record: 'bill',
+    payees: ['vendor', 'new_vendor'],
+    paidFrom: false,
+  },
   company_receipt: {
     operation: 'purchase.create',
     record: 'expense',
     payees: ['vendor', 'none'],
-    needs: 'paidFrom',
+    paidFrom: true,
   },
   card_refund: {
     operation: 'purchase.create',
     record: 'card_refund',
     payees: ['vendor', 'none'],
-    needs: 'paidFrom',
+    paidFrom: true,
   },
   vendor_credit: {
     operation: 'vendorCredit.create',
     record: 'vendor_credit',
     payees: ['vendor'],
-    needs: null,
-  },
-  employee: {
-    operation: 'journalEntry.create',
-    record: 'journal_entry',
-    payees: ['employee'],
-    needs: 'liability',
-  },
-  owner: {
-    operation: 'journalEntry.create',
-    record: 'journal_entry',
-    payees: ['owner'],
-    needs: 'equity',
+    paidFrom: false,
   },
 };
 
@@ -104,7 +95,6 @@ function isPayee(value: unknown, kinds: readonly Payee['kind'][]): boolean {
   if (!isObject(value) || !among(kinds, value.kind)) return false;
   switch (value.kind) {
     case 'vendor':
-    case 'employee':
       return isText(value.id) && isText(value.name);
     case 'new_vendor':
       return (
@@ -112,8 +102,6 @@ function isPayee(value: unknown, kinds: readonly Payee['kind'][]): boolean {
         isText(value.printedName) &&
         among(['customer', 'employee', null], value.nameInUseBy)
       );
-    case 'owner':
-      return isText(value.name);
     default:
       return true;
   }
@@ -136,10 +124,7 @@ function isPlan(value: unknown, route: RecordRoute): boolean {
     value.printStatus === (check ? 'NotSet' : null) &&
     isAccount(accounts.category) &&
     typeof (accounts.category as JsonObject).why === 'string' &&
-    isAccountOrNull(accounts.paidFrom) &&
-    isAccountOrNull(accounts.liability) &&
-    isAccountOrNull(accounts.equity) &&
-    (shape.needs === null || accounts[shape.needs] !== null) &&
+    (shape.paidFrom ? isAccount(accounts.paidFrom) : accounts.paidFrom === null) &&
     isPayee(value.payee, shape.payees) &&
     isCents(value.amountCents) &&
     isDay(value.date) &&
@@ -170,20 +155,25 @@ function isRecheck(value: unknown, saved: JsonObject): boolean {
     isCents(facts.amountCents) &&
     isDay(facts.date) &&
     isTextOrNull(facts.vendorId) &&
-    isTextOrNull(facts.accountId) &&
-    isTextOrNull(facts.employeeId)
+    isTextOrNull(facts.accountId)
   );
 }
 
-function isPayer(value: unknown, route: RecordRoute): boolean {
-  const personal = route === 'employee' || route === 'owner' || route === 'contractor';
-  if (!personal) return value === null;
+/** The document as read, kept for the saved details (`src/details.ts`). */
+function isRead(value: unknown): boolean {
   return (
     isObject(value) &&
-    value.route === route &&
-    isText(value.id) &&
-    isText(value.name) &&
-    among([true, false, null], value.vendor1099)
+    among(KEPT_TYPES, value.documentType) &&
+    isText(value.seller) &&
+    isTextOrNull(value.number) &&
+    (value.date === null || isDay(value.date)) &&
+    (value.dueDate === null || isDay(value.dueDate)) &&
+    isTextOrNull(value.currency) &&
+    (value.totalCents === null || Number.isSafeInteger(value.totalCents)) &&
+    (value.taxCents === null || Number.isSafeInteger(value.taxCents)) &&
+    typeof value.spendType === 'string' &&
+    among(PAYMENT_METHODS, value.paymentMethod) &&
+    isTextOrNull(value.cardLast4)
   );
 }
 
@@ -194,7 +184,7 @@ function isPayer(value: unknown, route: RecordRoute): boolean {
 export function readSaved(state: JsonObject): SavedState | undefined {
   const { plan, duplicates, company, preferences, modelServed, receipt, credit } = state;
   const route = state.route;
-  if (state.v !== 1 || route === 'statement' || !among(ROUTES, route)) return undefined;
+  if (state.v !== 2 || route === 'statement' || !among(ROUTES, route)) return undefined;
   const recorded = route as RecordRoute;
   const ok =
     among(KEPT_TYPES, state.documentType) &&
@@ -202,7 +192,7 @@ export function readSaved(state: JsonObject): SavedState | undefined {
     isText(state.seller) &&
     isTextOrNull(state.documentNumber) &&
     isPlan(plan, recorded) &&
-    isPayer(state.payer, recorded) &&
+    isRead(state.read) &&
     (receipt === null || (isObject(receipt) && among(PAYMENT_METHODS, receipt.paymentMethod))) &&
     (credit === null || (isObject(credit) && among(REFUND_METHODS, credit.refundMethod))) &&
     isObject(duplicates) &&
@@ -232,7 +222,7 @@ export function readSaved(state: JsonObject): SavedState | undefined {
 /** decide's statement comparison, as its step left the state: a statement creates nothing. */
 export function isStatementComparison(state: JsonObject): boolean {
   return (
-    state.v === 1 &&
+    state.v === 2 &&
     state.route === 'statement' &&
     Array.isArray(state.listedNotInQuickBooks) &&
     isObject(state.vendor)
