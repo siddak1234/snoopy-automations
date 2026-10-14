@@ -75,7 +75,6 @@ const BASE = [
   'total',
 ];
 const PARTS = ['subtotal', 'tax', 'shipping', 'discount', 'lineItems'];
-const PAID_PERSONALLY = [...BASE, ...PARTS, 'amountDue', 'tip', 'cashBackPrinted', 'cardLast4'];
 
 /**
  * The fields each route uses — an unclear field holds only where it can change the record. A
@@ -95,9 +94,6 @@ export const RELEVANT_FIELDS: Readonly<Record<Route, ReadonlySet<string>>> = {
   card_refund: new Set([...BASE, ...PARTS, 'refundMethod', 'originalInvoiceNumber', 'cardLast4']),
   vendor_credit: new Set([...BASE, ...PARTS, 'refundMethod', 'originalInvoiceNumber']),
   statement: new Set(),
-  employee: new Set(PAID_PERSONALLY),
-  owner: new Set(PAID_PERSONALLY),
-  contractor: new Set(PAID_PERSONALLY),
 };
 
 const WRITTEN = [
@@ -107,13 +103,6 @@ const WRITTEN = [
   'documentDate',
   'currency',
   'total',
-];
-const PERSONALLY: readonly ComparedField[] = [
-  ...(WRITTEN as ComparedField[]),
-  'amountDue',
-  'cardLast4',
-  'cashBackPrinted',
-  'spendType',
 ];
 
 /**
@@ -133,9 +122,6 @@ export const COMPARED_FIELDS: Readonly<Record<Route, readonly ComparedField[]>> 
   card_refund: [...(WRITTEN as ComparedField[]), 'cardLast4', 'refundMethod', 'spendType'],
   vendor_credit: [...(WRITTEN as ComparedField[]), 'refundMethod', 'spendType'],
   statement: ['documentType'],
-  employee: PERSONALLY,
-  owner: PERSONALLY,
-  contractor: PERSONALLY,
 };
 
 /** Up to two field names, then "+N": "total, date +2". */

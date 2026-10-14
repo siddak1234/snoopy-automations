@@ -18,8 +18,12 @@ import { completion, pdf, secondAnswer } from './fixtures.js';
 /**
  * `verify-read` alone, on the SDK's runner: a first step seeds the state `check-document` leaves —
  * the first read cleaned into `document`, the model that served it — then `verify-read` runs, and
- * the result hands the whole state back.
+ * the result hands the whole state back. By default the second read is due: QuickBooks chosen and
+ * an approval limit of 0, so any amount is over it (decision 3).
  */
+
+/** The settings that make a second read due whatever the document: over a limit of 0. */
+export const DUE: JsonObject = { vendor: 'quickbooks', holdAboveAmount: 0 };
 
 /** One second-read attempt's answer. */
 export type Answering = (
@@ -38,6 +42,8 @@ export interface VerifySetUp {
   /** Changes to the seeded state. */
   readonly state?: JsonObject;
   readonly deadlineInMs?: number;
+  /** The flow's settings; `DUE` by default. */
+  readonly config?: JsonObject;
 }
 
 export function verifyWorld(setUp: VerifySetUp) {
@@ -53,7 +59,7 @@ export function verifyWorld(setUp: VerifySetUp) {
     manifests: [
       {
         templateId: TEMPLATE_ID,
-        version: 1,
+        version: 2,
         requiredCapabilities: ['document-extraction'],
         pipeline: [{ id: 'seed' }, { id: 'verify-read' }],
       },
@@ -72,7 +78,8 @@ export function verifyWorld(setUp: VerifySetUp) {
     ((_call, model) => Promise.resolve(completion(model, secondAnswer(setUp.first))));
   const request: InvokeRequest = invokeFixture({
     templateId: TEMPLATE_ID,
-    templateVersion: 1,
+    templateVersion: 2,
+    config: setUp.config ?? DUE,
     deadline: new Date(Date.now() + (setUp.deadlineInMs ?? 900_000)).toISOString(),
   });
   return {

@@ -4,18 +4,19 @@ import { test } from 'node:test';
 import type { JsonObject } from '@autom8x/automation-sdk';
 import { NO_ANSWER, refusalFixture, type ProblemInput } from '@autom8x/automation-sdk/testing';
 
-import { CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
 import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
 import { MODELS } from '../src/steps/extract.js';
-import { VERIFY_INPUT, VERIFY_READ_SENTENCES } from '../src/steps/verify-read.js';
-import { bill, paidBy, receipt, statement } from './check-world.js';
+import { VERIFY_INPUT } from '../src/steps/verify-read.js';
+import { RUN_FAILS } from '../src/words.js';
+import { bill, receipt, statement } from './check-world.js';
 import { FILE_ID, completion, secondAnswer } from './fixtures.js';
 import { verifyWorld, type Answering } from './verify-read-world.js';
 
 /**
- * `verify-read`, the second read: its one request — blind, by another maker, never without the
- * exclusion — what it keeps when the reads agree or part, the second check not made (the run
- * holds at decide), and the faults that fail.
+ * `verify-read`, the second read, when it is due (decision 3; when, `second-read.test.ts`): its one
+ * request — blind, by another maker, never without the exclusion — what it keeps when the reads
+ * agree or part, the second read not made (the run holds at decide), and the faults that fail.
+ * Lines (§3.E): `Second read matches`, `Second read differs: …`, `Second read not made`.
  */
 
 async function stateOf(world: ReturnType<typeof verifyWorld>): Promise<JsonObject> {
@@ -25,10 +26,7 @@ async function stateOf(world: ReturnType<typeof verifyWorld>): Promise<JsonObjec
 }
 
 test("one request: verify-document v1, the fixed task, MODELS less the first read's maker, the run's file — nothing of read 1", async () => {
-  const world = verifyWorld({
-    first: receipt(),
-    options: paidBy('employee', { paidFrom: null }),
-  });
+  const world = verifyWorld({ first: receipt() });
   await stateOf(world);
   assert.deepEqual(world.platform.modelCalls, [
     {
@@ -42,9 +40,9 @@ test("one request: verify-document v1, the fixed task, MODELS less the first rea
     },
   ]);
   assert.deepEqual(VERIFY_INPUT, { task: 'Extract the fields of the attached document.' });
-  // Blind: no value of the first read, and never "Who paid".
+  // Blind: no value of the first read.
   const sent = JSON.stringify(world.platform.modelCalls);
-  for (const value of ['Tidewell', '55120', '60.63', 'Robin Example', '2026-09-27']) {
+  for (const value of ['Tidewell', '55120', '60.63', '2026-09-27']) {
     assert.ok(!sent.includes(value), value);
   }
   // The platform served another maker's model.
@@ -61,7 +59,7 @@ test("a first read served by Google's model leaves Google out; an alias counts a
   assert.deepEqual(alias.platform.modelCalls[0]?.excludeModelAuthors, ['anthropic']);
 });
 
-test('the reads agree: the second check is kept, the first read stands, the line counts the fields', async () => {
+test('the reads agree: the second read is kept, the first stands, the line says they match', async () => {
   const world = verifyWorld({ first: bill() });
   const state = await stateOf(world);
   assert.deepEqual(state.verification, {
@@ -83,10 +81,7 @@ test('the reads agree: the second check is kept, the first read stands, the line
     spendTypeDisputed: false,
   });
   assert.deepEqual(state.document, world.seeded.document);
-  assert.equal(
-    world.line()?.summary,
-    'Read again by google/gemini-3.1-flash-lite: the 9 fields compared agree',
-  );
+  assert.equal(world.line()?.summary, 'Second read matches');
   assert.deepEqual([world.platform.providerCalls, world.platform.mails], [[], []]);
 });
 
@@ -106,10 +101,7 @@ test('the reads part: both values kept for decide, the first read written unless
     { field: 'documentDate', first: '2026-09-14', second: '2026-09-15' },
   ]);
   assert.equal((state.verification as JsonObject).spendTypeDisputed, true);
-  assert.equal(
-    parted.line()?.summary,
-    'Read again by google/gemini-3.1-flash-lite: the reads differ on date; spend type disputed, the default category used',
-  );
+  assert.equal(parted.line()?.summary, 'Second read differs: date');
   // The first read misread its total; the second's adds up, is recorded, and the arithmetic re-run.
   const misread = bill({ total: 431.34 });
   const picked = verifyWorld({
@@ -121,33 +113,53 @@ test('the reads part: both values kept for decide, the first read written unless
   const document = pickedState.document as JsonObject;
   assert.deepEqual([document.totalCents, document.findings], [41334, []]);
   assert.equal((pickedState.verification as JsonObject).totalPicked, 'second');
-  assert.equal(
-    picked.line()?.summary,
-    "Read again by google/gemini-3.1-flash-lite: the reads differ on total; the second read's total adds up and is kept",
-  );
-  // Its re-check meets a fail rule: the run ends with check-document's sentence.
+  assert.equal(picked.line()?.summary, 'Second read differs: total');
+  // Its re-check meets a rule QuickBooks cannot record it under: not recorded, the details saved.
   const due = bill({ total: 400, amountDue: 400, subtotal: 370.75 });
-  const failing = verifyWorld({
+  const stopped = verifyWorld({
     first: due,
     answer: (_call, model) =>
       Promise.resolve(completion(model, secondAnswer(due, { total: 413.34 }))),
   });
-  assert.deepEqual(await failing.run(), {
-    outcome: 'failed',
-    failureReason: CHECK_DOCUMENT_SENTENCES.C15,
+  const stoppedState = await stateOf(stopped);
+  assert.deepEqual(stoppedState.quickBooks, { notRecorded: 'part may already be paid' });
+  assert.equal(stopped.line()?.summary, 'Not recorded in QuickBooks: part may already be paid');
+  // With "None" — the second read due on an unclear total — no recording rule is weighed.
+  const unclear = bill({
+    total: 400,
+    amountDue: 400,
+    subtotal: 370.75,
+    uncertainFields: ['total'],
   });
-  assert.equal(failing.line()?.summary, 'Checked again, not recorded (amount_due_below_charges)');
+  const none = verifyWorld({
+    first: unclear,
+    config: { vendor: 'none' },
+    answer: (_call, model) =>
+      Promise.resolve(completion(model, secondAnswer(unclear, { total: 413.34 }))),
+  });
+  const noneState = await stateOf(none);
+  assert.equal(noneState.quickBooks, undefined);
+  assert.equal((noneState.document as JsonObject).totalCents, 41334);
 });
 
 test('a statement: the type alone; the second read not seeing one is kept for decide (F7)', async () => {
-  const agreed = verifyWorld({ first: statement() });
-  await stateOf(agreed);
-  assert.equal(
-    agreed.line()?.summary,
-    'Read again by google/gemini-3.1-flash-lite: the document type agrees',
-  );
+  const agreed = verifyWorld({ first: statement(), config: { vendor: 'quickbooks' }, state: {} });
+  // A statement's amount is no record's: a second read is due only on a problem, and it has none.
+  assert.equal((await agreed.run()).outcome, 'success');
+  assert.equal(agreed.line(), undefined, 'not due: skipped, no line');
+  const forced = verifyWorld({
+    first: statement(),
+    state: {
+      document: { ...(agreed.seeded.document as JsonObject), findings: ['amounts_mismatch'] },
+    },
+  });
+  await stateOf(forced);
+  assert.equal(forced.line()?.summary, 'Second read matches');
   const parted = verifyWorld({
     first: statement(),
+    state: {
+      document: { ...(agreed.seeded.document as JsonObject), findings: ['amounts_mismatch'] },
+    },
     answer: (_call, model) =>
       Promise.resolve(
         completion(model, secondAnswer(statement(), { documentType: 'bill', total: 96.4 })),
@@ -164,15 +176,12 @@ async function notMade(world: ReturnType<typeof verifyWorld>) {
   const state = await stateOf(world);
   const verification = state.verification as JsonObject;
   assert.equal(verification.status, 'not_made');
-  assert.equal(
-    world.line()?.summary,
-    `A second check could not be made (${String(verification.reason)})`,
-  );
+  assert.equal(world.line()?.summary, 'Second read not made', 'its reason in the state alone');
   assert.deepEqual(state.document, world.seeded.document, 'the first read stands');
   return verification.reason;
 }
 
-test('never without the exclusion: no maker to leave out, or one outside the rule, is a second check not made — and no call', async () => {
+test('never without the exclusion: no maker to leave out, or one outside the rule, is a second read not made — and no call', async () => {
   for (const firstModel of [
     'test-model',
     'Anthropic/claude-haiku-4.5',
@@ -240,24 +249,21 @@ test('served by the maker it left out, which the platform never does: not made, 
 
 const refusing = (problem: ProblemInput) => () => Promise.reject(refusalFixture('model', problem));
 
-test("out of time, and the platform's own faults, fail the run with a fixed sentence", async () => {
+test("out of time, and the platform's own faults, fail the run with one of the spec's sentences", async () => {
   const late = verifyWorld({ first: bill(), deadlineInMs: 200_000 });
   assert.deepEqual(await late.run(), {
     outcome: 'failed',
-    failureReason: VERIFY_READ_SENTENCES.out_of_time,
+    failureReason: RUN_FAILS.ai_unavailable,
   });
   assert.deepEqual(late.platform.modelCalls, [], 'no call bought past the 260 s guard');
   const thrown: [ProblemInput, string][] = [
     [
       { status: 403, code: 'FORBIDDEN', detail: 'late', details: { reason: 'deadline_exceeded' } },
-      VERIFY_READ_SENTENCES.out_of_time,
+      RUN_FAILS.ai_unavailable,
     ],
-    [{ status: 404, code: 'NOT_FOUND', detail: 'gone' }, VERIFY_READ_SENTENCES.file_gone],
-    [
-      { status: 429, code: 'TOO_MANY_REQUESTS', detail: 'busy' },
-      'Autom8x is busy; run it again in a few minutes.',
-    ],
-    [{ status: 503, code: 'NOT_CONFIGURED', detail: 'off' }, VERIFY_READ_SENTENCES.platform_fault],
+    [{ status: 404, code: 'NOT_FOUND', detail: 'gone' }, RUN_FAILS.file],
+    [{ status: 429, code: 'TOO_MANY_REQUESTS', detail: 'busy' }, RUN_FAILS.ai_busy],
+    [{ status: 503, code: 'NOT_CONFIGURED', detail: 'off' }, RUN_FAILS.ai_unavailable],
     [
       {
         status: 502,
@@ -265,7 +271,7 @@ test("out of time, and the platform's own faults, fail the run with a fixed sent
         detail: 'key',
         details: { upstreamStatus: '401' },
       },
-      VERIFY_READ_SENTENCES.model_account_refused,
+      RUN_FAILS.ai_unavailable,
     ],
     [
       {
@@ -274,7 +280,7 @@ test("out of time, and the platform's own faults, fail the run with a fixed sent
         detail: 'credit',
         details: { upstreamStatus: '402' },
       },
-      VERIFY_READ_SENTENCES.model_account_refused,
+      RUN_FAILS.ai_unavailable,
     ],
     [
       {
@@ -283,7 +289,7 @@ test("out of time, and the platform's own faults, fail the run with a fixed sent
         detail: 'no such field',
         details: { field: 'excludeModelAuthors' },
       },
-      VERIFY_READ_SENTENCES.platform_fault,
+      RUN_FAILS.ai_unavailable,
     ],
     [
       {
@@ -292,11 +298,11 @@ test("out of time, and the platform's own faults, fail the run with a fixed sent
         detail: 'store',
         details: { reason: 'file_integrity' },
       },
-      VERIFY_READ_SENTENCES.platform_fault,
+      RUN_FAILS.ai_unavailable,
     ],
     [
       { status: 422, code: 'BAD_REQUEST', detail: 'pdf', details: { reason: 'file_encrypted' } },
-      VERIFY_READ_SENTENCES.platform_fault,
+      RUN_FAILS.ai_unavailable,
     ],
   ];
   for (const [problem, sentence] of thrown) {
@@ -307,26 +313,15 @@ test("out of time, and the platform's own faults, fail the run with a fixed sent
       JSON.stringify(problem),
     );
   }
-  assert.deepEqual(VERIFY_READ_SENTENCES, {
-    out_of_time:
-      'The run ran out of time before the document was checked a second time; start it again with the document.',
-    platform_fault:
-      'The document could not be checked a second time because of a fault on our side; nothing was created.',
-    file_gone: 'The document file is no longer available; start the run again with the document.',
-    model_account_refused:
-      'Model calls are unavailable on the platform right now; start the run again with the document later.',
-    state_incomplete:
-      'Bills & Receipts could not finish its checks. Run it again. Nothing was created.',
-  });
 });
 
 test('a state without what the earlier steps keep fails before any call', async () => {
   const cases: [JsonObject, string][] = [
-    [{ document: undefined }, VERIFY_READ_SENTENCES.state_incomplete],
-    [{ document: { route: 'bill' } }, VERIFY_READ_SENTENCES.state_incomplete],
-    [{ modelServed: undefined }, VERIFY_READ_SENTENCES.state_incomplete],
-    [{ file: { artifactId: 'invoice.pdf' } }, VERIFY_READ_SENTENCES.platform_fault],
-    [{ file: undefined }, VERIFY_READ_SENTENCES.platform_fault],
+    [{ document: undefined }, RUN_FAILS.other],
+    [{ document: { route: 'bill' } }, RUN_FAILS.other],
+    [{ modelServed: undefined }, RUN_FAILS.other],
+    [{ file: { artifactId: 'invoice.pdf' } }, RUN_FAILS.ai_unavailable],
+    [{ file: undefined }, RUN_FAILS.ai_unavailable],
   ];
   for (const [state, sentence] of cases) {
     const world = verifyWorld({ first: bill(), state });

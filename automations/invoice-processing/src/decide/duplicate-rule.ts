@@ -10,8 +10,8 @@ import type { DecideState, FoundRecord, JournalEntryRow } from './contract.js';
  * a record it matches that the approver never saw: one function, so the two cannot disagree (the
  * design's open question on the re-check, its recommended answer applied: the owner's "complete
  * all" of 2026-10-11). It holds only the comparisons §2.4 lists for those two lookups, per path;
- * what is no duplicate — a receipt's bill (hold 6), a company charge (hold 7), an expense with a
- * bill's number, D32's other records — stays decide's alone.
+ * what is no duplicate — a receipt's bill (hold 6), an expense with a bill's number, D32's other
+ * records — stays decide's alone.
  */
 
 /** The bank-feed window (D21): from 1 day before the document's date to 20 days after it. */
@@ -34,12 +34,10 @@ export interface DuplicateFacts {
   /** The vendor decide matched; null for a new vendor, so any vendor's record counts (D5). */
   readonly vendorId: string | null;
   /**
-   * The account a matching record names: a company receipt's or a card refund's Paid from — none
-   * set, no expense matches — or the account a person's journal entry credits — none, any.
+   * The account a matching expense names: a company receipt's or a card refund's Paid from, as
+   * decide picked it from the company's accounts — none, no expense matches.
    */
   readonly accountId: string | null;
-  /** The employee a matching journal entry names; null for anyone (an owner, or no Id). */
-  readonly employeeId: string | null;
 }
 
 const fold = (value: string | null) => cleanText(value)?.toLowerCase() ?? null;
@@ -58,41 +56,28 @@ export function inFeedWindow(date: string, around: string): boolean {
   return isWithin(date, addDays(around, -FEED_WINDOW.before), addDays(around, FEED_WINDOW.after));
 }
 
-/** A journal entry with a credit line of this amount, to this account and this person when named. */
-export function creditsAmount(
-  entry: JournalEntryRow,
-  amountCents: number,
-  accountId: string | null = null,
-  employeeId: string | null = null,
-): boolean {
+/** A journal entry with a credit line of this amount: someone's reimbursement for the purchase (D32). */
+export function creditsAmount(entry: JournalEntryRow, amountCents: number): boolean {
   return entry.lines.some(
-    (line) =>
-      line.postingType === 'Credit' &&
-      line.amountCents === amountCents &&
-      (accountId === null || line.accountId === accountId) &&
-      (employeeId === null || (line.entity?.type === 'Employee' && line.entity.id === employeeId)),
+    (line) => line.postingType === 'Credit' && line.amountCents === amountCents,
   );
 }
 
 /** decide's facts for the rule, from the state it reads; a statement has none. */
 export function duplicateFactsOf(state: DecideState): DuplicateFacts {
-  const { document, vendor, accounts, payer } = state;
+  const { document, vendor, paidFrom } = state;
   const route = document.route;
   if (route === 'statement') throw new Error('a statement is compared, never recorded');
-  const person = route === 'employee' || route === 'owner';
   return {
     route,
     number: document.number,
     amountCents: document.amountCents ?? 0,
     date: document.date ?? '',
-    vendorId: vendor?.status === 'matched' ? vendor.id : null,
+    vendorId: vendor.status === 'matched' ? vendor.id : null,
     accountId:
-      route === 'company_receipt' || route === 'card_refund'
-        ? (accounts.paidFrom?.id ?? null)
-        : person
-          ? (payer?.account?.id ?? null)
-          : null,
-    employeeId: route === 'employee' ? (payer?.employeeId ?? null) : null,
+      (route === 'company_receipt' || route === 'card_refund') && paidFrom?.kind !== 'none'
+        ? (paidFrom?.account.id ?? null)
+        : null,
   };
 }
 
@@ -136,21 +121,6 @@ export function isDuplicate(
         record.kind === 'vendor_credit' &&
         record.vendorId === facts.vendorId &&
         (byNumber ? sameNumber(record, facts.number) : sameTotalAndDate(record))
-      );
-    case 'contractor':
-      if (record.kind !== 'bill') return false;
-      // A bill document's number, any vendor's; a bill to them for this total and date.
-      return byNumber
-        ? sameNumber(record, facts.number)
-        : record.vendorId === facts.vendorId && sameTotalAndDate(record);
-    case 'employee':
-    case 'owner':
-      if (byNumber) return record.kind === 'bill' && sameNumber(record, facts.number);
-      // An entry on that date owing the same person the same amount: lines compared, TotalAmt is 0.
-      return (
-        record.kind === 'journal_entry' &&
-        record.txnDate === facts.date &&
-        creditsAmount(record, facts.amountCents, facts.accountId, facts.employeeId)
       );
   }
 }

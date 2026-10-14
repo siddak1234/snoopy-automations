@@ -1,7 +1,7 @@
 import { CallbackRefusedError, type ArtifactReference, type Step } from '@autom8x/automation-sdk';
 
 import { DECLARED_KINDS, FILE_LIMITS, measurementsOf, type FileMeasurements } from '../file.js';
-import { failedWith, grouped } from '../outcome.js';
+import { runFails } from '../outcome.js';
 import type { FileState } from '../state.js';
 
 /**
@@ -16,25 +16,26 @@ import type { FileState } from '../state.js';
  * wrapper gives its sentence when the attempts are spent.
  */
 
-export const RECEIVE_SENTENCES = {
-  no_file: 'No document file was given. Start the run again with the document.',
-  file_gone: 'The document file is no longer available. Upload it again and start a new run.',
-  file_unchecked: 'This file could not be checked; upload it again.',
-  unsupported_type:
-    'The document must be a PDF, JPEG or PNG file. Upload it in one of those formats and start a new run.',
-  content_mismatch:
-    'This file is not a real PDF, JPEG or PNG. Save the document again as a PDF, or take a photo of it.',
-  file_too_large:
-    'The document file is larger than 3.5 MB. Upload a smaller file or a photo of the document.',
-  too_many_pages: 'This PDF has more than 10 pages. Upload only the document pages, at most 10.',
-  image_too_large:
-    'This image is more than 8,000 pixels on a side. Upload a smaller photo or the PDF.',
-} as const;
+/**
+ * Why a file is refused, each a code for the log. Every one but "no file" ends the run with one
+ * plain sentence (§3.F): the platform already holds an upload to the manifest's limits when it is
+ * sealed, so a refusal here is a file that could not be opened as it should.
+ */
+export const RECEIVE_REFUSALS = [
+  'no_file',
+  'file_gone',
+  'file_unchecked',
+  'unsupported_type',
+  'content_mismatch',
+  'file_too_large',
+  'too_many_pages',
+  'image_too_large',
+] as const;
 
-type Refusal = keyof typeof RECEIVE_SENTENCES;
+type Refusal = (typeof RECEIVE_REFUSALS)[number];
 
 function refused(reason: Refusal) {
-  return failedWith('Document file not accepted', reason, RECEIVE_SENTENCES[reason]);
+  return runFails(reason === 'no_file' ? 'no_file' : 'file', reason);
 }
 
 export const receive: Step = async ({ request, state, platform }) => {
@@ -73,11 +74,8 @@ export const receive: Step = async ({ request, state, platform }) => {
   return { outcome: 'ok', summary: received(measured), state: { ...state, file } };
 };
 
-/** The timeline line: the kind, the pages or the pixels, the bytes — never the filename or the link. */
+/** The timeline line (§3.E): `PDF, 2 pages` or `Photo` — never the filename or the link. */
 function received(measured: Exclude<FileMeasurements, { kind: 'other' }>): string {
-  const bytes = `${grouped(measured.sizeBytes)} bytes`;
-  if (measured.kind === 'pdf') return `Received a ${measured.pageCount}-page PDF, ${bytes}`;
-  const what = measured.kind === 'jpeg' ? 'a JPEG photo' : 'a PNG image';
-  const size = `${grouped(measured.widthPixels)} x ${grouped(measured.heightPixels)} px`;
-  return `Received ${what}, ${size}, ${bytes}`;
+  if (measured.kind !== 'pdf') return 'Photo';
+  return `PDF, ${measured.pageCount} ${measured.pageCount === 1 ? 'page' : 'pages'}`;
 }

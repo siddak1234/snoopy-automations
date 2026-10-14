@@ -2,37 +2,42 @@ import { QUICKBOOKS_NUMBER_LENGTH, addDays } from '@autom8x/automation-kit/value
 
 import { KEPT_TYPES, type KeptType } from '../document.js';
 import { hasWebAddress } from '../names.js';
-import type { AccountRef, DocumentState, Finding, PayerState } from '../state.js';
+import type { DocumentState, Finding } from '../state.js';
 import { firstReadOf } from './answers.js';
 import { amountsOf, type Amounts } from './arithmetic.js';
 import { cleanFirstRead, unclearFieldsOf, type Cleaned } from './clean.js';
 import { routeOf } from './route.js';
-import { failedRule, type CheckRule } from './rules.js';
+import { failedRule, recordingRule, type DocumentRule, type RecordingRule } from './rules.js';
 
 /**
- * `check-document`'s decision, a pure function of the first read, the company, the settings it
- * needs, who paid and the run's date (the plan's §2.1–§2.5): the fail rule that ends the run, or
- * the cleaned document, its route and what it found. No QuickBooks or model call, so a document
- * that can never be recorded fails before any lookup is spent; the same input gives the same
- * answer, so a run re-sent after a lost acknowledgement reaches it again.
+ * `check-document`'s decision, a pure function of the first read, the company and the run's date
+ * (the plan's §2.1–§2.5, as v2's §2.6 splits the rules): the rule the document cannot be used
+ * under, which ends the run on either path; or the cleaned document, its route and what it found —
+ * and, on the QuickBooks path, the first rule QuickBooks cannot record it under, if any. No
+ * QuickBooks or model call; the same input gives the same answer, so a run re-sent after a lost
+ * acknowledgement reaches it again.
  */
 
 export interface CheckInput {
   /** `state.extraction`: read 1's answer as the platform held it to its schema. */
   readonly answer: unknown;
-  readonly switchOn: boolean;
-  /** find-payer's answer; null when the company paid. */
-  readonly payer: PayerState | null;
-  readonly paidFrom: AccountRef | null;
-  readonly companyName: string;
+  /** The QuickBooks path: the recording rules are weighed. */
+  readonly quickBooks: boolean;
+  /** The company's names, for C10; null with the vendor "None". */
+  readonly companyName: string | null;
   readonly legalName: string | null;
   /** The run's UTC date, `YYYY-MM-DD`. */
   readonly today: string;
 }
 
 export type CheckOutcome =
-  | { readonly outcome: 'ok'; readonly document: DocumentState }
-  | { readonly outcome: 'failed'; readonly rule: CheckRule | 'answer_unusable' };
+  | {
+      readonly outcome: 'ok';
+      readonly document: DocumentState;
+      /** On the QuickBooks path, the first rule QuickBooks cannot record the document under. */
+      readonly recordingRule: RecordingRule | undefined;
+    }
+  | { readonly outcome: 'failed'; readonly rule: DocumentRule | 'answer_unusable' };
 
 /** A bill's due date: printed; else its date plus the printed terms; else none (as designed). */
 function dueDateOf(
@@ -106,23 +111,21 @@ export function checkFirstRead(input: CheckInput): CheckOutcome {
           cleaned.amountDueCents,
         )
       : null;
-  const rule = failedRule({
+  const context = {
     cleaned,
-    switchOn: input.switchOn,
-    payerName: input.payer?.name ?? null,
-    paidFrom: input.paidFrom,
     companyName: input.companyName,
     legalName: input.legalName,
     today: input.today,
     amounts,
-  });
+  };
+  const rule = failedRule(context);
   if (rule !== undefined) return { outcome: 'failed', rule };
-  // Past C1–C4 the type is one this automation keeps; past C8 there is a seller; past C11–C13 a
-  // record's total is whole cents and its arithmetic ran.
+  // Past C1–C4 the type is one this automation keeps; past C8 there is a seller; past C11 a
+  // record has a total — in whole cents, its arithmetic run, unless C12 or C13 would say not.
   if (type === null || cleaned.seller === null)
     return { outcome: 'failed', rule: 'answer_unusable' };
 
-  const route = routeOf(type, input.switchOn, input.payer, read.refundMethod);
+  const route = routeOf(type, read.refundMethod);
   const unclearFields = route === 'statement' ? [] : unclearFieldsOf(cleaned, route);
   const totalCents = cleaned.total.kind === 'cents' ? cleaned.total.cents : null;
   const number = cleaned.number;
@@ -170,5 +173,9 @@ export function checkFirstRead(input: CheckInput): CheckOutcome {
     findings: findingsOf(base, amounts ?? { findings: [] }, unclearFields),
     unclearFields,
   };
-  return { outcome: 'ok', document };
+  return {
+    outcome: 'ok',
+    document,
+    recordingRule: input.quickBooks ? recordingRule(context) : undefined,
+  };
 }

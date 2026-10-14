@@ -208,3 +208,28 @@ export function dateRange(field: string, from: string, to: string): QueryConditi
     { field, operator: '<=', value: to },
   ];
 }
+
+/**
+ * The account types a chart read asks for: where a purchase's cost goes (Expense, Other Expense,
+ * Cost of Goods Sold) and what pays for it (Bank, Credit Card), as Intuit spells each.
+ */
+export const CHART_ACCOUNT_TYPES = [
+  'Bank',
+  'Credit Card',
+  'Expense',
+  'Other Expense',
+  'Cost of Goods Sold',
+] as const;
+
+/**
+ * The company's chart of accounts as an automation picks from it, in ONE query — every active
+ * account of `CHART_ACCOUNT_TYPES`, at most Intuit's 1,000 rows —
+ * `SELECT * FROM Account WHERE AccountType IN ('Bank', 'Credit Card', 'Expense', 'Other Expense', 'Cost of Goods Sold') AND Active = true MAXRESULTS 1000`
+ * (Invoice Processing v2, the platform's BUILD-PLAN 25.4.19: accounts are read from QuickBooks,
+ * never typed into a setting). Whether Intuit takes IN on `AccountType`, and how large the answer
+ * of a real company is against Connections' 192 KiB, is sandbox read S13; until it is made, this
+ * text is the spec's.
+ */
+export function chartQuery(): string {
+  return `SELECT * FROM Account WHERE AccountType IN ${listOf(CHART_ACCOUNT_TYPES)} AND Active = true MAXRESULTS ${MAXIMUM_RESULTS}`;
+}

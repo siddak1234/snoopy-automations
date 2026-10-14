@@ -4,7 +4,7 @@
   "display": {
     "name": "Example automation",
     "description": "Reads the document a run was given, extracts its fields with a model, holds large amounts for approval, records the result and emails the outcome.",
-    "category": "Examples",
+    "category": "Operations",
     "icon": "Sparkles"
   },
   "pricing": {

@@ -35,8 +35,17 @@ export type {
   StepOutcome,
   StepReport,
 } from './contract.js';
-export { isManifest, readManifest, readManifests } from './manifest.js';
-export type { Manifest } from './manifest.js';
+export { CONNECTION_NONE, isManifest, readManifest, readManifests } from './manifest.js';
+export type {
+  Manifest,
+  ManifestConnection,
+  ManifestSetupField,
+  ManifestStep,
+  ManifestStepGroup,
+  SetupControl,
+} from './manifest.js';
+export { RUN_DETAIL_LIMITS, boundedDetails } from './details.js';
+export type { RunDetail } from './details.js';
 export { isUnanswered, isUnsent } from './marks.js';
 export { artifactIdProblem, excludeModelAuthorsProblem, modelAuthor } from './model-request.js';
 export { DEFAULT_MODEL_TIMEOUT_MS, PlatformClient, boundedResult, clientFor } from './platform.js';

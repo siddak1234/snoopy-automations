@@ -4,9 +4,19 @@ import { test } from 'node:test';
 import { FAULT_MARKER, QuickBooksSimulator, faultAnswer } from '@autom8x/automation-kit/testing';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
+import { nameWords } from '../src/words.js';
 import { callsOf, everythingSaid, lines, setUp } from './fixtures.js';
 
-/** `read-company`: one `companyInfo.get`; a US company continues with its names and payroll flag kept. */
+/**
+ * `read-company`: one `companyInfo.get`, on the QuickBooks path; a US company continues with its
+ * names kept. Anything that keeps QuickBooks from recording the document — another country, no
+ * usable answer — is "not recorded in QuickBooks": the run goes on to read the document and save its
+ * details, every later QuickBooks step skipped (decision 6). Line (§3.E): `QuickBooks: {company}`.
+ */
+
+/** The run's state through verify-read, and whether QuickBooks will record. */
+const quickBooksOf = (result: Awaited<ReturnType<ReturnType<typeof setUp>['run']>>) =>
+  result.outcome === 'success' ? result.output?.quickBooks : result;
 
 async function readWith(edit: (info: Record<string, unknown>) => void = () => undefined) {
   const world = setUp();
@@ -18,13 +28,12 @@ async function readWith(edit: (info: Record<string, unknown>) => void = () => un
 
 test('a US company continues: its names are kept and the line names it', async () => {
   const { result, line, platform, request } = await readWith();
-  assert.deepEqual(line, ['read-company', 'ok', 'QuickBooks company: Sample Bakery (US)']);
+  assert.deepEqual(line, ['read-company', 'ok', 'QuickBooks: Sample Bakery']);
   assert.ok(result.outcome === 'success');
   assert.deepEqual(result.output?.company, {
     name: 'Sample Bakery',
     legalName: 'Sample Bakery LLC',
     country: 'USA',
-    payrollFeature: false,
     createdAt: '2024-01-02T09:00:00-08:00',
   });
   assert.deepEqual(callsOf(platform, request, 'read-company'), [
@@ -40,20 +49,18 @@ test("'US', 'us ', 'United States' and 'united states of america' continue, kept
   }
 });
 
-test('another country fails as not US; a missing or blank one as unknown', async () => {
+test('another country: only US companies work; a missing or blank one, QuickBooks did not answer usably — the run goes on without QuickBooks', async () => {
   for (const country of ['CA', 'GB', 'USA2', 'U.S.A.']) {
     const { result, line, platform } = await readWith((info) => (info.Country = country));
-    assert.deepEqual(result, {
-      outcome: 'failed',
-      failureReason:
-        'Bills & Receipts works only with US QuickBooks companies, and this company is set up for another country.',
-    });
+    assert.deepEqual(quickBooksOf(result), { notRecorded: 'only US companies work' });
     assert.deepEqual(line, [
       'read-company',
       'failed',
-      'QuickBooks company not checked (company_not_us)',
+      'Not recorded in QuickBooks: only US companies work',
     ]);
-    assert.equal(platform.steps.length, 2, 'nothing after read-company runs');
+    const reported = platform.steps.map((step) => step.stepId);
+    assert.ok(!reported.includes('read-preferences') && !reported.includes('find-accounts'));
+    assert.ok(reported.includes('extract'), 'the document is still read');
   }
   for (const edit of [
     (info: Record<string, unknown>) => delete info.Country,
@@ -62,31 +69,9 @@ test('another country fails as not US; a missing or blank one as unknown', async
     (info: Record<string, unknown>) => (info.Country = null),
   ]) {
     const { result, line } = await readWith(edit);
-    assert.deepEqual(result, {
-      outcome: 'failed',
-      failureReason:
-        'QuickBooks did not say which country this company is in, so Bills & Receipts cannot use it. Nothing was created.',
-    });
-    assert.equal(line?.[2], 'QuickBooks company not checked (company_country_unknown)');
+    assert.deepEqual(quickBooksOf(result), { notRecorded: "QuickBooks didn't answer" });
+    assert.equal(line?.[2], "Not recorded in QuickBooks: QuickBooks didn't answer");
   }
-});
-
-test("PayrollFeature is kept as Intuit's sample gives it: 'true' or 'false', and null for anything else", async () => {
-  const payroll = async (value: unknown) => {
-    const { result } = await readWith((info) => {
-      info.NameValue = value === undefined ? [] : [{ Name: 'PayrollFeature', Value: value }];
-    });
-    assert.ok(result.outcome === 'success');
-    return (result.output?.company as { payrollFeature: unknown }).payrollFeature;
-  };
-  assert.equal(await payroll('true'), true);
-  assert.equal(await payroll('false'), false);
-  for (const value of [undefined, 'TRUE', true, 'yes', '']) {
-    assert.equal(await payroll(value), null, String(value));
-  }
-  const { result } = await readWith((info) => delete info.NameValue);
-  assert.ok(result.outcome === 'success');
-  assert.equal((result.output?.company as { payrollFeature: unknown }).payrollFeature, null);
 });
 
 test("the company file's creation time is kept from the same answer, for confirm-company; null when QuickBooks does not give one", async () => {
@@ -122,7 +107,7 @@ test('a missing or blank LegalName is kept as null', async () => {
   }
 });
 
-test('an answer without a CompanyInfo or a CompanyName, or a body that was not JSON, is unexpected', async () => {
+test('an answer without a CompanyInfo or a CompanyName, or a body that was not JSON, is QuickBooks not answering usably', async () => {
   const bodies = [
     { time: 't' },
     { CompanyInfo: [] },
@@ -135,37 +120,34 @@ test('an answer without a CompanyInfo or a CompanyName, or a body that was not J
     const world = setUp();
     world.simulator.script('companyInfo.get', [{ status: 200, body }]);
     const result = await world.run();
-    assert.deepEqual(result, {
-      outcome: 'failed',
-      failureReason:
-        'QuickBooks answered in an unexpected way. Run it again; if it repeats, reconnect QuickBooks.',
-    });
+    assert.deepEqual(quickBooksOf(result), { notRecorded: "QuickBooks didn't answer" });
     assert.equal(
       lines(world.platform)[1]?.[2],
-      'QuickBooks company not checked (unexpected_answer)',
+      "Not recorded in QuickBooks: QuickBooks didn't answer",
     );
   }
 });
 
-test('a Fault inside a 200 fails by its number alone; its text appears nowhere', async () => {
+test('a Fault inside a 200: QuickBooks did not answer usably; its text, and its number, appear nowhere a person reads', async () => {
   const world = setUp();
   world.simulator.script('companyInfo.get', [
     { status: 200, body: faultAnswer('150', 'SystemFault') },
   ]);
   const result = await world.run();
-  assert.deepEqual(result, {
-    outcome: 'failed',
-    failureReason:
-      'QuickBooks answered with error 150 while reading the company. Check QuickBooks, then run it again.',
-  });
-  assert.equal(lines(world.platform)[1]?.[2], 'QuickBooks company not checked (qb_error 150)');
+  assert.deepEqual(quickBooksOf(result), { notRecorded: "QuickBooks didn't answer" });
+  assert.equal(
+    lines(world.platform)[1]?.[2],
+    "Not recorded in QuickBooks: QuickBooks didn't answer",
+  );
   assert.ok(!everythingSaid(world.platform, result).includes(FAULT_MARKER));
+  assert.ok(!JSON.stringify(world.platform.steps).includes('150'), 'no code in a line');
 });
 
-test('a long company name is cut to 120 characters in the line', async () => {
+test('a long company name is shortened to 60 characters in the line', async () => {
   const name = `${'Sample '.repeat(30)}Bakery`;
   const { line, result } = await readWith((info) => (info.CompanyName = name));
-  assert.equal(line?.[2], `QuickBooks company: ${name.slice(0, 120).trimEnd()} (US)`);
+  assert.equal(line?.[2], `QuickBooks: ${nameWords(name)}`);
+  assert.ok((line?.[2] ?? '').length <= 'QuickBooks: '.length + 60);
   assert.ok(result.outcome === 'success');
   assert.equal((result.output?.company as { name: string }).name, name, 'kept whole in the state');
 });
@@ -188,11 +170,7 @@ test('every call is the one request under the step key; a replayed answer gives 
   simulator.company.companyInfo.Country = 'CA';
   const again = setUp({ simulator, runId: first.request.runId });
   assert.equal((await again.run()).outcome, 'success');
-  assert.deepEqual(lines(again.platform)[1], [
-    'read-company',
-    'ok',
-    'QuickBooks company: Sample Bakery (US)',
-  ]);
+  assert.deepEqual(lines(again.platform)[1], ['read-company', 'ok', 'QuickBooks: Sample Bakery']);
   assert.ok(
     simulator.calls.some(
       (call) => call.operation === 'companyInfo.get' && call.outcome === 'replayed',

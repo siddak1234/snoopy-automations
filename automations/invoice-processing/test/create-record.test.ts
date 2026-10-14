@@ -11,6 +11,7 @@ import {
 import {
   defineAutomation,
   type JsonObject,
+  type RunResult,
   type StepPlatform,
   type StepReport,
 } from '@autom8x/automation-sdk';
@@ -24,37 +25,31 @@ import {
 import { TEMPLATE_ID } from '../src/automation.js';
 import { noteThrows, withFixedSentences } from '../src/failures.js';
 import { createRecord } from '../src/steps/create-record.js';
-import { NOUNS } from '../src/writes/lines.js';
-import {
-  AFTER_APPROVAL_SENTENCES,
-  INTUIT_CODES,
-  intuitSentence,
-  recordedUnfinished,
-} from '../src/writes/sentences.js';
+import { RESULTS, RUN_FAILS } from '../src/words.js';
 import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import { decide } from './decide-world.js';
 import { PAID, type RouteRun } from './lookups-world.js';
 import { approve, firstRun, noTimeToRepeat, writesOf, type Run } from './writes-world.js';
 
 /**
- * create-record's failures (the plan's §5 "Error mapping"; ip-review design-after-approval-writes-
- * notify-tests.json steps[4]): each Intuit code in its own fixed sentence — 6200 beside 6210, 2290,
- * 2300, 6430 added — any other in the kit's; a write QuickBooks may have made (its own 429 or 5xx,
- * Intuit's 600, an answer lost once the SDK's repeat cannot wait) "did not confirm"; one request a
- * call, repeated only by the step's retry (test/write-retry.test.ts); Intuit's words nowhere; and
- * the vendor this run added named in every sentence after it.
+ * create-record's failures (the plan's §5 "Error mapping", as decision 6 has it in v2): a write
+ * QuickBooks certainly refused keeps the record out of QuickBooks — "Saved. Not recorded in
+ * QuickBooks: …", in the nearest of §3.F's words — and a write QuickBooks may have made (its own 429
+ * or 5xx, Intuit's 600, an answer lost once the SDK's repeat cannot wait) "didn't confirm"; either
+ * way the details are saved and the run succeeds. One request a call, repeated only by the step's
+ * retry (test/write-retry.test.ts); Intuit's words nowhere.
  */
 
-const UNCONFIRMED_BILL =
-  'QuickBooks did not confirm whether the bill was created. Check QuickBooks before running this again.';
+const notRecorded = (reason: string) => RESULTS.notRecorded(reason);
+const summaryOf = (result: RunResult) =>
+  result.outcome === 'success' ? result.summary : JSON.stringify(result);
 
-/** The noun each path's sentences use: the kit's, so a refund is an expense there. */
-const PATHS: readonly [string, RouteRun, string, string][] = [
-  ['a bill', { answer: bill() }, 'bill.create', 'bill'],
-  ['a company receipt', { answer: receipt() }, 'purchase.create', 'expense'],
-  ['a card refund', { answer: sampleAnswer('card-refund') }, 'purchase.create', 'expense'],
-  ['a vendor credit', { answer: creditNote() }, 'vendorCredit.create', 'vendor credit'],
-  ['an employee', { answer: receipt(), ...PAID.employee }, 'journalEntry.create', 'journal entry'],
+/** Each path, and the write it makes. */
+const PATHS: readonly [string, RouteRun, string][] = [
+  ['a bill', { answer: bill() }, 'bill.create'],
+  ['a company receipt', { answer: receipt() }, 'purchase.create'],
+  ['a card refund', { answer: sampleAnswer('card-refund') }, 'purchase.create'],
+  ['a vendor credit', { answer: creditNote() }, 'vendorCredit.create'],
 ];
 
 /** A whole run of a path — approved, when it held — its write answered as `script` says. */
@@ -77,49 +72,31 @@ async function written(run: RouteRun, operation: string, script: ScriptedAnswer[
   return { result: approved.result, calls: approved.providerCalls, simulator: first.simulator };
 }
 
-test("each Intuit code the plan maps, in its own sentence naming the record, Intuit's words nowhere; any other code, the kit's", async () => {
-  const expected: Record<string, (noun: string) => string> = {
-    '6140': (noun) =>
-      `QuickBooks already has ${/^[aeiou]/u.test(noun) ? 'an' : 'a'} ${noun} with this number, so no ${noun} was created. Check QuickBooks before running this again.`,
-    '6240': (noun) =>
-      `QuickBooks reported a name conflict on this ${noun}, so no ${noun} was created.`,
-    '610': (noun) =>
-      `An account or name this ${noun} uses is inactive or missing in QuickBooks, so no ${noun} was created. Make it active, then run it again.`,
-    '2500': (noun) =>
-      `An account or name this ${noun} uses is inactive or missing in QuickBooks, so no ${noun} was created. Make it active, then run it again.`,
-    '6190': (noun) =>
-      `The QuickBooks subscription has ended or has a billing problem, so no ${noun} was created.`,
-    '6200': (noun) =>
-      `The document's date is in a period closed in QuickBooks, so no ${noun} was created.`,
-    '6210': (noun) =>
-      `The document's date is in a period closed in QuickBooks, so no ${noun} was created.`,
-    '2050': (noun) =>
-      `A value on this ${noun} is longer than QuickBooks allows, so no ${noun} was created. Enter it by hand in QuickBooks.`,
-    '2290': (noun) =>
-      `QuickBooks refused a negative amount on this ${noun}, so no ${noun} was created. Enter it by hand in QuickBooks.`,
-    '2300': (noun) =>
-      `QuickBooks found this ${noun}'s debits and credits unequal, so no ${noun} was created. Enter it by hand in QuickBooks.`,
-    '6430': (noun) =>
-      `An account in this flow's settings is the wrong kind for this ${noun}, so no ${noun} was created. Check the settings, then run it again.`,
-    '6000': (noun) => `QuickBooks refused the ${noun}, so no ${noun} was created.`,
+test("each Intuit code, a certain refusal: not recorded, the nearest of §3.F's reasons, the details saved, Intuit's words nowhere", async () => {
+  const expected: Record<string, string> = {
+    '6140': 'may already be in QuickBooks',
+    '6240': 'name used by a customer or employee',
+    '6200': 'that date is in closed books',
+    '6210': 'that date is in closed books',
+    '610': "QuickBooks didn't answer",
+    '2500': "QuickBooks didn't answer",
+    '6190': "QuickBooks didn't answer",
+    '2050': "QuickBooks didn't answer",
+    '2290': "QuickBooks didn't answer",
+    '6430': "QuickBooks didn't answer",
+    '6000': "QuickBooks didn't answer",
   };
-  assert.deepEqual(
-    [...INTUIT_CODES].sort(),
-    Object.keys(expected)
-      .filter((code) => code !== '6000')
-      .sort(),
-  );
-  for (const [label, run, operation, noun] of PATHS) {
-    for (const [code, sentence] of Object.entries(expected)) {
+  for (const [label, run, operation] of PATHS) {
+    for (const [code, reason] of Object.entries(expected)) {
       const { result, calls } = await written(run, operation, [
         { status: 400, body: faultAnswer(code) },
       ]);
-      assert.deepEqual(
-        result,
-        { outcome: 'failed', failureReason: sentence(noun) },
-        `${label} ${code}`,
-      );
-      assert.ok(sentence(noun).length <= 200, `${label} ${code}`);
+      assert.equal(summaryOf(result), notRecorded(reason), `${label} ${code}`);
+      assert.ok(result.outcome === 'success');
+      assert.deepEqual(result.details?.at(-1), {
+        label: 'QuickBooks',
+        value: `Not recorded: ${reason}`,
+      });
       assert.ok(!JSON.stringify(result).includes(FAULT_MARKER));
       assert.equal(writesOf(calls).length, 1, `${label} ${code}: one request`);
     }
@@ -128,15 +105,10 @@ test("each Intuit code the plan maps, in its own sentence naming the record, Int
   const { result } = await written({ answer: bill() }, 'bill.create', [
     { status: 200, body: faultAnswer('6210') },
   ]);
-  assert.deepEqual(result, {
-    outcome: 'failed',
-    failureReason:
-      "The document's date is in a period closed in QuickBooks, so no bill was created.",
-  });
-  assert.equal(intuitSentence('1', 'bill'), undefined);
+  assert.equal(summaryOf(result), notRecorded('that date is in closed books'));
 });
 
-test("QuickBooks' own 429 or 5xx, Fault 600, or an answer without the record: QuickBooks did not confirm it — one request, the safe side", async () => {
+test("QuickBooks' own 429 or 5xx, Fault 600, or an answer without the record: QuickBooks didn't confirm it — one request, the details saved, the safe side", async () => {
   const cases: [string, ScriptedAnswer[]][] = [
     ['a 429', [{ status: 429 }]],
     ['a 500', [{ status: 500 }]],
@@ -146,79 +118,57 @@ test("QuickBooks' own 429 or 5xx, Fault 600, or an answer without the record: Qu
   ];
   for (const [label, script] of cases) {
     const { result, calls } = await written({ answer: bill() }, 'bill.create', script);
-    assert.deepEqual(result, { outcome: 'failed', failureReason: UNCONFIRMED_BILL }, label);
+    assert.equal(summaryOf(result), RESULTS.unconfirmed, label);
+    assert.ok(result.outcome === 'success');
+    assert.deepEqual(result.details?.at(-1), { label: 'QuickBooks', value: "Didn't confirm" });
+    assert.deepEqual(result.output?.notRecorded, null, label);
     assert.equal(writesOf(calls).length, 1, `${label}: one request`);
   }
 });
 
-test("the platform's certain refusals: nothing reached QuickBooks, so nothing was created", async () => {
+test("the platform's certain refusals: nothing reached QuickBooks — not connected, or no usable answer", async () => {
   const cases: [string, ScriptedAnswer, string][] = [
-    [
-      'not connected',
-      { refuse: PROVIDER_REFUSALS.notConnected() },
-      'Reconnect QuickBooks in Connections, then run it again. No bill was created.',
-    ],
+    ['not connected', { refuse: PROVIDER_REFUSALS.notConnected() }, "QuickBooks isn't connected"],
     [
       'the scope missing',
       { refuse: PROVIDER_REFUSALS.badRequest('bill.create', 'insufficient_scope') },
-      'QuickBooks was connected without accounting access, so no bill was created. Reconnect QuickBooks in Connections, then run it again.',
+      "QuickBooks isn't connected",
     ],
     [
       'a field the platform refuses',
       { refuse: PROVIDER_REFUSALS.badRequest('bill.create', 'refused_field') },
-      'Autom8x could not send the bill to QuickBooks, so no bill was created.',
+      "QuickBooks didn't answer",
     ],
-    [
-      'QuickBooks 401',
-      { status: 401 },
-      'Reconnect QuickBooks in Connections, then run it again. No bill was created.',
-    ],
+    ['QuickBooks 401', { status: 401 }, "QuickBooks isn't connected"],
   ];
-  for (const [label, script, sentence] of cases) {
+  for (const [label, script, reason] of cases) {
     const { result } = await written({ answer: bill() }, 'bill.create', [script]);
-    assert.deepEqual(result, { outcome: 'failed', failureReason: sentence }, label);
+    assert.equal(summaryOf(result), notRecorded(reason), label);
   }
 });
 
-test('after create-vendor added the vendor: every create-record sentence says so, and its line names the vendor kept', async () => {
+test('after create-vendor added the vendor: a refused bill keeps it, and an unconfirmed one says to check QuickBooks', async () => {
   const refused = await firstRun({ answer: bill(), bare: true });
   refused.simulator.script('bill.create', [{ status: 400, body: faultAnswer('6140') }]);
   const fault = await approve(refused);
-  const sentence =
-    'QuickBooks already has a bill with this number, so no bill was created. Check QuickBooks before running this again. The new vendor was added to QuickBooks.';
-  assert.deepEqual(fault.result, { outcome: 'failed', failureReason: sentence });
-  assert.ok(sentence.length <= 200);
-  assert.match(
-    fault.steps.at(-1)?.[2] ?? '',
-    /^Not recorded; the new vendor stays \(Id 1001\) \(/u,
+  assert.equal(summaryOf(fault.result), notRecorded('may already be in QuickBooks'));
+  assert.equal(refused.simulator.company.vendors.length, 1, 'the vendor stays');
+  assert.deepEqual(
+    fault.steps.find(([stepId]) => stepId === 'create-record'),
+    ['create-record', 'failed', 'Not recorded in QuickBooks: may already be in QuickBooks'],
   );
-  // An answer lost with no time to repeat it: the sentence registered on the throw says it too,
-  // and create-vendor's line named the vendor it added.
+  // An answer lost with no time to repeat it: the run's recover says QuickBooks did not confirm it.
   const lost = await firstRun({ answer: bill(), bare: true });
   lost.simulator.script('bill.create', [{ lost: 'before_record' }]);
   const unconfirmed = await approve(lost, { deadline: noTimeToRepeat() });
-  const said = `${UNCONFIRMED_BILL} The new vendor was added to QuickBooks.`;
-  assert.deepEqual(unconfirmed.result, { outcome: 'failed', failureReason: said });
-  assert.ok(said.length <= 200);
-  assert.match(
-    unconfirmed.steps.find(([stepId]) => stepId === 'create-vendor')?.[2] ?? '',
-    /^Added vendor 'Harrowgate Office Supply' to QuickBooks \(Id 1001\)/u,
+  assert.equal(summaryOf(unconfirmed.result), RESULTS.unconfirmed);
+  assert.equal(
+    unconfirmed.steps.find(([stepId]) => stepId === 'create-vendor')?.[2],
+    'Vendor added',
   );
 });
 
-test('every sentence create-record can end with fits 200 characters, for every record, with the vendor named', () => {
-  for (const noun of ['bill', 'expense', 'vendor credit', 'journal entry']) {
-    for (const code of INTUIT_CODES) {
-      const sentence = intuitSentence(code, noun) ?? '';
-      assert.ok(
-        `${sentence} The new vendor was added to QuickBooks.`.length <= 200,
-        `${noun} ${code}`,
-      );
-    }
-  }
-});
-
-test('a new vendor that was neither found nor added — a guard that should never fire — writes nothing: "could not finish its checks"', async () => {
+test('a new vendor that was neither found nor added — a guard that should never fire — writes nothing: "Something went wrong"', async () => {
   const decision = decide({ answer: bill(), vendor: { status: 'new' } });
   assert.equal(decision.outcome, 'held');
   const saved = (decision as Extract<typeof decision, { outcome: 'held' }>).saved;
@@ -230,7 +180,7 @@ test('a new vendor that was neither found nor added — a guard that should neve
     },
   } as unknown as StepPlatform;
   const result = await createRecord()({
-    request: invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 1 }),
+    request: invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2 }),
     stepId: 'create-record',
     state: saved as unknown as JsonObject,
     idempotencyKey: `create-record-${'a'.repeat(48)}`,
@@ -238,8 +188,8 @@ test('a new vendor that was neither found nor added — a guard that should neve
   });
   assert.deepEqual(result, {
     outcome: 'failed',
-    summary: 'Not recorded (state_incomplete)',
-    failureReason: AFTER_APPROVAL_SENTENCES.state_incomplete,
+    summary: RUN_FAILS.other,
+    failureReason: RUN_FAILS.other,
   });
   assert.equal(calls, 0);
 });
@@ -255,10 +205,9 @@ function refuseReport(run: Run, stepId: string, problem: ProblemInput = FLOOD): 
 }
 
 const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
-const RECORDED =
-  'Expense 1001 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again.';
+const RECORDED = 'Recorded in QuickBooks: expense from Tidewell Hardware, $60.63.';
 
-test("once the record is made, a refused report — create-record's line or notify's, a 429 or any other — never says 'run it again': the run names the record", async () => {
+test("once the record is made, a refused report — create-record's line or notify's, a 429 or any other — never says 'Try again': the run names the record", async () => {
   const cases: [string, string, ProblemInput][] = [
     ["create-record's line refused 429", 'create-record', FLOOD],
     [
@@ -284,55 +233,21 @@ test("once the record is made, a refused report — create-record's line or noti
   }
 });
 
-test("a write's own failure stands when its line's report is refused: 'did not confirm' is never turned into 'run it again in a few minutes'", async () => {
+test("a write QuickBooks may have made stands when its line's report is refused: never 'Try again'", async () => {
   const first = await firstRun({ answer: receipt(), config: HOLD_ALL });
   first.simulator.script('purchase.create', [{ lost: 'before_record' }]);
   refuseReport(first, 'create-record');
   assert.deepEqual((await approve(first, { deadline: noTimeToRepeat() })).result, {
     outcome: 'failed',
-    failureReason:
-      'QuickBooks did not confirm whether the expense was created. Check QuickBooks before running this again.',
+    failureReason: "QuickBooks didn't confirm. Check QuickBooks before you run it again.",
   });
-  // Before any write, a refused report is still the Edge's flood valve: nothing was made.
+  // Before any write, a refused report is the Edge's flood valve: nothing was made.
   const early = await firstRun({ answer: receipt(), config: HOLD_ALL });
   refuseReport(early, 'confirm-company');
   assert.deepEqual((await approve(early)).result, {
     outcome: 'failed',
-    failureReason: 'Autom8x is busy; run it again in a few minutes.',
+    failureReason: RUN_FAILS.other,
   });
-});
-
-test('once create-vendor added the vendor, a refused report says so — and names the bill once it is made', async () => {
-  const vendor = await firstRun({ answer: bill(), bare: true });
-  refuseReport(vendor, 'confirm-no-duplicate');
-  assert.deepEqual((await approve(vendor)).result, {
-    outcome: 'failed',
-    failureReason:
-      'Autom8x is busy; run it again in a few minutes. The new vendor was added to QuickBooks.',
-  });
-  const other = await firstRun({ answer: bill(), bare: true });
-  refuseReport(other, 'create-vendor', { status: 422, code: 'BAD_REQUEST', detail: 'x' });
-  assert.deepEqual((await approve(other)).result, {
-    outcome: 'failed',
-    failureReason:
-      "Bills & Receipts stopped before it finished. Check the run's timeline before running it again. The new vendor was added to QuickBooks.",
-  });
-  const billed = await firstRun({ answer: bill(), bare: true });
-  refuseReport(billed, 'create-record');
-  assert.deepEqual((await approve(billed)).result, {
-    outcome: 'failed',
-    failureReason:
-      'Bill 1001 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again. The new vendor was added to QuickBooks.',
-  });
-});
-
-test('the sentence naming a record made fits 200 characters for every record, the longest Id and the vendor named', () => {
-  for (const noun of Object.values(NOUNS)) {
-    const sentence = recordedUnfinished(noun, '9'.repeat(40), true);
-    assert.ok(sentence.length <= 200, `${noun}: ${sentence.length}`);
-    // An Id is cut to 20 characters, as on every line.
-    assert.ok(sentence.includes(` ${'9'.repeat(19)}… was recorded`), noun);
-  }
 });
 
 test("a run's notes are its own: a record of a kind the run's end does not know is still named, and the same request run again starts with nothing done", async () => {
@@ -344,32 +259,34 @@ test("a run's notes are its own: a record of a kind the run's end does not know 
       manifests: [
         {
           templateId: TEMPLATE_ID,
-          version: 1,
+          version: 2,
           requiredCapabilities: [],
           pipeline: [{ id: 'make' }, { id: 'after' }],
         },
       ],
-      steps: noteThrows({
-        make: () => Promise.resolve({ outcome: 'ok', summary: 'Made', state: made }),
-        after: () => Promise.resolve({ outcome: 'ok', summary: 'After' }),
-      }),
+      steps: noteThrows(
+        {
+          make: () => Promise.resolve({ outcome: 'ok', summary: 'Made', state: made }),
+          after: () => Promise.resolve({ outcome: 'ok', summary: 'After' }),
+        },
+        () => undefined,
+      ),
       result: () => ({}),
     }),
     () => undefined,
   );
-  const request = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 1 });
+  const request = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2 });
   const platform = new RecordingPlatform();
   platform.reportStep = (line: StepReport) =>
     line.stepId === 'after' ? Promise.reject(refusalFixture('step', FLOOD)) : Promise.resolve();
   assert.deepEqual(await automation.execute(request, platform), {
     outcome: 'failed',
-    failureReason:
-      'Record 77 was recorded in QuickBooks, but Bills & Receipts could not finish the run. Check QuickBooks before running this again.',
+    failureReason: 'Recorded in QuickBooks.',
   });
-  // The same request again, nothing made this time: the flood valve's own sentence.
+  // The same request again, nothing made this time: "Something went wrong".
   made = {};
   assert.deepEqual(await automation.execute(request, platform), {
     outcome: 'failed',
-    failureReason: 'Autom8x is busy; run it again in a few minutes.',
+    failureReason: RUN_FAILS.other,
   });
 });

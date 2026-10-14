@@ -4,10 +4,11 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
+import type { DocumentRule } from '../src/checks/rules.js';
 import { FILE_LIMITS } from '../src/file.js';
+import { RUN_FAILS } from '../src/words.js';
 import { extractWorld } from './extract-world.js';
-import { completion, everythingSaid, lines, reads, setUp } from './fixtures.js';
+import { NONE, QUICKBOOKS, completion, everythingSaid, lines, reads, setUp } from './fixtures.js';
 import { measure, referenceOf } from './measure.js';
 import {
   SAMPLES,
@@ -171,12 +172,14 @@ test('a text PDF prints every name, number and amount its answer gives, and its 
   }
 });
 
-/** The samples check-document stops, each with its rule (the rest go on to be recorded or compared). */
-const STOPPED: Readonly<Record<string, keyof typeof CHECK_DOCUMENT_SENTENCES>> = {
+/**
+ * The samples check-document stops, on either path, each with its rule; the rest go on — the tip
+ * slip (C28) and the cash-back receipt (C16) too, which QuickBooks does not record but whose
+ * details are saved.
+ */
+const STOPPED: Readonly<Record<string, DocumentRule>> = {
   'two-invoices': 'C5',
   'missing-page': 'C6',
-  'card-slip-tip-only': 'C28',
-  'cash-back-receipt': 'C16',
   'bank-card-statement': 'C1',
 };
 
@@ -186,21 +189,20 @@ test("each sample's expected answer passes extract whole, and its marker never r
     world.platform.model = (_call, model) => Promise.resolve(completion(model, sample.answer));
     assert.deepEqual((await world.state())?.extraction, sample.answer, sample.name);
 
-    // The whole run, on the sample's own measurements, the company card as Paid from; then an
+    // The first steps, on the sample's own measurements, QuickBooks chosen or not; then an
     // unusable answer carrying the marker.
-    const run = setUp({
-      file: referenceOf(measure(readFileSync(samplePath(sample)))),
-      config: { expenseAccount: 'Utilities:Electric', paidFromAccount: 'Company Visa' },
-    });
-    run.platform.model = reads(sample.answer);
-    const result = await run.run();
-    const rule = STOPPED[sample.name];
-    assert.deepEqual(
-      result.outcome === 'failed' ? result.failureReason : result.outcome,
-      rule === undefined ? 'success' : CHECK_DOCUMENT_SENTENCES[rule],
-      sample.name,
-    );
-    assert.ok(!everythingSaid(run.platform, result).includes(sample.marker), sample.name);
+    for (const config of [QUICKBOOKS, NONE]) {
+      const run = setUp({ file: referenceOf(measure(readFileSync(samplePath(sample)))), config });
+      run.platform.model = reads(sample.answer);
+      const result = await run.run();
+      const rule = STOPPED[sample.name];
+      assert.deepEqual(
+        result.outcome === 'failed' ? result.failureReason : result.outcome,
+        rule === undefined ? 'success' : RUN_FAILS[rule],
+        sample.name,
+      );
+      assert.ok(!everythingSaid(run.platform, result).includes(sample.marker), sample.name);
+    }
     const unusable = setUp();
     unusable.platform.model = (_call, model) =>
       Promise.resolve(completion(model, { ...sample.answer, marker: sample.marker }));

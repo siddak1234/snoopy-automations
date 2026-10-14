@@ -3,24 +3,25 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import { SAVED_MAXIMUM_BYTES, savedBytes } from '../src/decide/saved.js';
 import type { Decision } from '../src/decide/decide.js';
-import { CHECKING, bill, creditNote, paidBy, receipt, sampleAnswer } from './check-world.js';
+import { SAVED_MAXIMUM_BYTES, savedBytes } from '../src/decide/saved.js';
+import { bill, check, creditNote, documentOf, receipt, sampleAnswer } from './check-world.js';
+import { CHART } from './extract-world.js';
 import {
   VENDOR,
   agreed,
   billRow,
+  chartWith,
   decide,
   found,
-  heldOf,
   type DecideSetUp,
 } from './decide-world.js';
-import { check, documentOf } from './check-world.js';
 import { SAMPLES } from './sample-maker/samples.js';
 
 /**
- * The record decide plans and saves for after approval (the plan's §2.6, §2.8; D27): built once,
- * one shape for held and straight through, the operation, payment type, accounts by role, payee,
+ * The record decide plans and saves for after approval (the plan's §2.6, §2.8; v2's §2.5): built
+ * once, one shape for held and straight through — the operation, payment type, the category and
+ * what it was paid from, each picked from the company's chart (no setting names one), payee,
  * amount, number or memo and currency rule per path; never a line, a row or the model's words;
  * refused over 32 KiB.
  */
@@ -33,7 +34,7 @@ function saved(decision: Decision) {
 }
 const plan = (setUp: DecideSetUp) => saved(decide(setUp)).plan;
 
-test('a bill: bill.create to the vendor, its due date, its number when QuickBooks can take it, one line to the category', () => {
+test('a bill: bill.create to the vendor, its due date, its number when QuickBooks can take it, one line to the category picked', () => {
   assert.deepEqual(plan({ answer: bill() }), {
     operation: 'bill.create',
     record: 'bill',
@@ -41,10 +42,8 @@ test('a bill: bill.create to the vendor, its due date, its number when QuickBook
     credit: false,
     printStatus: null,
     accounts: {
-      category: { id: '64', name: 'Office Supplies', why: 'office supplies' },
+      category: { id: '64', name: 'Office Supplies', why: 'its name' },
       paidFrom: null,
-      liability: null,
-      equity: null,
     },
     payee: { kind: 'vendor', id: '7', name: 'Harrowgate Office Supply' },
     amountCents: 41334,
@@ -77,7 +76,7 @@ test('a bill: bill.create to the vendor, its due date, its number when QuickBook
   );
 });
 
-test('a company receipt: an expense from Paid from — CreditCard from a card, Check for a check from a bank, else Cash — never a number', () => {
+test('a company receipt: an expense from the account picked — CreditCard from a card, Check for a check from a bank, else Cash — never a number', () => {
   const card = plan({ answer: receipt(), vendor: TIDEWELL });
   assert.deepEqual(
     [
@@ -88,22 +87,26 @@ test('a company receipt: an expense from Paid from — CreditCard from a card, C
       card.accounts.paidFrom,
       card.docNumber,
     ],
-    ['purchase.create', 'expense', 'CreditCard', null, { id: '41', name: 'Company Visa' }, null],
+    ['purchase.create', 'expense', 'CreditCard', null, { id: '42', name: 'Visa 4417' }, null],
+    'the card named with the printed last four',
   );
   assert.deepEqual(card.payee, { kind: 'vendor', id: '9', name: 'Tidewell Hardware' });
   assert.equal(card.memo, `Receipt 55120 from Tidewell Hardware.`);
+  const oneBank = chartWith('35');
   const check = plan({
     answer: receipt({ paymentMethod: 'check' }),
     vendor: TIDEWELL,
-    check: { paidFrom: CHECKING },
+    chart: oneBank,
   });
-  assert.deepEqual([check.paymentType, check.printStatus], ['Check', 'NotSet']);
+  assert.deepEqual(
+    [check.paymentType, check.printStatus, check.accounts.paidFrom],
+    ['Check', 'NotSet', { id: '35', name: 'Checking' }],
+  );
   for (const method of ['card', 'cash', 'bank_transfer', 'not_shown', 'other']) {
     const bank = plan({
       answer: receipt({ paymentMethod: method }),
       vendor: TIDEWELL,
-      check: { paidFrom: CHECKING },
-      config: { companyCardLast4: '4417' },
+      chart: oneBank,
     });
     assert.deepEqual([bank.paymentType, bank.printStatus], ['Cash', null], method);
   }
@@ -111,8 +114,11 @@ test('a company receipt: an expense from Paid from — CreditCard from a card, C
   assert.deepEqual(plan({ answer: receipt(), vendor: { status: 'new' } }).payee, { kind: 'none' });
   // A tip added: the amount carries it.
   assert.equal(
-    plan({ answer: sampleAnswer('restaurant-tip-under-total'), vendor: { status: 'new' } })
-      .amountCents,
+    plan({
+      answer: sampleAnswer('restaurant-tip-under-total'),
+      vendor: { status: 'new' },
+      chart: chartWith('35', '41'),
+    }).amountCents,
     3848,
   );
 });
@@ -120,7 +126,15 @@ test('a company receipt: an expense from Paid from — CreditCard from a card, C
 test('a card refund: an expense with Credit true on the card; a vendor credit: its number only with the own-numbers setting on', () => {
   const refund = plan({ answer: sampleAnswer('card-refund'), vendor: { status: 'new' } });
   assert.deepEqual(
-    [refund.operation, refund.record, refund.credit, refund.paymentType, refund.payee, refund.memo],
+    [
+      refund.operation,
+      refund.record,
+      refund.credit,
+      refund.paymentType,
+      refund.payee,
+      refund.memo,
+      refund.accounts.paidFrom,
+    ],
     [
       'purchase.create',
       'card_refund',
@@ -128,87 +142,56 @@ test('a card refund: an expense with Credit true on the card; a vendor credit: i
       'CreditCard',
       { kind: 'none' },
       `Refund R-6603 from Tidewell Hardware.`,
+      { id: '42', name: 'Visa 4417' },
     ],
   );
   const credit = plan({ answer: creditNote() });
   assert.deepEqual(
-    [credit.operation, credit.record, credit.docNumber],
-    ['vendorCredit.create', 'vendor_credit', null],
+    [credit.operation, credit.record, credit.docNumber, credit.accounts.paidFrom],
+    ['vendorCredit.create', 'vendor_credit', null, null],
   );
   assert.equal(credit.memo, `Number CM-0077. Credits invoice HOS-1042.`);
   const numbered = plan({ answer: creditNote(), preferences: { purchaseCustomTxnNumbers: true } });
   assert.deepEqual([numbered.docNumber, numbered.memo], ['CM-0077', `Credits invoice HOS-1042.`]);
 });
 
-test("paid personally: a journal entry owing the employee, or to the owner's equity; a bill to the contractor; the seller and number in the text", () => {
-  const employee = plan({ answer: receipt(), check: paidBy('employee', { paidFrom: null }) });
-  assert.deepEqual(
-    [
-      employee.operation,
-      employee.record,
-      employee.payee,
-      employee.accounts.liability,
-      employee.accounts.equity,
-    ],
-    [
-      'journalEntry.create',
-      'journal_entry',
-      { kind: 'employee', id: '55', name: 'Robin Example' },
-      { id: '120', name: 'Owed to Team Members' },
-      null,
-    ],
-  );
-  assert.equal(employee.lineDescription, 'Tidewell Hardware, receipt 55120');
-  assert.equal(employee.memo, `Robin Example paid Tidewell Hardware, receipt 55120.`);
-  const owner = plan({ answer: receipt(), check: paidBy('owner', { paidFrom: null }) });
-  assert.deepEqual(
-    [owner.payee, owner.accounts.equity, owner.accounts.liability],
-    [{ kind: 'owner', name: 'Pat Owner' }, { id: '125', name: 'Owner investments' }, null],
-  );
-  assert.equal(owner.lineDescription, 'Pat Owner paid Tidewell Hardware, receipt 55120');
-  const contractor = plan({
-    answer: bill(),
-    check: paidBy('not_employee', { paidFrom: null }),
-    vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee' },
-  });
-  assert.deepEqual(
-    [contractor.operation, contractor.payee, contractor.docNumber, contractor.dueDate],
-    ['bill.create', { kind: 'vendor', id: '31', name: 'Sam Lee' }, null, null],
-  );
-  assert.equal(contractor.memo, `Sam Lee paid Harrowgate Office Supply, bill HOS-1042.`);
-});
-
-test("the category (D27): the setting for the spend type; the default when unset, other, unclear or disputed; a credit's original bill", () => {
+test("the category (§2.5): by name, by detail type, else Uncategorized Expense — also for other, unclear or disputed; a credit's original bill first", () => {
   const category = (setUp: DecideSetUp) => plan(setUp).accounts.category;
   assert.deepEqual(category({ answer: bill() }), {
     id: '64',
     name: 'Office Supplies',
-    why: 'office supplies',
+    why: 'its name',
   });
   assert.deepEqual(category({ answer: bill({ spendType: 'travel' }) }), {
-    id: '57',
-    name: 'Utilities:Electric',
-    why: 'no category set for travel',
+    id: '301',
+    name: 'Travel',
+    why: 'its name',
   });
-  assert.deepEqual(category({ answer: bill({ spendType: 'other' }) }), {
-    id: '57',
-    name: 'Utilities:Electric',
-    why: 'spend type other',
-  });
-  assert.deepEqual(category({ answer: bill({ uncertainFields: ['spendType'] }) }), {
-    id: '57',
-    name: 'Utilities:Electric',
-    why: 'spend type unclear',
-  });
+  const uncategorized = { id: '300', name: 'Uncategorized Expense', why: 'uncategorized' };
+  assert.deepEqual(category({ answer: bill({ spendType: 'other' }) }), uncategorized);
+  assert.deepEqual(
+    category({ answer: bill({ uncertainFields: ['spendType'] }) }),
+    uncategorized,
+    'unclear',
+  );
   const document = documentOf(check(bill()));
   assert.deepEqual(
     category({ answer: bill(), verification: { ...agreed(document), spendTypeDisputed: true } }),
-    {
-      id: '57',
-      name: 'Utilities:Electric',
-      why: 'the reads disagree on the spend type',
-    },
+    uncategorized,
+    'disputed',
   );
+  // No name on the lists: the one account of the detail type.
+  const renamed = {
+    ...CHART,
+    categories: CHART.categories.map((account) =>
+      account.id === '301' ? { ...account, name: 'Trips', fullName: 'Trips' } : account,
+    ),
+  };
+  assert.deepEqual(category({ answer: bill({ spendType: 'travel' }), chart: renamed }), {
+    id: '301',
+    name: 'Trips',
+    why: 'its detail type',
+  });
   assert.deepEqual(
     category({
       answer: creditNote(),
@@ -219,20 +202,14 @@ test("the category (D27): the setting for the spend type; the default when unset
     { id: '80', name: 'Cost of Goods Sold', why: 'the original bill used it' },
   );
   // A bill of two accounts, or another vendor's: the spend type decides.
+  const twoAccounts = billRow({
+    lineAccounts: [
+      { id: '80', name: 'A' },
+      { id: '64', name: 'B' },
+    ],
+  });
   assert.equal(
-    category({
-      answer: creditNote(),
-      lookups: {
-        relatedLookup: found(
-          billRow({
-            lineAccounts: [
-              { id: '80', name: 'A' },
-              { id: '64', name: 'B' },
-            ],
-          }),
-        ),
-      },
-    }).id,
+    category({ answer: creditNote(), lookups: { relatedLookup: found(twoAccounts) } }).id,
     '64',
   );
   assert.equal(
@@ -240,14 +217,27 @@ test("the category (D27): the setting for the spend type; the default when unset
       answer: creditNote(),
       lookups: { relatedLookup: found(billRow({ vendorId: '88' })) },
     }).why,
-    'office supplies',
+    'its name',
   );
-  // Shown on every approval's line.
-  const held = heldOf(decide({ answer: bill(), config: { holdAboveAmount: 0 } }));
-  assert.match(held.summary, /category Office Supplies \(office supplies\)/u);
 });
 
-test("the saved data: one shape held or straight through, never a line, a row or the model's words; the payer, receipt and credit facts", () => {
+test('no account could take it — no Uncategorized Expense, no bank or card, a refund with no card — and it is not recorded', () => {
+  const none = { ...CHART, categories: [], uncategorized: null };
+  assert.deepEqual(decide({ answer: bill({ spendType: 'other' }), chart: none }), {
+    outcome: 'not_recorded',
+    reason: 'no_uncategorized',
+  });
+  assert.deepEqual(decide({ answer: receipt(), vendor: TIDEWELL, chart: chartWith() }), {
+    outcome: 'not_recorded',
+    reason: 'no_paying_account',
+  });
+  assert.deepEqual(
+    decide({ answer: sampleAnswer('card-refund'), vendor: TIDEWELL, chart: chartWith('35') }),
+    { outcome: 'not_recorded', reason: 'refund_needs_card' },
+  );
+});
+
+test("the saved data: one shape held or straight through, never a line, a row or the model's words; the read kept for its details", () => {
   const straight = saved(decide({ answer: bill() }));
   const heldOne = saved(decide({ answer: bill(), config: { holdAboveAmount: 0 } }));
   assert.deepEqual(Object.keys(heldOne), Object.keys(straight));
@@ -260,7 +250,7 @@ test("the saved data: one shape held or straight through, never a line, a row or
     'seller',
     'documentNumber',
     'plan',
-    'payer',
+    'read',
     'receipt',
     'credit',
     'duplicates',
@@ -271,50 +261,42 @@ test("the saved data: one shape held or straight through, never a line, a row or
     'artifactId',
     'modelServed',
   ]);
-
+  assert.equal(straight.v, 2);
+  assert.deepEqual(straight.read, {
+    documentType: 'bill',
+    seller: 'Harrowgate Office Supply',
+    number: 'HOS-1042',
+    date: '2026-09-14',
+    dueDate: '2026-10-14',
+    currency: 'USD',
+    totalCents: 41334,
+    taxCents: 3059,
+    spendType: 'office_supplies',
+    paymentMethod: 'not_shown',
+    cardLast4: null,
+  });
   assert.deepEqual(straight.modelServed, {
     first: 'anthropic/claude-haiku-4.5',
     second: 'google/gemini-3.1-flash-lite',
   });
-  const employee = saved(
+  const tipped = saved(
     decide({
       answer: sampleAnswer('restaurant-tip-under-total'),
-      check: paidBy('employee', { paidFrom: null }),
+      chart: chartWith('35', '41'),
     }),
   );
-  assert.deepEqual(employee.payer, {
-    route: 'employee',
-    id: '55',
-    name: 'Robin Example',
-    vendor1099: null,
-  });
-  assert.deepEqual(employee.receipt, {
+  assert.deepEqual(tipped.receipt, {
     paymentMethod: 'card',
     tipCents: 600,
     tipAdded: true,
     cardLast4: '3346',
   });
-  const owner = saved(decide({ answer: receipt(), check: paidBy('owner', { paidFrom: null }) }));
-  assert.equal(owner.payer?.id, 'owner');
-  const contractor = saved(
-    decide({
-      answer: receipt(),
-      check: paidBy('not_employee', { paidFrom: null }),
-      vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee', vendor1099: true },
-    }),
-  );
-  assert.deepEqual(contractor.payer, {
-    route: 'contractor',
-    id: '31',
-    name: 'Sam Lee',
-    vendor1099: true,
-  });
   const credit = saved(
     decide({ answer: creditNote(), lookups: { relatedLookup: found(billRow()) } }),
   );
   assert.deepEqual(credit.credit, { refundMethod: 'credit_on_account', originalBillId: '151' });
-  // Not a line, a statement row, an answer field the record does not carry.
-  for (const value of [straight, employee, credit]) {
+  // Not a line, a statement row, an answer field the record does not carry, nor the chart.
+  for (const value of [straight, tipped, credit]) {
     const text = JSON.stringify(value);
     for (const absent of [
       'lineItems',
@@ -324,6 +306,7 @@ test("the saved data: one shape held or straight through, never a line, a row or
       'arithmetic',
       'unclearFields',
       '"rows"',
+      'Uncategorized Expense',
     ]) {
       assert.ok(!text.includes(absent), absent);
     }
@@ -350,23 +333,19 @@ test('the saved data stays small with the longest names, and over 32 KiB the run
     }),
   );
   const big = decide({ answer: bill(), lookups: { amountLookup: found(...ids) } });
-  assert.deepEqual(big, {
-    outcome: 'failed',
-    failure: 'saved_too_large',
-    sentence:
-      'Bills & Receipts could not save this document for approval. Run it again. Nothing was created.',
-  });
+  assert.deepEqual(big, { outcome: 'failed', failure: 'saved_too_large' });
 });
 
-test("the planted marker: no sample's reaches a line, a reason, a sentence or the saved data, on any path", () => {
+test("the planted marker: no sample's reaches a reason or the saved data, on any path", () => {
   let decided = 0;
   for (const sample of SAMPLES) {
-    if (check(sample.answer).outcome === 'failed') continue;
+    const outcome = check(sample.answer);
+    if (outcome.outcome === 'failed' || outcome.recordingRule !== undefined) continue;
     for (const config of [{}, { holdAboveAmount: 0 }]) {
       const said = JSON.stringify(decide({ answer: sample.answer as JsonObject, config }));
       assert.ok(!said.includes(sample.marker), `${sample.name}: the marker`);
       decided += 1;
     }
   }
-  assert.equal(decided, 40, 'the 20 samples check-document passes, each straight and held');
+  assert.equal(decided, 40, 'the 20 samples QuickBooks could record, each straight and held');
 });

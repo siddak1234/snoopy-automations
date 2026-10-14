@@ -119,6 +119,17 @@ sentence instead, `UNANSWERED_REASON`: "The platform did not answer in time, so 
 stopped." A test hands the automation a `RecordingPlatform` from
 `@autom8x/automation-sdk/testing` instead.
 
+A run's `result` may return `details` beside its summary: at most 20 `{ label, value }` lines a
+person reads on the run, which the platform keeps with a succeeded run and shows to the
+workspace (its ADR-0037; the run result's `details`). The SDK bounds them before they are sent
+(`boundedDetails`: one line each, a label of 40 characters, a value of 200, empty ones dropped,
+none sent when none are left). And an automation may give `recover(stepId, error, context)`:
+when a step THREW and its attempts are spent, it may return a step result that ends the step
+instead of the run — reported as any result is, its `failed` without a `failureReason` letting
+the run go on. `invoice-processing` uses it to end a QuickBooks step that never answered "not
+recorded in QuickBooks" and save the details instead (below); `undefined` lets the run fail as
+before.
+
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
@@ -274,7 +285,7 @@ and sends no measurements.
 Every callback reaches the platform through its Edge, which sheds a flood before it reads
 anything: 120 requests a minute per source, counted in a fixed one-minute window (the platform's
 `apps/api/src/app.ts`, `DEFAULT_EDGE_RATE_LIMIT`). In production every automation on a host
-calls back through the same address, so they share that one bucket, and one Bills & Receipts
+calls back through the same address, so they share that one bucket, and one Invoice Processing
 document costs 25–44 callbacks. The Edge's refusal is a 429 problem with the code
 `TOO_MANY_REQUESTS`, no `details.reason`, and a `retry-after` header — the whole seconds until
 the window turns, at most 60 — and nothing behind it ran: nothing reached Runs, nothing was
@@ -441,10 +452,41 @@ a run already recorded (platform §12.1 #220).
 
 ## Invoice processing
 
-`invoice-processing` — shown to people as **Bills & Receipts** — records a bill, a receipt
-or a credit note from a PDF or photo in QuickBooks Online, and compares a supplier's
-statement with it (the platform's BUILD-PLAN 25.4.1; the owner's design of 2026-10-10 and
-plan of 2026-10-11). It was built in groups, each appending its steps to
+`invoice-processing` — shown to people as **Invoice Processing** since v2, as **Bills &
+Receipts** in v1 — reads a bill, a receipt, a credit note or a supplier's statement from a PDF
+or photo, then saves its details for the team, or records it in QuickBooks Online and compares a
+statement with it (the platform's BUILD-PLAN 25.4.1 and 25.4.13–25.4.26; the owner's design of
+2026-10-10, plan of 2026-10-11 and build-19 feedback of 2026-10-14).
+
+**v2, the version this code serves.** The image serves v2 alone (`SERVED_VERSIONS` in
+`src/automation.ts`; its Dockerfile copies only `manifests/invoice-processing.v2.json`, which
+`test/conformance.test.ts` holds it to); v1's manifest stays, registered and immutable, until
+it is retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
+chosen in its one `connection` setup field, `vendor` — "None" by default; two settings, the
+approval limit and "Also email", neither required, and no setting can fail a run
+(`test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
+setting and the journal entries are gone; and five visible step groups — Received, Read,
+Checked, Done, Emailed — over 24 steps, `save-details` new. With the vendor "None" a run is
+receive → extract → check-document → (verify-read) → save-details → notify, and calls
+QuickBooks for nothing (`test/none-path.test.ts`). `find-accounts` reads the company's chart
+with one query (the kit's `chartQuery()`), and `decide` picks from it (`src/decide/picks.ts`,
+`test/picks.test.ts`): the category by the spend type's list of names, else its detail type,
+else Uncategorized Expense; what a receipt or a refund was paid from — the card its printed
+digits name, the only card, the only bank — else it waits for approval showing the first by
+name. The second AI read runs only when the first shows a problem, or, with QuickBooks, over the
+limit (decision 3; `test/second-read.test.ts`). A document QuickBooks cannot take — one of its
+recording rules, or QuickBooks failing mid-run, a write it may have made included (decision 6,
+through the SDK's `recover`) — never fails the run: its details are saved and the result says
+"Saved. Not recorded in QuickBooks: …", or "Saved. QuickBooks didn't confirm. Check QuickBooks
+before you run it again." Every word a person reads is the spec's (its §3.E and §3.F): timeline
+lines of 80 characters at most, a one-sentence result, the run's `details` as label and value
+lines, the same lines mailed, and no reason code anywhere (`test/words.test.ts`). The
+manifest's additions and the result's `details` are the platform's #210 (ADR-0037), copied
+into `contract/schemas/` from its branch before it merges (`contract/README.md`): until it
+merges and is promoted, v2 cannot be registered. What follows describes v1, and what v2 keeps
+of it; where they differ, this paragraph wins.
+
+**v1.** It was built in groups, each appending its steps to
 `manifests/invoice-processing.v1.json`; v1 holds all 24 and was registered on 2026-10-12 (the
 platform's #205, read back live by its #206), so that file is now immutable and a change to it
 is a v2 (below). The first five steps spend nothing. `receive` holds the platform's
@@ -630,8 +672,11 @@ only what an automation here uses:
   credits and journal entries, conditions joined by AND, no Active condition, ordered by a
   plain field or by `MetaData.CreateTime`, each value quoted with every backslash written
   four times — Intuit reads a value's escapes twice (sandbox G4–5) — then every apostrophe
-  escaped, `%` and `_` left as themselves, which they are under `=` and IN — and readers for
-  Intuit's answers (`entityOf`, `queryRowsOf`, `nameValueOf`).
+  escaped, `%` and `_` left as themselves, which they are under `=` and IN — `chartQuery()`,
+  the one chart read v2 of `invoice-processing` makes (every active Bank, Credit Card,
+  Expense, Other Expense and Cost of Goods Sold account, at most 1,000; its IN on
+  `AccountType` is sandbox read S13, still to be made), and readers for Intuit's answers
+  (`entityOf`, `queryRowsOf`, `nameValueOf`).
 - `@autom8x/automation-kit/values` — the one cleaning of a value read from a document:
   `cleanText`, `toCents` (whole cents, a fraction of a cent rounded half away from zero and
   marked), `queryAmount` (cents as a query's `1250.00`), `parseDate` (a real day from 2000
@@ -654,7 +699,10 @@ only what an automation here uses:
   expenses, vendor credits and journal entries (a `sample…` builder for each): it answers
   only the query text the kit's builders write, by Intuit's documented rules (IN, =, <, >,
   <=, >= and LIKE joined by AND, OR refused; filterable and sortable fields from Intuit's
-  model file; an expense's amount behind a switch) and as Intuit's sandbox answered (a
+  model file; an expense's amount behind a switch; `chartQuery()`'s text answered with its
+  active accounts of those types, which include Uncategorized Expense, two banks and two
+  cards, one named "Visa 4417", and one account per v2 name list) and as Intuit's sandbox
+  answered (a
   value's escapes read twice, IN on an account's names compared with case, and `ORDERBY
 MetaData.CreateTime` on every transaction), and
   creates a vendor, a bill, an expense, a vendor credit or a journal entry as Intuit

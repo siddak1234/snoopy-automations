@@ -3,7 +3,13 @@ import { test } from 'node:test';
 
 import { callsOf, lines, setUp } from './fixtures.js';
 
-/** `read-preferences`: one `preferences.get`, keeping the settings later steps read. */
+/**
+ * `read-preferences`: one `preferences.get`, on the QuickBooks path, keeping the settings later steps
+ * read; an answer it cannot use is "not recorded in QuickBooks" and the run goes on (decision 6).
+ * Line (§3.E): `Settings read`.
+ */
+
+const NO_ANSWER = { notRecorded: "QuickBooks didn't answer" };
 
 type Prefs = Record<string, Record<string, unknown>>;
 
@@ -16,13 +22,9 @@ async function readWith(edit: (prefs: Prefs) => void = () => undefined) {
   return { ...world, result, line, preferences };
 }
 
-test('the company settings are kept and named in the line', async () => {
+test('the company settings are kept; the line says they were read', async () => {
   const { line, preferences, platform, request } = await readWith();
-  assert.deepEqual(line, [
-    'read-preferences',
-    'ok',
-    'Home currency USD; multicurrency off; books closed through 2025-12-31',
-  ]);
+  assert.deepEqual(line, ['read-preferences', 'ok', 'Settings read']);
   assert.deepEqual(preferences, {
     homeCurrency: 'USD',
     multiCurrencyEnabled: false,
@@ -42,15 +44,12 @@ test('no AccountingInfoPrefs, or no closing date in it, continues with none', as
     (prefs: Prefs) => delete prefs.AccountingInfoPrefs!.BookCloseDate,
   ]) {
     const { line, preferences } = await readWith(edit);
-    assert.equal(
-      line?.[2],
-      'Home currency USD; multicurrency off; no closing date from QuickBooks',
-    );
+    assert.equal(line?.[2], 'Settings read');
     assert.equal((preferences as { bookCloseDate: unknown }).bookCloseDate, null);
   }
 });
 
-test('a closing date that is not a real YYYY-MM-DD day is kept as null and called unreadable', async () => {
+test('a closing date that is not a real YYYY-MM-DD day is kept as null', async () => {
   for (const date of [
     '2026-02-30',
     '12/31/2025',
@@ -62,11 +61,7 @@ test('a closing date that is not a real YYYY-MM-DD day is kept as null and calle
     const { line, preferences } = await readWith(
       (prefs) => (prefs.AccountingInfoPrefs!.BookCloseDate = date),
     );
-    assert.equal(
-      line?.[2],
-      'Home currency USD; multicurrency off; closing date unreadable',
-      String(date),
-    );
+    assert.equal(line?.[2], 'Settings read', String(date));
     assert.equal((preferences as { bookCloseDate: unknown }).bookCloseDate, null);
   }
   const { preferences } = await readWith(
@@ -85,10 +80,10 @@ test('multicurrency is off when missing and on only when QuickBooks says true', 
   assert.equal((text.preferences as { multiCurrencyEnabled: unknown }).multiCurrencyEnabled, false);
   const on = await readWith((prefs) => (prefs.CurrencyPrefs!.MultiCurrencyEnabled = true));
   assert.equal((on.preferences as { multiCurrencyEnabled: unknown }).multiCurrencyEnabled, true);
-  assert.match(on.line?.[2] ?? '', /^Home currency USD; multicurrency on; /u);
+  assert.equal(on.line?.[2], 'Settings read');
 });
 
-test('a home currency that is missing or not three letters fails; one in lower case is read', async () => {
+test('a home currency that is missing or not three letters keeps the document out of QuickBooks; one in lower case is read', async () => {
   const edits: ((prefs: Prefs) => void)[] = [
     (prefs) => delete prefs.CurrencyPrefs,
     (prefs) => delete prefs.CurrencyPrefs!.HomeCurrency,
@@ -99,13 +94,11 @@ test('a home currency that is missing or not three letters fails; one in lower c
   ];
   for (const edit of edits) {
     const { result, line, platform } = await readWith(edit);
-    assert.deepEqual(result, {
-      outcome: 'failed',
-      failureReason:
-        "QuickBooks did not return this company's home currency, so the document cannot be checked. Run it again; if it repeats, contact support.",
-    });
-    assert.equal(line?.[2], 'QuickBooks settings not read (home_currency_missing)');
-    assert.equal(platform.steps.length, 3, 'find-accounts does not run');
+    assert.ok(result.outcome === 'success');
+    assert.deepEqual(result.output?.quickBooks, NO_ANSWER);
+    assert.equal(line?.[2], "Not recorded in QuickBooks: QuickBooks didn't answer");
+    const reported = platform.steps.map((step) => step.stepId);
+    assert.ok(!reported.includes('find-accounts'), 'find-accounts does not run');
   }
   const lower = await readWith((prefs) => (prefs.CurrencyPrefs!.HomeCurrency = { value: ' cad ' }));
   assert.equal((lower.preferences as { homeCurrency: unknown }).homeCurrency, 'CAD');
@@ -163,7 +156,7 @@ test("VendorAndPurchasesPrefs.UseCustomTxnNumbers is kept from OtherPrefs: 'true
   assert.deepEqual([both.customTxnNumbers, both.purchaseCustomTxnNumbers], [false, true]);
 });
 
-test('an answer without a Preferences object, or a body that was not JSON, is unexpected', async () => {
+test('an answer without a Preferences object, or a body that was not JSON, is QuickBooks not answering usably', async () => {
   for (const body of [
     { time: 't' },
     { Preferences: 'x' },
@@ -171,16 +164,17 @@ test('an answer without a Preferences object, or a body that was not JSON, is un
   ]) {
     const world = setUp();
     world.simulator.script('preferences.get', [{ status: 200, body }]);
-    assert.deepEqual(await world.run(), {
-      outcome: 'failed',
-      failureReason:
-        'QuickBooks answered in an unexpected way. Run it again; if it repeats, reconnect QuickBooks.',
-    });
-    assert.equal(lines(world.platform)[2]?.[2], 'QuickBooks settings not read (unexpected_answer)');
+    const result = await world.run();
+    assert.ok(result.outcome === 'success');
+    assert.deepEqual(result.output?.quickBooks, NO_ANSWER);
+    assert.equal(
+      lines(world.platform)[2]?.[2],
+      "Not recorded in QuickBooks: QuickBooks didn't answer",
+    );
   }
 });
 
-test("earlier state is kept, and a Fault names the step's purpose", async () => {
+test('earlier state is kept, and a Fault is QuickBooks not answering usably', async () => {
   const { result } = await readWith();
   assert.ok(result.outcome === 'success');
   assert.ok(result.output?.file && result.output.company, 'receive and read-company state kept');
@@ -188,9 +182,7 @@ test("earlier state is kept, and a Fault names the step's purpose", async () => 
   world.simulator.script('preferences.get', [
     { status: 400, body: { Fault: { Error: [{ code: '5010' }] } } },
   ]);
-  assert.deepEqual(await world.run(), {
-    outcome: 'failed',
-    failureReason:
-      'QuickBooks answered with error 5010 while reading the company settings. Check QuickBooks, then run it again.',
-  });
+  const faulted = await world.run();
+  assert.ok(faulted.outcome === 'success');
+  assert.deepEqual(faulted.output?.quickBooks, NO_ANSWER);
 });

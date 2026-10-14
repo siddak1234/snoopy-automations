@@ -1,0 +1,743 @@
+{
+  "templateId": "invoice-processing",
+  "version": 2,
+  "display": {
+    "name": "Invoice Processing",
+    "description": "Reads bills and receipts, then saves the details or records them in QuickBooks.",
+    "category": "Accounting",
+    "icon": "Receipt"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "manual",
+    "input": [
+      {
+        "key": "invoiceFile",
+        "title": "Document",
+        "description": "A PDF or photo of a bill or receipt.",
+        "control": "artifact",
+        "required": false
+      }
+    ]
+  },
+  "requiredConnections": [
+    {
+      "providerId": "quickbooks",
+      "displayName": "QuickBooks Online",
+      "purpose": "Records bills and receipts.",
+      "scopes": ["com.intuit.quickbooks.accounting"],
+      "optional": true
+    }
+  ],
+  "requiredCapabilities": ["document-extraction"],
+  "artifacts": {
+    "acceptedContentTypes": ["application/pdf", "image/jpeg", "image/png"],
+    "maximumSizeBytes": 3500000,
+    "maximumPdfPages": 10,
+    "maximumImageSidePixels": 8000
+  },
+  "setup": [
+    {
+      "section": "connections",
+      "key": "vendor",
+      "title": "Vendor",
+      "description": "Where the details go.",
+      "control": "connection",
+      "defaultValue": "none",
+      "required": false
+    },
+    {
+      "section": "rules",
+      "key": "holdAboveAmount",
+      "title": "Approval limit",
+      "description": "Amounts over this wait for approval.",
+      "control": "money",
+      "defaultValue": 500,
+      "required": false
+    },
+    {
+      "section": "notifications",
+      "key": "notifyEmail",
+      "title": "Also email",
+      "description": "Gets a short summary of each one.",
+      "control": "email",
+      "required": false
+    }
+  ],
+  "groups": [
+    {
+      "id": "received",
+      "title": "Received",
+      "description": "You add a PDF or photo."
+    },
+    {
+      "id": "read",
+      "title": "Read",
+      "description": "AI reads the details."
+    },
+    {
+      "id": "checked",
+      "title": "Checked",
+      "description": "Totals and duplicates are checked."
+    },
+    {
+      "id": "done",
+      "title": "Done",
+      "description": "Saved, or recorded in QuickBooks."
+    },
+    {
+      "id": "emailed",
+      "title": "Emailed",
+      "description": "A summary goes to Also email."
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "group": "received",
+      "title": "Document received",
+      "description": "A PDF or photo arrives."
+    },
+    {
+      "id": "read-company",
+      "kicker": "ACTION",
+      "group": "received",
+      "title": "QuickBooks checked",
+      "description": "Checks QuickBooks is connected."
+    },
+    {
+      "id": "read-preferences",
+      "kicker": "ACTION",
+      "group": "received",
+      "title": "QuickBooks settings read",
+      "description": "Reads currency and closed dates."
+    },
+    {
+      "id": "find-accounts",
+      "kicker": "ACTION",
+      "group": "received",
+      "title": "Accounts read",
+      "description": "Reads your accounts from QuickBooks."
+    },
+    {
+      "id": "extract",
+      "kicker": "AI STEP",
+      "group": "read",
+      "title": "Document read",
+      "description": "AI reads the details."
+    },
+    {
+      "id": "check-document",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Details checked",
+      "description": "Checks totals and dates."
+    },
+    {
+      "id": "verify-read",
+      "kicker": "AI STEP",
+      "group": "read",
+      "title": "Read again",
+      "description": "Only when something looks wrong."
+    },
+    {
+      "id": "find-vendor",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Vendor looked up",
+      "description": "Finds the vendor in QuickBooks."
+    },
+    {
+      "id": "find-vendor-company",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Vendor company looked up",
+      "description": "Tries the company name."
+    },
+    {
+      "id": "find-similar-vendors",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Similar vendors looked up",
+      "description": "Lists similar names."
+    },
+    {
+      "id": "find-customer-name",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Customer names checked",
+      "description": "QuickBooks allows each name once."
+    },
+    {
+      "id": "find-employee-name",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Employee names checked",
+      "description": "QuickBooks allows each name once."
+    },
+    {
+      "id": "find-duplicate-number",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Number checked",
+      "description": "Looks for the same number."
+    },
+    {
+      "id": "find-duplicate-amount",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Amount checked",
+      "description": "Looks for the same amount."
+    },
+    {
+      "id": "find-related",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Related record looked up",
+      "description": "Looks for a bill it pays."
+    },
+    {
+      "id": "find-other-record",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Other records checked",
+      "description": "Looks for the same purchase."
+    },
+    {
+      "id": "decide",
+      "kicker": "ACTION",
+      "group": "checked",
+      "title": "Record in QuickBooks?",
+      "description": "Records it, or waits for approval."
+    },
+    {
+      "id": "confirm-company",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Company checked again",
+      "description": "After approval."
+    },
+    {
+      "id": "confirm-vendor",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Vendor checked again",
+      "description": "After approval."
+    },
+    {
+      "id": "create-vendor",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Vendor added",
+      "description": "Adds the new vendor."
+    },
+    {
+      "id": "confirm-no-duplicate",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Duplicates checked again",
+      "description": "After approval."
+    },
+    {
+      "id": "create-record",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Recorded in QuickBooks",
+      "description": "Creates the bill or expense."
+    },
+    {
+      "id": "save-details",
+      "kicker": "ACTION",
+      "group": "done",
+      "title": "Details saved",
+      "description": "Saves the details for your team."
+    },
+    {
+      "id": "notify",
+      "kicker": "ACTION",
+      "group": "emailed",
+      "title": "Summary emailed",
+      "description": "Sends a summary to Also email."
+    }
+  ],
+  "service": {
+    "origin": "http://invoice-processing-v2.autom8x.internal:8080",
+    "serviceAccount": "invoice-processing-v2@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 1,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "$comment": "The run's output (automations/invoice-processing/src/output.ts): a record made, a supplier's statement compared, or the details saved. Never sent to a model.",
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "documentType",
+          "route",
+          "record",
+          "newVendor",
+          "nextStep",
+          "holdReasons",
+          "decidedBy"
+        ],
+        "properties": {
+          "outcome": {
+            "const": "recorded"
+          },
+          "documentType": {
+            "enum": ["bill", "receipt", "credit_note"]
+          },
+          "route": {
+            "enum": ["bill", "company_receipt", "card_refund", "vendor_credit"]
+          },
+          "record": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id",
+              "operation",
+              "paymentType",
+              "amountCents",
+              "quickBooksTotalCents",
+              "date",
+              "dueDate",
+              "docNumber",
+              "documentNumber",
+              "payee",
+              "category",
+              "paidFromAccount"
+            ],
+            "properties": {
+              "type": {
+                "enum": ["bill", "expense", "card_refund", "vendor_credit"]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "operation": {
+                "enum": ["bill.create", "purchase.create", "vendorCredit.create"]
+              },
+              "paymentType": {
+                "enum": ["Cash", "Check", "CreditCard", null]
+              },
+              "amountCents": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 999999999999
+              },
+              "quickBooksTotalCents": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "date": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "dueDate": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "docNumber": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 21
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "documentNumber": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "payee": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["kind", "id", "name"],
+                    "properties": {
+                      "kind": {
+                        "const": "vendor"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["kind"],
+                    "properties": {
+                      "kind": {
+                        "const": "none"
+                      }
+                    }
+                  }
+                ]
+              },
+              "category": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "name", "why"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "why": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "paidFromAccount": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["id", "name"],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "newVendor": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["how", "id", "displayName"],
+                "properties": {
+                  "how": {
+                    "enum": ["found", "created"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextStep": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holdReasons": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "over_limit",
+                "new_vendor",
+                "possible_duplicate",
+                "may_be_statement",
+                "matches_bill",
+                "company_charge_found",
+                "payment_method",
+                "paid_from_pick",
+                "earlier_balance",
+                "refund_method_not_shown",
+                "tip_added",
+                "amounts_mismatch",
+                "reads_disagree",
+                "second_check_not_made",
+                "unclear_fields",
+                "not_cross_checked",
+                "new_vendor_no_currency",
+                "name_in_use",
+                "currency_unrecognised"
+              ]
+            }
+          },
+          "decidedBy": {
+            "enum": ["automatically", "after approval"]
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "documentType", "route", "vendor", "statement", "secondCheck"],
+        "properties": {
+          "outcome": {
+            "const": "compared"
+          },
+          "documentType": {
+            "const": "supplier_statement"
+          },
+          "route": {
+            "const": "statement"
+          },
+          "vendor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "displayName"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            }
+          },
+          "statement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "closingCents",
+              "ownSum",
+              "ownSumDifferenceCents",
+              "listedNotInQuickBooks",
+              "listedCheckable",
+              "openBillsNotListed",
+              "openBillsCheckable",
+              "quickBooksOpenCents",
+              "differenceCents"
+            ],
+            "properties": {
+              "closingCents": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "ownSum": {
+                "enum": ["adds_up", "differs", "incomplete", "not_read"]
+              },
+              "ownSumDifferenceCents": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "listedNotInQuickBooks": {
+                "type": "array",
+                "maxItems": 40,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              },
+              "listedCheckable": {
+                "type": "boolean"
+              },
+              "openBillsNotListed": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["count", "totalCents"],
+                    "properties": {
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "totalCents": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "openBillsCheckable": {
+                "type": "boolean"
+              },
+              "quickBooksOpenCents": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "differenceCents": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "secondCheck": {
+            "enum": ["made", "not_made", "not_needed"]
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "documentType",
+          "seller",
+          "number",
+          "date",
+          "dueDate",
+          "currency",
+          "totalCents",
+          "taxCents",
+          "spendType",
+          "paymentMethod",
+          "cardLast4",
+          "notRecorded"
+        ],
+        "properties": {
+          "outcome": {
+            "const": "saved"
+          },
+          "documentType": {
+            "enum": ["bill", "receipt", "credit_note", "supplier_statement"]
+          },
+          "seller": {
+            "type": ["string", "null"],
+            "maxLength": 500
+          },
+          "number": {
+            "type": ["string", "null"],
+            "maxLength": 100
+          },
+          "date": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "dueDate": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "currency": {
+            "type": ["string", "null"],
+            "maxLength": 3
+          },
+          "totalCents": {
+            "type": ["integer", "null"]
+          },
+          "taxCents": {
+            "type": ["integer", "null"]
+          },
+          "spendType": {
+            "type": ["string", "null"]
+          },
+          "paymentMethod": {
+            "type": ["string", "null"]
+          },
+          "cardLast4": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}$"
+          },
+          "notRecorded": {
+            "type": ["string", "null"],
+            "maxLength": 200
+          }
+        }
+      }
+    ]
+  }
+}

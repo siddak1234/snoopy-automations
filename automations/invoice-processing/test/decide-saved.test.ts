@@ -7,15 +7,15 @@ import type { Decision } from '../src/decide/decide.js';
 import { SAVED_MAXIMUM_BYTES, savedBytes } from '../src/decide/saved.js';
 import { memoOf, recordBody, runLine } from '../src/writes/bodies.js';
 import { readSaved } from '../src/writes/saved-state.js';
-import { bill, paidBy, receipt } from './check-world.js';
-import { VENDOR, billRow, decide, found } from './decide-world.js';
+import { bill, receipt } from './check-world.js';
+import { billRow, decide, found } from './decide-world.js';
 
 /**
  * What decide saves for the steps after it (the plan's §2.8; Group 5): the seller and the
  * document's number, carried by design; the company with its file's creation time, for
- * confirm-company; the re-check confirm-no-duplicate repeats; a contractor named as QuickBooks shows
- * the vendor; a memo whose run is the one that writes it; and all of it under 32 KiB with the
- * longest names, read back whole by the steps after decide.
+ * confirm-company; the re-check confirm-no-duplicate repeats; a memo whose run is the one that
+ * writes it, naming Invoice Processing; and all of it under 32 KiB with the longest names, read back
+ * whole by the steps after decide.
  */
 
 function saved(decision: Decision) {
@@ -45,31 +45,13 @@ test("the seller and the document's number are saved, and the company with its f
   assert.ok(readSaved(held as unknown as JsonObject));
 });
 
-test('a contractor is named as QuickBooks shows the vendor, never as typed in "Who paid" (the recommended answer): in the memo and in the saved payer', () => {
-  const typed = saved(
-    decide({
-      answer: bill(),
-      check: paidBy('not_employee', {
-        paidFrom: null,
-        payer: { route: 'not_employee', name: 'sam lee', employeeId: null, account: null },
-      }),
-      vendor: { ...VENDOR, id: '31', displayName: 'Sam Lee Contracting' },
-    }),
-  );
-  assert.equal(
-    typed.plan.memo,
-    'Sam Lee Contracting paid Harrowgate Office Supply, bill HOS-1042.',
-  );
-  assert.equal(typed.payer?.name, 'Sam Lee Contracting');
-});
-
 test("the plan's memo leaves the run to the write: the run that writes it comes first, after an approval the continuation", () => {
   const plan = saved(decide({ answer: receipt(), config: { holdAboveAmount: 0 } })).plan;
   assert.equal(plan.memo, 'Receipt 55120 from Tidewell Hardware.');
   const continuation = '88888888-8888-4888-8888-888888888888';
   assert.equal(
     memoOf(plan, continuation),
-    `Created by Autom8x Bills & Receipts, run ${continuation}. Receipt 55120 from Tidewell Hardware.`,
+    `Created by Autom8x Invoice Processing, run ${continuation}. Receipt 55120 from Tidewell Hardware.`,
   );
   assert.equal(memoOf({ ...plan, memo: '' }, continuation), runLine(continuation));
   // The same plan and run give the same bytes, every time: what the platform's record replays.

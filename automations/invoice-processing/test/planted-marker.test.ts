@@ -5,13 +5,15 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { secondReadOf } from '../src/checks/answers.js';
 import type { CheckInput } from '../src/checks/check.js';
-import { CHECK_DOCUMENT_REASONS, CHECK_DOCUMENT_SENTENCES } from '../src/checks/rules.js';
-import { DECIDE_SENTENCES } from '../src/decide/fails.js';
+import { CHECK_DOCUMENT_REASONS, RECORDING_RULES } from '../src/checks/rules.js';
+import { readOf, savedDetails } from '../src/details.js';
+import { NOT_RECORDED } from '../src/quickbooks-path.js';
 import { compareReads } from '../src/reads/compare.js';
 import type { VerificationState } from '../src/state.js';
 import { checkedSummary } from '../src/steps/check-document.js';
 import { verifiedSummary } from '../src/steps/verify-read.js';
-import { VISA, check, paidBy } from './check-world.js';
+import { RUN_FAILS } from '../src/words.js';
+import { NONE_PATH, check } from './check-world.js';
 import { decide } from './decide-world.js';
 import { secondAnswer } from './fixtures.js';
 import { SAMPLES } from './sample-maker/samples.js';
@@ -22,8 +24,8 @@ import { SAMPLES } from './sample-maker/samples.js';
  * (samples.test.ts), so here each sample's marker is planted in every field the code reads but
  * must never pass on — read 1's currency, card digits, date, due date and the references any
  * document but a statement lists; read 2's currency, card digits and dates — and the run goes
- * through check-document, the second read's comparison and decide on every path, held and
- * straight through. The seller's name, the document number, a credit's original invoice and a
+ * through check-document, the second read's comparison, the details saved, and decide, QuickBooks
+ * chosen or not, held and straight through. The seller's name, the document number, a credit's original invoice and a
  * statement's listed references are carried by design, so the marker is never planted there.
  */
 
@@ -62,19 +64,13 @@ const SECOND_PLANTINGS: readonly (readonly string[])[] = [
   ['dueDate'],
 ];
 
-/** The paths a sample's document can take: as the company's, and paid personally when a bill or receipt. */
-function payersOf(answer: JsonObject): [string, Partial<CheckInput>][] {
-  const company: [string, Partial<CheckInput>] = ['company', { paidFrom: VISA }];
-  if (answer.documentType !== 'bill' && answer.documentType !== 'receipt') return [company];
-  return [
-    company,
-    ['employee', paidBy('employee', { paidFrom: null })],
-    ['owner', paidBy('owner', { paidFrom: null })],
-    ['contractor', paidBy('not_employee', { paidFrom: null })],
-  ];
-}
+/** The two paths: QuickBooks chosen, and the vendor "None" — where decide never runs. */
+const PATHS: readonly [string, Partial<CheckInput>][] = [
+  ['quickbooks', {}],
+  ['none', NONE_PATH],
+];
 
-test("every sample's marker, planted in each field the code must not pass on, reaches no line, reason, wording, sentence, state or saved data — on every path, held and straight through", (t) => {
+test("every sample's marker, planted in each field the code must not pass on, reaches no line, reason, sentence, details, state or saved data — on either path, held and straight through", (t) => {
   /** route → outcome → how many runs ended so with a marker planted. */
   const seen = new Map<string, Map<string, number>>();
   const count = (route: string, outcome: string) => {
@@ -86,7 +82,7 @@ test("every sample's marker, planted in each field the code must not pass on, re
     const { marker } = sample;
     const clean = (what: string, value: unknown) =>
       assert.ok(!JSON.stringify(value).includes(marker), `${sample.name}: the marker in ${what}`);
-    for (const [payer, options] of payersOf(sample.answer)) {
+    for (const [path, options] of PATHS) {
       for (const firstFields of FIRST_PLANTINGS) {
         const first = plantedFirst(sample.answer, marker, firstFields);
         const checked = check(first, options);
@@ -96,15 +92,27 @@ test("every sample's marker, planted in each field the code must not pass on, re
           clean(`check-document's ${rule}`, [
             checked,
             rule === 'answer_unusable'
-              ? rule
-              : [CHECK_DOCUMENT_SENTENCES[rule], CHECK_DOCUMENT_REASONS[rule]],
+              ? RUN_FAILS.unreadable
+              : [RUN_FAILS[rule], CHECK_DOCUMENT_REASONS[rule]],
           ]);
-          if (firstFields.length > 0) count(`${payer} ${String(first.documentType)}`, rule);
+          if (firstFields.length > 0) count(`${path} ${String(first.documentType)}`, rule);
           continue;
         }
-        const { document } = checked;
+        const { document, recordingRule } = checked;
         clean('the document check-document keeps', document);
-        clean("check-document's line", checkedSummary(document, options.switchOn === true));
+        clean("check-document's line", checkedSummary(document));
+        clean('the details saved', savedDetails(readOf(document), null));
+        if (recordingRule !== undefined) {
+          // Not recorded in QuickBooks: the run goes on to save the details, in a fixed reason.
+          const reason = NOT_RECORDED[RECORDING_RULES[recordingRule]];
+          clean(`the reason for ${recordingRule}`, [
+            reason,
+            savedDetails(readOf(document), { notRecorded: reason }),
+          ]);
+          if (firstFields.length > 0) count(`${path} ${String(first.documentType)}`, recordingRule);
+          continue;
+        }
+        if (path === 'none') continue;
         for (const secondFields of SECOND_PLANTINGS) {
           const planted = Object.fromEntries(secondFields.map((field) => [field, marker]));
           const second = secondReadOf(secondAnswer(sample.answer, planted));
@@ -119,19 +127,17 @@ test("every sample's marker, planted in each field the code must not pass on, re
             spendTypeDisputed: comparison.spendTypeDisputed,
           };
           clean('the comparison', comparison);
-          clean("verify-read's line", verifiedSummary(MODEL_SERVED, verification));
+          clean("verify-read's line", verifiedSummary(verification));
           const plantedAnywhere = firstFields.length > 0 || secondFields.length > 0;
           for (const holdAboveAmount of [0, 1_000_000]) {
             const decision = decide({
               answer: first,
               check: options,
               verification,
-              config: { expenseAccount: 'Utilities:Electric', holdAboveAmount },
+              config: { holdAboveAmount },
             });
             clean(`decide (${decision.outcome})`, decision);
-            if (decision.outcome === 'failed') {
-              assert.equal(decision.sentence, DECIDE_SENTENCES[decision.failure]);
-            }
+            assert.notEqual(decision.outcome, 'failed', sample.name);
             if (plantedAnywhere) count(document.route, decision.outcome);
           }
         }
@@ -145,12 +151,10 @@ test("every sample's marker, planted in each field the code must not pass on, re
   for (const route of ['bill', 'company_receipt', 'card_refund', 'vendor_credit']) {
     assert.ok((outcomes(route).held ?? 0) > 0 && (outcomes(route).ok ?? 0) > 0, route);
   }
-  for (const route of ['employee', 'owner', 'contractor']) {
-    assert.ok((outcomes(route).held ?? 0) > 0, route);
-    assert.equal(outcomes(route).ok, undefined, `${route}: a reimbursement always holds`);
-  }
   assert.ok((outcomes('statement').compared ?? 0) > 0, 'a statement compared');
-  // A planted date the record needs ends the run at check-document, in a fixed sentence.
-  assert.ok((outcomes('company bill').C22 ?? 0) > 0 && (outcomes('company bill').C24 ?? 0) > 0);
-  assert.ok((outcomes('employee receipt').C22 ?? 0) > 0);
+  // A planted date ends the run at check-document, in a fixed sentence, on either path; a planted
+  // due date only keeps it out of QuickBooks.
+  assert.ok((outcomes('quickbooks bill').C22 ?? 0) > 0 && (outcomes('none bill').C22 ?? 0) > 0);
+  assert.ok((outcomes('quickbooks bill').C24 ?? 0) > 0);
+  assert.equal(outcomes('none bill').C24, undefined);
 });

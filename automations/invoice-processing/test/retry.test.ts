@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { PROVIDER_REFUSALS } from '@autom8x/automation-kit/testing';
 
+import { RUN_FAILS } from '../src/words.js';
 import { callsOf, lines, setUp } from './fixtures.js';
 
 /**
@@ -21,15 +22,18 @@ test('a QuickBooks call with no answer is repeated 10 s later under the same key
   const started = Date.now();
   const result = await world.run();
   const elapsed = Date.now() - started;
+  // Its attempts spent, read-preferences ends "not recorded" (decision 6); with no time left for a
+  // model's answer, the read is not started, and the run ends saying so.
   assert.deepEqual(lines(world.platform).slice(1), [
-    ['read-company', 'ok', 'QuickBooks company: Sample Bakery (US) (after 2 attempts)'],
-    ['read-preferences', 'failed', 'The read-preferences step failed (after 2 attempts)'],
+    ['read-company', 'ok', 'QuickBooks: Sample Bakery (after 2 attempts)'],
+    [
+      'read-preferences',
+      'failed',
+      "Not recorded in QuickBooks: QuickBooks didn't answer (after 2 attempts)",
+    ],
+    ['extract', 'failed', RUN_FAILS.ai_unavailable],
   ]);
-  assert.deepEqual(result, {
-    outcome: 'failed',
-    failureReason:
-      'Autom8x could not reach QuickBooks. Run it again in a few minutes; nothing was created.',
-  });
+  assert.deepEqual(result, { outcome: 'failed', failureReason: RUN_FAILS.ai_unavailable });
   for (const stepId of ['read-company', 'read-preferences']) {
     const sent = callsOf(world.platform, world.request, stepId);
     assert.equal(sent.length, 2, stepId);
