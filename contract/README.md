@@ -3,7 +3,8 @@
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
 (`snoopy-backend`, private) at commit `df4bbad`, re-pinned 2026-10-11 — the platform's
 `main` after its #198 and #199 — two files since refreshed from its unmerged #210 at `9516c0e`
-(2026-10-14, below). The platform emits them with `npm run schemas:emit` and
+(2026-10-14), and three from its unmerged Build 21 branch `round-17/b21-platform` (2026-10-16,
+below). The platform emits them with `npm run schemas:emit` and
 verifies the committed files against its TypeScript types byte for byte, so this copy is the
 contract it publishes to external automation authors. To refresh: copy the directory again
 and update the commit above in the same change.
@@ -170,6 +171,31 @@ platform refuses a manifest declaring any of these, and v2 of `invoice-processin
 registered; this copy is re-pinned to the merge commit then, its bytes unchanged unless a
 review changed them.
 
+Refreshed 2026-10-16 from the contract of the platform's Build 21 (its BUILD-PLAN 25.4.27–25.4.30,
+ADR-0039 and ADR-0040; the branch `round-17/b21-platform`, not yet merged), with the owner's
+corrections of 2026-10-15 applied (AM1 and AM7: "no limits other than size"; every document
+carries its number, the label printed beside it and its other references) — as `dcb8ddb` and
+`1137ac9` were above, this repository's half built beside the platform's. Three files moved,
+additively for every automation here:
+
+- `automation-run-result.json`: the success and the held branches' optional `documents` — at
+  least one `RunDocument` when sent, with no maximum: `index` (from 1), `status`, `statusText`,
+  `type`, `vendor`, `number`, `numberLabel`, `references`, `date`, `time`, `currency`,
+  `lineItems`, `lineItemsComplete`, the amounts as decimal strings, `payment`, `recordedIn` and
+  `details` (each a `RunDetailLine`). No count and no length is bounded but a detail line's.
+- `automation-mail-request.json`: now `oneOf` — the plain mail, unchanged, or the run's results
+  (`to`, `template: "run-results"`, `summary`, `documents`, `idempotencyKey`), which the platform
+  renders in its one email standard. The SDK sends the plain form alone: the platform mails each
+  run's results itself, to the people it picks (the owner's AM3).
+- `automation-manifest.json`: a setup field's optional `providers` (1–16 distinct provider ids)
+  and `group` (a step group's id) — one connection field per step that uses a connection.
+
+The other five files are byte-identical to `9516c0e`'s; all eight are byte-identical to that
+branch's `schemas/` at its `a90a772` (2026-10-17). Until that branch merges and a promotion
+carries it, the live platform refuses `documents` and a manifest declaring `providers` or a
+setup `group`; this copy is re-vendored from the merge commit then, its bytes unchanged unless a
+review changed them, and `invoice-processing` v3 waits for it.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -222,11 +248,22 @@ than once" refused; "only the first step may be a TRIGGER".
 **Optional connections and the vendor choice** (ADR-0037, from `9516c0e`) —
 `requiredConnections[].optional` "must be a boolean"; a `connection` setup field "must be
 'connections' for a connection control" (its `section`), "must be false for a connection
-control" (`required`) and "must be 'none' for a connection control" (`defaultValue`); "only
-one setup field may have control 'connection'", and it "is only meaningful when
-requiredConnections has an optional entry"; a manifest with an optional connection and setup
-fields but none of them a choice: "an optional connection needs one setup field with control
-'connection'"; a `provider-event` trigger "must name a required, not optional, connection".
+control" (`required`) and "must be 'none' for a connection control" (`defaultValue`); a
+choice "is only meaningful when requiredConnections has an optional entry"; a manifest with an
+optional connection and setup fields but none of them a choice: "an optional connection needs
+one setup field with control 'connection'"; a `provider-event` trigger "must name a required,
+not optional, connection".
+
+**One connection per step** (ADR-0040, Build 21) — "only one setup field may have control
+'connection'" is gone: a manifest may declare one connection field per step that uses one. A
+field's `providers` "is only meaningful on a connection control", "must name 1 to 16
+providers", each "must name optional connections only" and none "is declared more than once";
+with two or more connection fields, each "with more than one connection field, each must name
+its providers", and none "names <id>, which another connection field names"; every optional
+connection is chosen by one field — "optional connection '<id>' is chosen by no connection
+field" — or by a manifest's one field that names none, which chooses among them all. A setup
+field's `group` "must name a declared group", and without `groups`, "group is only meaningful
+when groups are declared". A flow's choice "must be 'none' or one of this field's providers".
 
 **Step groups** (ADR-0037, from `9516c0e`) — `groups` "must declare at least 2 groups", an
 id "is declared more than once" refused, a key besides `id`, `title` and `description` "is

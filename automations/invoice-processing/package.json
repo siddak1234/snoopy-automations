@@ -2,7 +2,7 @@
   "name": "@autom8x/invoice-processing",
   "version": "0.1.0",
   "private": true,
-  "description": "Invoice Processing (v2): reads a bill, receipt, credit note or statement from a PDF or photo, then saves its details for the team, or records it in QuickBooks Online when the flow's vendor is QuickBooks. One AI read, a second only when the first shows a problem; accounts read from QuickBooks, never typed; QuickBooks failing mid-run saves the details instead. After the checks an approval calls for, it creates the one record planned, and emails a summary when an address is set.",
+  "description": "Invoice Processing (v3): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each its own document with its own seller, numbers, references and line items, read in parts so none is cut off — then saves each one's details, or records or compares it in QuickBooks Online when the flow's vendor is QuickBooks. One document never fails the others: a doubtful one is read again, and still unclear waits for one approval while the rest are recorded or saved; only a page that is clearly no financial document waits for review.",
   "type": "module",
   "engines": {
     "node": ">=22"

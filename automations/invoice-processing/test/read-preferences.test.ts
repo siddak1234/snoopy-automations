@@ -14,7 +14,7 @@ const NO_ANSWER = { notRecorded: "QuickBooks didn't answer" };
 type Prefs = Record<string, Record<string, unknown>>;
 
 async function readWith(edit: (prefs: Prefs) => void = () => undefined) {
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   edit(world.simulator.company.preferences as Prefs);
   const result = await world.run();
   const line = lines(world.platform).find(([stepId]) => stepId === 'read-preferences');
@@ -162,13 +162,13 @@ test('an answer without a Preferences object, or a body that was not JSON, is Qu
     { Preferences: 'x' },
     { error: 'the provider returned a response that is not JSON' },
   ]) {
-    const world = setUp();
+    const world = setUp({ through: 'find-accounts' });
     world.simulator.script('preferences.get', [{ status: 200, body }]);
     const result = await world.run();
     assert.ok(result.outcome === 'success');
     assert.deepEqual(result.output?.quickBooks, NO_ANSWER);
     assert.equal(
-      lines(world.platform)[2]?.[2],
+      lines(world.platform).find(([stepId]) => stepId === 'read-preferences')?.[2],
       "Not recorded in QuickBooks: QuickBooks didn't answer",
     );
   }
@@ -178,7 +178,7 @@ test('earlier state is kept, and a Fault is QuickBooks not answering usably', as
   const { result } = await readWith();
   assert.ok(result.outcome === 'success');
   assert.ok(result.output?.file && result.output.company, 'receive and read-company state kept');
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   world.simulator.script('preferences.get', [
     { status: 400, body: { Fault: { Error: [{ code: '5010' }] } } },
   ]);

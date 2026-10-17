@@ -9,14 +9,14 @@ import { lines } from './fixtures.js';
 import { lineOf, queriesOf, reported, routeRun, sampleVendor, stateOf } from './lookups-world.js';
 
 /**
- * find-vendor and find-vendor-company: the seller by its exact name, active or not, then by company
- * name; a bill's, a credit note's or a statement's vendor inactive, or two with the name, keeps it
+ * find-vendor and find-vendor-company — in v3 inside `find-vendors`, with find-similar-vendors after
+ * them for a new vendor: the seller by its exact name, active or not, then by company name; a bill's, a credit note's or a statement's vendor inactive, or two with the name, keeps it
  * out of QuickBooks — the details saved (decision 6) — but for a company receipt's or a card
  * refund's seller, which is then not linked (D20; unlinked-seller.test.ts); a near-miss ignored; and
  * names escaped as Intuit reads them. Lines (§3.E): `Vendor found`, `New vendor`.
  */
 
-const THROUGH = 'find-vendor-company';
+const THROUGH = 'find-vendors';
 const summaryOf = (result: RunResult) =>
   result.outcome === 'success' ? result.summary : JSON.stringify(result);
 const NOT_IN_QUICKBOOKS = RESULTS.notRecorded("the vendor isn't in QuickBooks");
@@ -44,9 +44,8 @@ test("one vendor with the name, capital letters aside: matched with QuickBooks' 
     balanceCents: 98050,
     vendor1099: true,
   });
-  assert.equal(lineOf(world, 'find-vendor'), 'Vendor found');
-  assert.equal(lineOf(world, 'find-vendor-company'), undefined, 'skipped: no line');
-  assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor']);
+  assert.equal(lineOf(world, 'find-vendors'), 'Vendor found');
+  assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor'], 'the company name not searched');
 });
 
 test('no vendor by name: one by company name is matched; none at all is a new vendor, both lines saying so', async () => {
@@ -74,16 +73,13 @@ test('no vendor by name: one by company name is matched; none at all is a new ve
     'find-vendor-company':
       "SELECT * FROM Vendor WHERE CompanyName = 'Harrowgate Office Supply' AND Active IN (true, false) MAXRESULTS 2",
   });
-  assert.equal(lineOf(byCompany, 'find-vendor-company'), 'Vendor found');
+  assert.equal(lineOf(byCompany, 'find-vendors'), 'Vendor found');
   const none = await routeRun({ answer: bill(), through: THROUGH, bare: true });
   assert.deepEqual(stateOf(none.result).vendor, { status: 'new' });
-  assert.deepEqual(lines(none.platform).slice(-2), [
-    ['find-vendor', 'ok', 'New vendor'],
-    ['find-vendor-company', 'ok', 'New vendor'],
-  ]);
-  // A receipt's seller nobody has: no vendor to link (D20), the same line.
+  assert.deepEqual(lines(none.platform).at(-1), ['find-vendors', 'ok', 'New vendor']);
+  // A receipt's seller nobody has: a new vendor too, the same line.
   const seller = await routeRun({ answer: receipt(), through: THROUGH, bare: true });
-  assert.equal(lineOf(seller, 'find-vendor-company'), 'New vendor');
+  assert.equal(lineOf(seller, 'find-vendors'), 'New vendor');
 });
 
 test("a bill's, a credit note's or a statement's vendor inactive, or two with the name — by company name too: not recorded, no QuickBooks step after it, the details saved", async () => {
@@ -96,7 +92,7 @@ test("a bill's, a credit note's or a statement's vendor inactive, or two with th
       'inactive',
       (sim) =>
         sim.company.vendors.push(sampleVendor('7', 'Harrowgate Office Supply', { Active: false })),
-      'find-vendor',
+      'find-vendors',
     ],
     [
       'two',
@@ -105,7 +101,7 @@ test("a bill's, a credit note's or a statement's vendor inactive, or two with th
           sampleVendor('7', 'Harrowgate Office Supply'),
           sampleVendor('8', 'harrowgate office supply'),
         ),
-      'find-vendor',
+      'find-vendors',
     ],
     [
       'inactive by company name',
@@ -113,7 +109,7 @@ test("a bill's, a credit note's or a statement's vendor inactive, or two with th
         sim.company.vendors.push(
           sampleVendor('61', 'HOS', { CompanyName: 'Harrowgate Office Supply', Active: false }),
         ),
-      'find-vendor-company',
+      'find-vendors',
     ],
     [
       'two by company name',
@@ -122,18 +118,18 @@ test("a bill's, a credit note's or a statement's vendor inactive, or two with th
           sampleVendor('61', 'HOS East', { CompanyName: 'Harrowgate Office Supply' }),
           sampleVendor('62', 'HOS West', { CompanyName: 'Harrowgate Office Supply' }),
         ),
-      'find-vendor-company',
+      'find-vendors',
     ],
   ];
   for (const [label, company, stepId] of cases) {
     const world = await routeRun({ answer: bill(), bare: true, company });
     assert.equal(summaryOf(world.result), NOT_IN_QUICKBOOKS, label);
     assert.deepEqual(
-      reported(world).slice(-2),
-      [stepId, 'save-details'],
+      reported(world).slice(-3),
+      [stepId, 'decide', 'save-documents'],
       `${label}: no QuickBooks step after it`,
     );
-    assert.deepEqual(lines(world.platform).at(-2), [
+    assert.deepEqual(lines(world.platform).at(-3), [
       stepId,
       'failed',
       "Not recorded in QuickBooks: the vendor isn't in QuickBooks",
@@ -180,7 +176,7 @@ test('a row QuickBooks returns under another name is a near-miss, ignored: the v
       ]),
   });
   assert.deepEqual(stateOf(world.result).vendor, { status: 'new' });
-  assert.equal(lineOf(world, 'find-vendor'), 'New vendor');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor');
 });
 
 test('names with an apostrophe, an ampersand or a backslash are sent escaped and matched as printed', async () => {
@@ -203,6 +199,8 @@ test('names with an apostrophe, an ampersand or a backslash are sent escaped and
       "SELECT * FROM Vendor WHERE DisplayName IN ('O\\'Brien & Sons', 'O\\'Brien & Sons (deleted)') AND Active IN (true, false) MAXRESULTS 4",
     'find-vendor-company':
       "SELECT * FROM Vendor WHERE CompanyName = 'O\\'Brien & Sons' AND Active IN (true, false) MAXRESULTS 2",
+    'find-similar-vendors':
+      "SELECT * FROM Vendor WHERE DisplayName LIKE '%brien%' AND Active IN (true, false) MAXRESULTS 3",
   });
 });
 
@@ -214,7 +212,7 @@ test('a name past the 100 characters a company name holds is not searched by com
     through: THROUGH,
     bare: true,
   });
-  assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor']);
+  assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor', 'find-similar-vendors']);
   assert.deepEqual(stateOf(world.result).vendor, { status: 'new' });
 });
 

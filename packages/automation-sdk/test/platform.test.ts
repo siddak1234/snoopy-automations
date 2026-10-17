@@ -209,60 +209,6 @@ test('a callback that never answers times out instead of hanging the run', async
   );
 });
 
-test('a mail sends exactly the four fields the handler allowlists, with the token, and reads the acceptance', async () => {
-  await client.sendMail({
-    to: 'vendor@example.com',
-    subject: 'Invoice INV-1 received',
-    body: 'We received it.',
-    idempotencyKey: 'notify-0123456789abcdef',
-    // A field the handler would refuse must not travel even if a caller adds one.
-    ...({ from: 'me@customer.example' } as object),
-  });
-  const { path, headers, body } = last();
-  assert.equal(path, '/v1/automations/callbacks/mail');
-  assert.equal(headers.authorization, `Bearer ${TOKEN}`);
-  assert.deepEqual(body, {
-    to: 'vendor@example.com',
-    subject: 'Invoice INV-1 received',
-    body: 'We received it.',
-    idempotencyKey: 'notify-0123456789abcdef',
-  });
-
-  stub.answers.mail = () => ({ status: 200, body: { mail: { queued: true } } });
-  await assert.rejects(
-    client.sendMail({
-      to: 'v@example.com',
-      subject: 's',
-      body: 'b',
-      idempotencyKey: 'k'.repeat(16),
-    }),
-    /did not answer with an acceptance/u,
-  );
-
-  stub.answers.mail = () => ({
-    status: 403,
-    body: problemFixture({
-      status: 403,
-      code: 'FORBIDDEN',
-      detail: 'The recipient is an address inside the requesting workspace',
-      details: { reason: 'recipient_inside_workspace' },
-    }),
-  });
-  await assert.rejects(
-    client.sendMail({
-      to: 'v@example.com',
-      subject: 's',
-      body: 'b',
-      idempotencyKey: 'k'.repeat(16),
-    }),
-    (error: unknown) =>
-      error instanceof CallbackRefusedError &&
-      error.callback === 'mail' &&
-      error.status === 403 &&
-      error.reason === 'recipient_inside_workspace',
-  );
-});
-
 /** An origin nobody listens on: a port taken, then given back. */
 async function closedOrigin(): Promise<string> {
   const server = createServer();

@@ -11,16 +11,14 @@ import {
 } from '@autom8x/automation-sdk';
 
 import { codeOf } from './outcome.js';
-import { runResult } from './output.js';
-import {
-  UNCONFIRMED_LINE,
-  notRecorded,
-  onQuickBooksPath,
-  quickBooksStateOf,
-  unconfirmed,
-} from './quickbooks-path.js';
+import { UNCONFIRMED_LINE, notRecorded } from './quickbooks-path.js';
+import { confirmCompanyGaveUp } from './run/approval.js';
+import { written } from './run/documents.js';
+import { gaveUp, type FanOut } from './run/fan-out.js';
+import { quickBooksRun } from './run/quickbooks.js';
+import { runResult } from './run/result.js';
+import { runStateOf } from './run/state.js';
 import { RUN_FAILS } from './words.js';
-import { createdOf } from './writes/saved-state.js';
 
 /**
  * How a run ends when a step THROWS — and what the log keeps.
@@ -29,26 +27,26 @@ import { createdOf } from './writes/saved-state.js';
  * unchanged, so the SDK's step retry can repeat it. When the attempts are spent:
  *
  * - a QuickBooks step is ended by the run's `recover` (`recoverQuickBooks`): QuickBooks did not
- *   answer, so the document is "not recorded in QuickBooks" — or, for a write, QuickBooks "didn't
- *   confirm" — and the run goes on to save the details (the session's decision 6);
+ *   answer, so the documents it had not finished are "not recorded in QuickBooks" — or, the one it
+ *   was writing, QuickBooks "didn't confirm" — and the run goes on to save their details (v2's
+ *   decision 6, per document in v3: `gaveUp` in `src/run/fan-out.ts`);
  * - any other step ends the run, and the serving shell would make the error's own message its
  *   reason. Instead each step is wrapped to note which step threw — in a WeakMap keyed by the error
  *   object itself, so the SDK's marks on it still hold and its retry still reads it — and the run's
  *   `execute` turns the throw into a failed result with one of the spec's sentences (§3.F).
  *
  * The runner reports each step AFTER it returns, and a report the platform refuses — the Edge's
- * 429 — throws outside any step: once a record was made, or a write QuickBooks may have made, the run
- * must not say "Try again". So the wrapper also notes, per run, what a step made (`RunNotes`), and
- * the run ends saying it. It
- * logs each reason code a step's result carries (`src/outcome.ts`): codes reach the log, never a
- * person.
+ * 429 — throws outside any step: once a record was made, or a write QuickBooks may have made, the
+ * run must not say "Try again". So the wrapper also notes, per run, what its steps made
+ * (`RunNotes`), and the run ends saying it. It logs each reason code a step's result carries
+ * (`src/outcome.ts`): codes reach the log, never a person.
  */
 
 const thrownBy = new WeakMap<object, string>();
 
 /** What a run's steps have done that its end must not deny. */
 export interface RunNotes {
-  /** create-record made the record: the result line naming it (§3.F). */
+  /** A record was made: the run's summary of its documents (§3.5). */
   readonly recorded: string | null;
   /** A write nothing answered: QuickBooks may hold it, and the run must not say "Try again". */
   readonly unconfirmed: boolean;
@@ -61,75 +59,66 @@ const NOTHING_DONE: RunNotes = { recorded: null, unconfirmed: false, failureReas
 /** Per run, keyed by its request — the one object every step's context carries. */
 const runs = new WeakMap<object, RunNotes>();
 
-/** The result line of the record a state holds, or null. */
-function recordedLine(request: InvokeRequest, result: StepResult): string | null {
+/** What a state's documents hold that QuickBooks may now have: a record made, a write unconfirmed. */
+function writtenOf(request: InvokeRequest, result: StepResult) {
   const state = result.outcome === 'skipped' ? undefined : result.state;
-  if (state === undefined || !createdOf(state)) return null;
-  try {
-    return runResult(state, request).summary;
-  } catch {
-    return null;
+  const run = state === undefined ? undefined : runStateOf(state);
+  if (!state || !run) return { recorded: null, unconfirmed: false };
+  const kinds = run.documents.map((entry) => written(entry.engine));
+  let recorded: string | null = null;
+  if (kinds.includes('recorded')) {
+    try {
+      recorded = runResult(state, request).summary;
+    } catch {
+      recorded = null;
+    }
   }
+  return { recorded, unconfirmed: kinds.includes('unconfirmed') };
 }
 
 /** A step's result, noted against its run: a record made, or a write unconfirmed, stays noted. */
 function noteResult(request: InvokeRequest, result: StepResult): void {
   const before = runs.get(request) ?? NOTHING_DONE;
-  const state = result.outcome === 'skipped' ? undefined : result.state;
-  const quickBooks = state === undefined ? null : quickBooksStateOf(state);
+  const { recorded, unconfirmed } = writtenOf(request, result);
   runs.set(request, {
-    recorded: recordedLine(request, result) ?? before.recorded,
-    unconfirmed:
-      before.unconfirmed ||
-      (quickBooks !== null && quickBooks !== undefined && 'unconfirmed' in quickBooks),
+    recorded: recorded ?? before.recorded,
+    unconfirmed: before.unconfirmed || unconfirmed,
     failureReason: result.outcome === 'failed' ? result.failureReason : undefined,
   });
 }
 
-/** Every step that calls QuickBooks; the two writes among them. */
-export const QUICKBOOKS_STEPS: ReadonlySet<string> = new Set([
+/** The run-level QuickBooks reads, made once for every document (`src/run/quickbooks.ts`). */
+export const RUN_LEVEL_STEPS: ReadonlySet<string> = new Set([
   'read-company',
   'read-preferences',
   'find-accounts',
-  'find-vendor',
-  'find-vendor-company',
-  'find-similar-vendors',
-  'find-customer-name',
-  'find-employee-name',
-  'find-duplicate-number',
-  'find-duplicate-amount',
-  'find-related',
-  'find-other-record',
-  'confirm-company',
-  'confirm-vendor',
-  'create-vendor',
-  'confirm-no-duplicate',
-  'create-record',
 ]);
-export const WRITE_STEPS: ReadonlySet<string> = new Set(['create-vendor', 'create-record']);
 
 /** The steps that call a model: a throw there that got no answer is "AI is busy". */
 export const MODEL_STEPS: ReadonlySet<string> = new Set(['extract', 'verify-read']);
 
 /**
- * The run's `recover`: a QuickBooks step that threw until the SDK's attempts were spent ends
- * "not recorded in QuickBooks: QuickBooks didn't answer" — a write, "QuickBooks didn't confirm",
- * since it may have been made — and the run goes on (decision 6). Any other step's throw ends the
- * run as before (`undefined`).
+ * The run's `recover`: a QuickBooks step that threw until the SDK's attempts were spent ends — the
+ * run-level reads keeping every document out of QuickBooks, a per-document step the documents it
+ * had not finished, confirm-company those that waited — and the run goes on (decision 6). Any
+ * other step's throw ends the run as before (`undefined`).
  */
-export function recoverQuickBooks(log: Logger) {
+export function recoverQuickBooks(log: Logger, perDocument: Readonly<Record<string, FanOut>>) {
   return (stepId: string, error: unknown, context: StepContext): StepResult | undefined => {
-    if (!QUICKBOOKS_STEPS.has(stepId) || !onQuickBooksPath(context.request, context.state)) {
-      return undefined;
+    let result: StepResult | undefined;
+    if (RUN_LEVEL_STEPS.has(stepId) && quickBooksRun(context.state, context.request)) {
+      result = notRecorded(context.state, 'no_answer');
+    } else if (stepId === 'confirm-company') {
+      result = confirmCompanyGaveUp(context);
+    } else if (Object.hasOwn(perDocument, stepId)) {
+      result = gaveUp(perDocument[stepId]!, error, context);
     }
+    if (result === undefined) return undefined;
     log('info', 'quickbooks_step_gave_up', {
       runId: context.request.runId,
       stepId,
       ...shapeOf(error),
     });
-    const result = WRITE_STEPS.has(stepId)
-      ? unconfirmed(context.state)
-      : notRecorded(context.state, 'no_answer');
     noteResult(context.request, result);
     return result;
   };
@@ -197,7 +186,7 @@ export function sentenceFor(
   error: unknown,
   run: RunNotes = NOTHING_DONE,
 ): string {
-  // The record stands, whatever threw after it: say so, never "Try again" — nor after a write
+  // The records stand, whatever threw after them: say so, never "Try again" — nor after a write
   // QuickBooks may have made.
   if (run.recorded !== null) return run.recorded;
   if (run.unconfirmed) return UNCONFIRMED_LINE;

@@ -24,7 +24,7 @@ const DUPLICATE = RESULTS.notRecorded('may already be in QuickBooks');
 const summaryOf = (result: RunResult) =>
   result.outcome === 'success' ? result.summary : JSON.stringify(result);
 const STOPPED = [
-  'confirm-no-duplicate',
+  'confirm-no-duplicates',
   'failed',
   'Not recorded in QuickBooks: may already be in QuickBooks',
 ];
@@ -112,7 +112,7 @@ test('confirm-no-duplicate after a full lookup ("too many to check"): a match Qu
   const approved = await approve(four);
   assert.equal(approved.result.outcome, 'success');
   assert.equal(
-    approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
+    approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicates')?.[2],
     'No duplicate',
   );
   assert.deepEqual(writesOf(approved.providerCalls).length, 1);
@@ -122,7 +122,7 @@ test('confirm-no-duplicate after a full lookup ("too many to check"): a match Qu
   const fed = await approve(three);
   assert.equal(summaryOf(fed.result), DUPLICATE);
   assert.deepEqual(
-    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
+    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicates'),
     STOPPED,
   );
   // A match decide's lookup did not show though it was not full was changed, or added, meanwhile:
@@ -144,7 +144,7 @@ test('the re-check asks for the newest created first, so a match made while the 
   const fed = await approve(five);
   assert.equal(summaryOf(fed.result), DUPLICATE);
   assert.deepEqual(
-    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
+    fed.steps.find(([stepId]) => stepId === 'confirm-no-duplicates'),
     STOPPED,
   );
   assert.match(

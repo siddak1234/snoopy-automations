@@ -158,9 +158,10 @@ test('3,500,000 bytes passes and 3,500,001 fails', async () => {
   await refusedWith(FILE, 'file_too_large')(jpeg({ sizeBytes: 3_500_001 }));
 });
 
-test('a PDF of 10 pages passes and one of 11 fails', async () => {
-  assert.deepEqual((await received(pdf({ pageCount: 10 }))).first?.[2], 'PDF, 10 pages');
-  await refusedWith(FILE, 'too_many_pages')(pdf({ pageCount: 11 }));
+test('a PDF of any number of pages passes: no limit other than size (AM1, AM7)', async () => {
+  for (const pageCount of [10, 11, 250]) {
+    assert.deepEqual((await received(pdf({ pageCount }))).first?.[2], `PDF, ${pageCount} pages`);
+  }
 });
 
 test('an image of 8,000 px on a side passes and 8,001 fails, on width and on height, JPEG and PNG', async () => {
@@ -186,15 +187,13 @@ test("the limits are the manifest's artifacts block, the pages and pixels the pl
   // Without a page or pixel limit the platform measures nothing (its BUILD-PLAN 25.2.28), and
   // receive, failing closed, would refuse every file.
   const manifest = JSON.parse(
-    readFileSync(join(manifestsRoot, 'invoice-processing.v2.json'), 'utf8'),
+    readFileSync(join(manifestsRoot, 'invoice-processing.v3.json'), 'utf8'),
   ) as { artifacts: unknown };
   assert.deepEqual(manifest.artifacts, {
     acceptedContentTypes: FILE_LIMITS.acceptedContentTypes,
     maximumSizeBytes: FILE_LIMITS.maximumSizeBytes,
-    maximumPdfPages: FILE_LIMITS.maximumPdfPages,
     maximumImageSidePixels: FILE_LIMITS.maximumImageSidePixels,
   });
-  assert.equal(FILE_LIMITS.maximumPdfPages, 10);
   assert.equal(FILE_LIMITS.maximumImageSidePixels, 8_000);
 });
 

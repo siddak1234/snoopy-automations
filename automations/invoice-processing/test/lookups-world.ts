@@ -12,26 +12,43 @@ import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import type { ExpenseSearch } from '../src/lookups/expense-search.js';
+import { runStateOf, SHARED_KEYS } from '../src/run/state.js';
 import { QUICKBOOKS, callsOf, lines, reads, setUp } from './fixtures.js';
 
 /**
- * The lookups' world: a whole run of v2 on the kit's simulator, holding the made-up company's
- * vendors, customers and records the samples name, with QuickBooks chosen; and readers for what
- * each lookup step sent and wrote.
+ * The lookups' world: a whole run of one document on the kit's simulator, holding the made-up
+ * company's vendors, customers and records the samples name, with QuickBooks chosen; and readers
+ * for what each of v2's lookups sent and wrote — in v3 each runs inside one of four steps, under
+ * the document's part of its key (`src/run/lookups.ts`).
  */
 
-/** The lookup steps, in the pipeline's order. */
-export const LOOKUP_STEPS = [
-  'find-vendor',
-  'find-vendor-company',
-  'find-similar-vendors',
-  'find-customer-name',
-  'find-employee-name',
-  'find-duplicate-number',
-  'find-duplicate-amount',
-  'find-related',
-  'find-other-record',
-] as const;
+/** v2's lookups, in the pipeline's order: each the v3 step it runs in, and its part for document 1. */
+export const LOOKUPS = {
+  'find-vendor': ['find-vendors', 'd1'],
+  'find-vendor-company': ['find-vendors', 'd1-a'],
+  'find-similar-vendors': ['find-vendors', 'd1-b'],
+  'find-customer-name': ['find-names', 'd1'],
+  'find-employee-name': ['find-names', 'd1-a'],
+  'find-duplicate-number': ['find-duplicates', 'd1'],
+  'find-duplicate-amount': ['find-duplicates', 'd1-a'],
+  'find-related': ['find-related', 'd1'],
+  'find-other-record': ['find-related', 'd1-a'],
+} as const;
+
+export const LOOKUP_STEPS = Object.keys(LOOKUPS) as (keyof typeof LOOKUPS)[];
+
+/** The v3 step one of v2's lookups runs in. */
+export const stepOf = (lookup: string): string =>
+  LOOKUPS[lookup as keyof typeof LOOKUPS]?.[0] ?? lookup;
+
+/** The provider calls one of v2's lookups made for document 1, under its part of its v3 step's key. */
+export function lookupCalls(world: Pick<World, 'platform' | 'request'>, lookup: string) {
+  const [step, part] = LOOKUPS[lookup as keyof typeof LOOKUPS];
+  return callsOf(world.platform, world.request, step, part);
+}
+
+/** v3's four lookup steps. */
+export const V3_LOOKUP_STEPS = ['find-vendors', 'find-names', 'find-duplicates', 'find-related'];
 
 /** References to the made-up company's vendors and accounts, as QuickBooks writes them. */
 export const REF = {
@@ -68,7 +85,7 @@ export interface RouteRun {
   /** Changes to the made-up company before the run. */
   readonly company?: (simulator: QuickBooksSimulator) => void;
   readonly expenseSearch?: ExpenseSearch;
-  /** The last step run; the whole of v2 by default. */
+  /** The last step run; the whole of v3 by default. */
   readonly through?: string;
   /** No vendor in the company: every seller is new. */
   readonly bare?: boolean;
@@ -101,7 +118,7 @@ export async function routeRun(run: RouteRun) {
   run.company?.(simulator);
   const world = setUp({
     simulator,
-    through: run.through ?? 'decide',
+    through: run.through ?? 'all',
     expenseSearch: how,
     config: run.config ?? PAID.company.config,
     ...(run.input ? { input: run.input } : {}),
@@ -113,11 +130,12 @@ export async function routeRun(run: RouteRun) {
 
 type World = Awaited<ReturnType<typeof routeRun>>;
 
-/** The query text each lookup step sent, by step; a step that sent none is absent. */
+/** The query text each of v2's lookups sent for document 1, by its v2 name; one that sent none is absent. */
 export function queriesOf(world: World): Record<string, string> {
   const sent: Record<string, string> = {};
   for (const stepId of LOOKUP_STEPS) {
-    const calls = callsOf(world.platform, world.request, stepId);
+    const [step, part] = LOOKUPS[stepId];
+    const calls = callsOf(world.platform, world.request, step, part);
     if (calls.length === 0) continue;
     // One distinct request a step, every attempt the same bytes.
     assert.equal(new Set(calls.map((call) => JSON.stringify(call))).size, 1, stepId);
@@ -135,10 +153,21 @@ export function lineOf(world: World, stepId: string): string | undefined {
 /** The steps that reported, in order. */
 export const reported = (world: World) => lines(world.platform).map(([stepId]) => stepId);
 
-/** The run's whole state, for a run cut short with `through`. */
+/**
+ * The run's state for its one document, for a run cut short with `through`: what the run shares
+ * and the document's own keys, as v2 kept one document's state.
+ */
 export function stateOf(result: RunResult): JsonObject {
   assert.equal(result.outcome, 'success', JSON.stringify(result).slice(0, 300));
-  return (result as Extract<RunResult, { outcome: 'success' }>).output ?? {};
+  const state = (result as Extract<RunResult, { outcome: 'success' }>).output ?? {};
+  const run = runStateOf(state);
+  assert.ok(run, 'the state holds its documents');
+  const shared = Object.fromEntries(
+    [...SHARED_KEYS, 'quickBooks']
+      .filter((key) => state[key] !== undefined)
+      .map((key) => [key, state[key]]),
+  );
+  return { ...shared, ...run.documents[0]!.engine };
 }
 
 export { sampleBill, sampleCustomer, sampleJournalEntry, samplePurchase, sampleVendor };

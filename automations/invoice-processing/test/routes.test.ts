@@ -13,17 +13,19 @@ import {
   samplePurchase,
   type RouteRun,
 } from './lookups-world.js';
+import { heldState, outputOf } from './writes-world.js';
 
 /**
- * Every route through v2 on the simulator, QuickBooks chosen (the plan's §2.6; v2's §2.2): the steps
- * that report, in order — verify-read only when the first read shows a problem (decision 3), and
- * save-details skipped while QuickBooks records — the lookups that ask QuickBooks; and the run's
- * outcome: the record made straight through, one hold, or a statement compared. With the vendor
- * "None": `none-path.test.ts`. Each path held, then approved: `writes-paths.test.ts`.
+ * Every route through v3 for a file of one document on the simulator, QuickBooks chosen (the plan's
+ * §2.6; v2's §2.2, in v3's steps): the steps that report, in order — verify-read only when the first
+ * read shows a problem (decision 3), and save-documents skipped while QuickBooks records — the
+ * lookups that ask QuickBooks; and the run's outcome: the record made straight through, one hold, or
+ * a statement compared. With the vendor "None": `none-path.test.ts`. Each path held, then
+ * approved: `writes-paths.test.ts`.
  */
 
-const FIRST = ['receive', 'read-company', 'read-preferences', 'find-accounts'];
-const READS = ['extract', 'check-document'];
+const FIRST = ['receive', 'extract', 'check-documents', 'read-company', 'read-preferences'];
+const READS = ['find-accounts'];
 const RECORDS = ['find-duplicate-number', 'find-duplicate-amount', 'find-related'];
 
 async function route(run: RouteRun) {
@@ -31,10 +33,7 @@ async function route(run: RouteRun) {
   return { world, steps: reported(world), lookups: Object.keys(queriesOf(world)) };
 }
 
-const planned = (result: RunResult) => {
-  assert.equal(result.outcome, 'success', JSON.stringify(result).slice(0, 300));
-  return (result as Extract<RunResult, { outcome: 'success' }>).output as JsonObject;
-};
+const planned = (result: RunResult) => outputOf(result);
 const held = (result: RunResult) => {
   assert.equal(result.outcome, 'held', JSON.stringify(result).slice(0, 300));
   return (result as Extract<RunResult, { outcome: 'held' }>).held;
@@ -45,11 +44,11 @@ test('a bill from a vendor QuickBooks has: four record lookups, straight through
   assert.deepEqual(steps, [
     ...FIRST,
     ...READS,
-    'find-vendor',
-    ...RECORDS,
-    'find-other-record',
+    'find-vendors',
+    'find-duplicates',
+    'find-related',
     'decide',
-    'create-record',
+    'create-records',
   ]);
   assert.deepEqual(lookups, ['find-vendor', ...RECORDS, 'find-other-record']);
   const output = planned(world.result);
@@ -65,36 +64,45 @@ test('a bill from a new vendor: every lookup, and one hold naming the new vendor
   assert.deepEqual(steps, [
     ...FIRST,
     ...READS,
-    'find-vendor',
-    'find-vendor-company',
-    'find-similar-vendors',
-    'find-customer-name',
-    'find-employee-name',
-    ...RECORDS,
-    'find-other-record',
+    'find-vendors',
+    'find-names',
+    'find-duplicates',
+    'find-related',
     'decide',
+    'ask-approval',
   ]);
   const hold = held(world.result);
-  assert.equal(hold.stepId, 'decide');
-  assert.equal(hold.reason, 'New vendor.');
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['new_vendor']);
+  assert.equal(hold.stepId, 'ask-approval');
+  assert.equal(hold.reason, 'Document 1: new vendor.');
+  assert.deepEqual(heldState(world).holdReasons, ['new_vendor']);
 });
 
-test('a company receipt whose seller is a vendor: linked as payee; one that is none: no payee, and no number lookup', async () => {
+test('a company receipt whose seller is a vendor: linked as payee; one that is none: added as a vendor once its name checks come back clear (B3), and no number lookup', async () => {
   const linked = await route({ answer: receipt() });
   assert.deepEqual(linked.lookups, ['find-vendor', ...RECORDS, 'find-other-record']);
   const record = planned(linked.world.result).record as JsonObject;
   assert.deepEqual(record.payee, { kind: 'vendor', id: '9', name: 'Tidewell Hardware' });
   assert.deepEqual([record.type, record.paymentType], ['expense', 'CreditCard']);
-  const unlinked = await route({ answer: receipt(), bare: true });
-  assert.deepEqual(unlinked.lookups, [
+  const added = await route({ answer: receipt(), bare: true });
+  assert.deepEqual(added.lookups, [
     'find-vendor',
     'find-vendor-company',
+    'find-similar-vendors',
+    'find-customer-name',
+    'find-employee-name',
     'find-duplicate-amount',
     'find-related',
     'find-other-record',
   ]);
-  assert.deepEqual((planned(unlinked.world.result).record as JsonObject).payee, { kind: 'none' });
+  const vendor = added.world.simulator.company.vendors.find(
+    (row) => row.DisplayName === 'Tidewell Hardware',
+  );
+  assert.ok(vendor, 'the seller added as a vendor');
+  assert.deepEqual((planned(added.world.result).record as JsonObject).payee, {
+    kind: 'vendor',
+    id: vendor.Id,
+    name: 'Tidewell Hardware',
+  });
 });
 
 test('a card refund: its number, the card feed and the original bill; a refund planned on the card', async () => {
@@ -137,16 +145,9 @@ test("a statement: compared, never held — the vendor's bills among its numbers
         sampleBill('141', REF.harrowgate, { DocNumber: 'HOS-0999', TotalAmt: 50, Balance: 50 }),
       ),
   });
-  assert.deepEqual(steps, [
-    ...FIRST,
-    ...READS,
-    'find-vendor',
-    'find-duplicate-number',
-    'find-duplicate-amount',
-    'decide',
-  ]);
+  assert.deepEqual(steps, [...FIRST, ...READS, 'find-vendors', 'find-duplicates', 'decide']);
   assert.ok(world.result.outcome === 'success');
-  assert.deepEqual(world.result.output, {
+  assert.deepEqual(outputOf(world.result), {
     outcome: 'compared',
     documentType: 'supplier_statement',
     route: 'statement',
@@ -165,10 +166,13 @@ test("a statement: compared, never held — the vendor's bills among its numbers
     secondCheck: 'not_needed',
   });
   assert.equal(world.result.summary, 'Compared with QuickBooks: 2 invoices not in QuickBooks.');
-  assert.deepEqual(world.result.details, [
-    { label: 'Vendor', value: 'Harrowgate Office Supply' },
+  const [document] = world.result.documents ?? [];
+  assert.deepEqual(
+    [document?.status, document?.statusText, document?.type],
+    ['compared', 'Compared with QuickBooks: 2 invoices not in QuickBooks', 'statement'],
+  );
+  assert.deepEqual(document?.details, [
     { label: 'Statement total', value: '$686.54' },
-    { label: 'Not in QuickBooks', value: '2 invoices' },
     { label: 'Open in QuickBooks', value: '$980.00' },
   ]);
   assert.equal(
@@ -192,11 +196,11 @@ test("a statement whose vendor has 41 open bills it does not list, the lookup re
     },
   });
   assert.equal(
-    world.platform.steps.find((step) => step.stepId === 'find-duplicate-amount')?.summary,
-    'Amount checked',
+    world.platform.steps.find((step) => step.stepId === 'find-duplicates')?.summary,
+    'Number checked; Amount checked',
   );
   assert.ok(world.result.outcome === 'success');
-  const compared = (world.result.output as { statement: JsonObject }).statement;
+  const compared = (outputOf(world.result) as { statement: JsonObject }).statement;
   assert.deepEqual(
     [compared.openBillsNotListed, compared.openBillsCheckable, compared.listedCheckable],
     [{ count: 40, totalCents: 40_000 }, false, true],
@@ -219,10 +223,10 @@ test('a bill whose number an expense already carries, whoever its payee, holds a
       ),
   });
   const hold = held(world.result);
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.equal(hold.reason, 'May already be in QuickBooks.');
+  assert.deepEqual(heldState(world).holdReasons, ['possible_duplicate']);
+  assert.equal(hold.reason, 'Document 1: may already be in QuickBooks.');
   assert.equal(
-    world.platform.steps.find((step) => step.stepId === 'find-related')?.summary,
+    world.platform.steps.find((step) => step.stepId === 'find-related')?.summary.split('; ')[0],
     'Possible duplicate',
   );
 });

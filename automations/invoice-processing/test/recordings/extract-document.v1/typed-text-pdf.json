@@ -1,9 +1,0 @@
-{
-  "fileSha256": "bae00d161cd9e745d9959103c388547875aee99f00ee8eecfb6f46f446fe85ac",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Harrowgate Office Supply\",\"documentNumber\":\"HOS-1042\",\"documentDate\":\"2026-09-14\",\"dueDate\":\"2026-10-14\",\"paymentTermsDays\":30,\"currency\":\"USD\",\"subtotal\":370.75,\"tax\":30.59,\"shipping\":12.00,\"discount\":null,\"total\":413.34,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"office_supplies\",\"lineItems\":[{\"amount\":99.00},{\"amount\":189.00},{\"amount\":38.25},{\"amount\":19.60},{\"amount\":24.90}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

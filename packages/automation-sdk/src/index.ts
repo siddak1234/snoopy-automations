@@ -24,6 +24,7 @@ export type {
   InvokeAck,
   InvokeRequest,
   JsonObject,
+  MailContent,
   MailRequest,
   ModelCompletion,
   ModelRequest,
@@ -46,9 +47,36 @@ export type {
 } from './manifest.js';
 export { RUN_DETAIL_LIMITS, boundedDetails } from './details.js';
 export type { RunDetail } from './details.js';
+export {
+  RUN_DOCUMENT_DECIMAL_PATTERN,
+  RUN_DOCUMENT_LIMITS,
+  RUN_DOCUMENT_PAYMENT_METHODS,
+  RUN_DOCUMENT_STATUSES,
+  RUN_DOCUMENT_TIME_PATTERN,
+  RUN_DOCUMENT_TYPES,
+  boundedDocuments,
+  decimalOf,
+} from './documents.js';
+export type {
+  RunDocument,
+  RunDocumentLineItem,
+  RunDocumentPayment,
+  RunDocumentPaymentMethod,
+  RunDocumentRecord,
+  RunDocumentReference,
+  RunDocumentStatus,
+  RunDocumentType,
+  RunDocumentVendor,
+} from './documents.js';
 export { isUnanswered, isUnsent } from './marks.js';
 export { artifactIdProblem, excludeModelAuthorsProblem, modelAuthor } from './model-request.js';
-export { DEFAULT_MODEL_TIMEOUT_MS, PlatformClient, boundedResult, clientFor } from './platform.js';
+export {
+  DEFAULT_MODEL_TIMEOUT_MS,
+  PlatformClient,
+  RESULT_BODY_LIMIT_BYTES,
+  boundedResult,
+  clientFor,
+} from './platform.js';
 export type { AutomationPlatform, PlatformClientOptions } from './platform.js';
 export {
   CallbackRefusedError,
@@ -68,10 +96,11 @@ export {
 export type { PromptModule } from './prompt.js';
 export type { RetryPolicy } from './retry.js';
 export { defineAutomation } from './runner.js';
-export { held, idempotencyKeyFor } from './steps.js';
+export { PART_PATTERN, held, idempotencyKeyFor, partKey } from './steps.js';
 export type {
   Automation,
   AutomationDefinition,
+  CallOptions,
   ModelCallOptions,
   Step,
   StepContext,

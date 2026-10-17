@@ -299,6 +299,22 @@
               "run-failed",
               "run-succeeded"
             ]
+          },
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+              "maxLength": 64
+            }
+          },
+          "group": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
           }
         }
       }

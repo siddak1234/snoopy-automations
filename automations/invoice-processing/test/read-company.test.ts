@@ -19,7 +19,7 @@ const quickBooksOf = (result: Awaited<ReturnType<ReturnType<typeof setUp>['run']
   result.outcome === 'success' ? result.output?.quickBooks : result;
 
 async function readWith(edit: (info: Record<string, unknown>) => void = () => undefined) {
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   edit(world.simulator.company.companyInfo);
   const result = await world.run();
   const line = lines(world.platform).find(([stepId]) => stepId === 'read-company');
@@ -117,26 +117,26 @@ test('an answer without a CompanyInfo or a CompanyName, or a body that was not J
     { error: 'the provider returned a response that is not JSON' },
   ];
   for (const body of bodies) {
-    const world = setUp();
+    const world = setUp({ through: 'find-accounts' });
     world.simulator.script('companyInfo.get', [{ status: 200, body }]);
     const result = await world.run();
     assert.deepEqual(quickBooksOf(result), { notRecorded: "QuickBooks didn't answer" });
     assert.equal(
-      lines(world.platform)[1]?.[2],
+      lines(world.platform).find(([stepId]) => stepId === 'read-company')?.[2],
       "Not recorded in QuickBooks: QuickBooks didn't answer",
     );
   }
 });
 
 test('a Fault inside a 200: QuickBooks did not answer usably; its text, and its number, appear nowhere a person reads', async () => {
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   world.simulator.script('companyInfo.get', [
     { status: 200, body: faultAnswer('150', 'SystemFault') },
   ]);
   const result = await world.run();
   assert.deepEqual(quickBooksOf(result), { notRecorded: "QuickBooks didn't answer" });
   assert.equal(
-    lines(world.platform)[1]?.[2],
+    lines(world.platform).find(([stepId]) => stepId === 'read-company')?.[2],
     "Not recorded in QuickBooks: QuickBooks didn't answer",
   );
   assert.ok(!everythingSaid(world.platform, result).includes(FAULT_MARKER));
@@ -153,7 +153,7 @@ test('a long company name is shortened to 60 characters in the line', async () =
 });
 
 test('every call is the one request under the step key; a replayed answer gives the same decision', async () => {
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   world.simulator.script('companyInfo.get', [{ status: 429 }, { status: 500 }, { status: 200 }]);
   assert.equal((await world.run()).outcome, 'success');
   assert.deepEqual(world.waits, [60_000]);
@@ -165,12 +165,15 @@ test('every call is the one request under the step key; a replayed answer gives 
   // The platform dispatches the same run again: the same keys meet Connections' records,
   // so a company that moved abroad since reads as it did, and the step decides the same.
   const simulator = new QuickBooksSimulator({ refusal: refusalFixture });
-  const first = setUp({ simulator });
+  const first = setUp({ simulator, through: 'find-accounts' });
   assert.equal((await first.run()).outcome, 'success');
   simulator.company.companyInfo.Country = 'CA';
-  const again = setUp({ simulator, runId: first.request.runId });
+  const again = setUp({ simulator, runId: first.request.runId, through: 'find-accounts' });
   assert.equal((await again.run()).outcome, 'success');
-  assert.deepEqual(lines(again.platform)[1], ['read-company', 'ok', 'QuickBooks: Sample Bakery']);
+  assert.deepEqual(
+    lines(again.platform).find(([stepId]) => stepId === 'read-company'),
+    ['read-company', 'ok', 'QuickBooks: Sample Bakery'],
+  );
   assert.ok(
     simulator.calls.some(
       (call) => call.operation === 'companyInfo.get' && call.outcome === 'replayed',

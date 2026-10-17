@@ -1,9 +1,0 @@
-{
-  "fileSha256": "232a3fc5ebab60a631aeb454bc8cec63f7c7c7f4a0a124b95ec916163b12d323",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Sample Valley Electric Cooperative\",\"documentNumber\":\"4471-0926\",\"documentDate\":\"2026-09-24\",\"dueDate\":\"2026-10-15\",\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":140.38,\"tax\":9.12,\"shipping\":null,\"discount\":null,\"total\":149.50,\"amountDue\":207.90,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"utilities_and_phone\",\"lineItems\":[{\"amount\":118.58},{\"amount\":9.80},{\"amount\":12.00}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

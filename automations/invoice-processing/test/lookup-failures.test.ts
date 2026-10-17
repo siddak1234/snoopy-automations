@@ -9,15 +9,18 @@ import {
 import { defineAutomation, type RunResult } from '@autom8x/automation-sdk';
 import { RecordingPlatform, invokeFixture, refusalFixture } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, pipelineSteps } from '../src/automation.js';
+import { TEMPLATE_ID, perDocumentSpecs, pipelineSteps } from '../src/automation.js';
 import { recoverQuickBooks, withFixedSentences } from '../src/failures.js';
+import { runStateOf } from '../src/run/state.js';
 import { RESULTS } from '../src/words.js';
 import { bill, creditNote, statement } from './check-world.js';
-import { QUICKBOOKS, callsOf, everythingSaid, lines } from './fixtures.js';
-import { LOOKUP_STEPS, reported, routeRun, stateOf } from './lookups-world.js';
+import { QUICKBOOKS, everythingSaid, lines } from './fixtures.js';
+import { LOOKUP_STEPS, lookupCalls, reported, routeRun, stepOf } from './lookups-world.js';
+import { outputOf } from './writes-world.js';
 
 /**
- * QuickBooks failing inside each lookup of a new vendor's bill — the one document that runs all
+ * QuickBooks failing inside each of v2's lookups — in v3 inside its step, under document 1's part —
+ * of a new vendor's bill — the one document that runs all
  * nine: a 429 waited out twice and a 5xx repeated once inside the step; every connection, busy and
  * refusal case keeping the bill out of QuickBooks — no QuickBooks step after it, the details saved,
  * "Saved. Not recorded in QuickBooks: …" (the session's decision 6) — and a thrown 502 the same, once
@@ -91,14 +94,15 @@ test('every connection, busy and refusal case at a lookup: not recorded, its lin
       const label = `${stepId}: ${name}`;
       assert.equal(summaryOf(world.result), RESULTS.notRecorded(reason), label);
       assert.deepEqual(
-        lines(world.platform).slice(-2),
+        lines(world.platform).slice(-3),
         [
-          [stepId, 'failed', `Not recorded in QuickBooks: ${reason}`],
-          ['save-details', 'ok', 'Saved: Harrowgate Office Supply, $413.34'],
+          [stepOf(stepId), 'failed', `Not recorded in QuickBooks: ${reason}`],
+          ['decide', 'ok', `Not recorded in QuickBooks: ${reason}`],
+          ['save-documents', 'ok', 'Saved: Harrowgate Office Supply, $413.34'],
         ],
         label,
       );
-      const sent = callsOf(world.platform, world.request, stepId);
+      const sent = lookupCalls(world, stepId);
       assert.equal(sent.length, calls, label);
       assert.equal(new Set(sent.map((call) => JSON.stringify(call))).size, 1, 'one request');
       assert.ok(!everythingSaid(world.platform, world.result).includes('FAULT-TEXT'), label);
@@ -117,11 +121,11 @@ test('a 429 is waited out twice and a 5xx repeated once inside the step, each th
       `${stepId}: held as a new vendor, as unthrottled`,
     );
     assert.deepEqual(throttled.waits, [60_000, 60_000], stepId);
-    assert.equal(callsOf(throttled.platform, throttled.request, stepId).length, 3, stepId);
+    assert.equal(lookupCalls(throttled, stepId).length, 3, stepId);
     const erred = await routeRun(at(stepId, [{ status: 503 }, { status: 200 }]));
     assert.equal(erred.result.outcome, 'held', stepId);
     assert.deepEqual(erred.waits, [], 'a 5xx is repeated at once');
-    assert.equal(callsOf(erred.platform, erred.request, stepId).length, 2, stepId);
+    assert.equal(lookupCalls(erred, stepId).length, 2, stepId);
   }
 });
 
@@ -143,8 +147,7 @@ test("QuickBooks refusing a statement's lookup, or a credit note's: not compared
         ]),
     });
     assert.equal(summaryOf(world.result), RESULTS.notRecorded(NO_ANSWER), stepId);
-    assert.ok(world.result.outcome === 'success');
-    assert.equal(world.result.output?.documentType, 'supplier_statement', stepId);
+    assert.equal(outputOf(world.result).documentType, 'supplier_statement', stepId);
   }
   const credit = await routeRun({
     answer: creditNote(),
@@ -165,60 +168,58 @@ test('the similar-names list goes on past what QuickBooks cannot answer; a conne
     at('find-employee-name', [{ status: 429 }, { status: 429 }, { status: 429 }]),
   );
   assert.equal(summaryOf(busy.result), RESULTS.notRecorded(NO_ANSWER));
-  assert.deepEqual(reported(busy).slice(-2), ['find-employee-name', 'save-details']);
+  assert.deepEqual(reported(busy).slice(-3), ['find-names', 'decide', 'save-documents']);
 });
 
 test('a body that is no query answer: not recorded, QuickBooks answered unusably', async () => {
   const world = await routeRun(at('find-duplicate-amount', [{ status: 200, body: { Bill: [] } }]));
   assert.equal(summaryOf(world.result), RESULTS.notRecorded(NO_ANSWER));
   assert.deepEqual(
-    lines(world.platform).find(([stepId]) => stepId === 'find-duplicate-amount'),
-    ['find-duplicate-amount', 'failed', `Not recorded in QuickBooks: ${NO_ANSWER}`],
+    lines(world.platform).find(([stepId]) => stepId === 'find-duplicates'),
+    ['find-duplicates', 'failed', `Not recorded in QuickBooks: ${NO_ANSWER}`],
   );
 });
 
 test("a reasonless 502 thrown at a lookup until the SDK's attempts are spent: the run's recover keeps the bill out — the raw problem nowhere", async () => {
-  const seeded = stateOf(
-    (await routeRun({ answer: bill(), bare: true, through: 'find-employee-name' })).result,
-  );
+  const through = (await routeRun({ answer: bill(), bare: true, through: 'find-names' })).result;
+  assert.ok(through.outcome === 'success');
+  const seeded = through.output ?? {};
   const simulator = new QuickBooksSimulator({ refusal: refusalFixture });
   simulator.script('query.run', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]);
   const platform = new RecordingPlatform();
   platform.provider = simulator.provider;
   const log = () => undefined;
-  const steps = pipelineSteps(
-    { now: () => Date.now(), sleep: () => Promise.resolve() },
-    'amount',
-    log,
-  );
+  const clock = { now: () => Date.now(), sleep: () => Promise.resolve() };
+  const steps = pipelineSteps(clock, 'amount', log);
   const automation = withFixedSentences(
     defineAutomation({
       templateId: TEMPLATE_ID,
       manifests: [
         {
           templateId: TEMPLATE_ID,
-          version: 2,
+          version: 3,
           requiredCapabilities: [],
-          pipeline: [{ id: 'seed' }, { id: 'find-duplicate-number' }],
+          pipeline: [{ id: 'seed' }, { id: 'find-duplicates' }],
         },
       ],
       steps: {
         seed: () => Promise.resolve({ outcome: 'ok', summary: 'Seeded', state: seeded }),
-        'find-duplicate-number': steps['find-duplicate-number']!,
+        'find-duplicates': steps['find-duplicates']!,
       },
-      recover: recoverQuickBooks(log),
+      recover: recoverQuickBooks(log, perDocumentSpecs(clock, 'amount')),
       result: (state) => ({ output: state }),
     }),
     log,
   );
   const result = await automation.execute(
-    invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2, config: QUICKBOOKS }),
+    invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 3, config: QUICKBOOKS }),
     platform,
   );
   assert.ok(result.outcome === 'success');
-  assert.deepEqual(result.output?.quickBooks, { notRecorded: NO_ANSWER });
+  const run = runStateOf(result.output ?? {});
+  assert.deepEqual(run?.documents[0]?.engine.quickBooks, { notRecorded: NO_ANSWER });
   assert.deepEqual(lines(platform).at(-1), [
-    'find-duplicate-number',
+    'find-duplicates',
     'failed',
     `Not recorded in QuickBooks: ${NO_ANSWER}`,
   ]);

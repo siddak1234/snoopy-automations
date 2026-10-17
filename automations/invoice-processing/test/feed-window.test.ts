@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
+import type { RunResult } from '@autom8x/automation-sdk';
 
 import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-search.js';
 import { RESULTS } from '../src/words.js';
 import { bill, receipt, sampleAnswer } from './check-world.js';
 import { lines } from './fixtures.js';
 import { REF, lineOf, queriesOf, routeRun, samplePurchase } from './lookups-world.js';
+import { documentState } from './writes-world.js';
 
 /**
  * The bank-feed check (D21) at the edges of its window — 2 days before, 1 day before, 20 days
@@ -50,7 +51,7 @@ test("a receipt's bank-feed check: a charge on its card 1 day before to 20 days 
         continue;
       }
       assert.ok(world.result.outcome === 'held', label);
-      assert.equal(world.result.held.reason, 'A bank or card charge matches.', label);
+      assert.equal(world.result.held.reason, 'Document 1: a bank or card charge matches.', label);
       assert.equal(lineOf(world, 'decide'), 'Waiting for approval', label);
     }
   }
@@ -82,7 +83,7 @@ test("a card refund's check: a refund on the card in the window holds; outside i
       const label = `${how}: ${credit ? 'a refund' : 'a charge'} on ${date}`;
       assert.equal(world.result.outcome, holds ? 'held' : 'success', label);
       if (holds && world.result.outcome === 'held') {
-        assert.equal(world.result.held.reason, 'A bank or card charge matches.', label);
+        assert.equal(world.result.held.reason, 'Document 1: a bank or card charge matches.', label);
       }
     }
   }
@@ -107,9 +108,9 @@ test('the fallback reads the window newest first, 50 at most; a full answer hold
     queriesOf(world)['find-duplicate-amount'],
     "SELECT * FROM Purchase WHERE TxnDate >= '2026-09-26' AND TxnDate <= '2026-10-17' ORDERBY TxnDate DESC MAXRESULTS 50",
   );
-  assert.equal(lineOf(world, 'find-duplicate-amount'), 'Possible duplicate');
+  assert.ok(lineOf(world, 'find-duplicates')?.split('; ').includes('Possible duplicate'));
   assert.ok(world.result.outcome === 'held');
-  assert.equal(world.result.held.reason, 'May already be in QuickBooks.');
+  assert.equal(world.result.held.reason, 'Document 1: may already be in QuickBooks.');
   // 49 rows: read whole, compared in code, no hold.
   const fewer = await routeRun({
     answer: receipt(),
@@ -126,7 +127,7 @@ test('the fallback reads the window newest first, 50 at most; a full answer hold
     },
   });
   assert.equal(fewer.result.outcome, 'success');
-  assert.equal(lineOf(fewer, 'find-duplicate-amount'), 'No duplicate', 'none for this amount');
+  assert.equal(lineOf(fewer, 'find-duplicates'), 'No duplicate', 'none for this amount');
 });
 
 test("under the fallback a bill's D32 check is dropped, and decide needs it not; decision 6's number check remains", async () => {
@@ -157,7 +158,7 @@ test("under the fallback a bill's D32 check is dropped, and decide needs it not;
   );
   const primary = await routeRun({ answer: bill(), company });
   assert.ok(primary.result.outcome === 'held');
-  assert.deepEqual((primary.result.held.state as JsonObject).holdReasons, ['possible_duplicate']);
+  assert.deepEqual(documentState(primary.result.held.state).holdReasons, ['possible_duplicate']);
 });
 
 test('if Intuit does not search an expense by amount, as its model file reads, D21 is refused — not recorded, the details saved — what sandbox S4 settles', async () => {
@@ -169,8 +170,8 @@ test('if Intuit does not search an expense by amount, as its model file reads, D
   });
   assert.equal(summaryOf(world.result), RESULTS.notRecorded("QuickBooks didn't answer"));
   assert.deepEqual(
-    lines(world.platform).find(([stepId]) => stepId === 'find-duplicate-amount'),
-    ['find-duplicate-amount', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+    lines(world.platform).find(([stepId]) => stepId === 'find-duplicates'),
+    ['find-duplicates', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
   );
   // The fallback asks only what Intuit marks searchable.
   const fallback = await routeRun({

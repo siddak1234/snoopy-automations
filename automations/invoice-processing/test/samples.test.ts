@@ -4,11 +4,24 @@ import { test } from 'node:test';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
-import type { DocumentRule } from '../src/checks/rules.js';
 import { FILE_LIMITS } from '../src/file.js';
+import { partAnswerOf, v2AnswerOf } from '../src/run/answer.js';
+import { documentReadOf } from '../src/run/document-read.js';
+import { PART_SIZES } from '../src/run/extract.js';
+import { runStateOf } from '../src/run/state.js';
 import { RUN_FAILS } from '../src/words.js';
 import { extractWorld } from './extract-world.js';
-import { NONE, QUICKBOOKS, completion, everythingSaid, lines, reads, setUp } from './fixtures.js';
+import {
+  NONE,
+  QUICKBOOKS,
+  completion,
+  documentAnswer,
+  everythingSaid,
+  lines,
+  partAnswer,
+  reads,
+  setUp,
+} from './fixtures.js';
 import { measure, referenceOf } from './measure.js';
 import {
   SAMPLES,
@@ -103,7 +116,7 @@ test("each expected.json is its sample's entry, and its answer never carries the
   ]);
 });
 
-test('each sample is a file receive accepts: its declared kind, within 3.5 MB, 10 pages and 8,000 px', async () => {
+test('each sample is a file receive accepts: its declared kind, within 3.5 MB and 8,000 px', async () => {
   for (const sample of SAMPLES) {
     const measured = measure(readFileSync(samplePath(sample)));
     const declared = { 'application/pdf': 'pdf', 'image/jpeg': 'jpeg', 'image/png': 'png' };
@@ -172,60 +185,81 @@ test('a text PDF prints every name, number and amount its answer gives, and its 
   }
 });
 
-/**
- * The samples check-document stops, on either path, each with its rule; the rest go on — the tip
- * slip (C28) and the cash-back receipt (C16) too, which QuickBooks does not record but whose
- * details are saved.
- */
-const STOPPED: Readonly<Record<string, DocumentRule>> = {
-  'two-invoices': 'C5',
-  'missing-page': 'C6',
-  'bank-card-statement': 'C1',
-};
+/** One sample's expected answer as v3's prompt reads it: one document, typed. */
+function readOf(answer: JsonObject) {
+  const [document] = partAnswerOf(partAnswer([documentAnswer(answer)]))?.documents ?? [];
+  assert.ok(document);
+  return document;
+}
 
-test("each sample's expected answer passes extract whole, and its marker never reaches a line or a reason", async () => {
+test("each sample's expected answer passes extract whole, no document ever ends the run, and its marker never reaches a line or a reason", async () => {
   for (const sample of SAMPLES) {
     const world = extractWorld();
-    world.platform.model = (_call, model) => Promise.resolve(completion(model, sample.answer));
-    assert.deepEqual((await world.state())?.extraction, sample.answer, sample.name);
+    world.platform.model = (_call, model) =>
+      Promise.resolve(completion(model, partAnswer([documentAnswer(sample.answer)])));
+    const [entry] = runStateOf((await world.state()) ?? {})?.documents ?? [];
+    const read = readOf(sample.answer);
+    assert.deepEqual(entry?.read, documentReadOf(read), sample.name);
+    // A record's or a statement's first read is kept for the checks; any other is kept as read.
+    if (entry?.kind === 'record' || entry?.kind === 'statement') {
+      assert.deepEqual(entry.answer, v2AnswerOf(read), sample.name);
+    }
 
-    // The first steps, on the sample's own measurements, QuickBooks chosen or not; then an
-    // unusable answer carrying the marker.
+    // The first steps, on the sample's own measurements, QuickBooks chosen or not — every one
+    // goes on (B4, AM8); then an unusable answer carrying the marker.
     for (const config of [QUICKBOOKS, NONE]) {
       const run = setUp({ file: referenceOf(measure(readFileSync(samplePath(sample)))), config });
       run.platform.model = reads(sample.answer);
       const result = await run.run();
-      const rule = STOPPED[sample.name];
-      assert.deepEqual(
-        result.outcome === 'failed' ? result.failureReason : result.outcome,
-        rule === undefined ? 'success' : RUN_FAILS[rule],
-        sample.name,
-      );
+      assert.equal(result.outcome, 'success', sample.name);
       assert.ok(!everythingSaid(run.platform, result).includes(sample.marker), sample.name);
     }
     const unusable = setUp();
     unusable.platform.model = (_call, model) =>
       Promise.resolve(completion(model, { ...sample.answer, marker: sample.marker }));
     const failed = await unusable.run();
-    assert.equal(failed.outcome, 'failed', sample.name);
+    assert.deepEqual(
+      failed,
+      { outcome: 'failed', failureReason: RUN_FAILS.unreadable },
+      sample.name,
+    );
     assert.ok(!everythingSaid(unusable.platform, failed).includes(sample.marker), sample.name);
   }
 });
 
-test('an answer stays well inside the 8,000-token cap: every expected one, and one of 40 lines and 40 listed rows', () => {
+test("a part's answer stays well inside the 8,000-token cap: the largest part — 5 documents, 80 lines in all, each with its words — and every expected answer", () => {
   // At 3 characters a token, the most an answer may take is 24,000 characters.
-  const largest = Math.max(...SAMPLES.map((sample) => JSON.stringify(sample.answer).length));
-  assert.ok(largest < 6_000, `the largest expected answer is ${largest} characters`);
+  const largest = Math.max(
+    ...SAMPLES.map((sample) => JSON.stringify(documentAnswer(sample.answer)).length),
+  );
+  assert.ok(largest < 6_000, `the largest expected document is ${largest} characters`);
+  const [first] = PART_SIZES;
+  assert.deepEqual(first, { documents: 5, lines: 80 });
   const statement = SAMPLES.find((sample) => sample.name === 'supplier-statement')!.answer;
-  const full = {
-    ...statement,
-    lineItems: Array.from({ length: 40 }, () => ({ amount: 1_234_567.89 })),
-    listedItems: Array.from({ length: 40 }, (_, index) => ({
-      reference: `INV-${String(index).padStart(10, '0')}`,
-      amount: -1_234_567.89,
-      kind: 'balance_forward',
-    })),
-  };
-  const size = JSON.stringify(full).length;
-  assert.ok(size < 8_000, `40 lines and 40 listed rows: ${size} characters`);
+  const document = (lines: number) =>
+    documentAnswer(statement, {
+      vendorAddress: '1200 Harbour Industrial Parkway, Unit 14B',
+      vendorCity: 'Port Coquitlam',
+      storeNumber: 'Store 0042',
+      numberLabel: 'Invoice No.',
+      references: Array.from({ length: 4 }, (_, index) => ({
+        label: 'Purchase order',
+        value: `PO-${String(index).padStart(10, '0')}`,
+      })),
+      documentTime: '14:05',
+      lineItems: Array.from({ length: lines }, () => ({
+        description: 'Copy paper, letter, 20 lb, case of 10 reams',
+        quantity: 12,
+        unitPrice: 1_234.56,
+        amount: 14_814.72,
+      })),
+      lineItemCount: lines,
+    });
+  const part = partAnswer(
+    Array.from({ length: 5 }, () => document(16)),
+    { document: 6, line: 1 },
+    9,
+  );
+  const size = JSON.stringify(part).length;
+  assert.ok(size < 24_000, `5 documents, 80 lines: ${size} characters`);
 });

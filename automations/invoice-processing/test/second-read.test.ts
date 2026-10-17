@@ -6,7 +6,7 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 import { refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import type { Finding } from '../src/state.js';
-import { secondReadDue } from '../src/steps/verify-read.js';
+import { secondReadDue } from '../src/run/verify.js';
 import { bill } from './check-world.js';
 import { NONE, QUICKBOOKS, lines, reads, setUp } from './fixtures.js';
 import { seededCompany } from './lookups-world.js';

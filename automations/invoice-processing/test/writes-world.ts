@@ -2,15 +2,17 @@ import assert from 'node:assert/strict';
 
 import type { InvokeRequest, JsonObject, RunResult } from '@autom8x/automation-sdk';
 
+import { runStateOf } from '../src/run/state.js';
 import { lines } from './fixtures.js';
 import { routeRun, type RouteRun } from './lookups-world.js';
 
 /**
- * The writes' world: a whole run of v2 on the kit's simulator (`routeRun`), and — when decide held it
- * — the approval's continuation the platform mints, run by the same automation against the same
- * QuickBooks: a new run, its own id and keys, `input` empty, the held state handed back verbatim,
- * the settings as they are at approval (ip-review design-after-approval-writes-notify-tests.json
- * cross_cutting[0]). Readers for what each run wrote, and what it said.
+ * The writes' world: a whole run of one document on the kit's simulator (`routeRun`), and — when
+ * it held — the approval's continuation the platform mints, run by the same automation against the
+ * same QuickBooks: a new run, its own id and keys, `input` empty, the held state handed back
+ * verbatim, the settings as they are at approval (ip-review
+ * design-after-approval-writes-notify-tests.json cross_cutting[0]). Readers for what each run
+ * wrote, and what it said.
  */
 
 /** The continuation's run id: the run whose timeline shows the record. */
@@ -35,7 +37,10 @@ export interface Approval {
   readonly runId?: string;
   /** The settings when the approval comes; the first run's by default. */
   readonly config?: JsonObject;
-  /** The state handed back; the held state by default. */
+  /**
+   * The document's state handed back in place of the held one — decide's saved data, as v2's
+   * held state was — inside the run's held state; the held state as it is by default.
+   */
   readonly state?: JsonObject;
   /** The continuation's deadline: a fresh one by default. */
   readonly deadline?: string;
@@ -48,9 +53,30 @@ export interface Approval {
 export const noTimeToRepeat = () => new Date(Date.now() + 5_000).toISOString();
 
 /** The held state the platform keeps: fails the test when the first run did not hold. */
-export function heldState(run: Run): JsonObject {
+export function heldRunState(run: Run): JsonObject {
   assert.equal(run.result.outcome, 'held', JSON.stringify(run.result).slice(0, 300));
   return (run.result as Extract<RunResult, { outcome: 'held' }>).held.state;
+}
+
+/** One held state's first document's state: decide's saved data, as v2's held state was. */
+export const documentState = (state: JsonObject): JsonObject =>
+  runStateOf(state)?.documents[0]?.engine ?? {};
+
+/** The one document's state in the held state: decide's saved data, as v2's held state was. */
+export function heldState(run: Run): JsonObject {
+  const held = runStateOf(heldRunState(run));
+  assert.ok(held, 'the held state holds its documents');
+  return held.documents[0]!.engine;
+}
+
+/** The run's held state with its one document's state replaced. */
+function withDocumentState(run: Run, engine: JsonObject): JsonObject {
+  const held = heldRunState(run);
+  const documents = runStateOf(held)?.documents ?? [];
+  return {
+    ...held,
+    documents: documents.map((entry, at) => (at === 0 ? { ...entry, engine } : entry)),
+  };
 }
 
 /**
@@ -58,7 +84,8 @@ export function heldState(run: Run): JsonObject {
  * QuickBooks; the steps it reported, and its result.
  */
 export async function approve(run: Run, approval: Approval = {}) {
-  const state = approval.state ?? heldState(run);
+  const state =
+    approval.state === undefined ? heldRunState(run) : withDocumentState(run, approval.state);
   const request: InvokeRequest = {
     ...run.request,
     runId: approval.runId ?? CONTINUATION_RUN_ID,
@@ -68,7 +95,7 @@ export async function approve(run: Run, approval: Approval = {}) {
     continuation: {
       ofRunId: run.request.runId,
       kind: 'approval',
-      stepId: 'decide',
+      stepId: 'ask-approval',
       decision: approval.decision ?? 'approved',
       decidedAt: '2026-10-11T10:00:00.000Z',
       state,
@@ -95,10 +122,13 @@ export function writesOf(calls: readonly { operation: string; input: JsonObject 
     .map((call) => [call.operation, call.input] as const);
 }
 
-/** The run's success output, or a failed test. */
+/** The run's one document's output item — v2's whole output, with its place — or a failed test. */
 export function outputOf(result: RunResult): JsonObject {
   assert.equal(result.outcome, 'success', JSON.stringify(result).slice(0, 400));
-  return (result as Extract<RunResult, { outcome: 'success' }>).output ?? {};
+  const output = (result as Extract<RunResult, { outcome: 'success' }>).output ?? {};
+  const [first] = Array.isArray(output.documents) ? (output.documents as JsonObject[]) : [];
+  const { index: _index, ...item } = first ?? {};
+  return item;
 }
 
 /**

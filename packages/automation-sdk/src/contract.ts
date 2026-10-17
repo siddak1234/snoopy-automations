@@ -15,6 +15,7 @@
  */
 
 import type { RunDetail } from './details.js';
+import type { RunDocument } from './documents.js';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -109,9 +110,21 @@ export type RunResult =
   // structured result. The platform publishes the first and never the second.
   // `details` (platform ADR-0037, its BUILD-PLAN 25.4.22) are a few label and value
   // lines written for people, which the platform keeps with the run and shows on
-  // the one-run read; it never parses them.
-  | { outcome: 'success'; output?: JsonObject; summary?: string; details?: readonly RunDetail[] }
-  | { outcome: 'held'; held: { stepId: string; reason: string; state: JsonObject } }
+  // the one-run read; it never parses them. `documents` (its ADR-0039, BUILD-PLAN 25.4.27) are the
+  // documents the run read from its file, one object each, kept with the run, shown on the one-run
+  // read and downloadable as a JSON file — on a success and on a held run, never on a failed one.
+  | {
+      outcome: 'success';
+      output?: JsonObject;
+      summary?: string;
+      details?: readonly RunDetail[];
+      documents?: readonly RunDocument[];
+    }
+  | {
+      outcome: 'held';
+      held: { stepId: string; reason: string; state: JsonObject };
+      documents?: readonly RunDocument[];
+    }
   // `retryState` was published here and withdrawn by the platform on 2026-09-08
   // (§12.1 #84): nothing read it, and the platform now refuses it as undeclared.
   | { outcome: 'failed'; failureReason: string };
@@ -240,35 +253,11 @@ export function toArtifactListing(reference: ArtifactReference): ArtifactListing
   return listing;
 }
 
-/* --- the sixth callback: mail --------------------------------------------- */
+/* --- the sixth callback: mail ------------------------------------------- */
 
-/**
- * One outbound mail the PLATFORM sends from its own identity (its ADR-0021) —
- * the sixth callback, `POST /v1/automations/callbacks/mail`. The automation names
- * a recipient and the words; the platform applies the self-send refusal, the
- * per-run and per-workspace caps and the sending address, and answers
- * `{ mail: { accepted: true } }` with nothing about transport, so an automation
- * cannot start branching on a third party's status codes.
- *
- * Held to the platform's published `automation-mail-request.json`, vendored in
- * `contract/schemas` since 2026-10-09 (`contract/README.md`): `to`, `subject`,
- * `body` and `idempotencyKey` and nothing else — `runId`, optional in the
- * handler's allow-list, is not in the schema and is never sent.
- */
-export interface MailRequest {
-  /** A single ASCII mailbox address, at most 254 characters. The platform validates it. */
-  to: string;
-  /** One line, at most `MAIL_SUBJECT_MAX_LENGTH`; a line break is refused, not stripped. */
-  subject: string;
-  /** Plain text, at most `MAIL_BODY_MAX_LENGTH`. */
-  body: string;
-  /** 16–128 characters, stable for the step: a retried step sends one mail, not two. */
-  idempotencyKey: string;
-}
-
-/** The platform's own bounds on a mail, copied from its handler by rule. */
-export const MAIL_SUBJECT_MAX_LENGTH = 200;
-export const MAIL_BODY_MAX_LENGTH = 10_000;
+// The mail's two forms and the platform's bounds on them, in their own file for the line ceiling.
+export { MAIL_BODY_MAX_LENGTH, MAIL_SUBJECT_MAX_LENGTH } from './mail.js';
+export type { MailContent, MailRequest } from './mail.js';
 
 /* --- one-line fields ------------------------------------------------------ */
 
