@@ -2,7 +2,8 @@
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
 (`snoopy-backend`, private) at commit `69b8d97`, re-pinned 2026-10-17 — the platform's
-`main` after its #213 squash-merged its Build 21 (below). The platform emits them with
+`main` after its #213 squash-merged its Build 21 — with three files refreshed the same day from
+the contract of its Build 22, not yet merged (below). The platform emits them with
 `npm run schemas:emit` and verifies the committed files against its TypeScript types byte for
 byte, so this copy is the
 contract it publishes to external automation authors. To refresh: copy the directory again
@@ -203,6 +204,28 @@ before it as `57eac70` (2026-10-14). Until a promotion carries `69b8d97`, the li
 refuses `documents` and a manifest declaring `providers` or a setup `group`; `invoice-processing`
 v3 is registered by the platform's pin change once this repository's `main` publishes its image.
 
+Refreshed 2026-10-17, later, from the contract of the platform's Build 22 (the session's spec of
+2026-10-17, §1: its BUILD-PLAN 25.4.47–25.4.61 and ADR-0041, built on its branch
+`round-17/b22-platform` from `2b9a40b`, not yet merged) — as `dcb8ddb` and `1137ac9` were above,
+this repository's half built beside the platform's. Three files moved:
+
+- `automation-manifest.json`: a step group's optional `titleByConnection` — `field`, the id of a
+  connection setup field, and `titles`, 1–16 of `{ providerId, title }`, each title 1–40
+  characters: the step's title when the flow chose that provider — and `platform`, whose one value
+  is `email`: the platform's own step, which mails each run's results. Additive.
+- `automation-run-result.json` (16 places) and `automation-mail-request.json` (8): an amount or a
+  quantity is `^-?(0|[1-9][0-9]*)(\.[0-9]+)?$` — any number of whole digits and decimals, where
+  it was 12 and 4 (the platform's P6; AM1, AM7: no limit but size). It admits more than before.
+  The SDK's `RUN_DOCUMENT_DECIMAL_PATTERN` is that pattern, and
+  `packages/automation-sdk/test/documents.test.ts` holds it to every place in both files.
+
+The other five files are byte-identical to `69b8d97`'s; all eight are byte-identical to the
+session's contract copy for Build 22 (its `b22-contract`, each file's sha256 as its spec's §1.1
+lists it). Until that branch merges and a promotion carries it, the live platform refuses a
+manifest declaring `titleByConnection` or `platform`, so `invoice-processing` v4 waits for it;
+this copy is re-vendored from the merge commit then, its bytes unchanged unless a review changed
+them.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -273,12 +296,24 @@ field's `group` "must name a declared group", and without `groups`, "group is on
 when groups are declared". A flow's choice "must be 'none' or one of this field's providers".
 
 **Step groups** (ADR-0037, from `9516c0e`) — `groups` "must declare at least 2 groups", an
-id "is declared more than once" refused, a key besides `id`, `title` and `description` "is
-not a group property"; each step's `group`: "every step needs a group when groups are
-declared", "must name a declared group", "the trigger step belongs to the first group", and
-without `groups`, "group is only meaningful when groups are declared"; a group no step names:
-"group '<id>' has no step". Steps may come back to a group — v2's `verify-read` follows
-`check-document`.
+id "is declared more than once" refused, a key besides `id`, `title`, `description`,
+`titleByConnection` and `platform` "is not a group property"; each step's `group`: "every step
+needs a group when groups are declared", "must name a declared group", "the trigger step belongs
+to the first group", and without `groups`, "group is only meaningful when groups are declared".
+Steps may come back to a group — v2's `verify-read` follows `check-document`.
+
+**A step that is a setting, the platform's step, a title by connection** (ADR-0041, Build 22;
+the session's spec of 2026-10-17, §2 "Manifest", in its words) — a group no pipeline step names is
+a step that is a setting, named by at least one setup field's `group`, or the platform's: else
+"group '<id>' has no step and no setting" (it was "group '<id>' has no step"). A group's
+`platform` "must be email"; "only one group may be the platform's"; "the platform's step is the
+last group"; "no pipeline step may be in the platform's step"; "no setting may be in the
+platform's step". A `titleByConnection`'s `field` "must name a connection field"; each of its
+`titles[].providerId` "must be one of that field's providers" — its `providers`, or every optional
+connection for a manifest's one field naming none — and none "is declared more than once"; 1–16
+titles of 1–40 characters, as the schema says. Groups stay at most 6. `test/manifest-rules.ts`
+ports every rule in this section, and `test/manifest-rules.test.ts` holds every manifest here to
+them, each refusal bitten.
 
 **`artifacts`** — media types "must be a media type, optionally with a \* subtype"; an
 empty list "must declare at least one media type — omit `artifacts` entirely to accept no

@@ -4,6 +4,7 @@ import { QuickBooksSimulator } from '@autom8x/automation-kit/testing';
 import type {
   InvokeRequest,
   JsonObject,
+  Manifest,
   ModelRequest,
   RunDocument,
   RunResult,
@@ -102,6 +103,8 @@ export interface DocumentsRun {
   /** No vendor in the company: every seller is new. */
   readonly bare?: boolean;
   readonly company?: (simulator: QuickBooksSimulator) => void;
+  /** The manifests the run's automation is given; the served ones (v4's) by default. */
+  readonly manifests?: readonly Manifest[];
 }
 
 /** A whole run of v3 on a photo of the documents given. */
@@ -115,6 +118,7 @@ export async function documentsRun(run: DocumentsRun) {
     through: 'all',
     file: jpeg(),
     config: run.config ?? QUICKBOOKS,
+    ...(run.manifests === undefined ? {} : { manifests: run.manifests }),
   });
   const documents = run.documents ?? THREE_RECEIPTS;
   world.platform.model = (call, model) => {
