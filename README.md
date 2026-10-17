@@ -138,7 +138,9 @@ completion to the prompt's `outputSchema`, writes one `runs.model_calls` row, an
 answers `{ text, model, finishReason, usage }`, `model` being the one that served;
 `readJsonCompletion` parses the text without ever quoting it, and reads an answer
 whose `finishReason` is `other` as it reads `stop`, since the platform holds both to
-the schema and bills both (the platform's BUILD-PLAN 25.3.12). A completion the
+the schema and bills both (the platform's BUILD-PLAN 25.3.12). Every string it returns
+is storable: a NUL dropped and half a surrogate pair U+FFFD, since the platform keeps a
+run's held state, output and documents as `jsonb`, which holds neither. A completion the
 platform will not hand over is a **typed refusal**: a
 `ModelRefusedError` — a `CallbackRefusedError` whose `callback` is `model` —
 carrying the platform's `details.reason` and the fields beside it, and nothing of
@@ -488,9 +490,9 @@ Four step groups — Received, Read, Checked, Done — over 22 steps. Each promp
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an
 image's 8,000 px kept, the size the models take). v2's recordings were made for v2's prompts and
-are removed with them; v3's are still to be made (`scripts/recording-request.ts`). Until the
-platform's Build 21 contract merges and is promoted (`contract/README.md`), v3 cannot be
-registered. What follows describes v2 and v1, and what v3 keeps of them; where they differ,
+are removed with them; v3's are still to be made (`scripts/recording-request.ts`). The
+platform's Build 21 contract merged as `69b8d97` (`contract/README.md`); until a promotion
+carries it, v3 cannot be registered. What follows describes v2 and v1, and what v3 keeps of them; where they differ,
 this paragraph wins.
 
 **v2.** Its image served v2 alone; v1's manifest stays, registered and immutable, until it is

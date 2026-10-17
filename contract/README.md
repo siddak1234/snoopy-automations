@@ -1,11 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `df4bbad`, re-pinned 2026-10-11 — the platform's
-`main` after its #198 and #199 — two files since refreshed from its unmerged #210 at `9516c0e`
-(2026-10-14), and three from its unmerged Build 21 branch `round-17/b21-platform` (2026-10-16,
-below). The platform emits them with `npm run schemas:emit` and
-verifies the committed files against its TypeScript types byte for byte, so this copy is the
+(`snoopy-backend`, private) at commit `69b8d97`, re-pinned 2026-10-17 — the platform's
+`main` after its #213 squash-merged its Build 21 (below). The platform emits them with
+`npm run schemas:emit` and verifies the committed files against its TypeScript types byte for
+byte, so this copy is the
 contract it publishes to external automation authors. To refresh: copy the directory again
 and update the commit above in the same change.
 
@@ -195,6 +194,14 @@ branch's `schemas/` at its `a90a772` (2026-10-17), and still at its `9afdd98` (t
 carries it, the live platform refuses `documents` and a manifest declaring `providers` or a
 setup `group`; this copy is re-vendored from the merge commit then, its bytes unchanged unless a
 review changed them, and `invoice-processing` v3 waits for it.
+
+Re-pinned 2026-10-17 at `69b8d97`, the platform's `main` after #213 squash-merged
+`round-17/b21-platform` (2026-10-17 06:50Z): its tree is `9afdd98`'s (`c0b311e`), so all eight
+files are byte-identical (each checked with `cmp` against `69b8d97`'s, read from the platform's
+API) and only the commit above moves. #210, from which two files came at `9516c0e`, had merged
+before it as `57eac70` (2026-10-14). Until a promotion carries `69b8d97`, the live platform
+refuses `documents` and a manifest declaring `providers` or a setup `group`; `invoice-processing`
+v3 is registered by the platform's pin change once this repository's `main` publishes its image.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
