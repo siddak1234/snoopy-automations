@@ -29,7 +29,16 @@ import { RESULTS, RUN_FAILS } from '../src/words.js';
 import { bill, creditNote, receipt, sampleAnswer } from './check-world.js';
 import { decide } from './decide-world.js';
 import { PAID, type RouteRun } from './lookups-world.js';
-import { approve, firstRun, noTimeToRepeat, writesOf, type Run } from './writes-world.js';
+import { runStateOf } from '../src/run/state.js';
+import { setUp } from './fixtures.js';
+import { approve, firstRun, noTimeToRepeat, outputOf, writesOf, type Run } from './writes-world.js';
+
+/** The state a run's first read leaves: one document, as `extract` keeps it. */
+async function readState(): Promise<JsonObject> {
+  const result = await setUp({ through: 'extract' }).run();
+  assert.ok(result.outcome === 'success');
+  return result.output ?? {};
+}
 
 /**
  * create-record's failures (the plan's §5 "Error mapping", as decision 6 has it in v2): a write
@@ -93,10 +102,10 @@ test("each Intuit code, a certain refusal: not recorded, the nearest of §3.F's 
       ]);
       assert.equal(summaryOf(result), notRecorded(reason), `${label} ${code}`);
       assert.ok(result.outcome === 'success');
-      assert.deepEqual(result.details?.at(-1), {
-        label: 'QuickBooks',
-        value: `Not recorded: ${reason}`,
-      });
+      assert.equal(
+        result.documents?.[0]?.statusText,
+        `Saved. Not recorded in QuickBooks: ${reason}`,
+      );
       assert.ok(!JSON.stringify(result).includes(FAULT_MARKER));
       assert.equal(writesOf(calls).length, 1, `${label} ${code}: one request`);
     }
@@ -120,8 +129,15 @@ test("QuickBooks' own 429 or 5xx, Fault 600, or an answer without the record: Qu
     const { result, calls } = await written({ answer: bill() }, 'bill.create', script);
     assert.equal(summaryOf(result), RESULTS.unconfirmed, label);
     assert.ok(result.outcome === 'success');
-    assert.deepEqual(result.details?.at(-1), { label: 'QuickBooks', value: "Didn't confirm" });
-    assert.deepEqual(result.output?.notRecorded, null, label);
+    assert.deepEqual(
+      [result.documents?.[0]?.status, result.documents?.[0]?.statusText],
+      ['unconfirmed', `Saved. ${RESULTS.unconfirmed.slice('Saved. '.length)}`],
+    );
+    assert.deepEqual(
+      [outputOf(result).notRecorded, outputOf(result).unconfirmed],
+      [null, true],
+      label,
+    );
     assert.equal(writesOf(calls).length, 1, `${label}: one request`);
   }
 });
@@ -154,8 +170,12 @@ test('after create-vendor added the vendor: a refused bill keeps it, and an unco
   assert.equal(summaryOf(fault.result), notRecorded('may already be in QuickBooks'));
   assert.equal(refused.simulator.company.vendors.length, 1, 'the vendor stays');
   assert.deepEqual(
-    fault.steps.find(([stepId]) => stepId === 'create-record'),
-    ['create-record', 'failed', 'Not recorded in QuickBooks: may already be in QuickBooks'],
+    fault.steps.find(([stepId]) => stepId === 'create-approved-records'),
+    [
+      'create-approved-records',
+      'failed',
+      'Not recorded in QuickBooks: may already be in QuickBooks',
+    ],
   );
   // An answer lost with no time to repeat it: the run's recover says QuickBooks did not confirm it.
   const lost = await firstRun({ answer: bill(), bare: true });
@@ -163,7 +183,7 @@ test('after create-vendor added the vendor: a refused bill keeps it, and an unco
   const unconfirmed = await approve(lost, { deadline: noTimeToRepeat() });
   assert.equal(summaryOf(unconfirmed.result), RESULTS.unconfirmed);
   assert.equal(
-    unconfirmed.steps.find(([stepId]) => stepId === 'create-vendor')?.[2],
+    unconfirmed.steps.find(([stepId]) => stepId === 'create-approved-vendors')?.[2],
     'Vendor added',
   );
 });
@@ -207,21 +227,17 @@ function refuseReport(run: Run, stepId: string, problem: ProblemInput = FLOOD): 
 const HOLD_ALL = { ...PAID.company.config, holdAboveAmount: 0 };
 const RECORDED = 'Recorded in QuickBooks: expense from Tidewell Hardware, $60.63.';
 
-test("once the record is made, a refused report — create-record's line or notify's, a 429 or any other — never says 'Try again': the run names the record", async () => {
+test("once the record is made, a refused report — its line, a 429 or any other — never says 'Try again': the run names the record", async () => {
   const cases: [string, string, ProblemInput][] = [
-    ["create-record's line refused 429", 'create-record', FLOOD],
+    ["create-approved-records' line refused 429", 'create-approved-records', FLOOD],
     [
-      "create-record's line refused 502",
-      'create-record',
+      "create-approved-records' line refused 502",
+      'create-approved-records',
       { status: 502, code: 'DEPENDENCY_FAILURE', detail: 'x' },
     ],
-    ["notify's line refused 429", 'notify', FLOOD],
   ];
   for (const [label, stepId, problem] of cases) {
-    const first = await firstRun({
-      answer: receipt(),
-      config: { ...HOLD_ALL, notifyEmail: 'books@example.com' },
-    });
+    const first = await firstRun({ answer: receipt(), config: HOLD_ALL });
     refuseReport(first, stepId, problem);
     const approved = await approve(first);
     assert.deepEqual(approved.result, { outcome: 'failed', failureReason: RECORDED }, label);
@@ -236,7 +252,7 @@ test("once the record is made, a refused report — create-record's line or noti
 test("a write QuickBooks may have made stands when its line's report is refused: never 'Try again'", async () => {
   const first = await firstRun({ answer: receipt(), config: HOLD_ALL });
   first.simulator.script('purchase.create', [{ lost: 'before_record' }]);
-  refuseReport(first, 'create-record');
+  refuseReport(first, 'create-approved-records');
   assert.deepEqual((await approve(first, { deadline: noTimeToRepeat() })).result, {
     outcome: 'failed',
     failureReason: "QuickBooks didn't confirm. Check QuickBooks before you run it again.",
@@ -252,14 +268,17 @@ test("a write QuickBooks may have made stands when its line's report is refused:
 
 test("a run's notes are its own: a record of a kind the run's end does not know is still named, and the same request run again starts with nothing done", async () => {
   // One step that makes a record and one after it, each report refusable.
-  let made: JsonObject = { created: { record: 'payment', id: '77' } };
+  const [entry] = runStateOf(await readState())?.documents ?? [];
+  assert.ok(entry);
+  const withRecord = { ...entry, engine: { created: { record: 'payment', id: '77' } } };
+  let made: JsonObject = { documents: [withRecord as unknown as JsonObject] };
   const automation = withFixedSentences(
     defineAutomation({
       templateId: TEMPLATE_ID,
       manifests: [
         {
           templateId: TEMPLATE_ID,
-          version: 2,
+          version: 3,
           requiredCapabilities: [],
           pipeline: [{ id: 'make' }, { id: 'after' }],
         },
@@ -275,13 +294,13 @@ test("a run's notes are its own: a record of a kind the run's end does not know 
     }),
     () => undefined,
   );
-  const request = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2 });
+  const request = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 3 });
   const platform = new RecordingPlatform();
   platform.reportStep = (line: StepReport) =>
     line.stepId === 'after' ? Promise.reject(refusalFixture('step', FLOOD)) : Promise.resolve();
   assert.deepEqual(await automation.execute(request, platform), {
     outcome: 'failed',
-    failureReason: 'Recorded in QuickBooks.',
+    failureReason: 'Recorded in QuickBooks: record from Harrowgate Office Supply.',
   });
   // The same request again, nothing made this time: "Something went wrong".
   made = {};

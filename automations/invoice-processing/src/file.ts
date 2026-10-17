@@ -12,17 +12,17 @@ import type { ArtifactReference } from '@autom8x/automation-sdk';
  */
 
 /**
- * The owner's decisions of 2026-10-10: a PDF, JPEG or PNG; at most 3,500,000 bytes; a
- * PDF at most 10 pages; an image at most 8,000 px on a side. All four are the manifest's
- * `artifacts` block, and a test holds them equal: the platform measures a file's pages
- * and pixels only for a manifest that declares a page or pixel limit (its BUILD-PLAN
- * 25.2.28, merged as its `main` 7086e5e), so without the last two every measurement
+ * The owner's decisions of 2026-10-10 as AM1 and AM7 change them ("no limits other than size"):
+ * a PDF, JPEG or PNG; at most 3,500,000 bytes; an image at most 8,000 px on a side — the image
+ * size the models take — and a PDF of any number of pages, every document in it read in parts.
+ * All three are the manifest's `artifacts` block, and a test holds them equal: the platform
+ * measures a file's pages and pixels only for a manifest that declares a page or pixel limit (its
+ * BUILD-PLAN 25.2.28, merged as its `main` 7086e5e), so without the pixel limit every measurement
  * `receive` reads would be null and every file refused.
  */
 export const FILE_LIMITS = {
   acceptedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'],
   maximumSizeBytes: 3_500_000,
-  maximumPdfPages: 10,
   maximumImageSidePixels: 8_000,
 } as const;
 

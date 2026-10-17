@@ -290,11 +290,24 @@ test('a mail request validates against the published schema, and the SDK bounds 
   // `runId` is optional in the handler's allow-list but not in the published
   // request, and the client never sends it.
   assert.equal(validate({ ...mail, runId: '44444444-4444-4444-8444-444444444444' }), false);
+  // Two forms since the platform's ADR-0039 (BUILD-PLAN 25.4.29): the plain mail first, then the
+  // run's results, which the platform renders; one field of the other form is refused.
   const schema = JSON.parse(
     readFileSync(join(schemas, 'automation-mail-request.json'), 'utf8'),
-  ) as { properties: Record<'subject' | 'body', { maxLength: number }> };
-  assert.equal(MAIL_SUBJECT_MAX_LENGTH, schema.properties.subject.maxLength);
-  assert.equal(MAIL_BODY_MAX_LENGTH, schema.properties.body.maxLength);
+  ) as { oneOf: [{ properties: Record<'subject' | 'body', { maxLength: number }> }] };
+  assert.equal(MAIL_SUBJECT_MAX_LENGTH, schema.oneOf[0].properties.subject.maxLength);
+  assert.equal(MAIL_BODY_MAX_LENGTH, schema.oneOf[0].properties.body.maxLength);
+  assert.equal(validate({ ...mail, template: 'run-results' }), false);
+  assert.equal(
+    validate({
+      to: mail.to,
+      template: 'run-results',
+      summary: 'Done.',
+      idempotencyKey: mail.idempotencyKey,
+    }),
+    false,
+    'the results form carries its documents',
+  );
   assert.ok(isMailAcceptance({ mail: { accepted: true } }));
   assert.equal(isMailAcceptance({ mail: { accepted: false } }), false);
   assert.equal(isMailAcceptance({ provider: { status: 200 } }), false);

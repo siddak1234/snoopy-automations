@@ -5,6 +5,7 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { creditNote, sampleAnswer, statement } from './check-world.js';
 import { REF, lineOf, queriesOf, routeRun, sampleBill, type RouteRun } from './lookups-world.js';
+import { outputOf } from './writes-world.js';
 
 /**
  * Numbers QuickBooks could not hold are never sent (Group 4's G4-4), end to end on the simulator:
@@ -35,11 +36,10 @@ test("a credit's original invoice number past the 21 characters a bill's holds: 
           sampleBill('152', REF.tidewell, { DocNumber: long }),
         ),
     });
-    assert.equal(lineOf(world, 'find-related'), NO_NUMBER);
+    assert.equal(lineOf(world, 'find-related')?.split('; ')[0], NO_NUMBER);
     assert.equal(queriesOf(world)['find-related'], undefined, 'no query');
     assert.ok(world.result.outcome === 'success', JSON.stringify(world.result));
-    const category = ((world.result.output as JsonObject).record as JsonObject)
-      .category as JsonObject;
+    const category = (outputOf(world.result).record as JsonObject).category as JsonObject;
     assert.notEqual(category.why, 'the original bill used it');
   }
   // 21 characters, the most a bill's number holds: searched.
@@ -57,7 +57,7 @@ test("a credit's original invoice number past the 21 characters a bill's holds: 
     answer: creditNote({ documentNumber: null }),
     through: 'find-related',
   });
-  assert.equal(lineOf(unnumbered, 'find-duplicate-number'), NO_NUMBER);
+  assert.equal(lineOf(unnumbered, 'find-duplicates')?.split('; ')[0], NO_NUMBER);
   assert.ok(queriesOf(unnumbered)['find-related'], 'the original bill searched');
 });
 
@@ -84,11 +84,12 @@ test("a statement's listed numbers: each once whatever its case, those past 21 c
     queriesOf(twice)['find-duplicate-number'],
     "SELECT * FROM Bill WHERE DocNumber IN ('HOS-1031', 'HOS-1042') AND VendorRef = '7' MAXRESULTS 3",
   );
-  assert.equal(lineOf(twice, 'find-duplicate-number'), 'Number checked');
+  assert.equal(lineOf(twice, 'find-duplicates')?.split('; ')[0], 'Number checked');
   /** The statement the run's output compares, and the run's summary. */
   const compared = (world: typeof twice) => {
     assert.ok(world.result.outcome === 'success', JSON.stringify(world.result));
-    const { output, summary } = world.result;
+    const output = outputOf(world.result);
+    const summary = world.result.summary;
     return { statement: (output as { statement: JsonObject }).statement, summary: summary ?? '' };
   };
   assert.deepEqual(compared(twice).statement.listedNotInQuickBooks, ['HOS-1031']);
@@ -115,6 +116,6 @@ test("a statement's listed numbers: each once whatever its case, those past 21 c
     company: seeded,
   });
   assert.equal(queriesOf(none)['find-duplicate-number'], undefined);
-  assert.equal(lineOf(none, 'find-duplicate-number'), 'Number checked');
+  assert.equal(lineOf(none, 'find-duplicates')?.split('; ')[0], 'Number checked');
   assert.equal((compared(none).statement.listedNotInQuickBooks as string[]).length, 3);
 });

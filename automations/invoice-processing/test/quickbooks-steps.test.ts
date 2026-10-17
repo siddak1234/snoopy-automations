@@ -77,7 +77,7 @@ const CASES: {
 for (const { stepId, operation } of STEPS) {
   test(`${stepId}: every connection and busy case keeps the document out of QuickBooks, and the run goes on`, async () => {
     for (const { name, script, reason, calls, waits } of CASES) {
-      const world = setUp();
+      const world = setUp({ through: 'find-accounts' });
       world.simulator.script(operation, script(operation));
       const result = await world.run();
       assert.ok(result.outcome === 'success', `${stepId}: ${name}`);
@@ -103,7 +103,7 @@ for (const { stepId, operation } of STEPS) {
   });
 
   test(`${stepId}: 429, 429, then an answer continues after two minute-long waits`, async () => {
-    const world = setUp();
+    const world = setUp({ through: 'find-accounts' });
     world.simulator.script(operation, [{ status: 429 }, { status: 429 }, { status: 200 }]);
     const result = await world.run();
     assert.ok(result.outcome === 'success');
@@ -113,7 +113,7 @@ for (const { stepId, operation } of STEPS) {
   });
 
   test(`${stepId}: a 429 with less than six minutes left does not wait: QuickBooks did not answer`, async () => {
-    const world = setUp({ deadlineInMs: 5 * 60_000 });
+    const world = setUp({ deadlineInMs: 5 * 60_000, through: 'find-accounts' });
     world.simulator.script(operation, [{ status: 429 }, { status: 200 }]);
     const result = await world.run();
     assert.ok(result.outcome === 'success');

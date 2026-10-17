@@ -158,6 +158,22 @@ test('a completion is read as the JSON object the schema asked for, and the text
   }
 });
 
+test("a completion's every string comes back storable: a NUL dropped, half a surrogate pair U+FFFD, an emoji kept — the platform keeps a run's state, output and documents as jsonb, which holds neither (its #287)", () => {
+  const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
+  // The escapes as a model's JSON writes them, at any depth.
+  const text = String.raw`{"vendorName":"Lo\u0000wes \ud83d","lines":[{"description":"Stud 😀 \udc00","amount":4}],"labels":["\u0000","PO\udfff#"]}`;
+  const answer = readJsonCompletion({ text, model: 'm', finishReason: 'stop', usage });
+  assert.deepEqual(answer, {
+    vendorName: 'Lowes �',
+    lines: [{ description: 'Stud \u{1F600} �', amount: 4 }],
+    labels: ['', 'PO�#'],
+  });
+  // The platform's own test (`packages/contracts/src/run-documents.ts`, `textCheck`).
+  const unstorable = /[\u0000\ud800-\udfff]/u;
+  const strings = [answer.vendorName, ...(answer.labels as string[])];
+  assert.ok(strings.every((value) => typeof value === 'string' && !unstorable.test(value)));
+});
+
 test("a prompt whose schema the platform would refuse is refused when it loads, in the platform's words (25.3.11)", () => {
   for (const [outputSchema, message] of [
     [

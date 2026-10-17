@@ -14,6 +14,7 @@ import {
   sampleJournalEntry,
   samplePurchase,
 } from './lookups-world.js';
+import { documentState } from './writes-world.js';
 
 /**
  * The same purchase met as another kind of record, through the whole run on the simulator (the
@@ -44,11 +45,11 @@ test('a bill created and paid, then its payment confirmation uploaded: held "alr
     },
   });
   const hold = held(world.result);
-  assert.equal(hold.reason, 'Matches a paid bill.');
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['matches_bill']);
+  assert.equal(hold.reason, 'Document 1: matches a paid bill.');
+  assert.deepEqual(documentState(hold.state).holdReasons, ['matches_bill']);
   assert.equal(
-    world.platform.steps.find((step) => step.stepId === 'decide')?.heldReason,
-    'Matches a paid bill.',
+    world.platform.steps.find((step) => step.stepId === 'ask-approval')?.heldReason,
+    'Document 1: matches a paid bill.',
   );
 });
 
@@ -65,8 +66,8 @@ test('an open bill, then a receipt for it: held, the hold 6 wording', async () =
       ),
   });
   const hold = held(world.result);
-  assert.equal(hold.reason, 'Matches an open bill.');
-  assert.equal(lineOf(world, 'find-related'), 'Possible duplicate');
+  assert.equal(hold.reason, 'Document 1: matches an open bill.');
+  assert.equal(lineOf(world, 'find-related')?.split('; ')[0], 'Possible duplicate');
   assert.equal(lineOf(world, 'decide'), 'Waiting for approval');
 });
 
@@ -79,9 +80,9 @@ test("a receipt recorded, then the supplier's invoice uploaded: held as a possib
       ),
   });
   const hold = held(world.result);
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.equal(hold.reason, 'May already be in QuickBooks.');
-  assert.deepEqual(((hold.state as JsonObject).duplicates as JsonObject).expenseIds, ['205']);
+  assert.deepEqual(documentState(hold.state).holdReasons, ['possible_duplicate']);
+  assert.equal(hold.reason, 'Document 1: may already be in QuickBooks.');
+  assert.deepEqual((documentState(hold.state).duplicates as JsonObject).expenseIds, ['205']);
 });
 
 test("an employee's reimbursement recorded (v1's journal entry), then the same receipt uploaded as the company's: held (D32)", async () => {
@@ -99,9 +100,9 @@ test("an employee's reimbursement recorded (v1's journal entry), then the same r
       ),
   });
   const hold = held(world.result);
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.deepEqual(((hold.state as JsonObject).duplicates as JsonObject).journalEntryIds, ['402']);
-  assert.equal(hold.reason, 'May already be in QuickBooks.');
+  assert.deepEqual(documentState(hold.state).holdReasons, ['possible_duplicate']);
+  assert.deepEqual((documentState(hold.state).duplicates as JsonObject).journalEntryIds, ['402']);
+  assert.equal(hold.reason, 'Document 1: may already be in QuickBooks.');
 });
 
 test("a contractor's reimbursement bill, then the same receipt: held", async () => {
@@ -113,6 +114,6 @@ test("a contractor's reimbursement bill, then the same receipt: held", async () 
       ),
   });
   const hold = held(world.result);
-  assert.deepEqual((hold.state as JsonObject).holdReasons, ['possible_duplicate']);
-  assert.equal(hold.reason, 'May already be in QuickBooks.');
+  assert.deepEqual(documentState(hold.state).holdReasons, ['possible_duplicate']);
+  assert.equal(hold.reason, 'Document 1: may already be in QuickBooks.');
 });

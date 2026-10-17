@@ -2,35 +2,392 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.autom8x.dev/schemas/automation-mail-request.json",
   "title": "AutomationMailRequest",
-  "type": "object",
-  "properties": {
-    "to": {
-      "type": "string",
-      "format": "email",
-      "minLength": 1,
-      "maxLength": 254
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "to",
+        "subject",
+        "body",
+        "idempotencyKey"
+      ],
+      "properties": {
+        "to": {
+          "type": "string",
+          "format": "email",
+          "minLength": 1,
+          "maxLength": 254
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128
+        }
+      }
     },
-    "subject": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 200
-    },
-    "body": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 10000
-    },
-    "idempotencyKey": {
-      "type": "string",
-      "minLength": 16,
-      "maxLength": 128
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "to",
+        "template",
+        "summary",
+        "documents",
+        "idempotencyKey"
+      ],
+      "properties": {
+        "to": {
+          "type": "string",
+          "format": "email",
+          "minLength": 1,
+          "maxLength": 254
+        },
+        "template": {
+          "const": "run-results"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "status",
+              "statusText",
+              "type",
+              "vendor",
+              "number",
+              "numberLabel",
+              "references",
+              "date",
+              "time",
+              "currency",
+              "lineItems",
+              "lineItemsComplete",
+              "subtotal",
+              "tax",
+              "tip",
+              "discount",
+              "total",
+              "payment",
+              "recordedIn",
+              "details"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "enum": [
+                  "recorded",
+                  "saved",
+                  "not_recorded",
+                  "unconfirmed",
+                  "compared",
+                  "waiting"
+                ]
+              },
+              "statusText": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "enum": [
+                  "bill",
+                  "invoice",
+                  "receipt",
+                  "credit_note",
+                  "statement",
+                  "bank_statement",
+                  "quote",
+                  "purchase_order",
+                  "other"
+                ]
+              },
+              "vendor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "address",
+                  "city",
+                  "storeNumber"
+                ],
+                "properties": {
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  },
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  },
+                  "city": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  },
+                  "storeNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  }
+                }
+              },
+              "number": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "numberLabel": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "references": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "time": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              },
+              "currency": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[A-Z]{3}$"
+              },
+              "lineItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "description",
+                    "quantity",
+                    "unitPrice",
+                    "amount"
+                  ],
+                  "properties": {
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1
+                    },
+                    "quantity": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+                    },
+                    "unitPrice": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+                    },
+                    "amount": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+                    }
+                  }
+                }
+              },
+              "lineItemsComplete": {
+                "type": "boolean"
+              },
+              "subtotal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+              },
+              "tax": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+              },
+              "tip": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+              },
+              "discount": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+              },
+              "total": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^-?(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"
+              },
+              "payment": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "cardLast4"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "card",
+                      "cash",
+                      "check",
+                      "bank_transfer",
+                      "other",
+                      "not_shown"
+                    ]
+                  },
+                  "cardLast4": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[0-9]{4}$"
+                  }
+                }
+              },
+              "recordedIn": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "providerId",
+                      "recordType",
+                      "recordId"
+                    ],
+                    "properties": {
+                      "providerId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$"
+                      },
+                      "recordType": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "recordId": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128
+        }
+      }
     }
-  },
-  "required": [
-    "to",
-    "subject",
-    "body",
-    "idempotencyKey"
-  ],
-  "additionalProperties": false
+  ]
 }

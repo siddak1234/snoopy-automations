@@ -1,9 +1,0 @@
-{
-  "fileSha256": "188606586675c97b331dcfcf747895711ac8e7f3e0e136b73487d32c5bc62f69",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Bluefinch Print & Sign\",\"documentNumber\":\"BPS-2207\",\"documentDate\":\"2026-09-03\",\"dueDate\":\"2026-10-03\",\"paymentTermsDays\":30,\"currency\":null,\"subtotal\":278.5,\"tax\":22.98,\"shipping\":null,\"discount\":null,\"total\":301.48,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"advertising\",\"lineItems\":[{\"amount\":128},{\"amount\":64},{\"amount\":86.5}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

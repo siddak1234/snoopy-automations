@@ -18,10 +18,10 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
-import { boundedDetails } from './details.js';
 import { floodClock, floodWaitMs, isFloodRefusal, waitEndsBefore } from './flood.js';
 import { modelRequestProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
+import { boundedResult } from './result.js';
 import { unanswered, unsent } from './marks.js';
 
 /**
@@ -348,27 +348,8 @@ export class PlatformClient implements AutomationPlatform {
   }
 }
 
-/** The result with every one-line field, and each line of its `details`, normalised to what the wire accepts. */
-export function boundedResult(result: RunResult): RunResult {
-  switch (result.outcome) {
-    case 'success': {
-      const { details, ...rest } = result;
-      const lines = boundedDetails(details);
-      return {
-        ...rest,
-        ...(result.summary === undefined ? {} : { summary: oneLine(result.summary, 'summary') }),
-        ...(lines === undefined ? {} : { details: lines }),
-      };
-    }
-    case 'held':
-      return {
-        ...result,
-        held: { ...result.held, reason: oneLine(result.held.reason, 'held.reason') },
-      };
-    case 'failed':
-      return { ...result, failureReason: oneLine(result.failureReason, 'failureReason') };
-  }
-}
+// The result as the wire accepts it, in its own file for the line ceiling.
+export { RESULT_BODY_LIMIT_BYTES, boundedResult } from './result.js';
 
 /** Builds the client for one invoke, held to its deadline. */
 export function clientFor(request: InvokeRequest, options?: PlatformClientOptions): PlatformClient {

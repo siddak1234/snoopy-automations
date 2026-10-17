@@ -5,13 +5,14 @@ import type {
   ArtifactReference,
   InvokeRequest,
   JsonObject,
-  MailRequest,
+  MailContent,
   ModelCompletion,
   ProviderAnswer,
   ProviderRequest,
   RunResult,
 } from './contract.js';
 import type { RunDetail } from './details.js';
+import type { RunDocument } from './documents.js';
 import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import type { PromptModule } from './prompt.js';
@@ -35,6 +36,35 @@ export interface ModelCallOptions {
   artifactId?: string;
 }
 
+/**
+ * How one side effect of a step is keyed. A step has ONE idempotency key (`idempotencyKeyFor`), and
+ * the platform answers a second call under a key from the first's record — so a step that does
+ * several things, one per document, names a `part` for each: `^[a-z0-9-]{1,12}$`, the same part on
+ * every attempt for the same thing (platform BUILD-PLAN 25.4.31; the session's spec, S17).
+ */
+export interface CallOptions {
+  part?: string;
+}
+
+/** A part's name: lowercase letters, digits and hyphens, 1 to 12 of them. */
+export const PART_PATTERN = /^[a-z0-9-]{1,12}$/u;
+
+/**
+ * The key of one part of a step: `<step key>.<part>` — at most 113 + 1 + 12 = 126 characters, in
+ * the platform's 16–128 bound and its character set (`A-Z a-z 0-9 . _ ~ : -`) — or the step's own
+ * key when no part is named. A part outside `PART_PATTERN` is the caller's mistake, refused before
+ * anything is sent.
+ */
+export function partKey(idempotencyKey: string, part: string | undefined): string {
+  if (part === undefined) return idempotencyKey;
+  if (!PART_PATTERN.test(part)) {
+    throw new Error(
+      `part ${JSON.stringify(part)} must be 1-12 lowercase letters, digits or hyphens`,
+    );
+  }
+  return `${idempotencyKey}.${part}`;
+}
+
 /** What a step may reach. The run token travels with every call; no key or grant exists here. */
 export interface StepPlatform {
   /**
@@ -46,10 +76,16 @@ export interface StepPlatform {
     input: JsonObject,
     options?: readonly string[] | ModelCallOptions,
   ): Promise<ModelCompletion>;
-  /** A provider operation the manifest declared, with this step's idempotency key attached. */
-  callProvider(request: Omit<ProviderRequest, 'idempotencyKey'>): Promise<ProviderAnswer>;
-  /** A mail the platform sends from its own identity, with this step's idempotency key attached. */
-  sendMail(mail: Omit<MailRequest, 'idempotencyKey'>): Promise<void>;
+  /**
+   * A provider operation the manifest declared, with this step's idempotency key attached — or,
+   * with `part`, the key of that part of the step (`partKey`).
+   */
+  callProvider(
+    request: Omit<ProviderRequest, 'idempotencyKey'>,
+    options?: CallOptions,
+  ): Promise<ProviderAnswer>;
+  /** A mail the platform sends from its own identity, keyed as `callProvider` keys a call. */
+  sendMail(mail: MailContent, options?: CallOptions): Promise<void>;
   readArtifact(artifactId: string): Promise<ArtifactReference>;
   listArtifacts(): Promise<ArtifactListing[]>;
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
@@ -75,7 +111,15 @@ export type StepResult =
   | { outcome: 'ok'; summary: string; state?: JsonObject }
   | { outcome: 'skipped' }
   | { outcome: 'failed'; summary: string; failureReason?: string; state?: JsonObject }
-  | { outcome: 'held'; summary: string; heldReason: string; reason: string; state: JsonObject };
+  | {
+      outcome: 'held';
+      summary: string;
+      heldReason: string;
+      reason: string;
+      state: JsonObject;
+      /** The documents read so far, as the held result shows them (platform ADR-0039). */
+      documents?: readonly RunDocument[];
+    };
 
 export type Step = (context: StepContext) => Promise<StepResult>;
 
@@ -88,13 +132,19 @@ export interface AutomationDefinition {
   /** Every prompt a step may send. Unregistered prompts are refused before the wire. */
   prompts?: readonly PromptModule[];
   /**
-   * The success result once the pipeline has run: the output, the one-line summary, and the
-   * `details` a person reads beside it (platform ADR-0037), which the client bounds.
+   * The success result once the pipeline has run: the output, the one-line summary, the
+   * `details` a person reads beside it (platform ADR-0037), and the `documents` the run read
+   * (platform ADR-0039), which the client bounds.
    */
   result: (
     state: JsonObject,
     request: InvokeRequest,
-  ) => { output?: JsonObject; summary?: string; details?: readonly RunDetail[] };
+  ) => {
+    output?: JsonObject;
+    summary?: string;
+    details?: readonly RunDetail[];
+    documents?: readonly RunDocument[];
+  };
   /**
    * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):
    * a step absent here runs once. Declare one only where a repeat is safe — a read;
@@ -138,6 +188,7 @@ export function held(input: {
   heldReason: string;
   reason?: string;
   state: JsonObject;
+  documents?: readonly RunDocument[];
 }): StepResult {
   return {
     outcome: 'held',
@@ -145,6 +196,7 @@ export function held(input: {
     heldReason: input.heldReason,
     reason: input.reason ?? input.heldReason,
     state: input.state,
+    ...(input.documents === undefined ? {} : { documents: input.documents }),
   };
 }
 

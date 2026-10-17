@@ -10,16 +10,16 @@ import { routeOf } from './route.js';
 import { failedRule, recordingRule, type DocumentRule, type RecordingRule } from './rules.js';
 
 /**
- * `check-document`'s decision, a pure function of the first read, the company and the run's date
- * (the plan's §2.1–§2.5, as v2's §2.6 splits the rules): the rule the document cannot be used
- * under, which ends the run on either path; or the cleaned document, its route and what it found —
- * and, on the QuickBooks path, the first rule QuickBooks cannot record it under, if any. No
+ * One document's checks, a pure function of its first read, the company and the run's date (the
+ * plan's §2.1–§2.5, as v2's §2.6 splits the rules): the rule the document cannot be used under as
+ * read, which holds it for a second read (v3's B4); or the cleaned document, its route and what it
+ * found — and, on the QuickBooks path, the first rule QuickBooks cannot record it under, if any. No
  * QuickBooks or model call; the same input gives the same answer, so a run re-sent after a lost
  * acknowledgement reaches it again.
  */
 
 export interface CheckInput {
-  /** `state.extraction`: read 1's answer as the platform held it to its schema. */
+  /** Read 1's answer for one document, as v2's checks read it (`v2AnswerOf`). */
   readonly answer: unknown;
   /** The QuickBooks path: the recording rules are weighed. */
   readonly quickBooks: boolean;
@@ -120,8 +120,9 @@ export function checkFirstRead(input: CheckInput): CheckOutcome {
   };
   const rule = failedRule(context);
   if (rule !== undefined) return { outcome: 'failed', rule };
-  // Past C1–C4 the type is one this automation keeps; past C8 there is a seller; past C11 a
-  // record has a total — in whole cents, its arithmetic run, unless C12 or C13 would say not.
+  // A type this automation records or compares — v3 checks no other (`src/run/check.ts`); past C8
+  // there is a seller; past C11 a record has a total — in whole cents, its arithmetic run, unless
+  // C12 or C13 would say not.
   if (type === null || cleaned.seller === null)
     return { outcome: 'failed', rule: 'answer_unusable' };
 

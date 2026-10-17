@@ -8,16 +8,20 @@ import { incomplete, lookupDocumentOf, lookupRows, lookupVendorOf } from '../loo
 import { distinctiveWord, similarLine, similarNamesOf } from '../lookups/similar.js';
 
 /**
- * Three checks for a bill whose vendor is new — skipped, with no line, for any other document or a
- * vendor found (the plan's §5; ip-review design-quickbooks-lookups.json steps[2]–[4]), on the
- * QuickBooks path only:
+ * Three checks for a document whose seller is a new vendor — a bill's, and in v3 a receipt's or a
+ * card refund's, whose new seller is added as a vendor (the session's spec, B3) — skipped, with no
+ * line, for any other document or a vendor found (the plan's §5; ip-review
+ * design-quickbooks-lookups.json steps[2]–[4]), on the QuickBooks path only:
  *
  * - `find-similar-vendors` lists, for the approver, up to three vendors whose name holds the printed
  *   name's distinctive word, inactive ones included (G4-2); it never holds or stops anything — when
  *   QuickBooks cannot answer, the run goes on as a new vendor anyway;
  * - `find-customer-name` and `find-employee-name` check that no customer and no employee, active or
  *   not, already has the name: QuickBooks wants a vendor's display name unique across all three, so
- *   a clash creates the vendor as "Name (vendor)" (decision 7) and holds.
+ *   a clash creates a bill's vendor as "Name (vendor)" (decision 7) and holds.
+ *
+ * A receipt's or a card refund's new seller is added only when all three come back clear — no
+ * similar name, no customer or employee with it — and otherwise is left unlinked, as v2 left it.
  *
  * Lines (§3.E, §2.6's phrases): `New vendor`, `New vendor, 2 similar names`, or `Name used by a
  * customer or employee`.
@@ -26,12 +30,15 @@ import { distinctiveWord, similarLine, similarNamesOf } from '../lookups/similar
 const NEW = 'New vendor';
 const NAME_IN_USE = 'Name used by a customer or employee';
 
-/** The new vendor's printed name, when this is a bill whose vendor is new; else why not. */
+/** The documents whose new seller may become a vendor: a bill's; in v3 a receipt's, a card refund's. */
+const ADDS_VENDOR: ReadonlySet<string> = new Set(['bill', 'company_receipt', 'card_refund']);
+
+/** The new vendor's printed name, when the document's seller is a new vendor; else why not. */
 function newVendorName(state: JsonObject): string | 'skipped' | 'incomplete' {
   const document = lookupDocumentOf(state);
   const vendor = lookupVendorOf(state);
   if (!document) return 'incomplete';
-  if (document.route !== 'bill') return 'skipped';
+  if (!ADDS_VENDOR.has(document.route)) return 'skipped';
   if (!vendor) return 'incomplete';
   return vendor.status === 'new' ? document.seller : 'skipped';
 }

@@ -5,7 +5,7 @@ import { faultAnswer, sampleEmployee, type ScriptedAnswer } from '@autom8x/autom
 import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 
 import { RESULTS } from '../src/words.js';
-import { bill, receipt } from './check-world.js';
+import { bill, creditNote, receipt } from './check-world.js';
 import { lines } from './fixtures.js';
 import {
   lineOf,
@@ -16,9 +16,11 @@ import {
   sampleVendor,
   stateOf,
 } from './lookups-world.js';
+import { heldState } from './writes-world.js';
 
 /**
- * A new vendor's three checks: the similar names an approver counts — likely-the-same first, never
+ * A new vendor's three checks — find-similar-vendors at the end of v3's `find-vendors`,
+ * find-customer-name and find-employee-name in `find-names`: the similar names an approver counts — likely-the-same first, never
  * a hold of their own — and a customer's or an employee's use of the name, which holds and names
  * the vendor "(vendor)"; employees a connection cannot read go on as unreadable. Lines (§3.E,
  * §2.6's phrases): `New vendor`, `New vendor, 2 similar names`, `Name used by a customer or
@@ -28,20 +30,23 @@ import {
 const summaryOf = (result: RunResult) =>
   result.outcome === 'success' ? result.summary : JSON.stringify(result);
 
-const THROUGH = 'find-employee-name';
+const THROUGH = 'find-names';
 /** QuickBooks' answers before step `n` of a new vendor's bill: find-accounts', then each lookup's. */
 const before = (count: number): ScriptedAnswer[] =>
   Array.from({ length: count }, () => ({ status: 200 }));
 
-test('a found vendor, or any document but a bill, skips all three: no line, no call', async () => {
+test("a found vendor skips all three: no line, no call; a receipt's new seller takes them, as v3 may add it as a vendor (B3)", async () => {
   const matched = await routeRun({ answer: bill(), through: THROUGH });
+  const checks = ['find-similar-vendors', 'find-customer-name', 'find-employee-name'];
+  for (const stepId of checks) assert.equal(queriesOf(matched)[stepId], undefined, stepId);
+  assert.ok(!reported(matched).includes('find-names'), 'no line');
   const receiptOfNewSeller = await routeRun({ answer: receipt(), through: THROUGH, bare: true });
-  for (const world of [matched, receiptOfNewSeller]) {
-    for (const stepId of ['find-similar-vendors', 'find-customer-name', 'find-employee-name']) {
-      assert.ok(!reported(world).includes(stepId), stepId);
-      assert.equal(queriesOf(world)[stepId], undefined, stepId);
-    }
+  for (const stepId of checks) {
+    assert.notEqual(queriesOf(receiptOfNewSeller)[stepId], undefined, stepId);
   }
+  // A credit note's seller is never added: it needs a vendor QuickBooks has (F5).
+  const credit = await routeRun({ answer: creditNote(), through: THROUGH, bare: true });
+  for (const stepId of checks) assert.equal(queriesOf(credit)[stepId], undefined, stepId);
 });
 
 test('similar names: likely-the-same first, inactive ones too; the names kept for decide to count', async () => {
@@ -60,12 +65,12 @@ test('similar names: likely-the-same first, inactive ones too; the names kept fo
     queriesOf(world)['find-similar-vendors'],
     "SELECT * FROM Vendor WHERE DisplayName LIKE '%acme%' AND Active IN (true, false) MAXRESULTS 3",
   );
-  assert.equal(lineOf(world, 'find-similar-vendors'), 'New vendor, 3 similar names');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor, 3 similar names');
   assert.deepEqual(stateOf(world.result).similarVendors, {
     names: ['ACME Supplies Inc', 'Acme Tools', 'Acme Corp'],
   });
   const none = await routeRun({ answer: bill(), through: THROUGH, bare: true });
-  assert.equal(lineOf(none, 'find-similar-vendors'), 'New vendor');
+  assert.equal(lineOf(none, 'find-vendors'), 'New vendor');
   assert.deepEqual(stateOf(none.result).similarVendors, { names: [] });
 });
 
@@ -81,7 +86,7 @@ test('long names are kept cut to 100 characters, and the line counts them', asyn
   });
   const names = (stateOf(world.result).similarVendors as { names: string[] } | undefined)?.names;
   assert.ok(names?.length === 3 && names.every((name) => name.length === 100), 'kept cut to 100');
-  assert.equal(lineOf(world, 'find-similar-vendors'), 'New vendor, 3 similar names');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor, 3 similar names');
 });
 
 test('a name with no distinctive word sends nothing; the run goes on', async () => {
@@ -91,7 +96,7 @@ test('a name with no distinctive word sends nothing; the run goes on', async () 
     bare: true,
   });
   assert.equal(queriesOf(world)['find-similar-vendors'], undefined);
-  assert.equal(lineOf(world, 'find-similar-vendors'), 'New vendor');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor');
   assert.equal(stateOf(world.result).similarVendors, undefined);
 });
 
@@ -103,11 +108,11 @@ test('QuickBooks unable to list similar names (429s, a Fault): the run goes on t
       company: (sim) => sim.script('query.run', [...before(3), ...(answer as ScriptedAnswer[])]),
     });
     assert.deepEqual(
-      lines(world.platform).find(([stepId]) => stepId === 'find-similar-vendors'),
-      ['find-similar-vendors', 'ok', 'New vendor'],
+      lines(world.platform).find(([stepId]) => stepId === 'find-vendors'),
+      ['find-vendors', 'ok', 'New vendor'],
     );
     assert.equal(world.result.outcome, 'held', 'held as a new vendor, not failed');
-    assert.ok(reported(world).includes('find-customer-name'));
+    assert.ok(reported(world).includes('find-names'));
   }
 });
 
@@ -120,21 +125,27 @@ test("a customer or an employee with the name, active or not: a clash; decide ho
         sampleCustomer('5', 'harrowgate office supply', { Active: false }),
       ),
   });
-  assert.equal(lineOf(customer, 'find-customer-name'), 'Name used by a customer or employee');
+  assert.equal(lineOf(customer, 'find-names'), 'Name used by a customer or employee');
   assert.ok(customer.result.outcome === 'held');
-  assert.equal(customer.result.held.reason, 'New vendor, name used by a customer or employee.');
+  assert.equal(
+    customer.result.held.reason,
+    'Document 1: new vendor, name used by a customer or employee.',
+  );
   const employee = await routeRun({
     answer: bill(),
     bare: true,
     company: (sim) => sim.company.employees.push(sampleEmployee('56', 'Harrowgate Office Supply')),
   });
-  assert.equal(lineOf(employee, 'find-employee-name'), 'Name used by a customer or employee');
+  assert.equal(lineOf(employee, 'find-names'), 'Name used by a customer or employee');
   assert.ok(employee.result.outcome === 'held');
-  assert.equal(employee.result.held.reason, 'New vendor, name used by a customer or employee.');
+  assert.equal(
+    employee.result.held.reason,
+    'Document 1: new vendor, name used by a customer or employee.',
+  );
   const none = await routeRun({ answer: bill(), through: THROUGH, bare: true });
   const state = stateOf(none.result);
   assert.deepEqual([state.customerNameClash, state.employeeNameClash], ['none', 'none']);
-  assert.equal(lineOf(none, 'find-employee-name'), 'New vendor');
+  assert.equal(lineOf(none, 'find-names'), 'New vendor');
 });
 
 test('employees this connection cannot read — a 403, an AuthorizationFault — are unreadable and the run goes on; a 401 is QuickBooks not connected (sandbox S7)', async () => {
@@ -149,16 +160,12 @@ test('employees this connection cannot read — a 403, an AuthorizationFault —
       company: (sim) => sim.script('query.run', [...before(5), answer]),
     });
     assert.deepEqual(
-      lines(world.platform).find(([stepId]) => stepId === 'find-employee-name'),
-      ['find-employee-name', 'ok', 'New vendor'],
+      lines(world.platform).find(([stepId]) => stepId === 'find-names'),
+      ['find-names', 'ok', 'New vendor'],
     );
-    assert.ok(reported(world).includes('find-duplicate-number'), 'the run went on');
+    assert.ok(reported(world).includes('find-duplicates'), 'the run went on');
     assert.ok(world.result.outcome === 'held');
-    assert.deepEqual(
-      (world.result.held.state as JsonObject).holdReasons,
-      ['new_vendor'],
-      'unreadable adds no hold',
-    );
+    assert.deepEqual(heldState(world).holdReasons, ['new_vendor'], 'unreadable adds no hold');
   }
   const through = await routeRun({
     answer: bill(),
@@ -183,10 +190,10 @@ test('a body that is no query answer: the similar-names list goes on past it; th
       sim.script('query.run', [...before(3), { status: 200, body: { Vendor: [] } }]),
   });
   assert.deepEqual(
-    lines(similar.platform).find(([stepId]) => stepId === 'find-similar-vendors'),
-    ['find-similar-vendors', 'ok', 'New vendor'],
+    lines(similar.platform).find(([stepId]) => stepId === 'find-vendors'),
+    ['find-vendors', 'ok', 'New vendor'],
   );
-  assert.ok(reported(similar).includes('find-customer-name'), 'the run went on');
+  assert.ok(reported(similar).includes('find-names'), 'the run went on');
   assert.equal(similar.result.outcome, 'held', 'held as a new vendor, not failed');
   const employee = await routeRun({
     answer: bill(),
@@ -196,8 +203,8 @@ test('a body that is no query answer: the similar-names list goes on past it; th
   });
   assert.equal(summaryOf(employee.result), RESULTS.notRecorded("QuickBooks didn't answer"));
   assert.deepEqual(
-    lines(employee.platform).find(([stepId]) => stepId === 'find-employee-name'),
-    ['find-employee-name', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+    lines(employee.platform).find(([stepId]) => stepId === 'find-names'),
+    ['find-names', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
   );
 });
 
@@ -209,8 +216,8 @@ test("QuickBooks refusing the customer query keeps the bill out of QuickBooks, n
   });
   assert.equal(summaryOf(world.result), RESULTS.notRecorded("QuickBooks didn't answer"));
   assert.deepEqual(
-    lines(world.platform).find(([stepId]) => stepId === 'find-customer-name'),
-    ['find-customer-name', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+    lines(world.platform).find(([stepId]) => stepId === 'find-names'),
+    ['find-names', 'failed', "Not recorded in QuickBooks: QuickBooks didn't answer"],
   );
 });
 
@@ -255,5 +262,5 @@ test('a similar-name row without the word, however QuickBooks matched it, is not
       ]),
   });
   assert.deepEqual(stateOf(world.result).similarVendors, { names: ['Acme Tools'] });
-  assert.equal(lineOf(world, 'find-similar-vendors'), 'New vendor, 1 similar name');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor, 1 similar name');
 });

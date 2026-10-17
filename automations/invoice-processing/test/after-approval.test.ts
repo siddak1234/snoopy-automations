@@ -108,9 +108,12 @@ test('confirm-vendor: the new vendor added while it waited, in any case, is link
   const first = await firstRun({ answer: bill(), bare: true });
   first.simulator.company.vendors.push(sampleVendor('77', 'HARROWGATE OFFICE SUPPLY'));
   const approved = await approve(first);
-  assert.equal(approved.steps.find(([stepId]) => stepId === 'confirm-vendor')?.[2], 'Vendor found');
   assert.equal(
-    approved.steps.find(([stepId]) => stepId === 'create-vendor'),
+    approved.steps.find(([stepId]) => stepId === 'confirm-vendors')?.[2],
+    'Vendor found',
+  );
+  assert.equal(
+    approved.steps.find(([stepId]) => stepId === 'create-approved-vendors'),
     undefined,
   );
   const writes = writesOf(approved.providerCalls);
@@ -149,7 +152,10 @@ test("confirm-vendor: '(vendor)' is the name looked up; inactive, two, or in ano
       CompanyName: 'Harrowgate Office Supply',
     },
   ]);
-  assert.equal(approved.steps.find(([id]) => id === 'create-vendor')?.[2], 'Vendor added');
+  assert.equal(
+    approved.steps.find(([id]) => id === 'create-approved-vendors')?.[2],
+    'Vendor added',
+  );
   const cases: [string, JsonObject[], string][] = [
     [
       'inactive',
@@ -235,8 +241,8 @@ test('confirm-no-duplicate: a record the rule matches, added while it waited —
   assert.equal(summaryOf(billed.result), DUPLICATE);
   assert.deepEqual(writesOf(billed.providerCalls), []);
   assert.deepEqual(
-    billed.steps.find(([stepId]) => stepId === 'confirm-no-duplicate'),
-    ['confirm-no-duplicate', 'failed', 'Not recorded in QuickBooks: may already be in QuickBooks'],
+    billed.steps.find(([stepId]) => stepId === 'confirm-no-duplicates'),
+    ['confirm-no-duplicates', 'failed', 'Not recorded in QuickBooks: may already be in QuickBooks'],
   );
   // The query: find-duplicate-number's, one row more, the newest created first.
   assert.equal(
@@ -283,7 +289,7 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
   const approved = await approve(seen);
   assert.equal(approved.result.outcome, 'success');
   assert.equal(
-    approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
+    approved.steps.find(([stepId]) => stepId === 'confirm-no-duplicates')?.[2],
     'No duplicate',
   );
   // Four of the vendor's bills for the total and date, one with the number: the first run's amount
@@ -309,7 +315,7 @@ test('confirm-no-duplicate: the possible duplicate the approver saw and approved
   const many = await approve(full);
   assert.equal(many.result.outcome, 'success');
   assert.equal(
-    many.steps.find(([stepId]) => stepId === 'confirm-no-duplicate')?.[2],
+    many.steps.find(([stepId]) => stepId === 'confirm-no-duplicates')?.[2],
     'No duplicate',
   );
 });

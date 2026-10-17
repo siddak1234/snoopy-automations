@@ -19,7 +19,7 @@ import { SPEND_TYPES, type SpendType } from '../spend-types.js';
  * throw, and the rest of the code is typed.
  */
 
-/** The 27 fields of `prompts/extract-document.v1.json`, typed. */
+/** v2's 27 fields of a first read, typed: one document of v3's read (`src/run/answer.ts`'s `v2AnswerOf`). */
 export interface FirstRead {
   readonly documentType: DocumentType;
   readonly documentCount: number;
@@ -54,7 +54,7 @@ export interface FirstRead {
   readonly uncertainFields: readonly string[];
 }
 
-/** The 14 fields of `prompts/verify-document.v1.json`: what read 2 re-reads (the plan's §4). */
+/** The 14 fields read 2 re-reads (the plan's §4): one document of `prompts/verify-documents.v1.json`. */
 export interface SecondRead {
   readonly documentType: DocumentType;
   readonly vendorName: string | null;

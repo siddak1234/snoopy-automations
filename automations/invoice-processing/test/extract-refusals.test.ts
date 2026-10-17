@@ -4,9 +4,19 @@ import { test } from 'node:test';
 import { CallbackRefusedError, type ModelCompletion } from '@autom8x/automation-sdk';
 import { NO_ANSWER, refusalFixture, type ProblemInput } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_FAILS } from '../src/steps/extract.js';
+import { PART_SIZES } from '../src/run/extract.js';
+import { EXTRACT_FAILS } from '../src/run/model-refusals.js';
 import { RUN_FAILS } from '../src/words.js';
-import { GOOD_ANSWER, completion, everythingSaid, lines, pdf, setUp } from './fixtures.js';
+import {
+  GOOD_ANSWER,
+  completion,
+  documentAnswer,
+  everythingSaid,
+  lines,
+  partAnswer,
+  pdf,
+  setUp,
+} from './fixtures.js';
 
 /**
  * Every way `extract` ends a run on an answer the platform gave: one of the spec's sentences
@@ -46,17 +56,29 @@ function assertEndsWith(
 
 const refusing = (problem: ProblemInput) => () => Promise.reject(refusalFixture('model', problem));
 
-test('every model off the schema, not JSON or cut off: the could-not-be-read sentence', async () => {
+test('every model off the schema or not JSON: the could-not-be-read sentence', async () => {
   for (const [label, text, finish] of [
     ['off the schema', JSON.stringify({ ...GOOD_ANSWER, extra: 1 }), 'stop'],
     ['not JSON', 'The document total is 461.53', 'stop'],
-    ['cut off at the cap', '{"documentType":"bill","lineItems":[', 'length'],
   ] as const) {
     const outcome = await ended((model) => Promise.resolve(completion(model, text, finish)));
     assertEndsWith(outcome, 'answer_unusable', UNREADABLE, label);
     assert.equal(outcome.world.platform.modelAttempts.length, 2, `${label}: both models tried`);
   }
   assert.equal(UNREADABLE, "The document can't be read. Try a clearer photo.");
+});
+
+test('every model cut off at the cap, at every part size: asked again smaller, then the could-not-be-read sentence', async () => {
+  const world = setUp();
+  world.platform.model = (_call, model) =>
+    Promise.resolve(completion(model, '{"documentCount":1,"documents":[', 'length'));
+  const result = await world.run();
+  assert.deepEqual(result, { outcome: 'failed', failureReason: UNREADABLE });
+  assert.deepEqual(
+    world.platform.modelCalls.map((call) => call.input.maximumDocuments),
+    PART_SIZES.map((size) => size.documents),
+    'each size once, smaller each time',
+  );
 });
 
 test('every model declining the document: the declined sentence', async () => {
@@ -235,14 +257,23 @@ test('a refusal of the request itself is a fault on our side; the deadline, out 
 });
 
 test('an answer a platform should have refused — not JSON, not an object, the wrong shape, a value off its list, cut off — still ends as unusable', async () => {
-  const wrongShape = { ...GOOD_ANSWER, lineItems: 'none' };
-  const off = (change: Record<string, unknown>) => JSON.stringify({ ...GOOD_ANSWER, ...change });
+  const one = documentAnswer();
+  const wrongShape = partAnswer([{ ...one, lineItems: 'none' }]);
+  const off = (change: Record<string, unknown>) =>
+    JSON.stringify(partAnswer([{ ...one, ...change }]));
+  const part = (change: Record<string, unknown>) =>
+    JSON.stringify({ ...partAnswer([one]), ...change });
   for (const [label, text, finish] of [
     ['not JSON', 'Total: 413.34', 'stop'],
     ['not an object', '[1, 2]', 'stop'],
+    ["v2's one-document answer", JSON.stringify(GOOD_ANSWER), 'stop'],
     ['no document type', off({ documentType: 7 }), 'stop'],
-    ["the old schema's invoice", off({ documentType: 'invoice' }), 'stop'],
     ['a type off the list', off({ documentType: 'statement' }), 'stop'],
+    ['references not a list', off({ references: 'PO 7' }), 'stop'],
+    ['a line without its words', off({ lineItems: [{ amount: 1 }] }), 'stop'],
+    ['a next part with no line', part({ nextDocument: 2, nextLine: 0 }), 'stop'],
+    ['a next part before the first', part({ nextDocument: -1, nextLine: 1 }), 'stop'],
+    ['no count of documents', part({ documentCount: undefined }), 'stop'],
     ['lines not a list', JSON.stringify(wrongShape), 'stop'],
     ['listed rows not a list', off({ listedItems: {} }), 'stop'],
     ['listed rows missing', off({ listedItems: undefined }), 'stop'],
@@ -258,7 +289,7 @@ test('an answer a platform should have refused — not JSON, not an object, the 
     ['a spend type off the list', off({ spendType: 'fuel' }), 'stop'],
     ['no spend type', off({ spendType: undefined }), 'stop'],
     ['unclear fields not a list', off({ uncertainFields: 'total' }), 'stop'],
-    ['cut off', JSON.stringify(GOOD_ANSWER), 'length'],
+    ['cut off', part({}), 'length'],
   ] as const) {
     const world = setUp();
     // A platform that hands any answer over: the step's own checks are the last line.
@@ -277,7 +308,10 @@ test('an answer a platform should have refused — not JSON, not an object, the 
 
 test("every sentence is one of the spec's, within the one-line bound; none carries the platform's words or the model's", async () => {
   for (const fail of Object.values(EXTRACT_FAILS)) {
-    assert.ok([UNREADABLE, BUSY, UNAVAILABLE, FILE].includes(RUN_FAILS[fail]), fail);
+    assert.ok(
+      [UNREADABLE, BUSY, UNAVAILABLE, FILE, RUN_FAILS.none_found].includes(RUN_FAILS[fail]),
+      fail,
+    );
   }
   const marker = 'QZ7LEAK';
   for (const answer of [

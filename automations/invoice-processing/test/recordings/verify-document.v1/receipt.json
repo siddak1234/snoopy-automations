@@ -1,9 +1,0 @@
-{
-  "fileSha256": "187da1e4ca576bbb04c56830c50a8b66132215f6c58763e6771f410a36b3bc0b",
-  "finishReason": "stop",
-  "promptId": "verify-document",
-  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
-  "promptVersion": 1,
-  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"vendorName\":\"Tidewell Hardware\",\"documentNumber\":\"55120\",\"documentDate\":\"2026-09-27\",\"dueDate\":null,\"currency\":null,\"total\":60.63,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"4417\",\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[]}"
-}

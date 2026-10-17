@@ -8,37 +8,40 @@ import {
   type PromptModule,
 } from '@autom8x/automation-sdk';
 
-import { EXTRACT_DOCUMENT_V1, VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
-import { EXTRACT_INPUT } from '../src/steps/extract.js';
-import { VERIFY_INPUT } from '../src/steps/verify-read.js';
+import { EXTRACT_DOCUMENTS_V1, VERIFY_DOCUMENTS_V1 } from '../src/prompts.js';
+import { partInput } from '../src/run/extract.js';
+import { VERIFY_TASK } from '../src/run/verify.js';
 import type { Sample } from './sample-maker/catalog.js';
 import { SAMPLES, samplePath, sha256 } from './sample-maker/samples.js';
 
 /**
  * The recordings: for each made-up sample, the answer of an agent that acted as the model —
- * given exactly the prompt's instruction, the fixed user text, the schema and the file, and
- * nothing else (`scripts/recording-request.ts` prints what) — saved verbatim, each read in its
- * own directory: read 1 (`extract`) as `test/recordings/extract-document.v1/<sample>.json`, read 2
- * (`verify-read`) as `test/recordings/verify-document.v1/<sample>.json`. Each sample is recorded
- * twice, by separate agents blind to each other, as the two reads are blind to each other.
+ * given exactly the prompt's instruction, the user text, the schema and the file, and nothing else
+ * (`scripts/recording-request.ts` prints what) — saved verbatim, each read in its own directory:
+ * read 1's first part (`extract`) as `test/recordings/extract-documents.v1/<sample>.json`, read 2
+ * (`verify-read`, every document the sample holds) as
+ * `test/recordings/verify-documents.v1/<sample>.json`. Each sample is recorded twice, by separate
+ * agents blind to each other, as the two reads are blind to each other. v2's recordings were made
+ * for v2's prompts, which v3 no longer has; v3's are still to be made.
  *
  * A recording names what it was made for, and the loader refuses one made for anything else:
  * another prompt id or version, other bytes of the prompt file (a word changed without a new
  * version), or other bytes of the sample. Such a recording is made again, never edited.
  */
 
-/** One of the two reads a sample is recorded for: its prompt, its fixed input, its directory. */
+/** One of the two reads a sample is recorded for: its prompt, its input, its directory. */
 export interface Read {
   readonly name: 'read 1' | 'read 2';
   readonly prompt: PromptModule;
-  readonly input: JsonObject;
+  /** The step's input for the sample. */
+  readonly input: (sample: Sample) => JsonObject;
   /** The prompt's file. */
   readonly promptFile: string;
   /** Where its recordings are kept. */
   readonly directory: string;
 }
 
-function readOf(name: Read['name'], prompt: PromptModule, input: JsonObject): Read {
+function readOf(name: Read['name'], prompt: PromptModule, input: Read['input']): Read {
   const versioned = `${prompt.id}.v${prompt.version}`;
   return {
     name,
@@ -49,10 +52,19 @@ function readOf(name: Read['name'], prompt: PromptModule, input: JsonObject): Re
   };
 }
 
-/** `extract`'s read: extract-document v1. */
-export const FIRST_READ: Read = readOf('read 1', EXTRACT_DOCUMENT_V1, EXTRACT_INPUT);
-/** `verify-read`'s: verify-document v1, blind to the first. */
-export const SECOND_READ: Read = readOf('read 2', VERIFY_DOCUMENT_V1, VERIFY_INPUT);
+/** The documents a sample holds, as its expected answer counts them. */
+const countOf = (sample: Sample): number =>
+  typeof sample.answer.documentCount === 'number' ? Math.max(1, sample.answer.documentCount) : 1;
+
+/** `extract`'s read: extract-documents v1, its first part. */
+export const FIRST_READ: Read = readOf('read 1', EXTRACT_DOCUMENTS_V1, () =>
+  partInput({ document: 1, line: 1 }, 0),
+);
+/** `verify-read`'s: verify-documents v1, every document the sample holds, blind to the first. */
+export const SECOND_READ: Read = readOf('read 2', VERIFY_DOCUMENTS_V1, (sample) => ({
+  task: VERIFY_TASK,
+  positions: Array.from({ length: countOf(sample) }, (_, at) => at + 1).join(', '),
+}));
 export const READS: readonly Read[] = [FIRST_READ, SECOND_READ];
 
 export const PROMPT_ID = FIRST_READ.prompt.id;
@@ -179,7 +191,7 @@ export interface RecordingRequest {
 
 /** Exactly what the platform sends the model for `sample` on `read` (`renderPrompt`, the step's input). */
 export function recordingRequest(sample: Sample, read: Read = FIRST_READ): RecordingRequest {
-  const rendered = renderPrompt(read.prompt, read.input);
+  const rendered = renderPrompt(read.prompt, read.input(sample));
   return {
     sample: sample.name,
     file: relative(REPOSITORY, samplePath(sample)),

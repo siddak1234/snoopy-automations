@@ -16,7 +16,7 @@ import { NONE, callsOf, lines, setUp } from './fixtures.js';
  */
 
 async function found(edit: (world: ReturnType<typeof setUp>) => void = () => undefined) {
-  const world = setUp();
+  const world = setUp({ through: 'find-accounts' });
   edit(world);
   const result = await world.run();
   const line = lines(world.platform).find(([stepId]) => stepId === 'find-accounts');
@@ -72,7 +72,7 @@ test("no setting is read: whatever the flow's settings say — v1's account name
     { vendor: 'quickbooks', expenseAccount: 'Parent:Child', paidFromAccount: 'Nope' },
     { vendor: 'quickbooks', companyCardLast4: '44 17', ownerNames: '=;=' },
   ]) {
-    const world = setUp({ config });
+    const world = setUp({ config, through: 'find-accounts' });
     const result = await world.run();
     assert.equal(result.outcome, 'success', JSON.stringify(config));
     charts.push(result.outcome === 'success' ? chartStateOf(result.output?.chart) : undefined);
@@ -82,7 +82,7 @@ test("no setting is read: whatever the flow's settings say — v1's account name
 });
 
 test('with the vendor "None" it never runs: no query, no line', async () => {
-  const world = setUp({ config: NONE });
+  const world = setUp({ config: NONE, through: 'find-accounts' });
   const result = await world.run();
   assert.equal(result.outcome, 'success');
   assert.deepEqual(world.platform.providerCalls, []);

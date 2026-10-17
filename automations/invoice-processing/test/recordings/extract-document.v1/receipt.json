@@ -1,9 +1,0 @@
-{
-  "fileSha256": "187da1e4ca576bbb04c56830c50a8b66132215f6c58763e6771f410a36b3bc0b",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Tidewell Hardware\",\"documentNumber\":\"55120\",\"documentDate\":\"2026-09-27\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":57.47,\"tax\":3.16,\"shipping\":null,\"discount\":null,\"total\":60.63,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"4417\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"materials\",\"lineItems\":[{\"amount\":34.99},{\"amount\":9.49},{\"amount\":12.99}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

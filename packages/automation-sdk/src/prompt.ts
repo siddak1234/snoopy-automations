@@ -130,6 +130,16 @@ export function loadPrompts(directory: string): PromptModule[] {
 }
 
 /**
+ * A parsed string as the platform's `jsonb` can hold it: a NUL dropped, half a surrogate
+ * pair the replacement character U+FFFD (a whole pair — an emoji — is one code point to
+ * the `u` flag, and kept). Every other value as parsed.
+ */
+const storable = (_key: string, value: unknown): unknown =>
+  typeof value === 'string'
+    ? value.replace(/\u0000/gu, '').replace(/[\ud800-\udfff]/gu, '�')
+    : value;
+
+/**
  * A completion's text as the JSON object its `outputSchema` asked for.
  *
  * Parsed here rather than by the author's `JSON.parse`, because Node's parse
@@ -143,6 +153,13 @@ export function loadPrompts(directory: string): PromptModule[] {
  * completion reaches here; the checks stay for a platform that does not. `other` is
  * read like `stop`, as the platform holds it to the schema like `stop` and bills it
  * (25.3.12): refusing it here failed a run on an answer the platform had passed.
+ *
+ * Every string comes back as the platform can keep it (`storable`): a model's JSON may
+ * escape a NUL or half a surrogate pair, and whatever a step keeps of its answer — the
+ * held state, the output, the documents — is stored by the platform as `jsonb`, which
+ * holds neither. A document carrying one is refused 400 (the platform's §12.1 #287), a
+ * held state or an output fails its write, and a run whose work is done is left with no
+ * way to report it.
  */
 export function readJsonCompletion(completion: ModelCompletion): JsonObject {
   if (completion.finishReason !== 'stop' && completion.finishReason !== 'other') {
@@ -150,7 +167,7 @@ export function readJsonCompletion(completion: ModelCompletion): JsonObject {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(completion.text);
+    parsed = JSON.parse(completion.text, storable);
   } catch {
     throw new Error('the model completion was not JSON');
   }

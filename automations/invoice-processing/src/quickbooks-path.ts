@@ -2,7 +2,6 @@ import type { QuickBooksRead, QuickBooksWrite } from '@autom8x/automation-kit/qu
 import {
   CONNECTION_NONE,
   isObject,
-  type InvokeRequest,
   type JsonObject,
   type StepResult,
 } from '@autom8x/automation-sdk';
@@ -86,14 +85,6 @@ export function quickBooksStateOf(state: JsonObject): QuickBooksState | null | u
     return { notRecorded: value.notRecorded };
   }
   return value.unconfirmed === true ? { unconfirmed: true } : undefined;
-}
-
-/** Whether this step is on the QuickBooks path: QuickBooks chosen, and nothing has stopped it. */
-export function onQuickBooksPath(
-  request: Pick<InvokeRequest, 'config'>,
-  state: JsonObject,
-): boolean {
-  return vendorChoiceOf(request.config) === QUICKBOOKS && state.quickBooks === undefined;
 }
 
 /** The line a step says when QuickBooks will not record this document (§3.E). */

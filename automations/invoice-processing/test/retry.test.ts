@@ -3,42 +3,43 @@ import { test } from 'node:test';
 
 import { PROVIDER_REFUSALS } from '@autom8x/automation-kit/testing';
 
-import { RUN_FAILS } from '../src/words.js';
 import { callsOf, lines, setUp } from './fixtures.js';
 
 /**
- * The SDK's own step retry, in real time — its 10-second floor is not a clock a suite
- * can replace, so this is the one test that waits: about 20 seconds. The deadline is
- * 25 seconds away, which leaves room for one repeat at each of two steps and no more.
+ * The SDK's own step retry, in real time — its 10-second floor is not a clock a suite can
+ * replace, so this is the one test that waits: about 30 seconds. v3 reads the file first, so the
+ * deadline leaves the model call its time; QuickBooks' first read then gets its three attempts.
  */
 
-test('a QuickBooks call with no answer is repeated 10 s later under the same key, then the attempts are spent', async () => {
-  const world = setUp({ deadlineInMs: 25_000 });
-  world.simulator.script('companyInfo.get', [{ refuse: PROVIDER_REFUSALS.noAnswer() }]);
-  world.simulator.script('preferences.get', [
-    { refuse: PROVIDER_REFUSALS.noAnswer() },
-    { refuse: PROVIDER_REFUSALS.noAnswer() },
-  ]);
+test('a QuickBooks call with no answer is repeated under the same key, 10 s then 20 s later, then the attempts are spent', async () => {
+  const world = setUp({ through: 'all', deadlineInMs: 300_000 });
+  world.simulator.script(
+    'companyInfo.get',
+    Array.from({ length: 3 }, () => ({ refuse: PROVIDER_REFUSALS.noAnswer() })),
+  );
   const started = Date.now();
   const result = await world.run();
   const elapsed = Date.now() - started;
-  // Its attempts spent, read-preferences ends "not recorded" (decision 6); with no time left for a
-  // model's answer, the read is not started, and the run ends saying so.
-  assert.deepEqual(lines(world.platform).slice(1), [
-    ['read-company', 'ok', 'QuickBooks: Sample Bakery (after 2 attempts)'],
+  // Its attempts spent, read-company keeps every document out of QuickBooks (decision 6): each is
+  // saved, and nothing more is asked of QuickBooks.
+  assert.deepEqual(lines(world.platform).slice(3), [
     [
-      'read-preferences',
+      'read-company',
       'failed',
-      "Not recorded in QuickBooks: QuickBooks didn't answer (after 2 attempts)",
+      "Not recorded in QuickBooks: QuickBooks didn't answer (after 3 attempts)",
     ],
-    ['extract', 'failed', RUN_FAILS.ai_unavailable],
+    ['decide', 'ok', "Not recorded in QuickBooks: QuickBooks didn't answer"],
+    ['save-documents', 'ok', 'Saved: Harrowgate Office Supply, $461.53'],
   ]);
-  assert.deepEqual(result, { outcome: 'failed', failureReason: RUN_FAILS.ai_unavailable });
-  for (const stepId of ['read-company', 'read-preferences']) {
-    const sent = callsOf(world.platform, world.request, stepId);
-    assert.equal(sent.length, 2, stepId);
-    assert.equal(new Set(sent.map((call) => JSON.stringify(call))).size, 1, 'the same request');
-  }
-  assert.ok(elapsed >= 20_000 && elapsed < 24_000, `two 10-second waits, not more: ${elapsed} ms`);
+  assert.ok(result.outcome === 'success');
+  assert.equal(result.summary, "Saved. Not recorded in QuickBooks: QuickBooks didn't answer.");
+  const sent = callsOf(world.platform, world.request, 'read-company');
+  assert.equal(sent.length, 3);
+  assert.equal(new Set(sent.map((call) => JSON.stringify(call))).size, 1, 'the same request');
+  assert.equal(world.platform.providerCalls.length, 3, 'nothing more asked of QuickBooks');
+  assert.ok(
+    elapsed >= 30_000 && elapsed < 34_000,
+    `waits of 10 s and 20 s, not more: ${elapsed} ms`,
+  );
   assert.deepEqual(world.waits, [], 'no QuickBooks wait: the SDK repeated the step');
 });

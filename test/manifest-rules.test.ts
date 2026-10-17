@@ -5,12 +5,13 @@ import { test } from 'node:test';
 
 /**
  * The platform's validator rules a JSON Schema cannot say, for the manifest additions of its
- * ADR-0037 (spec §1.2 and §1.4 of the Invoice Processing update): an optional connection and its
- * one `connection` setup field, and the visible step groups — ported from its
- * `packages/contracts/src/manifest-validation.ts` at the head of its PR #210
- * (`round-17/ip-update-platform`, `9516c0e`), each refusal as `<path>: <message>` in its words, so a
- * manifest that would be refused at registration fails this repository first. Every manifest in
- * `manifests/` is held to them.
+ * ADR-0037 (spec §1.2 and §1.4 of the Invoice Processing update) and its ADR-0040 (Build 21, C4:
+ * one connection per step): an optional connection and the connection setup fields that choose it,
+ * a setup field's step group, and the visible step groups — ported from its
+ * `packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21 branch
+ * `round-17/b21-platform`), each refusal as `<path>: <message>` in its words, so a manifest that
+ * would be refused at registration fails this repository first. Every manifest in `manifests/` is
+ * held to them.
  */
 
 const manifestsRoot = resolve(import.meta.dirname, '..', 'manifests');
@@ -36,10 +37,12 @@ export function manifestProblems(manifest: Json): string[] {
   if (trigger.kind === 'provider-event' && optional.has(trigger.connection)) {
     add('trigger.connection', 'must name a required, not optional, connection');
   }
-  let choices = 0;
+  // ADR-0040 — one connection field per step that uses one, each naming its providers.
+  const fields: { path: string; providers: string[] | undefined }[] = [];
   for (const [index, field] of list(manifest.setup).entries()) {
-    if (field.control !== 'connection') continue;
     const path = `setup[${index}]`;
+    const providers = fieldProviders(field, path, optional, add);
+    if (field.control !== 'connection') continue;
     if (field.section !== 'connections') {
       add(`${path}.section`, "must be 'connections' for a connection control");
     }
@@ -47,15 +50,15 @@ export function manifestProblems(manifest: Json): string[] {
     if (field.defaultValue !== 'none') {
       add(`${path}.defaultValue`, "must be 'none' for a connection control");
     }
-    choices += 1;
-    if (choices > 1) add(`${path}.control`, "only one setup field may have control 'connection'");
+    fields.push({ path, providers });
     if (optional.size === 0) {
       add(`${path}.control`, 'is only meaningful when requiredConnections has an optional entry');
     }
   }
-  if (manifest.setup !== undefined && optional.size > 0 && choices === 0) {
+  if (manifest.setup !== undefined && optional.size > 0 && fields.length === 0) {
     add('setup', "an optional connection needs one setup field with control 'connection'");
   }
+  coverage(fields, optional, add);
   // §1.4 — the visible step groups.
   let declared: string[] | undefined;
   if (manifest.groups !== undefined) {
@@ -85,7 +88,82 @@ export function manifestProblems(manifest: Json): string[] {
     if (!pipeline.some((step) => step.group === id))
       add(`groups[${index}]`, `group '${id}' has no step`);
   }
+  // ADR-0040 — a setting may say which step it is drawn in.
+  for (const [index, field] of list(manifest.setup).entries()) {
+    if (field.group === undefined) continue;
+    const path = `setup[${index}].group`;
+    if (declared === undefined) add(path, 'group is only meaningful when groups are declared');
+    else if (typeof field.group !== 'string' || !declared.includes(field.group)) {
+      add(path, 'must name a declared group');
+    }
+  }
   return problems;
+}
+
+type Add = (path: string, message: string) => void;
+
+/** A field's `providers`: only on a connection field, 1–16 distinct optional connections. */
+function fieldProviders(
+  field: Json,
+  path: string,
+  optional: ReadonlySet<unknown>,
+  add: Add,
+): string[] | undefined {
+  const raw = field.providers;
+  if (raw === undefined) return undefined;
+  if (field.control !== 'connection') {
+    add(`${path}.providers`, 'is only meaningful on a connection control');
+    return undefined;
+  }
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 16) {
+    add(`${path}.providers`, 'must name 1 to 16 providers');
+    return undefined;
+  }
+  const named: string[] = [];
+  raw.forEach((providerId: unknown, index) => {
+    const at = `${path}.providers[${index}]`;
+    if (typeof providerId !== 'string' || !optional.has(providerId)) {
+      add(at, 'must name optional connections only');
+    } else if (named.includes(providerId)) add(at, 'is declared more than once');
+    else named.push(providerId);
+  });
+  return named;
+}
+
+/** Every optional connection chosen by exactly one field, or by a manifest's one field naming none. */
+function coverage(
+  fields: readonly { path: string; providers: string[] | undefined }[],
+  optional: ReadonlySet<unknown>,
+  add: Add,
+): void {
+  if (fields.length === 0) return;
+  if (fields.length > 1) {
+    for (const field of fields) {
+      if (field.providers === undefined) {
+        add(
+          `${field.path}.providers`,
+          'with more than one connection field, each must name its providers',
+        );
+      }
+    }
+  }
+  const namedBy = new Set<string>();
+  for (const field of fields) {
+    field.providers?.forEach((providerId, index) => {
+      if (namedBy.has(providerId)) {
+        add(
+          `${field.path}.providers[${index}]`,
+          `names ${providerId}, which another connection field names`,
+        );
+      } else namedBy.add(providerId);
+    });
+  }
+  if (fields.length === 1 && fields[0]?.providers === undefined) return;
+  for (const providerId of optional) {
+    if (!namedBy.has(String(providerId))) {
+      add('setup', `optional connection '${String(providerId)}' is chosen by no connection field`);
+    }
+  }
 }
 
 const read = (file: string) =>
@@ -113,9 +191,49 @@ test('the rules refuse what the platform refuses', () => {
       "setup: an optional connection needs one setup field with control 'connection'",
     ],
     [
-      'two choices',
+      'two choices, neither naming its providers',
       { ...v2, setup: [vendor, { ...vendor, key: 'other' }, ...settings] },
-      "setup[1].control: only one setup field may have control 'connection'",
+      'setup[1].providers: with more than one connection field, each must name its providers',
+    ],
+    [
+      'providers on a setting that is no connection',
+      { ...v2, setup: [vendor, { ...settings[0]!, providers: ['quickbooks'] }] },
+      'setup[1].providers: is only meaningful on a connection control',
+    ],
+    [
+      'a provider that is not optional',
+      { ...v2, setup: [{ ...vendor, providers: ['google'] }, ...settings] },
+      'setup[0].providers[0]: must name optional connections only',
+    ],
+    [
+      'one provider chosen by two fields',
+      {
+        ...v2,
+        setup: [
+          { ...vendor, providers: ['quickbooks'] },
+          { ...vendor, key: 'other', providers: ['quickbooks'] },
+        ],
+      },
+      'setup[1].providers[0]: names quickbooks, which another connection field names',
+    ],
+    [
+      'an optional connection no field chooses',
+      {
+        ...v2,
+        requiredConnections: [quickBooks, { ...quickBooks, providerId: 'google' }],
+        setup: [{ ...vendor, providers: ['quickbooks'] }],
+      },
+      "setup: optional connection 'google' is chosen by no connection field",
+    ],
+    [
+      'a setting drawn in a step group nobody declared',
+      { ...v2, setup: [{ ...vendor, group: 'filed' }, ...settings] },
+      'setup[0].group: must name a declared group',
+    ],
+    [
+      'a setting in a group without groups',
+      { ...v2, groups: undefined, setup: [{ ...vendor, group: 'done' }, ...settings] },
+      'setup[0].group: group is only meaningful when groups are declared',
     ],
     [
       'a choice of nothing optional',

@@ -71,7 +71,7 @@ const EARLIER = ['file', 'company', 'preferences', 'chart', 'modelServed', 'docu
 for (const how of ['amount', 'window'] as const satisfies readonly ExpenseSearch[]) {
   test(`every path leaves decide a whole input, its lookups exactly those required (S4: ${how})`, async () => {
     for (const [label, run] of PATHS) {
-      const world = await routeRun({ ...run, through: 'find-other-record', expenseSearch: how });
+      const world = await routeRun({ ...run, through: 'find-related', expenseSearch: how });
       const state = stateOf(world.result);
       const read = readDecideState(state, how);
       assert.ok(read, `${label}: decide reads it whole`);
@@ -84,7 +84,10 @@ for (const how of ['amount', 'window'] as const satisfies readonly ExpenseSearch
         [...required].sort(),
         `${label}: the lookups present`,
       );
-      const newVendorBill = document.route === 'bill' && vendor.status === 'new';
+      // A new vendor's name checks: a bill's, and in v3 a receipt's or a card refund's (B3).
+      const newVendorBill =
+        vendor.status === 'new' &&
+        ['bill', 'company_receipt', 'card_refund'].includes(document.route);
       for (const key of ['similarVendors', 'customerNameClash', 'employeeNameClash']) {
         assert.equal(key in state, newVendorBill, `${label}: ${key}`);
       }
@@ -103,7 +106,7 @@ for (const how of ['amount', 'window'] as const satisfies readonly ExpenseSearch
 test("the bill's D32 lookup is required under D21 and not under S4's fallback", async () => {
   const world = await routeRun({
     answer: bill(),
-    through: 'find-other-record',
+    through: 'find-related',
     expenseSearch: 'window',
   });
   const state = stateOf(world.result);
@@ -117,7 +120,7 @@ test("the bill's D32 lookup is required under D21 and not under S4's fallback", 
 });
 
 test('each typed record decide reads is held to the contract: a malformed one is refused', async () => {
-  const world = await routeRun({ answer: receipt(), through: 'find-other-record' });
+  const world = await routeRun({ answer: receipt(), through: 'find-related' });
   const state = stateOf(world.result);
   const broken: JsonObject = {
     ...state,

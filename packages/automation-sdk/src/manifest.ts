@@ -28,8 +28,9 @@ export interface Manifest {
   groups?: readonly ManifestStepGroup[];
   /**
    * The connections the automation calls through the platform. One marked `optional` the flow
-   * may run without: the person picks it, or "none", in the manifest's one setup field whose
-   * control is `connection`, and the run reads the choice from its `config` under that key.
+   * may run without: the person picks it, or "none", in a setup field whose control is
+   * `connection` — the one that names it in `providers`, or the manifest's one such field — and
+   * the run reads the choice from its `config` under that field's key.
    */
   requiredConnections?: readonly ManifestConnection[];
   /** The flow's settings, as far as an automation reads them by type. */
@@ -62,6 +63,14 @@ export interface ManifestSetupField {
   key: string;
   control: SetupControl;
   defaultValue?: unknown;
+  /**
+   * A `connection` field's providers: the optional connections it chooses among (platform
+   * ADR-0040, one connection field per step that uses one). Absent on a manifest's one connection
+   * field: every optional connection.
+   */
+  providers?: readonly string[];
+  /** The step group the field is drawn in (platform ADR-0040), by its id. */
+  group?: string;
 }
 
 /**

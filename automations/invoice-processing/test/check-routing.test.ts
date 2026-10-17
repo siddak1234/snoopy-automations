@@ -3,17 +3,23 @@ import { test } from 'node:test';
 
 import { routeOf } from '../src/checks/route.js';
 import { DOCUMENT_TYPES, REFUND_METHODS } from '../src/document.js';
-import { checkedSummary } from '../src/steps/check-document.js';
+import { partAnswerOf, type DocumentAnswer } from '../src/run/answer.js';
+import { checkedEntry, checkedSummary } from '../src/run/check.js';
+import { documentReadOf } from '../src/run/document-read.js';
+import { KIND_OF, type Entry } from '../src/run/state.js';
+import type { JsonObject } from '@autom8x/automation-sdk';
+
 import {
   NONE_PATH,
+  TODAY,
   bill,
   check,
   creditNote,
   documentOf,
   receipt,
-  ruleOf,
   statement,
 } from './check-world.js';
+import { documentAnswer, partAnswer } from './fixtures.js';
 
 /**
  * The routing table (the plan's §2.1, as v2 keeps it — no "I paid with my own money", the session's
@@ -65,18 +71,37 @@ test('a credit note: a vendor credit, a card refund for a refund to a card; by c
   );
 });
 
+/** One document as v3's extract keeps it, before its checks. */
+function entriesOf(answer: JsonObject): Entry[] {
+  const [document] = partAnswerOf(partAnswer([answer]))?.documents ?? [];
+  assert.ok(document, 'a usable answer');
+  const read: DocumentAnswer = document;
+  return [
+    {
+      index: 1,
+      kind: KIND_OF[read.documentType],
+      read: documentReadOf(read),
+      doubts: [],
+      engine: {},
+      stage: 'read',
+    },
+  ];
+}
+
 test('a supplier statement: compared only, its checks passed', () => {
   assert.equal(routeOrRule(statement()), 'statement');
   assert.equal(checkedSummary(documentOf(check(statement()))), 'Checks passed');
 });
 
-test('a bank or card statement, a quote, an order or anything else fails, on either path', () => {
-  const rules = { bank_statement: 'C1', quote: 'C2', purchase_order: 'C3', other: 'C4' } as const;
-  for (const [type, rule] of Object.entries(rules)) {
-    assert.equal(ruleOf(check(bill({ documentType: type }))), rule, type);
-    assert.equal(ruleOf(check(bill({ documentType: type }), NONE_PATH)), rule, type);
+test('a bank or card statement, a quote, an order or any other financial document is kept as read, never checked or failed (AM8)', () => {
+  for (const type of ['bank_statement', 'quote', 'purchase_order', 'other_financial'] as const) {
+    const answer = documentAnswer(bill(), { documentType: type });
+    const entry = entriesOf(answer)[0]!;
+    assert.equal(entry.kind, 'kept', type);
+    assert.equal(checkedEntry(entry, true, TODAY), entry, `${type}: kept as read`);
+    assert.equal(checkedEntry(entry, false, TODAY), entry, `${type}: on either path`);
   }
-  // Every type is one of the eight, and each has its row.
+  // v2's eight types each still have their row; v3 reads two more, an invoice and a page.
   assert.equal(DOCUMENT_TYPES.length, 8);
 });
 

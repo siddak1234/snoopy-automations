@@ -347,5 +347,5 @@ test("the planted marker: no sample's reaches a reason or the saved data, on any
       decided += 1;
     }
   }
-  assert.equal(decided, 40, 'the 20 samples QuickBooks could record, each straight and held');
+  assert.equal(decided, 42, 'the 21 samples QuickBooks could record, each straight and held');
 });

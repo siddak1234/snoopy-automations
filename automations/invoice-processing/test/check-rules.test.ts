@@ -5,14 +5,13 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import type { CheckInput } from '../src/checks/check.js';
 import {
-  CHECK_DOCUMENT_REASONS,
   CHECK_RULE_ORDER,
   DOCUMENT_RULES,
   RECORDING_RULES,
   type CheckRule,
 } from '../src/checks/rules.js';
 import { NOT_RECORDED } from '../src/quickbooks-path.js';
-import { RUN_FAILS } from '../src/words.js';
+import { DOUBTS } from '../src/run/words.js';
 import {
   NONE_PATH,
   bill,
@@ -25,26 +24,21 @@ import {
 } from './check-world.js';
 
 /**
- * check-document's rules (the plan's §2.3, as v2's §2.6 splits them): the rules a document cannot
- * be used under, each failing the run on either path in the spec's sentence (§3.F); the rules
+ * The checks' rules (the plan's §2.3, as v2's §2.6 splits them and v3 keeps them): the rules a
+ * document cannot be used under as read, each holding it for a second read and, still unclear, for
+ * review in the words below (B4) — never failing the run; C1–C5 gone (AM1, AM8); the rules
  * QuickBooks cannot record it under, each a reason the details are saved with, weighed on the
  * QuickBooks path alone; each rule met by one answer, in its place in the order; the first of each
  * kind wins.
  */
 
 test("the rules v2 keeps, in the plan's order, each with the spec's words", () => {
-  const v2 = [
-    1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 25, 26, 28,
-  ];
+  const v2 = [6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 25, 26, 28];
   assert.deepEqual(
     CHECK_RULE_ORDER,
     v2.map((n) => `C${n}`),
   );
-  assert.deepEqual(Object.keys(CHECK_DOCUMENT_REASONS).sort(), [...CHECK_RULE_ORDER].sort());
-  assert.deepEqual(
-    [...DOCUMENT_RULES],
-    ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C8', 'C11', 'C21', 'C22', 'C26'],
-  );
+  assert.deepEqual([...DOCUMENT_RULES], ['C6', 'C8', 'C11', 'C21', 'C22', 'C26']);
   assert.deepEqual(Object.keys(RECORDING_RULES), [
     'C9',
     'C10',
@@ -60,21 +54,16 @@ test("the rules v2 keeps, in the plan's order, each with the spec's words", () =
     'C25',
     'C28',
   ]);
-  // §3.F, word for word.
+  // B4's waiting reasons, word for word.
   assert.deepEqual(
-    DOCUMENT_RULES.map((rule) => RUN_FAILS[rule]),
+    DOCUMENT_RULES.map((rule) => DOUBTS[rule]),
     [
-      'This is a bank or card statement. Add one bill or receipt.',
-      'This is a quote, not a bill or receipt.',
-      'This is a purchase order, not a bill or receipt.',
-      'This is not a bill, receipt, credit note or statement.',
-      'Add one document per file.',
-      'Pages are missing. Add the whole document.',
-      "The seller's name can't be read. Try a clearer photo.",
-      "The total can't be read. Try a clearer photo.",
-      "The date can't be read. Try a clearer photo.",
-      "The date isn't a real date. Try a clearer photo.",
-      'Nothing on this statement can be read. Try a clearer photo.',
+      'pages may be missing',
+      "the seller's name can't be read",
+      "the total can't be read",
+      "the date can't be read",
+      "the date isn't a real date",
+      'nothing on this statement can be read',
     ],
   );
   assert.deepEqual(
@@ -99,12 +88,6 @@ test("the rules v2 keeps, in the plan's order, each with the spec's words", () =
 
 /** Each rule, one answer — or several — that meets it first. */
 const CASES: readonly (readonly [CheckRule, JsonObject, Partial<CheckInput>?])[] = [
-  ['C1', bill({ documentType: 'bank_statement' })],
-  ['C2', bill({ documentType: 'quote' })],
-  ['C3', bill({ documentType: 'purchase_order' })],
-  ['C4', bill({ documentType: 'other' })],
-  ['C5', bill({ documentCount: 0 })],
-  ['C5', bill({ documentCount: 2 })],
   ['C6', bill({ pagesMissing: true })],
   ['C8', bill({ vendorName: null })],
   ['C8', bill({ vendorName: ' \n ' })],
@@ -160,8 +143,8 @@ test('each rule is met by its answer, and only it, in its place in the order', (
 });
 
 test('the first match of each kind wins, and a document that cannot be used wins over one QuickBooks cannot take', () => {
-  // A quote holding two documents: the type first.
-  assert.equal(ruleOf(check(bill({ documentType: 'quote', documentCount: 2 }))), 'C2');
+  // One document's read counts one document, whatever the file holds (C5 is gone, AM1).
+  assert.equal(ruleOf(check(bill({ documentCount: 3 }))), 'ok');
   // No total and no date: the total first.
   assert.equal(ruleOf(check(bill({ total: null, documentDate: null }))), 'C11');
   // Refunded by check, and no total: the total, which no path can use.
@@ -169,8 +152,8 @@ test('the first match of each kind wins, and a document that cannot be used wins
     ruleOf(check(creditNote({ refundMethod: 'refund_by_check_or_cash', total: null }))),
     'C11',
   );
-  // A statement holding two: C5 before C26.
-  assert.equal(ruleOf(check(statement({ documentCount: 2, listedItems: [], total: null }))), 'C5');
+  // A statement with nothing to read: C26.
+  assert.equal(ruleOf(check(statement({ listedItems: [], total: null }))), 'C26');
   // The seller's name past 500 and the company's own: the length first.
   assert.equal(ruleOf(check(bill({ vendorName: `Sample Bakery ${'x'.repeat(500)}` }))), 'C9');
   // Cash back and no date: the date, which no path can use, over what QuickBooks cannot take.

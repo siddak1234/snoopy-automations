@@ -6,7 +6,7 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import type { SavedState } from '../src/decide/saved.js';
 import { bill, creditNote, receipt, sampleAnswer, statement } from './check-world.js';
-import { PAID, type RouteRun } from './lookups-world.js';
+import { PAID, onlyChecking, sampleCustomer, type RouteRun } from './lookups-world.js';
 import { assertOutputValid } from './output-schema.js';
 import {
   CONTINUATION_RUN_ID,
@@ -80,8 +80,16 @@ const PATHS: readonly [string, RouteRun, (runId: string) => readonly [string, Js
     ],
   ],
   [
-    'a company receipt paid by card from the bank — the company has no card — its seller no vendor',
-    { answer: receipt(), bare: true, ...PAID.bank },
+    "a company receipt paid by card from the bank — the company has no card — its seller no vendor, a customer's name",
+    {
+      answer: receipt(),
+      bare: true,
+      config: PAID.bank.config,
+      company: (sim) => {
+        onlyChecking(sim);
+        sim.company.customers.push(sampleCustomer('5', 'Tidewell Hardware'));
+      },
+    },
     (runId) => [
       'purchase.create',
       {
@@ -246,12 +254,12 @@ test('a new vendor approved: confirm-vendor finds none, create-vendor adds it as
     approved.steps.map(([stepId, outcome]) => [stepId, outcome]),
     [
       ['confirm-company', 'ok'],
-      ['confirm-vendor', 'ok'],
-      ['create-vendor', 'ok'],
-      ['confirm-no-duplicate', 'ok'],
-      ['create-record', 'ok'],
+      ['confirm-vendors', 'ok'],
+      ['create-approved-vendors', 'ok'],
+      ['confirm-no-duplicates', 'ok'],
+      ['create-approved-records', 'ok'],
     ],
-    'save-details skipped: the record is the result',
+    'save-approved skipped: the record is the result',
   );
   assert.equal(approved.steps[2]?.[2], 'Vendor added');
   const output = outputOf(approved.result);

@@ -1,6 +1,6 @@
 import { rowsNaming, writeQuickBooks, type Clock } from '@autom8x/automation-kit/quickbooks';
 import { MAXIMUM_NAME_LENGTH, cleanText, sameName } from '@autom8x/automation-kit/values';
-import type { JsonObject, Step, StepResult } from '@autom8x/automation-sdk';
+import type { JsonObject, Step, StepPlatform, StepResult } from '@autom8x/automation-sdk';
 
 import type { Payee } from '../decide/plan.js';
 import type { SavedState } from '../decide/saved.js';
@@ -10,7 +10,7 @@ import { matchedVendorOf } from '../lookups/records.js';
 import { runFails } from '../outcome.js';
 import { notRecorded, writeFailed } from '../quickbooks-path.js';
 import { vendorBody } from '../writes/bodies.js';
-import { newVendorOf, readSaved, type NewVendorState } from '../writes/saved-state.js';
+import { readSaved, type NewVendorState } from '../writes/saved-state.js';
 
 /**
  * Two steps for a bill whose vendor was new when it was held — only in an approval's continuation,
@@ -34,7 +34,7 @@ import { newVendorOf, readSaved, type NewVendorState } from '../writes/saved-sta
  *   stops the bill, the vendor stays — a real supplier, which the next document matches.
  */
 
-type NewVendor = Extract<Payee, { kind: 'new_vendor' }>;
+export type NewVendor = Extract<Payee, { kind: 'new_vendor' }>;
 
 /** The saved data and the new vendor its plan names; 'skipped' for any other payee; the state's guard. */
 function plannedVendor(
@@ -86,34 +86,31 @@ export function confirmVendor(clock: Clock): Step {
   };
 }
 
-export function createVendor(): Step {
-  return async ({ request, state, platform }) => {
-    if (!request.continuation) return { outcome: 'skipped' };
-    const planned = plannedVendor(state);
-    if (planned === 'skipped') return { outcome: 'skipped' };
-    if ('outcome' in planned) return planned;
-    const { payee } = planned;
-    const already = newVendorOf(state);
-    if (already === undefined) return runFails('other', 'state_incomplete');
-    // Found while the run waited: linked, not created.
-    if (already !== null) return { outcome: 'skipped' };
-    // decide kept a longer name out of QuickBooks (F4); a guard that should never fire.
-    if (payee.name.length > MAXIMUM_NAME_LENGTH) return runFails('other', 'state_incomplete');
-    // One write. Thrown on unchanged for the SDK's retry (S6); when its attempts are spent, the run's
-    // `recover` says QuickBooks did not confirm it — the vendor may have been added.
-    const write = await writeQuickBooks({ platform, kind: 'vendor', input: vendorBody(payee) });
-    if (!write.ok) {
-      // A certain refusal of a name too long for QuickBooks (Intuit's 2050) says so.
-      return write.created === false && write.reason === 'qb_refused' && write.detail === '2050'
-        ? notRecorded(state, 'vendor_name_too_long')
-        : writeFailed(state, write);
-    }
-    const displayName = cleanText(write.record.DisplayName) ?? payee.name;
-    const created: NewVendorState = { how: 'created', id: write.id, displayName };
-    return {
-      outcome: 'ok',
-      summary: 'Vendor added',
-      state: { ...state, newVendor: created as unknown as JsonObject },
-    };
+/**
+ * The one vendor write: the new vendor exactly as the approver saw it named (`vendorBody`), its
+ * answer kept as `newVendor`. Thrown on unchanged for the SDK's retry (S6); when its attempts are
+ * spent, the run's `recover` says QuickBooks did not confirm it — the vendor may have been added.
+ * v3 adds a receipt's new seller with it too, once per name in the file (`src/run/writes.ts`).
+ */
+export async function addVendor(
+  platform: Pick<StepPlatform, 'callProvider'>,
+  state: JsonObject,
+  payee: NewVendor,
+): Promise<StepResult> {
+  // decide kept a longer name out of QuickBooks (F4); a guard that should never fire.
+  if (payee.name.length > MAXIMUM_NAME_LENGTH) return runFails('other', 'state_incomplete');
+  const write = await writeQuickBooks({ platform, kind: 'vendor', input: vendorBody(payee) });
+  if (!write.ok) {
+    // A certain refusal of a name too long for QuickBooks (Intuit's 2050) says so.
+    return write.created === false && write.reason === 'qb_refused' && write.detail === '2050'
+      ? notRecorded(state, 'vendor_name_too_long')
+      : writeFailed(state, write);
+  }
+  const displayName = cleanText(write.record.DisplayName) ?? payee.name;
+  const created: NewVendorState = { how: 'created', id: write.id, displayName };
+  return {
+    outcome: 'ok',
+    summary: 'Vendor added',
+    state: { ...state, newVendor: created as unknown as JsonObject },
   };
 }

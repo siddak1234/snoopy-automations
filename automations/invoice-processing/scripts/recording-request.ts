@@ -3,7 +3,7 @@ import { SAMPLES } from '../test/sample-maker/samples.js';
 
 /**
  * What an agent acting as the model must be given to record one sample — exactly what the
- * platform sends the model: the prompt's instruction as the system message, the step's fixed
+ * platform sends the model: the prompt's instruction as the system message, the step's
  * input as the one user message, the sample attached to it, and the schema the answer is held
  * to — and where its answer is saved, in the shape `test/recordings.ts` loads. Each agent sees
  * its block and nothing else: not `expected.json`, not this repository.
@@ -19,7 +19,7 @@ const args = process.argv.slice(2);
 const at = args.indexOf('--read');
 const which = at === -1 ? '1' : args[at + 1];
 if (which !== '1' && which !== '2') {
-  console.error('--read takes 1 (extract-document) or 2 (verify-document)');
+  console.error('--read takes 1 (extract-documents) or 2 (verify-documents)');
   process.exit(2);
 }
 const read = which === '2' ? SECOND_READ : FIRST_READ;

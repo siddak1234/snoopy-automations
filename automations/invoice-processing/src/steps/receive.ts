@@ -9,7 +9,7 @@ import type { FileState } from '../state.js';
  *
  * The run's input names the upload; the artifact callback answers with its reference
  * and the platform's measurements, which are held to `FILE_LIMITS`: the declared type
- * one of the three, the measured kind the same, then the size, the pages or the pixels.
+ * one of the three, the measured kind the same, then the size and an image's pixels.
  * The file is never downloaded here: the platform measured it once at upload, and sends
  * it to the model itself. A 404 is a file this run was not given, or one that is gone; any other
  * failure is thrown unchanged, so the SDK's retry repeats a transient one and the run's
@@ -28,7 +28,6 @@ export const RECEIVE_REFUSALS = [
   'unsupported_type',
   'content_mismatch',
   'file_too_large',
-  'too_many_pages',
   'image_too_large',
 ] as const;
 
@@ -56,11 +55,10 @@ export const receive: Step = async ({ request, state, platform }) => {
   // sealed; held here too, because the platform's model call reads it by that type.
   if (measured.kind !== declared) return refused('content_mismatch');
   if (measured.sizeBytes > FILE_LIMITS.maximumSizeBytes) return refused('file_too_large');
-  if (measured.kind === 'pdf') {
-    if (measured.pageCount > FILE_LIMITS.maximumPdfPages) return refused('too_many_pages');
-  } else if (
-    measured.widthPixels > FILE_LIMITS.maximumImageSidePixels ||
-    measured.heightPixels > FILE_LIMITS.maximumImageSidePixels
+  if (
+    measured.kind !== 'pdf' &&
+    (measured.widthPixels > FILE_LIMITS.maximumImageSidePixels ||
+      measured.heightPixels > FILE_LIMITS.maximumImageSidePixels)
   ) {
     return refused('image_too_large');
   }

@@ -1,3 +1,5 @@
+import { MAXIMUM_NAME_LENGTH } from '@autom8x/automation-kit/values';
+
 import type { NotRecordedReason } from '../quickbooks-path.js';
 import type { DecideState } from './contract.js';
 import { newVendorName } from './fails.js';
@@ -96,6 +98,24 @@ const TYPE_WORDS = {
   supplier_statement: 'statement',
 } as const;
 
+/**
+ * Whether a receipt's or a card refund's new seller is added as a vendor (the session's spec, B3):
+ * no vendor has the name, no customer or employee has it, QuickBooks listed no similar name, and it
+ * fits QuickBooks' 500 characters — the checks a bill's new vendor waits for a person on, all clear.
+ */
+export function addsSeller(state: DecideState): boolean {
+  const { document, vendor, similarVendors } = state;
+  return (
+    (document.route === 'company_receipt' || document.route === 'card_refund') &&
+    vendor.status === 'new' &&
+    state.customerNameClash === 'none' &&
+    state.employeeNameClash === 'none' &&
+    similarVendors !== null &&
+    similarVendors.names.length === 0 &&
+    document.seller.length <= MAXIMUM_NAME_LENGTH
+  );
+}
+
 export function recordPlan(state: DecideState, matches: Matches): Planned {
   const { document, vendor, preferences } = state;
   const route = document.route;
@@ -113,6 +133,11 @@ export function recordPlan(state: DecideState, matches: Matches): Planned {
     vendor.status === 'matched'
       ? { kind: 'vendor', id: vendor.id, name: vendor.displayName }
       : { kind: 'none' };
+  // v3 (B3): a receipt's or a card refund's new seller is added as a vendor once every check of
+  // its name came back clear; otherwise the record names none, the seller in its memo (D20).
+  const sellerPayee: Payee = addsSeller(state)
+    ? { kind: 'new_vendor', name: seller, printedName: seller, nameInUseBy: null }
+    : vendorPayee;
   const base = {
     credit: false,
     printStatus: null,
@@ -171,7 +196,7 @@ export function recordPlan(state: DecideState, matches: Matches): Planned {
           credit: refund,
           printStatus: paymentType === 'Check' ? 'NotSet' : null,
           accounts: { ...base.accounts, paidFrom },
-          payee: vendorPayee,
+          payee: sellerPayee,
           memo: `${words} from ${seller}.`,
           lineDescription: `${words} from ${seller}`,
         };

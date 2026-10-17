@@ -4,14 +4,14 @@ import { RecordingPlatform, invokeFixture, refusalFixture } from '@autom8x/autom
 
 import { TEMPLATE_ID } from '../src/automation.js';
 import { chartOf, type ChartState } from '../src/chart.js';
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
-import { extract } from '../src/steps/extract.js';
+import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { extract } from '../src/run/extract.js';
 import { FILE_ID, completion, pdf } from './fixtures.js';
 
 /**
  * `extract` alone, on the SDK's runner: a first step seeds the state the steps before it
  * leave, then `extract` runs, and the result hands the whole state back — the one place a
- * suite can read what the step kept, since the automation's own result never carries the answer.
+ * suite can read what the step kept of each document's read.
  */
 
 /** The simulator's made-up company's chart, as `find-accounts` keeps it. */
@@ -20,7 +20,7 @@ export const CHART: ChartState = chartOf(
   false,
 );
 
-/** The state `receive`, `read-company`, `read-preferences` and `find-accounts` leave. */
+/** The state `receive` leaves, and on the QuickBooks path `read-company`, `read-preferences` and `find-accounts`. */
 export const SEEDED_STATE: JsonObject = {
   file: { artifactId: FILE_ID, kind: 'pdf', sizeBytes: 184_203, pages: 2, sha256: 'ab'.repeat(32) },
   company: {
@@ -45,22 +45,22 @@ export function extractWorld(seeded: JsonObject = SEEDED_STATE) {
     manifests: [
       {
         templateId: TEMPLATE_ID,
-        version: 2,
+        version: 3,
         requiredCapabilities: ['document-extraction'],
         pipeline: [{ id: 'seed' }, { id: 'extract' }],
       },
     ],
-    prompts: [EXTRACT_DOCUMENT_V1],
+    prompts: [EXTRACT_DOCUMENTS_V1],
     steps: {
       seed: () => Promise.resolve({ outcome: 'ok', summary: 'Seeded', state: seeded }),
-      extract: extract(EXTRACT_DOCUMENT_V1),
+      extract: extract(EXTRACT_DOCUMENTS_V1),
     },
     result: (state) => ({ output: state }),
   });
   const platform = new RecordingPlatform();
   platform.artifacts = [pdf()];
   platform.model = (_call, model) => Promise.resolve(completion(model));
-  const request: InvokeRequest = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2 });
+  const request: InvokeRequest = invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 3 });
   return {
     platform,
     request,

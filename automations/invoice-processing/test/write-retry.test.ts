@@ -63,8 +63,8 @@ test('a create whose answer was lost is repeated 10 s later under the same key, 
   );
   assert.equal(vendorRun.simulator.company.vendors.length, 1);
   assert.deepEqual(
-    vendored.steps.find(([stepId]) => stepId === 'create-vendor'),
-    ['create-vendor', 'ok', 'Vendor added (after 2 attempts)'],
+    vendored.steps.find(([stepId]) => stepId === 'create-approved-vendors'),
+    ['create-approved-vendors', 'ok', 'Vendor added (after 2 attempts)'],
   );
   assert.deepEqual(outputOf(vendored.result).newVendor, {
     how: 'created',
@@ -86,7 +86,7 @@ test('a create whose answer was lost is repeated 10 s later under the same key, 
   assert.equal(expenseRun.simulator.calls.at(-1)?.outcome, 'replayed');
   assert.equal(expenseRun.simulator.company.purchases.length, purchasesBefore + 1);
   assert.match(
-    expensed.steps.find(([stepId]) => stepId === 'create-record')?.[2] ?? '',
+    expensed.steps.find(([stepId]) => stepId === 'create-approved-records')?.[2] ?? '',
     / \(after 2 attempts\)$/u,
   );
   assert.equal((outputOf(expensed.result).record as JsonObject).id, '1001');
@@ -111,8 +111,8 @@ test("with no time left to repeat it, a create that got no answer: QuickBooks di
     const approved = await approve(first, { deadline: noTimeToRepeat() });
     assert.equal(summaryOf(approved.result), RESULTS.unconfirmed, label);
     assert.deepEqual(
-      approved.steps.find(([stepId]) => stepId === 'create-record'),
-      ['create-record', 'failed', UNCONFIRMED_LINE],
+      approved.steps.find(([stepId]) => stepId === 'create-approved-records'),
+      ['create-approved-records', 'failed', UNCONFIRMED_LINE],
       label,
     );
     assert.equal(writesOf(approved.providerCalls).length, 1, `${label}: one request`);
@@ -128,8 +128,8 @@ test("with no time left to repeat it, a new vendor that got no answer: QuickBook
     const approved = await approve(first, { deadline: noTimeToRepeat() });
     assert.equal(summaryOf(approved.result), RESULTS.unconfirmed, label);
     assert.deepEqual(
-      approved.steps.find(([stepId]) => stepId === 'create-vendor'),
-      ['create-vendor', 'failed', UNCONFIRMED_LINE],
+      approved.steps.find(([stepId]) => stepId === 'create-approved-vendors'),
+      ['create-approved-vendors', 'failed', UNCONFIRMED_LINE],
       label,
     );
     assert.deepEqual(
@@ -201,12 +201,12 @@ const REPEATED: readonly [string, (operation: string) => ScriptedAnswer, string]
 /** Each write a step repeats: its operation, and a first run that reaches it. */
 const WRITES = [
   {
-    stepId: 'create-record',
+    stepId: 'create-approved-records',
     operation: 'bill.create',
     run: () => firstRun({ answer: bill(), config: HELD }),
   },
   {
-    stepId: 'create-vendor',
+    stepId: 'create-approved-vendors',
     operation: 'vendor.create',
     run: () => firstRun({ answer: bill(), bare: true }),
   },
@@ -243,7 +243,7 @@ test('a create whose answer was lost, its repeat refused — 404, 429, 400, 403,
     );
     assert.deepEqual(writes[1], writes[0], `${label}: the same request under the same key`);
     const made =
-      write.stepId === 'create-record'
+      write.stepId === 'create-approved-records'
         ? first.simulator.company.bills
         : first.simulator.company.vendors;
     assert.equal(made.length, 1, `${label}: what the lost attempt made`);

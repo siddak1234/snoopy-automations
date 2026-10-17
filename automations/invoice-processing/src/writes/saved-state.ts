@@ -74,13 +74,13 @@ const SHAPES: Readonly<
   company_receipt: {
     operation: 'purchase.create',
     record: 'expense',
-    payees: ['vendor', 'none'],
+    payees: ['vendor', 'new_vendor', 'none'],
     paidFrom: true,
   },
   card_refund: {
     operation: 'purchase.create',
     record: 'card_refund',
-    payees: ['vendor', 'none'],
+    payees: ['vendor', 'new_vendor', 'none'],
     paidFrom: true,
   },
   vendor_credit: {

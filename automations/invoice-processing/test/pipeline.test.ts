@@ -6,148 +6,179 @@ import type { JsonObject, StepContext } from '@autom8x/automation-sdk';
 import { invokeFixture, refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import { EXPENSE_SEARCH } from '../src/lookups/expense-search.js';
-import { TEMPLATE_ID, define, pipelineSteps } from '../src/automation.js';
-import { QUICKBOOKS_STEPS, WRITE_STEPS, recoverQuickBooks } from '../src/failures.js';
+import { TEMPLATE_ID, define, perDocumentSpecs, pipelineSteps } from '../src/automation.js';
+import { RUN_LEVEL_STEPS, recoverQuickBooks } from '../src/failures.js';
+import { runStateOf } from '../src/run/state.js';
 import { RUN_FAILS } from '../src/words.js';
 import { FILE_ID, NONE, QUICKBOOKS, callsOf, lines, manifests, setUp } from './fixtures.js';
-import { LOOKUP_STEPS, seededCompany } from './lookups-world.js';
+import { V3_LOOKUP_STEPS, seededCompany } from './lookups-world.js';
 
 /**
- * v2's 24 steps as one run, QuickBooks chosen: their order, the lines and the result of a bill
+ * v3's 22 steps as one run, QuickBooks chosen: their order, the lines and the result of a bill
  * decided straight through and created — one AI read, the first showing no problem (decision 3) —
  * the code's steps against the manifest's, the retry each declares, and how a run ends on a
- * thrown error: a QuickBooks step that never answers saves the details instead (decision 6); any
- * other ends in one of the spec's sentences (§3.F), never the error's own words.
+ * thrown error: a QuickBooks step that never answers saves the details instead (decision 6), per
+ * document; any other ends in one of the spec's sentences (§3.F), never the error's own words.
  */
 
-/** The whole of v2, on a company that holds the sample bill's vendor. */
+const CLOCK = { now: () => 0, sleep: () => Promise.resolve() };
+
+/** The whole of v3, on a company that holds the sample bill's vendor. */
 function wholeRun(options: Parameters<typeof setUp>[0] = {}) {
   const simulator = seededCompany(new QuickBooksSimulator({ refusal: refusalFixture }));
   simulator.expenseAmountSearchable = true;
   return setUp({ simulator, through: 'all', ...options });
 }
 
-test('the steps run in order, each QuickBooks step under its own key, one AI read, and a bill decided straight through is created and is the result', async () => {
+test('the steps run in order, each QuickBooks call under its own key, one AI read, and a bill decided straight through is created and is the result', async () => {
   const world = wholeRun();
   const result = await world.run();
   assert.deepEqual(lines(world.platform), [
     ['receive', 'ok', 'PDF, 2 pages'],
+    ['extract', 'ok', 'Read: bill from Harrowgate Office Supply, $461.53'],
+    ['check-documents', 'ok', 'Checks passed'],
     ['read-company', 'ok', 'QuickBooks: Sample Bakery'],
     ['read-preferences', 'ok', 'Settings read'],
     ['find-accounts', 'ok', '18 accounts read'],
-    ['extract', 'ok', 'Read: bill from Harrowgate Office Supply, $461.53'],
-    ['check-document', 'ok', 'Checks passed'],
-    ['find-vendor', 'ok', 'Vendor found'],
-    ['find-duplicate-number', 'ok', 'No duplicate'],
-    ['find-duplicate-amount', 'ok', 'No duplicate'],
+    ['find-vendors', 'ok', 'Vendor found'],
+    ['find-duplicates', 'ok', 'No duplicate'],
     ['find-related', 'ok', 'No duplicate'],
-    ['find-other-record', 'ok', 'No duplicate'],
     ['decide', 'ok', 'Ready to record'],
-    ['create-record', 'ok', 'Recorded: bill HOS-1042, $461.53'],
+    ['create-records', 'ok', 'Recorded: bill HOS-1042, $461.53'],
   ]);
-  assert.deepEqual(result, {
-    outcome: 'success',
-    output: {
-      outcome: 'recorded',
-      documentType: 'bill',
-      route: 'bill',
-      record: {
-        type: 'bill',
-        id: '1001',
-        operation: 'bill.create',
-        paymentType: null,
-        amountCents: 46153,
-        quickBooksTotalCents: 46153,
-        date: '2026-09-14',
-        dueDate: '2026-10-14',
-        docNumber: 'HOS-1042',
-        documentNumber: 'HOS-1042',
-        payee: { kind: 'vendor', id: '7', name: 'Harrowgate Office Supply' },
-        category: { id: '64', name: 'Office Supplies', why: 'its name' },
-        paidFromAccount: null,
+  assert.ok(result.outcome === 'success');
+  assert.deepEqual(result.output, {
+    outcome: 'documents',
+    documents: [
+      {
+        index: 1,
+        outcome: 'recorded',
+        documentType: 'bill',
+        route: 'bill',
+        record: {
+          type: 'bill',
+          id: '1001',
+          operation: 'bill.create',
+          paymentType: null,
+          amountCents: 46153,
+          quickBooksTotalCents: 46153,
+          date: '2026-09-14',
+          dueDate: '2026-10-14',
+          docNumber: 'HOS-1042',
+          documentNumber: 'HOS-1042',
+          payee: { kind: 'vendor', id: '7', name: 'Harrowgate Office Supply' },
+          category: { id: '64', name: 'Office Supplies', why: 'its name' },
+          paidFromAccount: null,
+        },
+        newVendor: null,
+        nextStep: null,
+        holdReasons: [],
+        decidedBy: 'automatically',
       },
-      newVendor: null,
-      nextStep: null,
-      holdReasons: [],
-      decidedBy: 'automatically',
-    },
-    summary: 'Recorded in QuickBooks: bill from Harrowgate Office Supply, $461.53.',
-    details: [
-      { label: 'Recorded as', value: 'Bill' },
-      { label: 'Vendor', value: 'Harrowgate Office Supply' },
-      { label: 'Number', value: 'HOS-1042' },
-      { label: 'Date', value: 'Sep 14, 2026' },
-      { label: 'Due', value: 'Oct 14, 2026' },
-      { label: 'Total', value: '$461.53' },
-      { label: 'Category', value: 'Office Supplies' },
-      { label: 'Decided', value: 'Automatically' },
     ],
   });
-  for (const [stepId, operation] of [
-    ['read-company', 'companyInfo.get'],
-    ['read-preferences', 'preferences.get'],
-    ['find-accounts', 'query.run'],
-    ['find-vendor', 'query.run'],
-    ['find-duplicate-number', 'query.run'],
-    ['find-duplicate-amount', 'query.run'],
-    ['find-related', 'query.run'],
-    ['find-other-record', 'query.run'],
-    ['create-record', 'bill.create'],
+  assert.equal(
+    result.summary,
+    'Recorded in QuickBooks: bill from Harrowgate Office Supply, $461.53.',
+  );
+  const [document] = result.documents ?? [];
+  assert.deepEqual(
+    [document?.status, document?.statusText, document?.recordedIn, document?.details],
+    [
+      'recorded',
+      'Recorded in QuickBooks: bill',
+      { providerId: 'quickbooks', recordType: 'bill', recordId: '1001' },
+      [
+        { label: 'Category', value: 'Office Supplies' },
+        { label: 'Decided', value: 'Automatically' },
+        { label: 'Due', value: 'Oct 14, 2026' },
+        { label: 'Shipping', value: '$15.00' },
+      ],
+    ],
+  );
+  // The run-level reads under the step's key; each document's calls under its part of it.
+  for (const [stepId, part, operation] of [
+    ['read-company', undefined, 'companyInfo.get'],
+    ['read-preferences', undefined, 'preferences.get'],
+    ['find-accounts', undefined, 'query.run'],
+    ['find-vendors', 'd1', 'query.run'],
+    ['find-duplicates', 'd1', 'query.run'],
+    ['find-duplicates', 'd1-a', 'query.run'],
+    ['find-related', 'd1', 'query.run'],
+    ['find-related', 'd1-a', 'query.run'],
+    ['create-records', 'd1', 'bill.create'],
   ] as const) {
     assert.deepEqual(
-      callsOf(world.platform, world.request, stepId).map((call) => call.operation),
+      callsOf(world.platform, world.request, stepId, part).map((call) => call.operation),
       [operation],
-      stepId,
+      `${stepId} ${part ?? ''}`,
     );
   }
-  assert.equal(world.platform.providerCalls.length, 9, 'no step called QuickBooks twice');
+  assert.equal(world.platform.providerCalls.length, 9, 'no key used twice');
   assert.deepEqual(world.platform.artifactReads, [FILE_ID]);
   assert.equal(world.platform.modelCalls.length, 1, 'one AI read: the first showed no problem');
+  assert.deepEqual(
+    world.platform.mails,
+    [],
+    'the run sends no mail: the platform sends the results (AM3)',
+  );
 });
 
-test("the code's steps are the v2 manifest's, in its order: find-payer gone, save-details in", () => {
+test("the code's steps are the v3 manifest's, in its order: v2's one-document steps gone", () => {
   const [manifest] = manifests;
   const ids = manifest?.pipeline.map((step) => step.id) ?? [];
-  const clock = { now: () => 0, sleep: () => Promise.resolve() };
-  assert.deepEqual(Object.keys(pipelineSteps(clock, EXPENSE_SEARCH, () => undefined)), ids);
-  assert.equal(ids.length, 24);
-  assert.ok(!ids.includes('find-payer') && ids.includes('save-details'));
+  assert.deepEqual(Object.keys(pipelineSteps(CLOCK, EXPENSE_SEARCH, () => undefined)), ids);
+  assert.equal(ids.length, 22);
+  for (const gone of ['check-document', 'find-vendor', 'create-record', 'save-details', 'notify']) {
+    assert.ok(!ids.includes(gone), gone);
+  }
 });
 
-test("the reads and the two writes repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; decide, save-details and notify none", () => {
+test("the reads and the writes repeat a transient failure at the SDK's floor and ceilings; each model call only what never reached the platform; the steps that call nothing, none", () => {
   const policy = { attempts: 3, backoffMs: 10_000 };
   const model = { attempts: 2, backoffMs: 10_000, when: 'unsent' };
-  const recheck = ['confirm-company', 'confirm-vendor', 'confirm-no-duplicate'];
-  assert.deepEqual(define(manifests).retry, {
-    receive: policy,
-    'read-company': policy,
-    'read-preferences': policy,
-    'find-accounts': policy,
-    extract: model,
-    'verify-read': model,
-    ...Object.fromEntries(LOOKUP_STEPS.map((stepId) => [stepId, policy])),
-    ...Object.fromEntries(recheck.map((stepId) => [stepId, policy])),
-    // Sandbox S6: Intuit answers a repeated request id with its first answer, never a second record.
-    'create-vendor': policy,
-    'create-record': policy,
-  });
-  for (const step of ['notify', 'decide', 'save-details', 'check-document']) {
-    assert.equal(define(manifests).retry[step], undefined, step);
-  }
-  // Every step that calls QuickBooks saves the details when its attempts are spent.
+  const recheck = ['confirm-company', 'confirm-vendors', 'confirm-no-duplicates'];
+  const writes = [
+    'create-vendors',
+    'create-records',
+    'create-approved-vendors',
+    'create-approved-records',
+  ];
+  const { retry } = define(manifests);
   assert.deepEqual(
-    [...QUICKBOOKS_STEPS].sort(),
-    [
-      'read-company',
-      'read-preferences',
-      'find-accounts',
-      ...LOOKUP_STEPS,
-      ...recheck,
-      'create-vendor',
-      'create-record',
-    ].sort(),
+    Object.fromEntries(Object.entries(retry).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(
+      [
+        ['receive', policy],
+        ['extract', model],
+        ['verify-read', model],
+        ...[...RUN_LEVEL_STEPS, ...V3_LOOKUP_STEPS, ...recheck].map((id) => [id, policy] as const),
+        // Sandbox S6: Intuit answers a repeated request id with its first answer, never a second record.
+        ...writes.map((id) => [id, policy] as const),
+      ].sort(([a], [b]) => String(a).localeCompare(String(b))),
+    ),
   );
-  assert.deepEqual([...WRITE_STEPS], ['create-vendor', 'create-record']);
+  for (const step of [
+    'check-documents',
+    'decide',
+    'save-documents',
+    'ask-approval',
+    'save-approved',
+  ]) {
+    assert.equal(retry[step], undefined, step);
+  }
+  // Every QuickBooks step done per document saves that document's details when its attempts are spent.
+  assert.deepEqual(
+    Object.keys(perDocumentSpecs(CLOCK, EXPENSE_SEARCH)).sort(),
+    [...V3_LOOKUP_STEPS, 'confirm-vendors', 'confirm-no-duplicates', ...writes].sort(),
+  );
+  assert.deepEqual(
+    Object.entries(perDocumentSpecs(CLOCK, EXPENSE_SEARCH))
+      .filter(([, spec]) => spec.writes === true)
+      .map(([id]) => id)
+      .sort(),
+    [...writes].sort(),
+  );
 });
 
 test('QuickBooks failing at a read saves the details instead (decision 6): not recorded, nothing more asked of QuickBooks', async () => {
@@ -159,78 +190,102 @@ test('QuickBooks failing at a read saves the details instead (decision 6): not r
     const world = wholeRun();
     world.simulator.script(operation, [{ refuse: PROVIDER_REFUSALS.notConnected() }]);
     const result = await world.run();
-    assert.equal(result.outcome, 'success', stepId);
-    assert.equal(
-      (result as { summary?: string }).summary,
-      "Saved. Not recorded in QuickBooks: QuickBooks isn't connected.",
+    assert.ok(result.outcome === 'success', stepId);
+    assert.equal(result.summary, "Saved. Not recorded in QuickBooks: QuickBooks isn't connected.");
+    assert.deepEqual(
+      result.documents?.map((document) => document.status),
+      ['not_recorded'],
     );
     const said = lines(world.platform);
     const at = said.findIndex(([id]) => id === stepId);
-    assert.deepEqual(said[at], [
-      stepId,
-      'failed',
-      "Not recorded in QuickBooks: QuickBooks isn't connected",
+    assert.deepEqual(said.slice(at), [
+      [stepId, 'failed', "Not recorded in QuickBooks: QuickBooks isn't connected"],
+      ['decide', 'ok', "Not recorded in QuickBooks: QuickBooks isn't connected"],
+      ['save-documents', 'ok', 'Saved: Harrowgate Office Supply, $461.53'],
     ]);
-    assert.deepEqual(said.slice(at + 1), [
-      ['extract', 'ok', 'Read: bill from Harrowgate Office Supply, $461.53'],
-      ['check-document', 'ok', 'Checks passed'],
-      ['save-details', 'ok', 'Saved: Harrowgate Office Supply, $461.53'],
-    ]);
-    assert.equal(world.platform.providerCalls.length, at, 'one call each, up to the one refused');
+    assert.equal(
+      world.platform.providerCalls.length,
+      at - 2,
+      'one call each, up to the one refused',
+    );
   }
 });
 
-test("a QuickBooks step that THREW until its attempts were spent: the run's recover ends it not recorded — a write, unconfirmed — and logs the step, never the message", () => {
+/** The run's state after `through`, for a bill on the made-up company. */
+async function stateAfter(through: string): Promise<JsonObject> {
+  const world = wholeRun({ through });
+  const result = await world.run();
+  assert.ok(result.outcome === 'success' && result.output, JSON.stringify(result).slice(0, 300));
+  return result.output;
+}
+
+test("a QuickBooks step that THREW until its attempts were spent: the run's recover ends it for the documents it had not finished — a write unconfirmed — and logs the step, never the message", async () => {
   const logs: unknown[][] = [];
-  const recoverOf = recoverQuickBooks((...line) => logs.push(line));
+  const recoverOf = recoverQuickBooks(
+    (...line) => logs.push(line),
+    perDocumentSpecs(CLOCK, EXPENSE_SEARCH),
+  );
   const error = refusalFixture('provider', PROVIDER_REFUSALS.noAnswer());
-  const context = (config: JsonObject, state: JsonObject = {}) =>
+  const context = (stepId: string, config: JsonObject, state: JsonObject) =>
     ({
-      request: invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 2, config }),
+      request: invokeFixture({ templateId: TEMPLATE_ID, templateVersion: 3, config }),
+      stepId,
       state,
     }) as unknown as StepContext;
-  assert.deepEqual(recoverOf('find-vendor', error, context(QUICKBOOKS)), {
-    outcome: 'failed',
-    summary: "Not recorded in QuickBooks: QuickBooks didn't answer",
-    state: { quickBooks: { notRecorded: "QuickBooks didn't answer" } },
-  });
-  assert.deepEqual(recoverOf('create-record', error, context(QUICKBOOKS)), {
-    outcome: 'failed',
-    summary: "QuickBooks didn't confirm. Check QuickBooks before you run it again.",
-    state: { quickBooks: { unconfirmed: true } },
-  });
-  // Not a QuickBooks step, the vendor "None", or QuickBooks already stopped: the run ends as before.
-  assert.equal(recoverOf('extract', error, context(QUICKBOOKS)), undefined);
-  assert.equal(recoverOf('find-vendor', error, context(NONE)), undefined);
+  const checked = await stateAfter('check-documents');
+  const decided = await stateAfter('decide');
+  const stopOf = (state: JsonObject | undefined) =>
+    runStateOf(state ?? {})?.documents.map((entry) => entry.engine.quickBooks);
+  // A run-level read: every document, for the whole run.
+  const read = recoverOf('read-company', error, context('read-company', QUICKBOOKS, checked));
+  assert.ok(read?.outcome === 'failed');
+  assert.deepEqual(
+    [read.summary, read.state?.quickBooks],
+    [
+      "Not recorded in QuickBooks: QuickBooks didn't answer",
+      { notRecorded: "QuickBooks didn't answer" },
+    ],
+  );
+  // A lookup: each document it had not finished, not recorded.
+  const lookup = recoverOf('find-vendors', error, context('find-vendors', QUICKBOOKS, checked));
+  assert.ok(lookup?.outcome === 'failed');
+  assert.equal(lookup.summary, "Not recorded in QuickBooks: QuickBooks didn't answer");
+  assert.deepEqual(stopOf(lookup.state), [{ notRecorded: "QuickBooks didn't answer" }]);
+  // A write: QuickBooks may hold it — never "not recorded".
+  const write = recoverOf('create-records', error, context('create-records', QUICKBOOKS, decided));
+  assert.ok(write?.outcome === 'failed');
   assert.equal(
-    recoverOf('find-vendor', error, context(QUICKBOOKS, { quickBooks: { notRecorded: 'x' } })),
+    write.summary,
+    "QuickBooks didn't confirm. Check QuickBooks before you run it again.",
+  );
+  assert.deepEqual(stopOf(write.state), [{ unconfirmed: true }]);
+  // Not a QuickBooks step, the vendor "None", or QuickBooks already stopped: the run ends as before.
+  assert.equal(recoverOf('extract', error, context('extract', QUICKBOOKS, checked)), undefined);
+  assert.equal(recoverOf('read-company', error, context('read-company', NONE, checked)), undefined);
+  assert.equal(
+    recoverOf(
+      'read-company',
+      error,
+      context('read-company', QUICKBOOKS, { ...checked, quickBooks: { notRecorded: 'x' } }),
+    ),
     undefined,
   );
+  const logged = (stepId: string) => [
+    'info',
+    'quickbooks_step_gave_up',
+    {
+      runId: '11111111-1111-4111-8111-111111111111',
+      stepId,
+      error: 'CallbackRefusedError',
+      status: 502,
+      code: 'DEPENDENCY_FAILURE',
+      reason: null,
+    },
+  ];
   assert.deepEqual(logs, [
-    [
-      'info',
-      'quickbooks_step_gave_up',
-      {
-        runId: '11111111-1111-4111-8111-111111111111',
-        stepId: 'find-vendor',
-        error: 'CallbackRefusedError',
-        status: 502,
-        code: 'DEPENDENCY_FAILURE',
-        reason: null,
-      },
-    ],
-    [
-      'info',
-      'quickbooks_step_gave_up',
-      {
-        runId: '11111111-1111-4111-8111-111111111111',
-        stepId: 'create-record',
-        error: 'CallbackRefusedError',
-        status: 502,
-        code: 'DEPENDENCY_FAILURE',
-        reason: null,
-      },
-    ],
+    logged('read-company'),
+    logged('find-vendors'),
+    logged('create-records'),
   ]);
 });
 

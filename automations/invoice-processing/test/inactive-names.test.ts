@@ -17,7 +17,7 @@ import { approve, firstRun, writesOf } from './writes-world.js';
  * and a similar name that is inactive is counted once.
  */
 
-const THROUGH = 'find-employee-name';
+const THROUGH = 'find-names';
 const summaryOf = (result: RunResult) =>
   result.outcome === 'success' ? result.summary : JSON.stringify(result);
 const NOT_IN_QUICKBOOKS = RESULTS.notRecorded("the vendor isn't in QuickBooks");
@@ -38,8 +38,8 @@ test('an inactive vendor, as QuickBooks keeps it, is inactive and not new: a bil
   });
   assert.equal(summaryOf(billed.result), NOT_IN_QUICKBOOKS);
   assert.deepEqual(
-    lines(billed.platform).find(([stepId]) => stepId === 'find-vendor'),
-    ['find-vendor', 'failed', "Not recorded in QuickBooks: the vendor isn't in QuickBooks"],
+    lines(billed.platform).find(([stepId]) => stepId === 'find-vendors'),
+    ['find-vendors', 'failed', "Not recorded in QuickBooks: the vendor isn't in QuickBooks"],
   );
   assert.deepEqual(Object.keys(queriesOf(billed)), ['find-vendor']);
   const receipted = await routeRun({
@@ -53,7 +53,7 @@ test('an inactive vendor, as QuickBooks keeps it, is inactive and not new: a bil
     reason: 'inactive',
     matchedBy: 'display name',
   });
-  assert.equal(lineOf(receipted, 'find-vendor'), 'Vendor found');
+  assert.equal(lineOf(receipted, 'find-vendors'), 'Vendor found');
 });
 
 test('an active vendor made with the name an inactive one had is that vendor, the inactive one no near-miss; by company name both share it, and the bill is not recorded (sandbox G4–5 #19)', async () => {
@@ -67,9 +67,9 @@ test('an active vendor made with the name an inactive one had is that vendor, th
         sampleVendor('73', 'Harrowgate Office Supply'),
       ),
   });
-  assert.equal(lineOf(world, 'find-vendor'), 'Vendor found');
+  assert.equal(lineOf(world, 'find-vendors'), 'Vendor found');
   assert.equal((stateOf(world.result).vendor as { id: string }).id, '73');
-  assert.equal(lineOf(world, 'find-vendor-company'), undefined, 'settled by its name');
+  assert.deepEqual(Object.keys(queriesOf(world)), ['find-vendor'], 'settled by its name');
   // Display names that are not the printed name: only the company name, which QuickBooks left on
   // the inactive vendor, finds them — both, as before; no one vendor is it, so the bill is not
   // recorded.
@@ -89,8 +89,8 @@ test('confirm-vendor: a new vendor added while the run waited and made inactive 
   const approved = await approve(first);
   assert.equal(summaryOf(approved.result), NOT_IN_QUICKBOOKS);
   assert.deepEqual(
-    approved.steps.find(([stepId]) => stepId === 'confirm-vendor'),
-    ['confirm-vendor', 'failed', "Not recorded in QuickBooks: the vendor isn't in QuickBooks"],
+    approved.steps.find(([stepId]) => stepId === 'confirm-vendors'),
+    ['confirm-vendors', 'failed', "Not recorded in QuickBooks: the vendor isn't in QuickBooks"],
   );
   assert.deepEqual(writesOf(approved.providerCalls), []);
   assert.equal(first.simulator.company.vendors.length, 1, 'no second vendor');
@@ -109,7 +109,7 @@ test('find-similar-vendors keeps an inactive vendor by the name it had, and coun
         sampleVendor('4', 'Acme Tools (deleted)'),
       ),
   });
-  assert.equal(lineOf(world, 'find-similar-vendors'), 'New vendor, 3 similar names');
+  assert.equal(lineOf(world, 'find-vendors'), 'New vendor, 3 similar names');
   assert.deepEqual(stateOf(world.result).similarVendors, {
     names: ['ACME Supplies Inc', 'Acme Corp', 'Acme Tools (deleted)'],
   });

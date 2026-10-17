@@ -1,5 +1,4 @@
 import type { CreditSigns, TipOutcome } from '@autom8x/automation-kit/values';
-import type { JsonObject } from '@autom8x/automation-sdk';
 
 import type { KeptType, ListedKind, PaymentMethod, RefundMethod, Route } from './document.js';
 import type { FileKind } from './file.js';
@@ -58,17 +57,6 @@ export interface PreferencesState {
   readonly warnDuplicateBillNumber: boolean | null;
   /** The books' closing date, `YYYY-MM-DD`, when QuickBooks returned a real one. */
   readonly bookCloseDate: string | null;
-}
-
-/**
- * `extract`: the model's answer, whole — the 27 fields of `prompts/extract-document.v1.json`,
- * held to its schema by the platform — kept only until the step that checks it replaces it
- * with the fields it cleans, so a held state never carries a line's raw text; and the model
- * that served, as the router reported it, which may differ from the id asked for.
- */
-export interface ExtractionState {
-  readonly extraction: JsonObject;
-  readonly modelServed: string;
 }
 
 /** How one arithmetic check ended: within 1¢, off by more, or not possible with what is printed. */

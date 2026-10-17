@@ -1,9 +1,0 @@
-{
-  "fileSha256": "0c42968be0927a27bb4642da33bd6015c29ccb7a6e2fc904d2a453960b22e568",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"bill\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Marlowe Fastener Supply\",\"documentNumber\":\"MFS-7781\",\"documentDate\":\"2026-09-08\",\"dueDate\":\"2026-10-08\",\"paymentTermsDays\":30,\"currency\":\"USD\",\"subtotal\":7917.50,\"tax\":574.02,\"shipping\":45.00,\"discount\":null,\"total\":8536.52,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":null,\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"materials\",\"lineItems\":[{\"amount\":3.13},{\"amount\":35.32},{\"amount\":20.51},{\"amount\":5.70},{\"amount\":37.89},{\"amount\":23.08},{\"amount\":8.27},{\"amount\":40.46},{\"amount\":25.65},{\"amount\":10.84},{\"amount\":43.03},{\"amount\":28.22},{\"amount\":13.41},{\"amount\":45.60},{\"amount\":30.79},{\"amount\":15.98},{\"amount\":48.17},{\"amount\":33.36},{\"amount\":18.55},{\"amount\":3.74},{\"amount\":35.93},{\"amount\":21.12},{\"amount\":6.31},{\"amount\":38.50},{\"amount\":23.69},{\"amount\":8.88},{\"amount\":41.07},{\"amount\":26.26},{\"amount\":11.45},{\"amount\":43.64},{\"amount\":28.83},{\"amount\":14.02},{\"amount\":46.21},{\"amount\":31.40},{\"amount\":16.59},{\"amount\":48.78},{\"amount\":33.97},{\"amount\":19.16},{\"amount\":4.35},{\"amount\":36.54}],\"lineItemsComplete\":false,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

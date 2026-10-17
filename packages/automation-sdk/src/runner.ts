@@ -18,6 +18,7 @@ import {
   type StepContext,
   type StepPlatform,
   idempotencyKeyFor,
+  partKey,
 } from './steps.js';
 
 /**
@@ -233,16 +234,18 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
           return {
             outcome: 'held',
             held: { stepId, reason: outcome.reason, state: outcome.state },
+            ...(outcome.documents === undefined ? {} : { documents: outcome.documents }),
           };
       }
     }
 
-    const { output, summary, details } = result(state, request);
+    const { output, summary, details, documents } = result(state, request);
     return {
       outcome: 'success',
       ...(output === undefined ? {} : { output }),
       ...(summary === undefined ? {} : { summary }),
       ...(details === undefined ? {} : { details }),
+      ...(documents === undefined ? {} : { documents }),
     };
   }
 
@@ -261,8 +264,8 @@ function failed(failureReason: string): RunResult {
 }
 
 /**
- * The platform as one step sees it: the same callbacks, with this step's key on
- * every side effect, prompts rendered by capability, and nothing that reports —
+ * The platform as one step sees it: the same callbacks, with this step's key — or its part's —
+ * on every side effect, prompts rendered by capability, and nothing that reports —
  * the runner reports, under the declared id, and nothing else can.
  */
 function stepPlatform(
@@ -298,8 +301,11 @@ function stepPlatform(
         ...(artifactId === undefined ? {} : { artifactId }),
       });
     },
-    callProvider: (request) => platform.callProvider({ ...request, idempotencyKey }),
-    sendMail: (mail) => platform.sendMail({ ...mail, idempotencyKey }),
+    // A part names one of several side effects of the step: its own key, the same on every attempt.
+    callProvider: (request, options) =>
+      platform.callProvider({ ...request, idempotencyKey: partKey(idempotencyKey, options?.part) }),
+    sendMail: (mail, options) =>
+      platform.sendMail({ ...mail, idempotencyKey: partKey(idempotencyKey, options?.part) }),
     readArtifact: (artifactId) => platform.readArtifact(artifactId),
     listArtifacts: () => platform.listArtifacts(),
     readArtifactBytes: (artifact) => platform.readArtifactBytes(artifact),
