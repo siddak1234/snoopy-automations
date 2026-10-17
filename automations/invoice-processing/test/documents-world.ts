@@ -107,7 +107,7 @@ export interface DocumentsRun {
   readonly manifests?: readonly Manifest[];
 }
 
-/** A whole run of v3 on a photo of the documents given. */
+/** A whole run of v4 — v3's steps — on a photo of the documents given. */
 export async function documentsRun(run: DocumentsRun) {
   const simulator = new QuickBooksSimulator({ refusal: refusalFixture });
   simulator.expenseAmountSearchable = true;

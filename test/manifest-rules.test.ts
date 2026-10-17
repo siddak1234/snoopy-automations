@@ -154,9 +154,37 @@ test("the rules refuse what the platform refuses of a step that is a setting, th
       'groups[4].platform: must be email',
     ],
     [
+      // As the platform's `validateGroups`: a value other than email is no platform's step.
+      "a platform other than email: no platform's step, so a step with nothing in it",
+      { ...v4, groups: [upload, connect, process, record, { ...email, platform: 'sms' }] },
+      "groups[4]: group 'email' has no step and no setting",
+    ],
+    [
       "two of the platform's steps",
       { ...v4, groups: [upload, connect, process, record, email, { ...email, id: 'email-again' }] },
       "groups[5].platform: only one group may be the platform's",
+    ],
+    [
+      // The platform keeps the first; the second is a step with nothing in it.
+      "two of the platform's steps: the second is no platform's step",
+      { ...v4, groups: [upload, connect, process, record, email, { ...email, id: 'email-again' }] },
+      "groups[5]: group 'email-again' has no step and no setting",
+    ],
+    [
+      "the trigger step in the platform's step: refused for being outside the first group too",
+      {
+        ...v4,
+        pipeline: v4.pipeline.map((step, i) => (i === 0 ? { ...step, group: 'email' } : step)),
+      },
+      'pipeline[0].group: the trigger step belongs to the first group',
+    ],
+    [
+      "the trigger step in the platform's step",
+      {
+        ...v4,
+        pipeline: v4.pipeline.map((step, i) => (i === 0 ? { ...step, group: 'email' } : step)),
+      },
+      "pipeline[0].group: no pipeline step may be in the platform's step",
     ],
     [
       "the platform's step before another",

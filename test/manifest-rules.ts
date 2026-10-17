@@ -56,12 +56,15 @@ export function manifestProblems(manifest: Json): string[] {
   coverage(fields, optional, add);
   // §1.4 — the visible step groups; ADR-0041 — the platform's step, the last.
   let declared: string[] | undefined;
-  const platforms = new Set<string>();
+  // The platform's step: the first group whose `platform` is `email`, as the platform's
+  // `validateGroups` keeps it — another value, or a second one, is refused and is no one's step.
+  let platform: string | undefined;
   if (manifest.groups !== undefined) {
     const groups = list(manifest.groups);
     if (groups.length < 2) add('groups', 'must declare at least 2 groups');
     if (groups.length > 6) add('groups', 'must hold at most 6 items');
     declared = [];
+    let platformAt: number | undefined;
     for (const [index, group] of groups.entries()) {
       const id = String(group.id);
       if (declared.includes(id)) add(`groups[${index}].id`, 'is declared more than once');
@@ -69,9 +72,11 @@ export function manifestProblems(manifest: Json): string[] {
       if (group.platform === undefined) continue;
       const path = `groups[${index}].platform`;
       if (group.platform !== 'email') add(path, 'must be email');
-      if (platforms.size > 0) add(path, "only one group may be the platform's");
-      if (index !== groups.length - 1) add(path, "the platform's step is the last group");
-      platforms.add(id);
+      else if (platformAt !== undefined) add(path, "only one group may be the platform's");
+      else [platformAt, platform] = [index, id];
+    }
+    if (platformAt !== undefined && platformAt !== groups.length - 1) {
+      add(`groups[${platformAt}].platform`, "the platform's step is the last group");
     }
   }
   for (const [index, step] of pipeline.entries()) {
@@ -82,10 +87,12 @@ export function manifestProblems(manifest: Json): string[] {
       add(path, 'every step needs a group when groups are declared');
     } else if (typeof step.group !== 'string' || !declared.includes(step.group)) {
       add(path, 'must name a declared group');
-    } else if (platforms.has(step.group)) {
-      add(path, "no pipeline step may be in the platform's step");
     } else if (index === 0 && step.group !== declared[0]) {
       add(path, 'the trigger step belongs to the first group');
+    }
+    // Beside the checks above, as the platform's `checkStepGroup` and its own check are.
+    if (platform !== undefined && step.group === platform) {
+      add(path, "no pipeline step may be in the platform's step");
     }
   }
   // ADR-0040 — a setting may say which step it is drawn in; ADR-0041 — never the platform's.
@@ -95,11 +102,11 @@ export function manifestProblems(manifest: Json): string[] {
     if (declared === undefined) add(path, 'group is only meaningful when groups are declared');
     else if (typeof field.group !== 'string' || !declared.includes(field.group)) {
       add(path, 'must name a declared group');
-    } else if (platforms.has(field.group)) add(path, "no setting may be in the platform's step");
+    } else if (field.group === platform) add(path, "no setting may be in the platform's step");
   }
   // ADR-0041 — a group no step names is a step that is a setting, or the platform's.
   for (const [index, id] of (declared ?? []).entries()) {
-    if (platforms.has(id)) continue;
+    if (id === platform) continue;
     const named = (entries: readonly Json[]) => entries.some((each) => each.group === id);
     if (!named(pipeline) && !named(list(manifest.setup))) {
       add(`groups[${index}]`, `group '${id}' has no step and no setting`);
