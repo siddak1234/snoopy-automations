@@ -4,12 +4,16 @@ import { join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import { renderPrompt, type JsonObject } from '@autom8x/automation-sdk';
 
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
-import { SEEDED_STATE, extractWorld } from './extract-world.js';
+import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { partAnswerOf } from '../src/run/answer.js';
+import { partInput } from '../src/run/extract.js';
+import { runStateOf } from '../src/run/state.js';
+import { extractWorld } from './extract-world.js';
 import { completion } from './fixtures.js';
 import {
+  FIRST_READ,
   RECORDINGS_DIRECTORY,
   madeFor,
   readRecording,
@@ -61,15 +65,18 @@ test('the loader takes a recording made for this prompt file and this sample, an
   );
 });
 
-test('each request gives the agent what the platform gives the model, and a recording the loader takes', () => {
+test('each request gives the agent what the platform gives the model — the first part, its numbers in the instruction — and a recording the loader takes', () => {
   const repository = resolve(import.meta.dirname, '..', '..', '..');
+  const rendered = renderPrompt(EXTRACT_DOCUMENTS_V1, partInput({ document: 1, line: 1 }, 0));
   for (const sample of SAMPLES) {
     const request = recordingRequest(sample);
-    assert.equal(request.systemInstruction, EXTRACT_DOCUMENT_V1.template);
-    assert.equal(request.userText, '{"task":"Extract the fields of the attached document."}');
-    assert.deepEqual(request.responseSchema, EXTRACT_DOCUMENT_V1.outputSchema);
-    assert.equal(request.recording.promptId, 'extract-document');
-    assert.match(request.saveAs, /test\/recordings\/extract-document\.v1\//u);
+    assert.equal(request.systemInstruction, rendered.prompt);
+    assert.ok(request.systemInstruction.includes('Start at document 1, and with its line 1.'));
+    assert.equal(request.userText, JSON.stringify(rendered.input));
+    assert.ok(request.userText.includes('Extract the documents in the attached file.'));
+    assert.deepEqual(request.responseSchema, EXTRACT_DOCUMENTS_V1.outputSchema);
+    assert.equal(request.recording.promptId, 'extract-documents');
+    assert.match(request.saveAs, /test\/recordings\/extract-documents\.v1\//u);
     assert.equal(
       request.file,
       `automations/invoice-processing/test/samples/${sample.name}/${sample.file}`,
@@ -91,7 +98,7 @@ const files = recordingFiles();
 const where = relative(process.cwd(), RECORDINGS_DIRECTORY);
 
 test(
-  'every recording passes extract whole: held to the schema, kept in the state, the model that served named',
+  'every recording is one part extract takes: held to the schema, each document kept in the state, the model that served named, the marker in no line',
   {
     skip:
       files.length === 0
@@ -100,20 +107,28 @@ test(
   },
   async (t) => {
     for (const { sample, recording } of recordings()) {
+      const part = partAnswerOf(JSON.parse(recording.text));
+      assert.ok(part, `${sample.name}: the schema`);
+      // A recording is read 1's first part alone: a run that reads on is not recorded.
+      if (part.nextDocument !== null) {
+        t.diagnostic(`${sample.name}: the reading goes on at document ${part.nextDocument}`);
+        continue;
+      }
       const world = extractWorld();
       world.platform.model = (_call, model) =>
         Promise.resolve(completion(model, recording.text, recording.finishReason));
-      const answer = JSON.parse(recording.text) as JsonObject;
-      assert.deepEqual(
-        await world.state(),
-        { ...SEEDED_STATE, extraction: answer, modelServed: 'anthropic/claude-haiku-4.5' },
-        sample.name,
-      );
+      const state = (await world.state()) ?? {};
+      assert.equal(state.modelServed, 'anthropic/claude-haiku-4.5', sample.name);
+      assert.equal(runStateOf(state)?.documents.length, part.documents.length, sample.name);
       const said = JSON.stringify(world.platform.steps);
       assert.ok(!said.includes(sample.marker), `${sample.name}: the marker reached the line`);
       // For the person who reviews it: where the recording and expected.json part.
+      const [first] = (JSON.parse(recording.text) as { documents: JsonObject[] }).documents;
       const differ = Object.keys(sample.answer).filter(
-        (field) => !isDeepStrictEqual(answer[field], sample.answer[field]),
+        (field) =>
+          first !== undefined &&
+          field in first &&
+          !isDeepStrictEqual(first[field], sample.answer[field]),
       );
       if (differ.length > 0)
         t.diagnostic(`${sample.name} differs from expected.json on ${differ.join(', ')}`);
@@ -122,7 +137,7 @@ test(
 );
 
 test(
-  "the 300-line sample's recording lists at most 40 lines, says there are more, and stays under 24,000 characters",
+  "the 300-line sample's recording lists at most the part's 80 lines, says where the next part starts, and stays under 24,000 characters",
   {
     skip: files.includes('long-300-lines.json')
       ? false
@@ -130,10 +145,12 @@ test(
   },
   () => {
     const sample = SAMPLES.find((each) => each.name === 'long-300-lines');
-    const recording = sample ? recordingOf(sample) : undefined;
-    const answer = JSON.parse(recording?.text ?? '{}') as JsonObject;
-    assert.ok(Array.isArray(answer.lineItems) && answer.lineItems.length <= 40);
-    assert.equal(answer.lineItemsComplete, false);
+    const recording = sample ? recordingOf(sample, FIRST_READ) : undefined;
+    const part = partAnswerOf(JSON.parse(recording?.text ?? '{}'));
+    assert.ok(part);
+    const lines = part.documents.reduce((sum, document) => sum + document.lineItems.length, 0);
+    assert.ok(lines <= 80, String(lines));
+    assert.deepEqual([part.nextDocument, part.nextLine], [1, lines + 1]);
     assert.ok((recording?.text.length ?? 0) < 24_000);
   },
 );

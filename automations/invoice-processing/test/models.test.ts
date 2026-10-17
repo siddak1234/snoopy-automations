@@ -10,19 +10,20 @@ import {
 } from '@autom8x/automation-sdk';
 import { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_DOCUMENT_V1 } from '../src/prompts.js';
-import { EXTRACT_INPUT, MODELS } from '../src/steps/extract.js';
+import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { partInput } from '../src/run/extract.js';
+import { MODELS } from '../src/run/model-refusals.js';
 import { FILE_ID, completion, pdf } from './fixtures.js';
 import { localServer } from './wire.js';
 
 /**
- * The models `extract` names: held to the platform's rule by the SDK before anything is sent,
+ * The models the reads name: held to the platform's rule by the SDK before anything is sent,
  * and by two makers — so a later read that leaves out the maker of the model that served this
  * one (the platform's BUILD-PLAN 25.2.29, `excludeModelAuthors`) always has a model left.
  */
 
 const REQUEST: ModelRequest = {
-  ...renderPrompt(EXTRACT_DOCUMENT_V1, EXTRACT_INPUT),
+  ...renderPrompt(EXTRACT_DOCUMENTS_V1, partInput({ document: 1, line: 1 }, 0)),
   models: MODELS,
   artifactId: FILE_ID,
 };

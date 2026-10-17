@@ -138,7 +138,9 @@ completion to the prompt's `outputSchema`, writes one `runs.model_calls` row, an
 answers `{ text, model, finishReason, usage }`, `model` being the one that served;
 `readJsonCompletion` parses the text without ever quoting it, and reads an answer
 whose `finishReason` is `other` as it reads `stop`, since the platform holds both to
-the schema and bills both (the platform's BUILD-PLAN 25.3.12). A completion the
+the schema and bills both (the platform's BUILD-PLAN 25.3.12). Every string it returns
+is storable: a NUL dropped and half a surrogate pair U+FFFD, since the platform keeps a
+run's held state, output and documents as `jsonb`, which holds neither. A completion the
 platform will not hand over is a **typed refusal**: a
 `ModelRefusedError` — a `CallbackRefusedError` whose `callback` is `model` —
 carrying the platform's `details.reason` and the fields beside it, and nothing of
@@ -453,15 +455,48 @@ a run already recorded (platform §12.1 #220).
 ## Invoice processing
 
 `invoice-processing` — shown to people as **Invoice Processing** since v2, as **Bills &
-Receipts** in v1 — reads a bill, a receipt, a credit note or a supplier's statement from a PDF
-or photo, then saves its details for the team, or records it in QuickBooks Online and compares a
-statement with it (the platform's BUILD-PLAN 25.4.1 and 25.4.13–25.4.26; the owner's design of
-2026-10-10, plan of 2026-10-11 and build-19 feedback of 2026-10-14).
+Receipts** in v1 — reads every bill, invoice, receipt, credit note, statement and other
+financial document in a PDF or photo, then saves each one's details for the team, or records it
+in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN 25.4.1,
+25.4.13–25.4.30; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback of
+2026-10-14 and Build 21 corrections of 2026-10-15).
 
-**v2, the version this code serves.** The image serves v2 alone (`SERVED_VERSIONS` in
-`src/automation.ts`; its Dockerfile copies only `manifests/invoice-processing.v2.json`, which
-`test/conformance.test.ts` holds it to); v1's manifest stays, registered and immutable, until
-it is retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
+**v3, the version this code serves** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8
+change it). The image serves v3 alone (`SERVED_VERSIONS`; its Dockerfile copies only
+`manifests/invoice-processing.v3.json`); v1 and v2 stay registered and immutable. A file holds
+any number of documents: `extract` reads them all with `prompts/extract-documents.v1.json`, in
+parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
+8,000-token cap — each its own entry with its own seller and details (`src/run/extract.ts`,
+`test/documents-parts.test.ts`). Nothing is left out silently: a part that says the file is done
+while it counts more documents than were read is followed by one from the next document, and a
+reading still short of that count has its last document wait, "the file may hold more
+documents"; a reading stopped inside a document marks its lines — a statement's rows too —
+incomplete (`test/documents-counted.test.ts`). Each QuickBooks lookup and write runs once per document,
+under its document's part of the step's key (`<key>.d1`, the SDK's `part`;
+`src/run/fan-out.ts`); the three company reads run once for all. One document never fails the
+others: one the checks cannot use is read again (`verify-documents.v1`, 20 a call), and one
+still unclear — or a page clearly not a financial document — waits for one approval that names
+each ("Document 2: the total can't be read.") while the rest are recorded or saved; a quote, a
+purchase order, a bank statement or any other financial document QuickBooks keeps no record of
+is saved with all its data (AM8; `test/documents-hold.test.ts`). The result carries every
+document whole (`RunDocument`, `src/run/documents.ts`): its type (`invoice` among them), seller
+and place, `number`, `numberLabel` and `references`, date and time, each line's words, quantity,
+unit price and amount, the totals as decimal strings, how it was paid, `recordedIn` and the
+lines a person reads beside it — no limit but the callback body's 256 KiB
+(`RESULT_BODY_LIMIT_BYTES`; AM1, AM7); a NUL or half a surrogate pair, which the platform cannot
+store, never reaches it (`boundedDocuments`). The run sends no mail and has no email setting: the
+platform mails each run's results to the person who started it, or the owner and admins (AM3).
+Four step groups — Received, Read, Checked, Done — over 22 steps. Each prompt has at most 16
+fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
+no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an
+image's 8,000 px kept, the size the models take). v2's recordings were made for v2's prompts and
+are removed with them; v3's are still to be made (`scripts/recording-request.ts`). The
+platform's Build 21 contract merged as `69b8d97` (`contract/README.md`); until a promotion
+carries it, v3 cannot be registered. What follows describes v2 and v1, and what v3 keeps of them; where they differ,
+this paragraph wins.
+
+**v2.** Its image served v2 alone; v1's manifest stays, registered and immutable, until it is
+retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
 chosen in its one `connection` setup field, `vendor` — "None" by default; two settings, the
 approval limit and "Also email", neither required, and no setting can fail a run
 (`test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
@@ -484,7 +519,7 @@ lines, the same lines mailed, and no reason code anywhere (`test/words.test.ts`)
 manifest's additions and the result's `details` are the platform's #210 (ADR-0037), copied
 into `contract/schemas/` from its branch before it merges (`contract/README.md`): until it
 merges and is promoted, v2 cannot be registered. What follows describes v1, and what v2 keeps
-of it; where they differ, this paragraph wins.
+of it; where they differ, this paragraph wins, and v3's above it.
 
 **v1.** It was built in groups, each appending its steps to
 `manifests/invoice-processing.v1.json`; v1 holds all 24 and was registered on 2026-10-12 (the

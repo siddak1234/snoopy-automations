@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { sampleBill, sampleJournalEntry, samplePurchase } from '@autom8x/automation-kit/testing';
-import { defineAutomation, type JsonObject } from '@autom8x/automation-sdk';
+import { defineAutomation, type JsonObject, type Step } from '@autom8x/automation-sdk';
 import { RecordingPlatform, invokeFixture } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, pipelineSteps } from '../src/automation.js';
+import { TEMPLATE_ID } from '../src/automation.js';
 import { lookupDocumentOf } from '../src/lookups/read.js';
 import {
   billOf,
@@ -15,13 +15,26 @@ import {
   recordsOf,
   vendorCreditOf,
 } from '../src/lookups/records.js';
+import {
+  findCustomerName,
+  findEmployeeName,
+  findSimilarVendors,
+} from '../src/steps/find-name-checks.js';
+import {
+  findDuplicateAmount,
+  findDuplicateNumber,
+  findOtherRecord,
+  findRelated,
+} from '../src/steps/find-records.js';
+import { findVendor, findVendorCompany } from '../src/steps/find-vendor.js';
 import { RUN_FAILS } from '../src/words.js';
 import { bill, check, documentOf, receipt, statement } from './check-world.js';
 import { QUICKBOOKS, lines } from './fixtures.js';
 import { LOOKUP_STEPS, REF, routeRun, stateOf } from './lookups-world.js';
 
 /**
- * The guards that should never fire: the state a lookup reads, missing or malformed, ends the run
+ * The guards that should never fire: the state one of v2's lookups reads for a document — each run
+ * by v3 on that document's own state — missing or malformed, ends the run
  * with "Something went wrong. Try again." — the code in the log alone — never a guess; and a
  * QuickBooks row missing what decide weighs is no record at all.
  */
@@ -111,7 +124,23 @@ test('a row without what decide weighs is no record: the whole answer is unexpec
   );
 });
 
-/** One lookup step on the runner, after a seed that leaves `state`. */
+/** v2's nine lookups, as v3 runs each on one document's state (`src/run/lookups.ts`). */
+function lookups(): Record<string, Step> {
+  const clock = { now: () => Date.now(), sleep: () => Promise.resolve() };
+  return {
+    'find-vendor': findVendor(clock),
+    'find-vendor-company': findVendorCompany(clock),
+    'find-similar-vendors': findSimilarVendors(clock),
+    'find-customer-name': findCustomerName(clock),
+    'find-employee-name': findEmployeeName(clock),
+    'find-duplicate-number': findDuplicateNumber(clock, 'amount'),
+    'find-duplicate-amount': findDuplicateAmount(clock, 'amount'),
+    'find-related': findRelated(clock, 'amount'),
+    'find-other-record': findOtherRecord(clock, 'amount'),
+  };
+}
+
+/** One of v2's lookups on the runner, on one document's state, after a seed that leaves it. */
 async function stepOn(stepId: string, state: JsonObject) {
   const automation = defineAutomation({
     templateId: TEMPLATE_ID,
@@ -125,11 +154,7 @@ async function stepOn(stepId: string, state: JsonObject) {
     ],
     steps: {
       seed: () => Promise.resolve({ outcome: 'ok', summary: 'Seeded', state }),
-      [stepId]: pipelineSteps(
-        { now: () => Date.now(), sleep: () => Promise.resolve() },
-        'amount',
-        () => undefined,
-      )[stepId]!,
+      [stepId]: lookups()[stepId]!,
     },
     result: (end) => ({ output: end }),
   });
@@ -142,19 +167,16 @@ async function stepOn(stepId: string, state: JsonObject) {
 }
 
 test("a lookup's state missing or malformed — no document, no vendor where one must be — fails before asking QuickBooks", async () => {
-  const company = stateOf((await routeRun({ answer: receipt(), through: 'find-vendor' })).result);
+  const company = stateOf((await routeRun({ answer: receipt(), through: 'find-vendors' })).result);
   const { document: _gone, ...noDocument } = company;
   const { vendor: _none, ...noVendor } = company;
-  const RECORDS = LOOKUP_STEPS.slice(5);
+  // A receipt's new seller may become a vendor in v3 (B3): its name checks read the vendor too.
+  const AFTER_VENDOR = LOOKUP_STEPS.slice(1);
   // Each state, and the steps it must stop; every other step skips it, asking nothing.
   const cases: [string, JsonObject, readonly string[]][] = [
     ['no document', noDocument, LOOKUP_STEPS],
-    ['no vendor on a company receipt', noVendor, ['find-vendor-company', ...RECORDS]],
-    [
-      'a malformed vendor',
-      { ...company, vendor: { status: 'matched', id: '9' } },
-      ['find-vendor-company', ...RECORDS],
-    ],
+    ['no vendor on a company receipt', noVendor, AFTER_VENDOR],
+    ['a malformed vendor', { ...company, vendor: { status: 'matched', id: '9' } }, AFTER_VENDOR],
   ];
   for (const [label, state, stopped] of cases) {
     for (const stepId of LOOKUP_STEPS) {

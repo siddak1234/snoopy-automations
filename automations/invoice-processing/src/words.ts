@@ -1,6 +1,5 @@
 import { formatMoney, shorten } from '@autom8x/automation-kit/values';
 
-import type { DocumentType, PaymentMethod } from './document.js';
 import type { SpendType } from './spend-types.js';
 
 /**
@@ -10,20 +9,14 @@ import type { SpendType } from './spend-types.js';
  * the code goes to the log alone (`src/outcome.ts`).
  */
 
-/** Why a run fails, on either path: the document cannot be used, or the run could not go on. */
+/**
+ * Why a run fails — the file itself, never one document in it (v3: one document never fails the
+ * others; the session's spec, B4, and §3.5's file-level sentences). AM1 deleted "Add up to 5 bills
+ * or receipts per file.", and AM8 every sentence that refused a kind of financial document.
+ */
 export const RUN_FAILS = {
   no_file: 'Add a PDF or photo, then start again.',
-  C1: 'This is a bank or card statement. Add one bill or receipt.',
-  C2: 'This is a quote, not a bill or receipt.',
-  C3: 'This is a purchase order, not a bill or receipt.',
-  C4: 'This is not a bill, receipt, credit note or statement.',
-  C5: 'Add one document per file.',
-  C6: 'Pages are missing. Add the whole document.',
-  C8: "The seller's name can't be read. Try a clearer photo.",
-  C11: "The total can't be read. Try a clearer photo.",
-  C21: "The date can't be read. Try a clearer photo.",
-  C22: "The date isn't a real date. Try a clearer photo.",
-  C26: 'Nothing on this statement can be read. Try a clearer photo.',
+  none_found: 'No bill or receipt found. Try a clearer photo.',
   unreadable: "The document can't be read. Try a clearer photo.",
   ai_busy: 'AI is busy. Try again in a minute.',
   ai_unavailable: "The document can't be read right now. Try again.",
@@ -74,18 +67,6 @@ export function lineWith(before: string, name: string, after = ''): string {
   return shorten(`${before}${shorten(name, Math.max(room, 1))}${after}`, LINE_MAXIMUM);
 }
 
-/** What a document is, inside a line: "Read: bill from …". */
-export const DOCUMENT_WORDS: Readonly<Record<DocumentType, string>> = {
-  bill: 'bill',
-  receipt: 'receipt',
-  credit_note: 'credit note',
-  supplier_statement: 'statement',
-  bank_statement: 'bank statement',
-  quote: 'quote',
-  purchase_order: 'purchase order',
-  other: 'document',
-};
-
 /** The saved details' "Type" (§2.8). */
 export const TYPE_WORDS = {
   bill: 'Bill',
@@ -109,25 +90,6 @@ export const SPEND_TYPE_WORDS: Readonly<Record<SpendType, string>> = {
   advertising: 'Advertising',
   other: 'Other',
 };
-
-/**
- * How it was paid, as the saved details' "Paid with" says it (§2.8): a card only with its last
- * four digits; nothing for a way not shown, or one the list has no words for.
- */
-export function paidWithWords(method: PaymentMethod, cardLast4: string | null): string | null {
-  switch (method) {
-    case 'card':
-      return cardLast4 === null ? null : `Card ending ${cardLast4}`;
-    case 'cash':
-      return 'Cash';
-    case 'check':
-      return 'Check';
-    case 'bank_transfer':
-      return 'Bank transfer';
-    default:
-      return null;
-  }
-}
 
 /** The records this automation makes: the result's noun (§3.F) and "Recorded as" (§2.8). */
 export const RECORD_WORDS = {

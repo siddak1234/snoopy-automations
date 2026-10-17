@@ -7,6 +7,7 @@ import type { Decision } from '../src/decide/decide.js';
 import { receipt, sampleAnswer } from './check-world.js';
 import { decide, type DecideSetUp } from './decide-world.js';
 import { lineOf, queriesOf, routeRun, sampleVendor, stateOf } from './lookups-world.js';
+import { outputOf } from './writes-world.js';
 
 /**
  * A company receipt's or a card refund's seller that an inactive vendor has, or two vendors have
@@ -15,7 +16,7 @@ import { lineOf, queriesOf, routeRun, sampleVendor, stateOf } from './lookups-wo
  * memo and line text. A bill's, a credit note's or a statement's is not recorded (find-vendor.test.ts).
  */
 
-const THROUGH = 'find-vendor-company';
+const THROUGH = 'find-vendors';
 
 function saved(decision: Decision) {
   assert.ok(decision.outcome === 'ok' || decision.outcome === 'held', decision.outcome);
@@ -74,7 +75,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
       const named = `${document}, ${label}`;
       const through = await routeRun({ answer, bare: true, company, through: THROUGH });
       assert.deepEqual(stateOf(through.result).vendor, vendor, named);
-      assert.equal(lineOf(through, stepId), line, named);
+      assert.equal(lineOf(through, 'find-vendors'), line, named);
       // Settled by its name: nothing is looked up by company name.
       const searched = Object.keys(queriesOf(through));
       assert.deepEqual(
@@ -84,7 +85,7 @@ test("a company receipt's or a card refund's seller that an inactive vendor has,
       );
       const world = await routeRun({ answer, bare: true, company });
       assert.equal(world.result.outcome, 'success', `${named}: ${JSON.stringify(world.result)}`);
-      const record = (stateOf(world.result).record ?? {}) as JsonObject;
+      const record = (outputOf(world.result).record ?? {}) as JsonObject;
       assert.deepEqual(record.payee, { kind: 'none' }, named);
       assert.equal(lineOf(world, 'decide'), 'Ready to record', named);
     }
@@ -120,6 +121,30 @@ test("a receipt's or a card refund's seller not linked — an inactive vendor's 
       ],
     );
   }
-  // A seller nobody has, as before: no payee.
+  // A seller nobody has, its name checks not all clear: no payee, as before.
   assert.deepEqual(plan({ answer: receipt(), vendor: { status: 'new' } }).payee, { kind: 'none' });
+  const clear = {
+    answer: receipt(),
+    vendor: { status: 'new' },
+    similarVendors: [],
+    customerNameClash: 'none',
+    employeeNameClash: 'none',
+  } as const;
+  // v3 (B3): every check of its name clear, the seller is added as a vendor the record names.
+  assert.deepEqual(plan(clear).payee, {
+    kind: 'new_vendor',
+    name: 'Tidewell Hardware',
+    printedName: 'Tidewell Hardware',
+    nameInUseBy: null,
+  });
+  // A similar name, or a customer or employee with it: no vendor added, no payee.
+  for (const doubt of [
+    { similarVendors: ['Tidewell Tools'] },
+    { customerNameClash: 'match' },
+    { employeeNameClash: 'unreadable' },
+  ] as const) {
+    assert.deepEqual(plan({ ...clear, ...doubt }).payee, { kind: 'none' }, JSON.stringify(doubt));
+  }
+  // A new vendor never holds a receipt: it is not a bill's approval.
+  assert.equal(decide(clear).outcome, 'ok');
 });

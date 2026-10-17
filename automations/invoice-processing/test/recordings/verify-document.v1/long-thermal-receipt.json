@@ -1,9 +1,0 @@
-{
-  "fileSha256": "4c2f0f90ab0a63c1ea48d815519c52a09261daefa53f9af990b26057de889f73",
-  "finishReason": "stop",
-  "promptId": "verify-document",
-  "promptSha256": "cf2381a70c04b1145145c815b9c578c7be43b54da27f8dbb08032c9dec8ca376",
-  "promptVersion": 1,
-  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"vendorName\":\"Fernwick Restaurant Supply\",\"documentNumber\":\"R-77102\",\"documentDate\":\"2026-09-30\",\"dueDate\":null,\"currency\":null,\"total\":2178.29,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"1180\",\"refundMethod\":\"not_applicable\",\"spendType\":\"materials\",\"uncertainFields\":[]}"
-}

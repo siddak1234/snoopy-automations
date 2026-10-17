@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject } from '@autom8x/automation-sdk';
+import { renderPrompt, type JsonObject } from '@autom8x/automation-sdk';
 import { NO_ANSWER, refusalFixture, type ProblemInput } from '@autom8x/automation-sdk/testing';
 
-import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
-import { MODELS } from '../src/steps/extract.js';
-import { VERIFY_INPUT } from '../src/steps/verify-read.js';
+import { VERIFY_DOCUMENTS_V1 } from '../src/prompts.js';
+import { MODELS } from '../src/run/model-refusals.js';
+import { VERIFY_TASK } from '../src/run/verify.js';
 import { RUN_FAILS } from '../src/words.js';
 import { bill, receipt, statement } from './check-world.js';
 import { FILE_ID, completion, secondAnswer } from './fixtures.js';
-import { verifyWorld, type Answering } from './verify-read-world.js';
+import { flat, verifyWorld, type Answering } from './verify-read-world.js';
 
 /**
- * `verify-read`, the second read, when it is due (decision 3; when, `second-read.test.ts`): its one
- * request — blind, by another maker, never without the exclusion — what it keeps when the reads
+ * `verify-read`, the second read, when it is due (decision 3; when, `second-read.test.ts`), for a
+ * file of one document (several: `documents-hold.test.ts`): its one request — blind, by another maker, never without the exclusion — what it keeps when the reads
  * agree or part, the second read not made (the run holds at decide), and the faults that fail.
  * Lines (§3.E): `Second read matches`, `Second read differs: …`, `Second read not made`.
  */
@@ -22,24 +22,23 @@ import { verifyWorld, type Answering } from './verify-read-world.js';
 async function stateOf(world: ReturnType<typeof verifyWorld>): Promise<JsonObject> {
   const result = await world.run();
   assert.equal(result.outcome, 'success', JSON.stringify(result));
-  return (result as { output: JsonObject }).output;
+  return flat((result as { output: JsonObject }).output);
 }
 
-test("one request: verify-document v1, the fixed task, MODELS less the first read's maker, the run's file — nothing of read 1", async () => {
+test("one request: verify-documents v1, the fixed task, the documents' places, MODELS less the first read's maker, the run's file — nothing of read 1", async () => {
   const world = verifyWorld({ first: receipt() });
   await stateOf(world);
+  const input = { task: VERIFY_TASK, positions: '1' };
   assert.deepEqual(world.platform.modelCalls, [
     {
-      capability: 'document-extraction',
-      prompt: VERIFY_DOCUMENT_V1.template,
-      input: { task: 'Extract the fields of the attached document.' },
-      outputSchema: VERIFY_DOCUMENT_V1.outputSchema,
+      ...renderPrompt(VERIFY_DOCUMENTS_V1, input),
       models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
       excludeModelAuthors: ['anthropic'],
       artifactId: FILE_ID,
     },
   ]);
-  assert.deepEqual(VERIFY_INPUT, { task: 'Extract the fields of the attached document.' });
+  assert.equal(VERIFY_TASK, 'Read again the documents the instruction names.');
+  assert.ok(world.platform.modelCalls[0]?.prompt.includes('by their numbers: 1;'));
   // Blind: no value of the first read.
   const sent = JSON.stringify(world.platform.modelCalls);
   for (const value of ['Tidewell', '55120', '60.63', '2026-09-27']) {
@@ -80,7 +79,7 @@ test('the reads agree: the second read is kept, the first stands, the line says 
     totalPicked: null,
     spendTypeDisputed: false,
   });
-  assert.deepEqual(state.document, world.seeded.document);
+  assert.deepEqual(state.document, world.document);
   assert.equal(world.line()?.summary, 'Second read matches');
   assert.deepEqual([world.platform.providerCalls, world.platform.mails], [[], []]);
 });
@@ -144,22 +143,19 @@ test('the reads part: both values kept for decide, the first read written unless
 
 test('a statement: the type alone; the second read not seeing one is kept for decide (F7)', async () => {
   const agreed = verifyWorld({ first: statement(), config: { vendor: 'quickbooks' }, state: {} });
+  const seeded = agreed.document as unknown as JsonObject;
   // A statement's amount is no record's: a second read is due only on a problem, and it has none.
   assert.equal((await agreed.run()).outcome, 'success');
   assert.equal(agreed.line(), undefined, 'not due: skipped, no line');
   const forced = verifyWorld({
     first: statement(),
-    state: {
-      document: { ...(agreed.seeded.document as JsonObject), findings: ['amounts_mismatch'] },
-    },
+    state: { document: { ...seeded, findings: ['amounts_mismatch'] } },
   });
   await stateOf(forced);
   assert.equal(forced.line()?.summary, 'Second read matches');
   const parted = verifyWorld({
     first: statement(),
-    state: {
-      document: { ...(agreed.seeded.document as JsonObject), findings: ['amounts_mismatch'] },
-    },
+    state: { document: { ...seeded, findings: ['amounts_mismatch'] } },
     answer: (_call, model) =>
       Promise.resolve(
         completion(model, secondAnswer(statement(), { documentType: 'bill', total: 96.4 })),
@@ -177,7 +173,7 @@ async function notMade(world: ReturnType<typeof verifyWorld>) {
   const verification = state.verification as JsonObject;
   assert.equal(verification.status, 'not_made');
   assert.equal(world.line()?.summary, 'Second read not made', 'its reason in the state alone');
-  assert.deepEqual(state.document, world.seeded.document, 'the first read stands');
+  assert.deepEqual(state.document, world.document, 'the first read stands');
   return verification.reason;
 }
 
@@ -315,21 +311,23 @@ test("out of time, and the platform's own faults, fail the run with one of the s
   }
 });
 
-test('a state without what the earlier steps keep fails before any call', async () => {
-  const cases: [JsonObject, string][] = [
-    [{ document: undefined }, RUN_FAILS.other],
-    [{ document: { route: 'bill' } }, RUN_FAILS.other],
-    [{ modelServed: undefined }, RUN_FAILS.other],
-    [{ file: { artifactId: 'invoice.pdf' } }, RUN_FAILS.ai_unavailable],
-    [{ file: undefined }, RUN_FAILS.ai_unavailable],
-  ];
-  for (const [state, sentence] of cases) {
+test('a state without what the earlier steps keep: no file fails before any call; no usable document is not read again; no maker is no second read', async () => {
+  for (const state of [{ file: { artifactId: 'invoice.pdf' } }, { file: undefined }]) {
     const world = verifyWorld({ first: bill(), state });
     assert.deepEqual(
       await world.run(),
-      { outcome: 'failed', failureReason: sentence },
+      { outcome: 'failed', failureReason: RUN_FAILS.ai_unavailable },
       JSON.stringify(state),
     );
     assert.deepEqual(world.platform.modelCalls, []);
   }
+  for (const state of [{ document: undefined }, { document: { route: 'bill' } }]) {
+    const world = verifyWorld({ first: bill(), state });
+    assert.equal((await world.run()).outcome, 'success', JSON.stringify(state));
+    assert.equal(world.line(), undefined, 'nothing to read again: skipped');
+    assert.deepEqual(world.platform.modelCalls, []);
+  }
+  const noMaker = verifyWorld({ first: bill(), state: { readMakers: undefined } });
+  assert.equal(await notMade(noMaker), 'no_other_maker');
+  assert.deepEqual(noMaker.platform.modelCalls, []);
 });

@@ -5,15 +5,12 @@ import { QuickBooksSimulator } from '@autom8x/automation-kit/testing';
 import {
   defineAutomation,
   idempotencyKeyFor,
-  isObject,
   readManifests,
   type ArtifactReference,
   type Automation,
   type InvokeRequest,
   type JsonObject,
   type Logger,
-  type ModelCompletion,
-  type ModelRequest,
 } from '@autom8x/automation-sdk';
 import {
   RecordingPlatform,
@@ -27,25 +24,37 @@ import {
   RETRY,
   TEMPLATE_ID,
   define,
+  perDocumentSpecs,
   pipelineSteps,
   servedManifests,
 } from '../src/automation.js';
-import { SECOND_READ_FIELDS } from '../src/checks/answers.js';
 import { recoverQuickBooks, withFixedSentences } from '../src/failures.js';
 import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-search.js';
-import { VERIFY_DOCUMENT_V1 } from '../src/prompts.js';
+import { reads } from './answers.js';
 
 /**
- * The suite's world: the repository's own v2 manifest — the one this code serves — a run started
+ * The suite's world: the repository's own v3 manifest — the one this code serves — a run started
  * with one upload and the vendor QuickBooks, QuickBooks behind the platform (the kit's simulator,
- * holding Connections to its rules), a model that reads every document as `GOOD_ANSWER` — and,
- * asked the second read's prompt, gives the same document's 14 fields — and a clock that records
- * QuickBooks' 60-second waits instead of waiting.
+ * holding Connections to its rules), a model that reads the file as one document, `GOOD_ANSWER`,
+ * or as the documents a test gives — and, asked the second read's prompt, gives each document's 14
+ * fields again — and a clock that records QuickBooks' 60-second waits instead of waiting.
  *
- * The run goes `through` one step of the manifest's pipeline: by default `verify-read`, its result
- * then the whole state the steps so far leave; `decide` — or `all` — runs v2 whole, with the
- * automation's own result.
+ * The run goes `through` one step of the manifest's pipeline — by default `verify-read`, its
+ * result then the whole state the steps so far leave — or `all`, v3 whole, with its own result.
  */
+
+export {
+  GOOD_ANSWER,
+  asTexts,
+  documentAnswer,
+  partAnswer,
+  secondAnswer,
+  verifyAnswer,
+  isSecondRead,
+  positionsOf,
+  reads,
+  completion,
+} from './answers.js';
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
 export const manifests = servedManifests(readManifests(manifestsRoot, TEMPLATE_ID));
@@ -110,78 +119,6 @@ export function png(overrides: Overrides = {}): ArtifactReference {
   });
 }
 
-/** A whole answer as the platform hands it over: every one of the prompt's 27 fields. */
-export const GOOD_ANSWER: JsonObject = {
-  documentType: 'bill',
-  documentCount: 1,
-  pagesMissing: false,
-  vendorName: 'Harrowgate Office Supply',
-  documentNumber: 'HOS-1042',
-  documentDate: '2026-09-14',
-  dueDate: '2026-10-14',
-  paymentTermsDays: 30,
-  currency: 'USD',
-  subtotal: 412.5,
-  tax: 34.03,
-  shipping: 15,
-  discount: null,
-  total: 461.53,
-  amountDue: null,
-  tip: null,
-  cashBackPrinted: false,
-  paymentMethod: 'not_shown',
-  cardLast4: null,
-  refundMethod: 'not_applicable',
-  originalInvoiceNumber: null,
-  spendType: 'office_supplies',
-  lineItems: [{ amount: 189.5 }, { amount: 223 }],
-  lineItemsComplete: true,
-  listedItems: [],
-  listedItemsComplete: true,
-  uncertainFields: [],
-};
-
-/** The second read's answer of a reader who agrees with `answer`: its 14 fields, then `changes`. */
-export function secondAnswer(answer: JsonObject, changes: JsonObject = {}): JsonObject {
-  const fields = SECOND_READ_FIELDS as readonly string[];
-  const picked = Object.fromEntries(fields.map((field) => [field, answer[field]]));
-  const unclear = Array.isArray(answer.uncertainFields)
-    ? answer.uncertainFields.filter((field) => fields.includes(String(field)))
-    : [];
-  return { ...picked, uncertainFields: unclear, ...changes };
-}
-
-/** Whether a model call is the second read's: its prompt is `verify-document`'s. */
-export function isSecondRead(call: ModelRequest): boolean {
-  return call.prompt === VERIFY_DOCUMENT_V1.template;
-}
-
-/**
- * A model that reads every document as `first`, and — asked the second read's prompt — as
- * `second`, by default the same document's 14 fields.
- */
-export function reads(
-  first: unknown = GOOD_ANSWER,
-  second: unknown = isObject(first) ? secondAnswer(first) : first,
-) {
-  return (call: ModelRequest, model: string) =>
-    Promise.resolve(completion(model, isSecondRead(call) ? second : first));
-}
-
-/** One attempt's answer, as the platform's model callback hands it over. */
-export function completion(
-  model: string,
-  answer: unknown = GOOD_ANSWER,
-  finishReason: ModelCompletion['finishReason'] = 'stop',
-): ModelCompletion {
-  return {
-    text: typeof answer === 'string' ? answer : JSON.stringify(answer),
-    model,
-    finishReason,
-    usage: { inputTokens: 1_900, outputTokens: 400, totalTokens: 2_300 },
-  };
-}
-
 export interface SetUp {
   /** The upload the run was given; `null` for a run given none. */
   file?: ArtifactReference | null;
@@ -189,9 +126,11 @@ export interface SetUp {
   input?: JsonObject;
   /** Milliseconds from now to the run's deadline. */
   deadlineInMs?: number;
+  /** The run's clock at its start, for the checks' date; the real time by default. */
+  now?: number;
   simulator?: QuickBooksSimulator;
   runId?: string;
-  /** The last step the run takes (default `verify-read`); `decide` or `all` is the whole of v2. */
+  /** The last step the run takes (default `verify-read`); `all` is the whole of v3. */
   through?: string;
   /**
    * Sandbox S4's answer for the run (default `EXPENSE_SEARCH`). A simulator made here searches an
@@ -207,7 +146,7 @@ function automationThrough(
 ): Automation {
   const [manifest] = manifests;
   const at = manifest?.pipeline.findIndex((step) => step.id === stepId) ?? -1;
-  if (!manifest || at < 0) throw new Error(`v2 declares no step ${stepId}`);
+  if (!manifest || at < 0) throw new Error(`v3 declares no step ${stepId}`);
   const pipeline = manifest.pipeline.slice(0, at + 1);
   const ids = pipeline.map((step) => step.id);
   const steps = pipelineSteps(dependencies.clock, dependencies.expenseSearch, dependencies.log);
@@ -217,14 +156,17 @@ function automationThrough(
     prompts: PROMPTS,
     steps: Object.fromEntries(ids.map((id) => [id, steps[id]!])),
     retry: Object.fromEntries(Object.entries(RETRY).filter(([id]) => ids.includes(id))),
-    recover: recoverQuickBooks(dependencies.log),
+    recover: recoverQuickBooks(
+      dependencies.log,
+      perDocumentSpecs(dependencies.clock, dependencies.expenseSearch),
+    ),
     result: (state) => ({ output: state }),
   });
   return withFixedSentences(automation, dependencies.log);
 }
 
 export function setUp(options: SetUp = {}) {
-  let now = Date.now();
+  let now = options.now ?? Date.now();
   const waits: number[] = [];
   const clock = {
     now: () => now,
@@ -239,7 +181,7 @@ export function setUp(options: SetUp = {}) {
   const expenseSearch = options.expenseSearch ?? EXPENSE_SEARCH;
   const through = options.through ?? 'verify-read';
   const automation =
-    through === 'decide' || through === 'all'
+    through === 'all'
       ? define(manifests, { clock, log, expenseSearch })
       : automationThrough(through, { clock, log, expenseSearch });
   const simulator = options.simulator ?? new QuickBooksSimulator({ refusal: refusalFixture });
@@ -251,10 +193,10 @@ export function setUp(options: SetUp = {}) {
   const request: InvokeRequest = invokeFixture({
     ...(options.runId === undefined ? {} : { runId: options.runId }),
     templateId: TEMPLATE_ID,
-    templateVersion: 2,
+    templateVersion: 3,
     config: options.config ?? QUICKBOOKS,
     input: options.input ?? { invoiceFile: FILE_ID },
-    deadline: new Date(now + (options.deadlineInMs ?? 900_000)).toISOString(),
+    deadline: new Date(Math.max(now, Date.now()) + (options.deadlineInMs ?? 900_000)).toISOString(),
   });
   return {
     automation,
@@ -272,9 +214,18 @@ export function lines(platform: RecordingPlatform): [string, string, string][] {
   return platform.steps.map((step) => [step.stepId, step.outcome, step.summary]);
 }
 
-/** The provider calls one step made: each under the step's one key, which this asserts. */
-export function callsOf(platform: RecordingPlatform, request: InvokeRequest, stepId: string) {
-  const key = idempotencyKeyFor(request.runId, stepId);
+/**
+ * The provider calls one step made under one key — the step's own, or one document's part of it
+ * (`d1`, `d1-a`, …), which this asserts.
+ */
+export function callsOf(
+  platform: RecordingPlatform,
+  request: InvokeRequest,
+  stepId: string,
+  part?: string,
+) {
+  const step = idempotencyKeyFor(request.runId, stepId);
+  const key = part === undefined ? step : `${step}.${part}`;
   return platform.providerCalls
     .filter((call) => call.idempotencyKey === key)
     .map(({ providerId, operation, input }) => ({ providerId, operation, input }));

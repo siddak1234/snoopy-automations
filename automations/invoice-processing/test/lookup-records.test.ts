@@ -9,6 +9,7 @@ import { creditNote, receipt } from './check-world.js';
 import {
   REF,
   lineOf,
+  stepOf,
   routeRun,
   sampleBill,
   sampleJournalEntry,
@@ -29,7 +30,7 @@ const SIMULATOR_TIME = '2026-10-10T09:00:00.000-07:00';
 test("each record is kept as decide's contract types it: a bill, an expense, a vendor credit, a journal entry and its lines", async () => {
   const world = await routeRun({
     answer: receipt(),
-    through: 'find-other-record',
+    through: 'find-related',
     company: (sim) => {
       sim.company.bills.push(
         sampleBill('160', REF.tidewell, {
@@ -110,7 +111,7 @@ test("each record is kept as decide's contract types it: a bill, an expense, a v
   });
   // Each line says only whether it found a record to weigh (§3.E).
   for (const stepId of ['find-duplicate-number', 'find-duplicate-amount', 'find-other-record']) {
-    assert.equal(lineOf(world, stepId), 'Possible duplicate', stepId);
+    assert.ok(lineOf(world, stepOf(stepId))?.split('; ').includes('Possible duplicate'), stepId);
   }
 });
 
@@ -141,7 +142,7 @@ test("a lookup keeps QuickBooks' time only when the answer's `time` is a date an
 test('a vendor credit kept with its vendor, compared in code; an item line leaves a bill’s accounts unknown', async () => {
   const world = await routeRun({
     answer: creditNote(),
-    through: 'find-other-record',
+    through: 'find-related',
     company: (sim) => {
       sim.company.vendorCredits.push({
         Id: '301',
@@ -178,7 +179,7 @@ test('a vendor credit kept with its vendor, compared in code; an item line leave
       totalCents: 1500,
     },
   ]);
-  assert.equal(lineOf(world, 'find-duplicate-number'), 'Possible duplicate');
+  assert.equal(lineOf(world, 'find-duplicates')?.split('; ')[0], 'Possible duplicate');
   assert.deepEqual(
     ((state.relatedLookup as JsonObject).records as JsonObject[])[0]?.lineAccounts,
     [],

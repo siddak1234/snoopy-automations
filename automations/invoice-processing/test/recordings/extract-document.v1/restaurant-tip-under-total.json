@@ -1,9 +1,0 @@
-{
-  "fileSha256": "9b0236df4391f750f70d3c3cca325690e397231d9d92bc02b19f0ab7ac726f56",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Saltmarsh Lane Diner\",\"documentNumber\":\"7713\",\"documentDate\":\"2026-09-23\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":30.00,\"tax\":2.48,\"shipping\":null,\"discount\":null,\"total\":32.48,\"amountDue\":null,\"tip\":6.00,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"3346\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"meals\",\"lineItems\":[{\"amount\":14.50},{\"amount\":6.50},{\"amount\":9.00}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

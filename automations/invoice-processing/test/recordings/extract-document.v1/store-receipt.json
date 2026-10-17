@@ -1,9 +1,0 @@
-{
-  "fileSha256": "b55426d791fccfc8b75ba70c54cfb2d8181385d21940c8038a5052cde6c9098d",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Brightquill Office Mart\",\"documentNumber\":\"448190\",\"documentDate\":\"2026-09-29\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":97.52,\"tax\":6.34,\"shipping\":null,\"discount\":null,\"total\":103.86,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"2291\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"office_supplies\",\"lineItems\":[{\"amount\":52.99},{\"amount\":11.49},{\"amount\":18.75},{\"amount\":14.29}],\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

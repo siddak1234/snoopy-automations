@@ -8,11 +8,12 @@ import { VENDOR_KEY } from '../src/quickbooks-path.js';
 import { manifests, manifestsRoot } from './fixtures.js';
 
 /**
- * The v2 manifest as the spec words it (the Invoice Processing update's §2.1 and §2.2; its words
- * final): the name the owner gave it, its category a team kind, QuickBooks optional with the vendor
- * choice, two settings and no paid-personally input (decision 4), five visible step groups, and 24
- * steps — find-payer gone, save-details new — each in plain words. v1 stays beside it, untouched,
- * until it is retired.
+ * The v3 manifest as the session's spec words it (Build 21, B1–B6, as the owner's AM1–AM8 change
+ * it): v2's name, category, price and QuickBooks choice; one setting besides the vendor — the
+ * approval limit — and no email setting (AM3: the platform sends each run's results to the person
+ * who started it, or the owner and admins); four step groups a person sees, each step inside one;
+ * and 22 steps, each done once for every document of the file, in plain words. v1 and v2 stay
+ * beside it, registered, untouched, until they are retired.
  */
 
 const read = (version: number) =>
@@ -27,20 +28,26 @@ const read = (version: number) =>
     pipeline: Record<string, string>[];
     service: Record<string, unknown>;
   };
-const manifest = read(2);
+const manifest = read(3);
 
-test('v2 is the one version this code serves, beside v1', () => {
-  assert.deepEqual([...SERVED_VERSIONS], [2]);
+test('v3 is the one version this code serves; v1 and v2 stay registered, untouched', () => {
+  assert.deepEqual([...SERVED_VERSIONS], [3]);
   assert.deepEqual(
     manifests.map((each) => each.version),
-    [2],
+    [3],
   );
   assert.equal(read(1).display.name, 'Bills & Receipts', 'v1 untouched, registered, immutable');
+  const v2 = read(2);
+  assert.deepEqual(
+    [v2.version, v2.pipeline.length, v2.pipeline.at(-1)?.id, v2.service.origin],
+    [2, 24, 'notify', 'http://invoice-processing-v2.autom8x.internal:8080'],
+    'v2 untouched, registered, immutable',
+  );
 });
 
 test('Invoice Processing, Accounting: the name, the description, the icon, the price, the trigger', () => {
   assert.equal(manifest.templateId, 'invoice-processing');
-  assert.equal(manifest.version, 2);
+  assert.equal(manifest.version, 3);
   assert.deepEqual(manifest.display, {
     name: 'Invoice Processing',
     description: 'Reads bills and receipts, then saves the details or records them in QuickBooks.',
@@ -48,14 +55,14 @@ test('Invoice Processing, Accounting: the name, the description, the icon, the p
     icon: 'Receipt',
   });
   assert.deepEqual(manifest.pricing, { monthlyPriceUsd: 0 });
-  // One field on the run form: no "I paid with my own money", no "Who paid" (decision 4).
+  // One field on the run form: the file, of one document or many.
   assert.deepEqual(manifest.trigger, {
     kind: 'manual',
     input: [
       {
         key: 'invoiceFile',
         title: 'Document',
-        description: 'A PDF or photo of a bill or receipt.',
+        description: 'A PDF or photo of bills or receipts.',
         control: 'artifact',
         required: false,
       },
@@ -63,7 +70,7 @@ test('Invoice Processing, Accounting: the name, the description, the icon, the p
   });
 });
 
-test('QuickBooks is optional, chosen in the one connection field; two settings, neither required (U6, U7)', () => {
+test('QuickBooks is optional, chosen in the one connection field; the approval limit the one other setting; no email setting (AM3)', () => {
   assert.deepEqual(manifest.requiredConnections, [
     {
       providerId: 'quickbooks',
@@ -82,6 +89,8 @@ test('QuickBooks is optional, chosen in the one connection field; two settings, 
       control: 'connection',
       defaultValue: 'none',
       required: false,
+      providers: ['quickbooks'],
+      group: 'done',
     },
     {
       section: 'rules',
@@ -91,30 +100,22 @@ test('QuickBooks is optional, chosen in the one connection field; two settings, 
       control: 'money',
       defaultValue: 500,
       required: false,
-    },
-    {
-      section: 'notifications',
-      key: 'notifyEmail',
-      title: 'Also email',
-      description: 'Gets a short summary of each one.',
-      control: 'email',
-      required: false,
+      group: 'checked',
     },
   ]);
   assert.ok(
-    manifest.setup.every((field) => field.required === false),
-    'nothing to set up first',
+    manifest.setup.every((field) => field.control !== 'email' && field.section !== 'notifications'),
+    'no email setting: the results go to the person who started the run, or the owner and admins',
   );
   assert.deepEqual(manifest.requiredCapabilities, ['document-extraction']);
 });
 
-test("the five groups a person sees, and the 24 steps, each its kicker, group, title and description in the spec's words", () => {
+test('the four groups a person sees, and the 22 steps, each inside one: its kicker, group, title and description in plain words', () => {
   assert.deepEqual(manifest.groups, [
-    { id: 'received', title: 'Received', description: 'You add a PDF or photo.' },
-    { id: 'read', title: 'Read', description: 'AI reads the details.' },
+    { id: 'received', title: 'Received', description: 'Add a PDF or photo.' },
+    { id: 'read', title: 'Read', description: 'AI reads each bill or receipt.' },
     { id: 'checked', title: 'Checked', description: 'Totals and duplicates are checked.' },
     { id: 'done', title: 'Done', description: 'Saved, or recorded in QuickBooks.' },
-    { id: 'emailed', title: 'Emailed', description: 'A summary goes to Also email.' },
   ]);
   assert.deepEqual(
     manifest.pipeline.map(({ id, kicker, group, title, description }) => [
@@ -126,115 +127,90 @@ test("the five groups a person sees, and the 24 steps, each its kicker, group, t
     ]),
     [
       ['receive', 'TRIGGER', 'received', 'Document received', 'A PDF or photo arrives.'],
+      ['extract', 'AI STEP', 'read', 'Documents read', 'AI reads each document.'],
+      ['check-documents', 'ACTION', 'read', 'Documents checked', 'Checks totals and dates.'],
+      ['verify-read', 'AI STEP', 'read', 'Read again', 'Only when something looks wrong.'],
       [
         'read-company',
         'ACTION',
-        'received',
+        'checked',
         'QuickBooks checked',
         'Checks QuickBooks is connected.',
       ],
       [
         'read-preferences',
         'ACTION',
-        'received',
+        'checked',
         'QuickBooks settings read',
         'Reads currency and closed dates.',
       ],
       [
         'find-accounts',
         'ACTION',
-        'received',
+        'checked',
         'Accounts read',
         'Reads your accounts from QuickBooks.',
       ],
-      ['extract', 'AI STEP', 'read', 'Document read', 'AI reads the details.'],
-      ['check-document', 'ACTION', 'checked', 'Details checked', 'Checks totals and dates.'],
-      ['verify-read', 'AI STEP', 'read', 'Read again', 'Only when something looks wrong.'],
-      ['find-vendor', 'ACTION', 'checked', 'Vendor looked up', 'Finds the vendor in QuickBooks.'],
       [
-        'find-vendor-company',
+        'find-vendors',
         'ACTION',
         'checked',
-        'Vendor company looked up',
-        'Tries the company name.',
+        'Vendors looked up',
+        'Finds each vendor in QuickBooks.',
       ],
+      ['find-names', 'ACTION', 'checked', 'Names checked', 'QuickBooks allows each name once.'],
       [
-        'find-similar-vendors',
+        'find-duplicates',
         'ACTION',
         'checked',
-        'Similar vendors looked up',
-        'Lists similar names.',
-      ],
-      [
-        'find-customer-name',
-        'ACTION',
-        'checked',
-        'Customer names checked',
-        'QuickBooks allows each name once.',
-      ],
-      [
-        'find-employee-name',
-        'ACTION',
-        'checked',
-        'Employee names checked',
-        'QuickBooks allows each name once.',
-      ],
-      [
-        'find-duplicate-number',
-        'ACTION',
-        'checked',
-        'Number checked',
-        'Looks for the same number.',
-      ],
-      [
-        'find-duplicate-amount',
-        'ACTION',
-        'checked',
-        'Amount checked',
-        'Looks for the same amount.',
+        'Duplicates checked',
+        'Looks for the same number or amount.',
       ],
       [
         'find-related',
         'ACTION',
         'checked',
-        'Related record looked up',
+        'Related records looked up',
         'Looks for a bill it pays.',
-      ],
-      [
-        'find-other-record',
-        'ACTION',
-        'checked',
-        'Other records checked',
-        'Looks for the same purchase.',
       ],
       [
         'decide',
         'ACTION',
         'checked',
-        'Record in QuickBooks?',
-        'Records it, or waits for approval.',
+        'Ready to record?',
+        'Records each one, or waits for approval.',
       ],
+      ['create-vendors', 'ACTION', 'done', 'Vendors added', 'Adds new vendors.'],
+      ['create-records', 'ACTION', 'done', 'Recorded in QuickBooks', 'Creates bills and expenses.'],
+      ['save-documents', 'ACTION', 'done', 'Details saved', 'Saves the details for your team.'],
+      ['ask-approval', 'ACTION', 'done', 'Needs your approval', 'Waits for your approval.'],
       ['confirm-company', 'ACTION', 'done', 'Company checked again', 'After approval.'],
-      ['confirm-vendor', 'ACTION', 'done', 'Vendor checked again', 'After approval.'],
-      ['create-vendor', 'ACTION', 'done', 'Vendor added', 'Adds the new vendor.'],
-      ['confirm-no-duplicate', 'ACTION', 'done', 'Duplicates checked again', 'After approval.'],
-      ['create-record', 'ACTION', 'done', 'Recorded in QuickBooks', 'Creates the bill or expense.'],
-      ['save-details', 'ACTION', 'done', 'Details saved', 'Saves the details for your team.'],
-      ['notify', 'ACTION', 'emailed', 'Summary emailed', 'Sends a summary to Also email.'],
+      ['confirm-vendors', 'ACTION', 'done', 'Vendors checked again', 'After approval.'],
+      ['create-approved-vendors', 'ACTION', 'done', 'Approved vendors added', 'After approval.'],
+      ['confirm-no-duplicates', 'ACTION', 'done', 'Duplicates checked again', 'After approval.'],
+      [
+        'create-approved-records',
+        'ACTION',
+        'done',
+        'Approved documents recorded',
+        'After approval.',
+      ],
+      ['save-approved', 'ACTION', 'done', 'Approved details saved', 'After approval.'],
     ],
   );
 });
 
-test('its own container: the v2 origin and service account, the rest as v1', () => {
+test('its own container: the v3 origin and service account; the file of any number of pages (AM1, AM7)', () => {
   assert.deepEqual(manifest.service, {
-    origin: 'http://invoice-processing-v2.autom8x.internal:8080',
-    serviceAccount: 'invoice-processing-v2@autom8x.iam.gserviceaccount.com',
+    origin: 'http://invoice-processing-v3.autom8x.internal:8080',
+    serviceAccount: 'invoice-processing-v3@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
     runTimeoutSeconds: 900,
   });
-  assert.deepEqual(manifest.artifacts, read(1).artifacts);
+  const { maximumPdfPages: _pages, ...artifacts } = read(2).artifacts as Record<string, unknown>;
+  assert.deepEqual(manifest.artifacts, artifacts);
 });
 
 test("the plain-words rule (§3.0 rule 4): no 'solution', 'pipeline', 'provider', 'deployment' in anything a person reads", () => {

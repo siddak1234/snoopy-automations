@@ -1,9 +1,0 @@
-{
-  "fileSha256": "4c2f0f90ab0a63c1ea48d815519c52a09261daefa53f9af990b26057de889f73",
-  "finishReason": "stop",
-  "promptId": "extract-document",
-  "promptSha256": "be4a9649b9e9b3782c0de24fa7a3647a82de34f8a5a4eebdc4cd5b603c3f70e5",
-  "promptVersion": 1,
-  "recordedBy": "claude-opus-5-5 acting as the model, 2026-10-11",
-  "text": "{\"documentType\":\"receipt\",\"documentCount\":1,\"pagesMissing\":false,\"vendorName\":\"Fernwick Restaurant Supply\",\"documentNumber\":\"R-77102\",\"documentDate\":\"2026-09-30\",\"dueDate\":null,\"paymentTermsDays\":null,\"currency\":null,\"subtotal\":2116.90,\"tax\":61.39,\"shipping\":null,\"discount\":null,\"total\":2178.29,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"1180\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":null,\"spendType\":\"materials\",\"lineItems\":[{\"amount\":5.17},{\"amount\":38.48},{\"amount\":7.79},{\"amount\":41.10},{\"amount\":10.41},{\"amount\":43.72},{\"amount\":13.03},{\"amount\":46.34},{\"amount\":15.65},{\"amount\":48.96},{\"amount\":18.27},{\"amount\":51.58},{\"amount\":20.89},{\"amount\":54.20},{\"amount\":23.51},{\"amount\":56.82},{\"amount\":26.13},{\"amount\":59.44},{\"amount\":28.75},{\"amount\":62.06},{\"amount\":31.37},{\"amount\":64.68},{\"amount\":33.99},{\"amount\":67.30},{\"amount\":36.61},{\"amount\":5.92},{\"amount\":39.23},{\"amount\":8.54},{\"amount\":41.85},{\"amount\":11.16},{\"amount\":44.47},{\"amount\":13.78},{\"amount\":47.09},{\"amount\":16.40},{\"amount\":49.71},{\"amount\":19.02},{\"amount\":52.33},{\"amount\":21.64},{\"amount\":54.95},{\"amount\":24.26}],\"lineItemsComplete\":false,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}"
-}

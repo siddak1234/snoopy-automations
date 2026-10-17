@@ -1,7 +1,7 @@
 /**
- * The values the AI's answer may hold where the prompt gives it a list
- * (`prompts/extract-document.v1.json`, the owner's plan of 2026-10-11, §4): a test holds
- * the prompt's schema to these, and `extract` holds an answer to them.
+ * The values v2's checks read where the prompt gives a list (the owner's plan of 2026-10-11, §4);
+ * v3's prompt (`prompts/extract-documents.v1.json`) gives the same lists, which a test holds it
+ * to, its document types in `src/run/answer.ts`.
  */
 
 /** What the document is; it chooses the record (the plan's §2.1). */
@@ -69,34 +69,3 @@ export const ROUTES = [
   'statement',
 ] as const;
 export type Route = (typeof ROUTES)[number];
-
-/** The answer's 27 fields, in the schema's order. */
-export const ANSWER_FIELDS = [
-  'documentType',
-  'documentCount',
-  'pagesMissing',
-  'vendorName',
-  'documentNumber',
-  'documentDate',
-  'dueDate',
-  'paymentTermsDays',
-  'currency',
-  'subtotal',
-  'tax',
-  'shipping',
-  'discount',
-  'total',
-  'amountDue',
-  'tip',
-  'cashBackPrinted',
-  'paymentMethod',
-  'cardLast4',
-  'refundMethod',
-  'originalInvoiceNumber',
-  'spendType',
-  'lineItems',
-  'lineItemsComplete',
-  'listedItems',
-  'listedItemsComplete',
-  'uncertainFields',
-] as const;

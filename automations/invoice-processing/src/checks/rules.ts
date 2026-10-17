@@ -6,38 +6,29 @@ import {
 } from '@autom8x/automation-kit/values';
 
 import type { NotRecordedReason } from '../quickbooks-path.js';
-import type { RunFail } from '../words.js';
 import { dueBelowCharges, overMaximum, type Amounts } from './arithmetic.js';
 import type { Cleaned } from './clean.js';
 
 /**
- * `check-document`'s rules (the plan's §2.3, C1–C28 as v2 keeps them — C7, C18, C20 and C27 left
- * with the settings and "I paid with my own money"), in two kinds (v2's §2.6):
+ * The checks' rules (the plan's §2.3, C1–C28 as v2 kept them — C7, C18, C20 and C27 left with the
+ * settings and "I paid with my own money"), in two kinds (v2's §2.6, as v3 changes it):
  *
- * - **the document cannot be used** — C1–C6, C8, C11, C21, C22, C26 — the run fails on either
- *   path, with one of the spec's sentences (§3.F);
+ * - **the document cannot be used as read** — C6, C8, C11, C21, C22, C26 — which in v2 failed the
+ *   run, and in v3 hold only this document for a second read, then for review (the session's spec,
+ *   B4): one document never fails the others. C1–C5 are gone: a bank statement, a quote, an order
+ *   or any other financial document is kept with all its data (the owner's AM8, 2026-10-15), and a
+ *   file holds as many documents as it holds (AM1) — C5's "Add one document per file." failed the
+ *   owner's photo of three receipts (run 793eef82, 2026-10-15);
  * - **QuickBooks cannot record it** — every other rule — which applies on the QuickBooks path
- *   alone: the run goes on, the details are saved, and the result says why it was not recorded
- *   (the spec's S2). With the vendor "None" nothing is recorded, so none of them is weighed.
+ *   alone: the document is not recorded, its details are saved, and its result says why (v2's S2).
+ *   With the vendor "None" nothing is recorded, so none of them is weighed.
  *
  * The first of each kind that applies, in the plan's order, wins. Nothing here carries text from
  * the document.
  */
 
-/** The rules a document fails on either path, each with its sentence's key in `RUN_FAILS`. */
-export const DOCUMENT_RULES = [
-  'C1',
-  'C2',
-  'C3',
-  'C4',
-  'C5',
-  'C6',
-  'C8',
-  'C11',
-  'C21',
-  'C22',
-  'C26',
-] as const satisfies readonly RunFail[];
+/** The rules a document cannot be used under as read, on either path: each holds it (B4). */
+export const DOCUMENT_RULES = ['C6', 'C8', 'C11', 'C21', 'C22', 'C26'] as const;
 
 export type DocumentRule = (typeof DOCUMENT_RULES)[number];
 
@@ -61,34 +52,6 @@ export const RECORDING_RULES = {
 export type RecordingRule = keyof typeof RECORDING_RULES;
 export type CheckRule = DocumentRule | RecordingRule;
 
-/** Each rule's word, for the log alone. */
-export const CHECK_DOCUMENT_REASONS: Readonly<Record<CheckRule, string>> = {
-  C1: 'bank_statement',
-  C2: 'quote',
-  C3: 'purchase_order',
-  C4: 'not_a_document',
-  C5: 'document_count_not_one',
-  C6: 'pages_missing',
-  C8: 'seller_missing',
-  C9: 'seller_name_too_long',
-  C10: 'own_company_document',
-  C11: 'total_missing',
-  C12: 'total_not_positive',
-  C13: 'total_too_large',
-  C14: 'document_number_too_long',
-  C15: 'amount_due_below_charges',
-  C16: 'cash_back',
-  C17: 'balance_still_owed',
-  C19: 'refund_by_check_or_cash',
-  C21: 'date_missing',
-  C22: 'date_invalid',
-  C23: 'date_in_future',
-  C24: 'due_date_invalid',
-  C25: 'due_date_before_date',
-  C26: 'statement_unreadable',
-  C28: 'tip_unclear',
-};
-
 /** What the rules weigh besides the cleaned read. */
 export interface RuleContext {
   readonly cleaned: Cleaned;
@@ -105,11 +68,6 @@ const RECORDS = new Set(['bill', 'receipt', 'credit_note']);
 
 /** Every rule, each its condition, in the plan's order. */
 const RULES: readonly (readonly [CheckRule, (context: RuleContext) => boolean])[] = [
-  ['C1', ({ cleaned }) => cleaned.read.documentType === 'bank_statement'],
-  ['C2', ({ cleaned }) => cleaned.read.documentType === 'quote'],
-  ['C3', ({ cleaned }) => cleaned.read.documentType === 'purchase_order'],
-  ['C4', ({ cleaned }) => cleaned.read.documentType === 'other'],
-  ['C5', ({ cleaned }) => cleaned.read.documentCount !== 1],
   ['C6', ({ cleaned }) => cleaned.read.pagesMissing],
   ['C8', ({ cleaned }) => cleaned.seller === null],
   ['C9', ({ cleaned }) => (cleaned.seller?.length ?? 0) > MAXIMUM_NAME_LENGTH],
