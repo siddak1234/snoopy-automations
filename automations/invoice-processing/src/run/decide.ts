@@ -23,8 +23,10 @@ import { DOUBTS, countLine } from './words.js';
  *   differ or a second read not made (B4) — or when an earlier one in the file is the same
  *   purchase (B1); else it is saved.
  * - With QuickBooks: v2's decide on the document's own state (`src/decide/decide.ts`) — not
- *   recorded, compared, ready to record, or waiting with v2's hold phrases — and a document the
- *   file already holds the same purchase of waits too.
+ *   recorded, compared, ready to record, or waiting with v2's hold phrases — and a document with a
+ *   doubt found before decide waits too — the same purchase as an earlier one in the file, or the
+ *   last read of a file counted to hold more — even one QuickBooks will not take, whose details
+ *   are then saved after the approval; a statement compared never waits (v2).
  *
  * A waiting document keeps its plan for after the approval; one approval covers them all
  * (`ask-approval`). The chart and the raw reads leave the state here.
@@ -83,15 +85,20 @@ function decided(
     const all = [...readDoubts(document, verificationOf(entry.engine)), ...doubts];
     return all.length > 0 ? waiting(base, all) : settledAs(base, 'done');
   }
+  // A doubtful document waits even when QuickBooks will not take it: nothing is written either way.
+  const savedUnless = (engine: JsonObject): Entry =>
+    doubts.length > 0
+      ? waiting(settledAs(base, 'done', engine), doubts)
+      : settledAs(base, 'done', engine);
   // QuickBooks stopped for the whole run, or for this document: its details are saved.
   const stop = quickBooksStateOf(run) ?? quickBooksStateOf(entry.engine);
-  if (stop) return settledAs(base, 'done', { ...entry.engine, quickBooks: stop });
+  if (stop) return savedUnless({ ...entry.engine, quickBooks: stop });
   const decision = decideRun({ state: engineState(run, entry), config, expenseSearch });
   switch (decision.outcome) {
     case 'failed':
       return { end: runFails('other', decision.failure) };
     case 'not_recorded':
-      return settledAs(base, 'done', {
+      return savedUnless({
         ...entry.engine,
         quickBooks: { notRecorded: NOT_RECORDED[decision.reason] },
       });

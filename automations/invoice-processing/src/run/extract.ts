@@ -18,7 +18,7 @@ import { partAnswerOf, v2AnswerOf, type DocumentAnswer, type PartAnswer } from '
 import { documentReadOf, joinedAnswer } from './document-read.js';
 import { MODELS, extractFailed, extractRefused } from './model-refusals.js';
 import { KIND_OF, type Entry } from './state.js';
-import { readLine } from './words.js';
+import { DOUBTS, readLine } from './words.js';
 
 /**
  * `extract` (v3) — the platform's model reads EVERY document in the file, each its own entry with
@@ -33,7 +33,11 @@ import { readLine } from './words.js';
  *
  * The parts read so far are kept for the run, so the runner's repeat of a call that never reached
  * the platform starts at the part it was reading, not the first. A part that does not move the
- * reading on ends the reading with what was read, the last document's lines marked incomplete.
+ * reading on ends the reading with what was read, the last document's lines marked incomplete
+ * when it stopped inside it. Nothing is left out silently (the owner's AM6): a part that says the
+ * file is done while it counts more documents than were read is followed by one from the next
+ * document; when the reading still ends short of that count, the last document read waits for a
+ * person, "the file may hold more documents" (the session's choice S44).
  * Refusals end the run as v2's first read did (`model-refusals.ts`); a file with nothing in it,
  * with "No bill or receipt found. Try a clearer photo." (B1).
  */
@@ -58,12 +62,16 @@ export interface Cursor {
   readonly line: number;
 }
 
-/** The reading so far: the documents read, where it goes on (null once done), the part size, the models. */
+/**
+ * The reading so far: the documents read, where it goes on (null once done), the part size, the
+ * models, and the most documents any part counted in the whole file.
+ */
 interface Reading {
   documents: DocumentAnswer[];
   cursor: Cursor | null;
   size: number;
   models: string[];
+  counted: number;
 }
 
 /** Each run's reading, kept across the runner's repeats of the step (keyed by its request). */
@@ -84,7 +92,9 @@ export function partInput(cursor: Cursor, size: number): JsonObject {
 /**
  * The documents with one part's added — a document the part continues gets its next lines — and
  * where the reading goes on: null when it is done, or when the part does not move it on, which ends
- * it with the last document's lines incomplete.
+ * it — with the last document's lines, and a statement's rows, incomplete when it stopped inside
+ * that document. A part that says the file is done while counting more documents than are read
+ * goes on with the next document, once: a part after it that adds none does not move the reading.
  */
 export function withPart(
   read: readonly DocumentAnswer[],
@@ -98,20 +108,34 @@ export function withPart(
     documents[documents.length - 1] = joinedAnswer(documents.at(-1)!, entries.shift()!);
   }
   documents.push(...entries);
-  if (part.nextDocument === null) return { documents, next: null };
   const last = documents.at(-1);
-  // The next part goes on with the last document listed, from its next line, or starts the next.
+  const counted = part.documentCount > documents.length;
+  // The next part goes on with the last document listed, from its next line, or starts the next —
+  // also when the part says it is done while the file it counts holds more.
   const next: Cursor | null =
-    part.nextDocument === documents.length && last !== undefined
-      ? { document: documents.length, line: last.lineItems.length + 1 }
-      : part.nextDocument === documents.length + 1
+    part.nextDocument === null
+      ? counted
         ? { document: documents.length + 1, line: 1 }
-        : null;
+        : null
+      : part.nextDocument === documents.length && last !== undefined
+        ? { document: documents.length, line: last.lineItems.length + 1 }
+        : part.nextDocument === documents.length + 1
+          ? { document: documents.length + 1, line: 1 }
+          : null;
+  if (part.nextDocument === null && !counted) return { documents, next: null };
   const moved =
     next !== null &&
     (next.document > from.document || (next.document === from.document && next.line > from.line));
   if (moved) return { documents, next };
-  if (last !== undefined) documents[documents.length - 1] = { ...last, lineItemsComplete: false };
+  // Stopped inside the last document, or pointed nowhere: its lines may be cut.
+  const inside = next === null || next.document === documents.length;
+  if (inside && last !== undefined) {
+    documents[documents.length - 1] = {
+      ...last,
+      lineItemsComplete: false,
+      listedItemsComplete: false,
+    };
+  }
   return { documents, next: null };
 }
 
@@ -121,9 +145,14 @@ function artifactIdOf(state: JsonObject): string | undefined {
   return typeof id === 'string' && artifactIdProblem(id) === undefined ? id : undefined;
 }
 
-/** One entry per document read, in reading order, each read cleaned once for the result. */
-function entriesOf(documents: readonly DocumentAnswer[]): Entry[] {
-  return documents.map((answer, at) => {
+/**
+ * One entry per document read, in reading order, each read cleaned once for the result. When the
+ * file was counted to hold more documents than were read, the last one read that is not a
+ * statement — a statement compared with QuickBooks never waits (v2) — waits: "the file may hold
+ * more documents".
+ */
+function entriesOf(documents: readonly DocumentAnswer[], counted = 0): Entry[] {
+  const entries: Entry[] = documents.map((answer, at) => {
     const kind = KIND_OF[answer.documentType];
     return {
       index: at + 1,
@@ -135,6 +164,12 @@ function entriesOf(documents: readonly DocumentAnswer[]): Entry[] {
       stage: 'read',
     };
   });
+  if (counted <= entries.length || entries.length === 0) return entries;
+  let at = entries.length - 1;
+  while (at > 0 && entries[at]!.kind === 'statement') at -= 1;
+  if (entries[at]!.kind === 'statement') at = entries.length - 1;
+  entries[at] = { ...entries[at]!, doubts: [DOUBTS.more_in_file] };
+  return entries;
 }
 
 export function extract(prompt: PromptModule): Step {
@@ -146,6 +181,7 @@ export function extract(prompt: PromptModule): Step {
       cursor: { document: 1, line: 1 },
       size: 0,
       models: [],
+      counted: 0,
     };
     readings.set(request, reading);
     while (reading.cursor !== null) {
@@ -181,6 +217,7 @@ export function extract(prompt: PromptModule): Step {
       }
       if (!part) return extractFailed('answer_unusable');
       reading.models.push(completion.model);
+      reading.counted = Math.max(reading.counted, part.documentCount);
       const { documents, next } = withPart(reading.documents, part, reading.cursor);
       reading.documents = documents;
       reading.cursor = next;
@@ -205,6 +242,6 @@ function done(state: JsonObject, reading: Reading): JsonObject {
     modelServed: reading.models[0] ?? '',
     // Every maker that read a part: the second read is by another (`verify.ts`).
     readMakers: makers as string[],
-    documents: entriesOf(reading.documents) as unknown as JsonObject[],
+    documents: entriesOf(reading.documents, reading.counted) as unknown as JsonObject[],
   };
 }

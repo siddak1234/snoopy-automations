@@ -65,7 +65,9 @@ export function documentOf(engine: JsonObject): DocumentState | undefined {
 
 /** One document checked: kept as read, waiting for review, unsettled, or its clean values. */
 export function checkedEntry(entry: Entry, quickBooks: boolean, today: string): Entry {
-  if (entry.kind === 'not_financial') return { ...entry, doubts: [DOUBTS.not_financial] };
+  if (entry.kind === 'not_financial') {
+    return { ...entry, doubts: [DOUBTS.not_financial, ...entry.doubts] };
+  }
   if (entry.kind === 'kept' || entry.answer === undefined) return entry;
   const outcome = checkFirstRead({
     answer: entry.answer,

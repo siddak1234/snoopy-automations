@@ -465,7 +465,11 @@ change it). The image serves v3 alone (`SERVED_VERSIONS`; its Dockerfile copies 
 any number of documents: `extract` reads them all with `prompts/extract-documents.v1.json`, in
 parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
 8,000-token cap — each its own entry with its own seller and details (`src/run/extract.ts`,
-`test/documents-parts.test.ts`). Each QuickBooks lookup and write runs once per document,
+`test/documents-parts.test.ts`). Nothing is left out silently: a part that says the file is done
+while it counts more documents than were read is followed by one from the next document, and a
+reading still short of that count has its last document wait, "the file may hold more
+documents"; a reading stopped inside a document marks its lines — a statement's rows too —
+incomplete (`test/documents-counted.test.ts`). Each QuickBooks lookup and write runs once per document,
 under its document's part of the step's key (`<key>.d1`, the SDK's `part`;
 `src/run/fan-out.ts`); the three company reads run once for all. One document never fails the
 others: one the checks cannot use is read again (`verify-documents.v1`, 20 a call), and one
@@ -477,7 +481,8 @@ document whole (`RunDocument`, `src/run/documents.ts`): its type (`invoice` amon
 and place, `number`, `numberLabel` and `references`, date and time, each line's words, quantity,
 unit price and amount, the totals as decimal strings, how it was paid, `recordedIn` and the
 lines a person reads beside it — no limit but the callback body's 256 KiB
-(`RESULT_BODY_LIMIT_BYTES`; AM1, AM7). The run sends no mail and has no email setting: the
+(`RESULT_BODY_LIMIT_BYTES`; AM1, AM7); a NUL or half a surrogate pair, which the platform cannot
+store, never reaches it (`boundedDocuments`). The run sends no mail and has no email setting: the
 platform mails each run's results to the person who started it, or the owner and admins (AM3).
 Four step groups — Received, Read, Checked, Done — over 22 steps. Each prompt has at most 16
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,

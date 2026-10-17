@@ -135,6 +135,49 @@ test('the client keeps every text whole, on one line; cuts only a detail line; m
   );
 });
 
+test('a NUL or half a surrogate pair never reaches the wire: the platform cannot store either and refuses the document (its #287)', () => {
+  const [bounded] = boundedDocuments([
+    {
+      ...EXAMPLE,
+      statusText: 'Saved\u0000',
+      vendor: { ...EXAMPLE.vendor, name: 'Lo\u0000we\u0007s \ud83d' },
+      references: [{ label: 'PO \udc00#', value: '7\u0000' }],
+      lineItems: [
+        {
+          description: 'Stud \ud83d\ude00 \ud83d',
+          quantity: '4',
+          unitPrice: null,
+          amount: '15.92',
+        },
+      ],
+      details: [{ label: 'Category', value: 'Mate\u0000rials\udfff' }],
+    },
+  ])!;
+  assert.ok(bounded);
+  // The platform's own test (`packages/contracts/src/run-documents.ts`, `textCheck`).
+  const unstorable = /[\u0000\ud800-\udfff]/u;
+  const texts = [
+    bounded.statusText,
+    bounded.vendor.name,
+    ...bounded.references.flatMap((reference) => [reference.label, reference.value]),
+    bounded.lineItems[0]?.description,
+    ...bounded.details.flatMap((line) => [line.label, line.value]),
+  ];
+  assert.ok(
+    texts.every((text) => typeof text === 'string' && !unstorable.test(text)),
+    texts.join('|'),
+  );
+  assert.equal(bounded.statusText, 'Saved');
+  assert.equal(bounded.vendor.name, 'Lo we s \uFFFD');
+  assert.deepEqual(bounded.references, [{ label: 'PO \uFFFD#', value: '7' }]);
+  assert.equal(
+    bounded.lineItems[0]?.description,
+    'Stud \ud83d\ude00 \uFFFD',
+    'a whole pair is kept',
+  );
+  assert.equal(bounded.details[0]?.value, 'Mate rials\uFFFD');
+});
+
 test('none is left off, and an empty status line is refused, as the platform refuses it', () => {
   assert.equal(boundedDocuments(undefined), undefined);
   assert.equal(boundedDocuments([]), undefined);

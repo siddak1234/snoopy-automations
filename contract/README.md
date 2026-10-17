@@ -191,7 +191,7 @@ additively for every automation here:
   and `group` (a step group's id) — one connection field per step that uses a connection.
 
 The other five files are byte-identical to `9516c0e`'s; all eight are byte-identical to that
-branch's `schemas/` at its `a90a772` (2026-10-17). Until that branch merges and a promotion
+branch's `schemas/` at its `a90a772` (2026-10-17), and still at its `9afdd98` (the same day). Until that branch merges and a promotion
 carries it, the live platform refuses `documents` and a manifest declaring `providers` or a
 setup `group`; this copy is re-vendored from the merge commit then, its bytes unchanged unless a
 review changed them, and `invoice-processing` v3 waits for it.

@@ -141,8 +141,17 @@ export function decimalOf(value: unknown): string | null {
   return RUN_DOCUMENT_DECIMAL_PATTERN.test(text) ? text : null;
 }
 
-/** One line of text: every run of white space one space; trimmed. */
-const oneLineText = (value: string) => value.replace(/\s+/gu, ' ').trim();
+/**
+ * One line of text the platform can store: every run of white space and control characters (a NUL
+ * among them) one space; half a surrogate pair the replacement character U+FFFD — the run's row is
+ * `jsonb`, which holds neither, and the platform refuses a document carrying one (its §12.1 #287),
+ * which would leave a run whose work is done unreportable; trimmed.
+ */
+const oneLineText = (value: string) =>
+  value
+    .replace(/[\s\p{Cc}]+/gu, ' ')
+    .replace(/[\ud800-\udfff]/gu, '\uFFFD')
+    .trim();
 
 /** Text on one line, whole — never cut, as AM7 has it; null when nothing is left. */
 function text(value: unknown): string | null {

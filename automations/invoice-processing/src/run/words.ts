@@ -34,6 +34,8 @@ export const DOUBTS = {
   answer_unusable: "it can't be read",
   not_financial: "this doesn't look like a bill, receipt or invoice",
   count_differs: 'two reads differ: number of documents',
+  /** The first read counted more documents in the file than it could read (S44). */
+  more_in_file: 'the file may hold more documents',
 } as const;
 
 /** Two documents in one file with the same seller, date and total: the second waits. */
