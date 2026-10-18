@@ -18,7 +18,7 @@ Copy [templates/checklist.md](templates/checklist.md) into your working notes an
 
 1. **Start from the right files.**
    - New automation: `cp -R templates/automation automations/<name>`, then replace `example` with `<name>` everywhere (`package.json`, `Dockerfile`, `src/`), and give it a lockfile as README's step 1 says.
-   - New version: work in `automations/<name>/`. Set `SERVED_VERSIONS` in `automations/<name>/src/automation.ts` to `[<n>]` and point the Dockerfile's manifest `COPY` at `manifests/<name>.v<n>.json`; the image serving `v<n-1>` stays pinned by digest in the platform.
+   - New version: work in `automations/<name>/`. Point the Dockerfile's manifest `COPY` at `manifests/<name>.v<n>.json` alone (the container serves the manifests its image carries), and where `automations/<name>/src/automation.ts` declares `SERVED_VERSIONS` (invoice-processing's does), set it to `[<n>]`; the image serving `v<n-1>` stays pinned by digest in the platform.
 2. **Write `manifests/<name>.v<n>.json`** (a registered version is immutable: never edit an earlier file). Declare every step id the code can report, every capability its prompts use in `requiredCapabilities`, and the origin `http://<name>-v<n>.autom8x.internal:8080`. Prompts go in `automations/<name>/prompts/`, each naming a capability, never a model; tests in `automations/<name>/test/`.
 3. **A new automation joins the CI matrices:** add `<name>` to the Image and Publish `matrix` in `.github/workflows/ci.yml`.
 4. **Run the gate, from the repository root, holding the gate lock:**

@@ -56,7 +56,7 @@ scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from 
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
-docs/MAP.md                  generated (npm run map): every folder, script, agent, hook and record
+docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
 The boundary is the **wire format, not a package.** Nothing here depends on the

@@ -312,7 +312,7 @@ function auditDocReferences() {
   return references;
 }
 
-// Paths, not URLs: a URL percent-encodes a space (`Business Infra/`), and the
+// Paths, not URLs: a URL percent-encodes a space (`My Projects/`), and the
 // audit then never ran — a silent pass (`snoopy`'s second Round 14 review).
 if (realpathSync(resolve(process.argv[1] ?? '')) === fileURLToPath(import.meta.url)) {
   const references = auditDocReferences();

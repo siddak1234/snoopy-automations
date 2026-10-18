@@ -1,6 +1,6 @@
 # Round record: current
 
-The rounds open in this repository, one section per round. Moved verbatim from the "Round record" table in CLAUDE.md on 2026-10-18 (one `## Round <n>` per row; only the table syntax changed). When a round closes, its section moves unchanged to [round-record.archive.md](round-record.archive.md). Grep by heading rather than reading the file whole.
+The rounds open in this repository, one section per round. Moved verbatim from the "Round record" table in CLAUDE.md on 2026-10-18 (one `## Round <n>` per row; only the table syntax changed); its file references were then written out in full so each resolves (repository paths, `snoopy-backend/` before the platform's, removed files struck), and no other word changed. When a round closes, its section moves unchanged to [round-record.archive.md](round-record.archive.md). Grep by heading rather than reading the file whole.
 
 ## Round 17
 

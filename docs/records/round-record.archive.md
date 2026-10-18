@@ -1,6 +1,6 @@
 # Round record: archive
 
-Closed rounds and dated CI changes, append-only, each moved unchanged: from the "Round record" table in CLAUDE.md on 2026-10-18 (one section per row; only the table syntax changed), later from [round-record.md](round-record.md) when a round closes.
+Closed rounds and dated CI changes, append-only, each moved unchanged: from the "Round record" table in CLAUDE.md on 2026-10-18 (one section per row; only the table syntax changed; file references then written out in full so each resolves, and no other word changed), later from [round-record.md](round-record.md) when a round closes.
 
 ## Round 10
 
