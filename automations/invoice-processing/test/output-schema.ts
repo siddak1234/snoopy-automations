@@ -9,7 +9,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { manifestsRoot } from './fixtures.js';
 
 /**
- * The v3 manifest's `outputSchema`, compiled as the repository's architecture test compiles
+ * The served manifest's `outputSchema` (v4's, v3's unchanged — `test/manifest.test.ts`), compiled as the repository's architecture test compiles
  * schemas — Ajv's 2020-12 draft, strict, every error — to hold each run's output to it: the platform
  * only requires an object, so this is where the description is checked (ip-review
  * design-after-approval-writes-notify-tests.json cross_cutting[5]). And the platform's published
@@ -17,7 +17,7 @@ import { manifestsRoot } from './fixtures.js';
  */
 
 const manifest = JSON.parse(
-  readFileSync(join(manifestsRoot, 'invoice-processing.v3.json'), 'utf8'),
+  readFileSync(join(manifestsRoot, 'invoice-processing.v4.json'), 'utf8'),
 ) as { outputSchema: { properties: { documents: { items: object } } } };
 
 /** One document's output item, as the manifest describes it: v2's shapes, each with its place. */

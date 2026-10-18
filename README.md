@@ -458,12 +458,35 @@ a run already recorded (platform §12.1 #220).
 Receipts** in v1 — reads every bill, invoice, receipt, credit note, statement and other
 financial document in a PDF or photo, then saves each one's details for the team, or records it
 in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN 25.4.1,
-25.4.13–25.4.30; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback of
-2026-10-14 and Build 21 corrections of 2026-10-15).
+25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
+of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v3, the version this code serves** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8
-change it). The image serves v3 alone (`SERVED_VERSIONS`; its Dockerfile copies only
-`manifests/invoice-processing.v3.json`); v1 and v2 stay registered and immutable. A file holds
+**v4, the version this code serves** (Build 22; the session's spec of 2026-10-17, §3, V1). The
+image serves v4 alone (`SERVED_VERSIONS`; its Dockerfile copies only
+`manifests/invoice-processing.v4.json`); v1, v2 and v3 stay registered and immutable,
+`test/manifest.test.ts` holding each to its sha256. v4 is v3's automation, unchanged — the same 22
+steps, prompts, checks, holds, QuickBooks writes, result and `outputSchema`, and the same model
+calls per file: `test/v4.test.ts` runs one file on v4's manifest and on v3's and finds the same
+steps reported, the same calls and the same result — shown in the five steps the owner asked for
+on build 21 (2026-10-17: "1. Upooad Invoice / 2. Connect integration … / 3. Then something about
+AI Processing / 4. Quickbooks updated / 5. Email sent"): **Upload invoice** (`receive`) ·
+**Connect integration** (no step of the run: the flow's `vendor` choice, titled "Integration") ·
+**AI processing** (`extract`, `check-documents`, `verify-read`) · **QuickBooks updated** when the
+flow chose QuickBooks, **Details saved** with None (the other 18 steps; the group's
+`titleByConnection`) · **Email sent** (`platform: "email"`, the platform's step). Step 3's and step
+4's words are the session's suggestions D2 and D3, which the owner approved; the mapping, the
+vendor's title and its step are the session's choices (its S18, S19). The approval limit is in no
+step (Set up only). No email setting, and the run sends no mail: the platform mails each run's
+results to the workspace's owners and admins, the person who started it and any address an owner
+or admin adds on step 5's screen (D1, the session's suggestion the owner approved, replacing AM3).
+Every v3 setting key is v4's, so the platform's move of each flow to v4 keeps it. The platform's
+Build 22 merged as `32b33ae` (its #215; `contract/README.md`); until a promotion carries it, v4
+cannot be registered. What follows describes v3, v2 and v1; where they differ, this paragraph
+wins.
+
+**v3** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8 change it). Its image served v3
+alone; v1 and v2 stay registered and immutable, and v3 since the platform's thirty-second pin (its
+#214). A file holds
 any number of documents: `extract` reads them all with `prompts/extract-documents.v1.json`, in
 parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
 8,000-token cap — each its own entry with its own seller and details (`src/run/extract.ts`,
@@ -491,9 +514,8 @@ fields typed with a union, Anthropic's limit for structured outputs: a text not 
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an
 image's 8,000 px kept, the size the models take). v2's recordings were made for v2's prompts and
 are removed with them; v3's are still to be made (`scripts/recording-request.ts`). The
-platform's Build 21 contract merged as `69b8d97` (`contract/README.md`); until a promotion
-carries it, v3 cannot be registered. What follows describes v2 and v1, and what v3 keeps of them; where they differ,
-this paragraph wins.
+platform's Build 21 contract merged as `69b8d97` (`contract/README.md`). What follows describes
+v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, and v4's above it.
 
 **v2.** Its image served v2 alone; v1's manifest stays, registered and immutable, until it is
 retired. v2's manifest is category Accounting; QuickBooks is an optional connection,

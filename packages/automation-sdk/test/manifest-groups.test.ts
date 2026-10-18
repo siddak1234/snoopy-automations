@@ -102,3 +102,66 @@ test('a manifest may declare 2 to 6 step groups and name one on each step', () =
   const badStep = { ...grouped, pipeline: [{ ...grouped.pipeline[0], group: 'Not An Id' }] };
   assert.equal(validate(badStep), false, "a step's group is an id");
 });
+
+test("a group may carry a title by connection and be the platform's email step (platform ADR-0041)", () => {
+  const validate = validator('automation-manifest');
+  const groups = [
+    { id: 'received', title: 'Received', description: 'You add a PDF or photo.' },
+    {
+      id: 'done',
+      title: 'Details saved',
+      description: 'Saved, or recorded in QuickBooks.',
+      titleByConnection: {
+        field: 'vendor',
+        titles: [{ providerId: 'quickbooks', title: 'QuickBooks updated' }],
+      },
+    },
+    {
+      id: 'email',
+      title: 'Email sent',
+      description: 'The results are emailed.',
+      platform: 'email',
+    },
+  ];
+  const grouped = {
+    ...reference,
+    groups,
+    pipeline: reference.pipeline.map((step, index) => ({
+      ...step,
+      group: index === 0 ? 'received' : 'done',
+    })),
+  };
+  assertValid(validate, grouped, 'a title by connection and an email step');
+  const titled = groups[1]!.titleByConnection;
+  const title = { providerId: 'quickbooks', title: 'QuickBooks updated' };
+  for (const [what, group] of [
+    ['a platform other than email', { ...groups[2]!, platform: 'sms' }],
+    ['no titles', { ...groups[1]!, titleByConnection: { ...titled, titles: [] } }],
+    [
+      '17 titles',
+      {
+        ...groups[1]!,
+        titleByConnection: { ...titled, titles: Array.from({ length: 17 }, () => title) },
+      },
+    ],
+    [
+      'a title over 40',
+      {
+        ...groups[1]!,
+        titleByConnection: { ...titled, titles: [{ ...title, title: 'T'.repeat(41) }] },
+      },
+    ],
+    [
+      'a provider that is not an id',
+      {
+        ...groups[1]!,
+        titleByConnection: { ...titled, titles: [{ ...title, providerId: 'QuickBooks' }] },
+      },
+    ],
+    ['no field', { ...groups[1]!, titleByConnection: { titles: [title] } }],
+    ['another key', { ...groups[1]!, titleByConnection: { ...titled, fallback: 'Done' } }],
+  ] as const) {
+    const changed = groups.map((each) => (each.id === group.id ? group : each));
+    assert.equal(validate({ ...grouped, groups: changed }), false, what);
+  }
+});

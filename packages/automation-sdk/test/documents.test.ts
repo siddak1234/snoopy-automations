@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import type { RunResult } from '../src/contract.js';
-import { RUN_DOCUMENT_LIMITS, boundedDocuments, decimalOf } from '../src/documents.js';
+import {
+  RUN_DOCUMENT_DECIMAL_PATTERN,
+  RUN_DOCUMENT_LIMITS,
+  boundedDocuments,
+  decimalOf,
+} from '../src/documents.js';
 import { RESULT_BODY_LIMIT_BYTES, boundedResult } from '../src/platform.js';
 import { EXAMPLE } from './document-fixture.js';
-import { assertValid, validator } from './published-schemas.js';
+import { assertValid, schemas, validator } from './published-schemas.js';
 
 /**
  * A run's `documents` (platform ADR-0039; the session's spec of 2026-10-15, §1.1, as the owner's
@@ -74,12 +81,48 @@ test('a decimal string is the number as written — never rounded, never an expo
   assert.equal(decimalOf(-25), '-25');
   assert.equal(decimalOf(-0), '0');
   assert.equal(decimalOf(0.1234), '0.1234');
-  assert.equal(decimalOf(0.12345), null, 'a fifth decimal is not a decimal string here');
-  assert.equal(decimalOf(1e21), null);
-  assert.equal(decimalOf(1234567890123), null, 'thirteen whole digits');
+  // P6 (the platform's Build 22; AM1, AM7 — no limit but size): any number of digits.
+  assert.equal(decimalOf(0.12345), '0.12345', 'a fifth decimal');
+  assert.equal(decimalOf(1234567890123), '1234567890123', 'thirteen whole digits');
+  assert.equal(decimalOf(1e21), null, 'an exponent');
+  assert.equal(decimalOf(1e-7), null, 'an exponent');
   assert.equal(decimalOf(Number.NaN), null);
   assert.equal(decimalOf('17.19'), null, 'only a number is converted');
   assert.equal(decimalOf(null), null);
+});
+
+test("the decimal pattern is the published schemas' own, every amount and quantity in both: no digit limit (P6)", () => {
+  const amounts = new Set([
+    'quantity',
+    'unitPrice',
+    'amount',
+    'subtotal',
+    'tax',
+    'tip',
+    'discount',
+    'total',
+  ]);
+  const patterns: string[] = [];
+  const walk = (value: unknown, key?: string): void => {
+    if (Array.isArray(value)) value.forEach((item) => walk(item));
+    else if (typeof value === 'object' && value !== null) {
+      const node = value as Record<string, unknown>;
+      if (key !== undefined && amounts.has(key) && typeof node.pattern === 'string') {
+        patterns.push(node.pattern);
+      }
+      for (const [child, inner] of Object.entries(node)) walk(inner, child);
+    }
+  };
+  for (const name of ['automation-run-result', 'automation-mail-request']) {
+    walk(JSON.parse(readFileSync(join(schemas, `${name}.json`), 'utf8')));
+  }
+  // 16 in the result (the success's and the held run's documents), 8 in the run-results mail.
+  assert.equal(patterns.length, 24);
+  for (const pattern of patterns) assert.equal(pattern, RUN_DOCUMENT_DECIMAL_PATTERN.source);
+  const long = '1234567890123.12345';
+  const [kept] = boundedDocuments([{ ...EXAMPLE, total: long, subtotal: `-${long}` }])!;
+  assert.deepEqual([kept?.total, kept?.subtotal], [long, `-${long}`], 'kept whole');
+  assertValid(validator('automation-run-result'), { outcome: 'success', documents: [kept] }, long);
 });
 
 test('the client keeps every text whole, on one line; cuts only a detail line; makes a bad value null', () => {
@@ -120,8 +163,8 @@ test('the client keeps every text whole, on one line; cuts only a detail line; m
   assert.equal(bounded.lineItems[0]?.description, long);
   assert.equal(bounded.lineItems[0]?.quantity, null, 'a separator is not a decimal');
   assert.equal(bounded.lineItems[0]?.unitPrice, '3.98');
-  assert.equal(bounded.subtotal, null);
-  assert.equal(bounded.tip, null);
+  assert.equal(bounded.subtotal, '15.923456', 'any number of decimals (P6)');
+  assert.equal(bounded.tip, null, 'an exponent is not a decimal');
   assert.equal(bounded.payment.cardLast4, null);
   assert.equal(bounded.recordedIn, null, 'a provider id outside its pattern is no record');
   assert.deepEqual(

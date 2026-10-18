@@ -29,16 +29,25 @@ import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing (template `invoice-processing`), version 3 — reads EVERY bill, invoice,
+ * Invoice Processing (template `invoice-processing`), version 4 — reads EVERY bill, invoice,
  * receipt, credit note, statement and other financial document in a PDF or photo, each on its own,
  * then saves each one's details, or records or compares it in QuickBooks Online (the platform's
  * BUILD-PLAN 25.4.31–25.4.36; the session's spec of 2026-10-15, §3, as the owner's corrections
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
- * every document carries its numbers). v1 and v2, under their own names, are registered and
+ * every document carries its numbers). v1, v2 and v3, under their own names, are registered and
  * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v3 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version).
+ * v4 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version).
  *
- * Its 22 steps, in four groups a person sees (Received · Read · Checked · Done):
+ * v4 (Build 22, the platform's BUILD-PLAN 25.4.54; the session's spec of 2026-10-17, §3) is v3's
+ * code and v3's 22 steps, unchanged, shown in the five steps the owner asked for on build 21
+ * (2026-10-17: "1. Upooad Invoice / 2. Connect integration … / 3. Then something about AI
+ * Processing / 4. Quickbooks updated / 5. Email sent") — Upload invoice · Connect integration · AI
+ * processing · QuickBooks updated, or Details saved with "None" · Email sent. The groups are the
+ * manifest's alone: `receive` is step 1; step 2 holds no step, only the vendor choice; `extract`,
+ * `check-documents` and `verify-read` are step 3; the other 18 are step 4; step 5 is the
+ * platform's, which mails each run's results. This code reports every step by its id, as v3's did.
+ *
+ * Its 22 steps:
  *
  * - `receive` checks the file against the platform's measurements of it (v2's, unchanged);
  * - `extract` has the platform's model read every document, a part at a time, in ONE call for a
@@ -57,8 +66,8 @@ import { receive } from './steps/receive.js';
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
-/** The manifest versions this code serves: v3 alone. v1's and v2's containers run their own images. */
-export const SERVED_VERSIONS = [3] as const;
+/** The manifest versions this code serves: v4 alone. v1's, v2's and v3's containers run their own images. */
+export const SERVED_VERSIONS = [4] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
@@ -118,7 +127,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 }
 
 /**
- * Every step v3's pipeline declares, in its order, each noting what it throws for the run's fixed
+ * Every step v4's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
  * (`src/lookups/expense-search.ts`).
  */
@@ -167,7 +176,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v3's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v4's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),

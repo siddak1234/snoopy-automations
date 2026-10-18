@@ -57,8 +57,12 @@ export const RUN_DOCUMENT_LIMITS = {
   detailValueLength: RUN_DETAIL_LIMITS.value,
 } as const;
 
-/** An amount or a quantity: a decimal string, up to 12 whole digits and 4 decimals. */
-export const RUN_DOCUMENT_DECIMAL_PATTERN = /^-?(0|[1-9][0-9]{0,11})(\.[0-9]{1,4})?$/u;
+/**
+ * An amount or a quantity: a decimal string of any number of whole digits and decimals — the
+ * vendored `automation-run-result.json`'s `RunDocumentAmount` (the platform's P6 of Build 22, AM1
+ * and AM7: no limit but size), which `test/documents.test.ts` holds this to.
+ */
+export const RUN_DOCUMENT_DECIMAL_PATTERN = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/u;
 /** A time as printed: `HH:MM`, 24-hour, no zone. */
 export const RUN_DOCUMENT_TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/u;
 const DATE_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u;
@@ -132,8 +136,8 @@ export interface RunDocument {
 
 /**
  * A number as a decimal string, exactly as its shortest form writes it — `412.5` is `"412.5"`,
- * `-0` is `"0"` — or null when it is not a finite number, or does not fit the pattern (more than 12
- * whole digits or 4 decimals, or an exponent): never rounded.
+ * `-0` is `"0"` — or null when it is not a finite number, or its shortest form does not fit the
+ * pattern (an exponent: from 1e21, or below 1e-6): never rounded.
  */
 export function decimalOf(value: unknown): string | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;

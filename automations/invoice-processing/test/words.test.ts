@@ -30,8 +30,9 @@ import { SAMPLES } from './sample-maker/samples.js';
  * Guards A6 and A8 — the words a person reads (v2's §3.E, §3.F; the owner's "short, plain, no
  * codes"): no reason code — `(recipient_inside_workspace)`, `qb_refused`, `HTTP 503` — in any
  * sentence, reason, line, approval reason, document status or detail, on either path; every
- * timeline line at most 80 characters; no mail sent by the run (the owner's AM3: the platform
- * sends the results); and the old name, "Bills & Receipts", nowhere in v3's code, manifest or image.
+ * timeline line at most 80 characters; no mail sent by the run (the platform sends the results:
+ * AM3, whose recipients Build 22's D1 changed); and the old name, "Bills & Receipts", nowhere in
+ * v3's or v4's code, manifest or image.
  */
 
 /** A code as a person must never read it: snake_case, an HTTP status, or a code in brackets. */
@@ -204,7 +205,7 @@ function filesUnder(directory: string): string[] {
   });
 }
 
-test('the old name, "Bills & Receipts", is nowhere in v3: its code, its manifest, its image, its package', () => {
+test('the old name, "Bills & Receipts", is nowhere in v3 or v4: its code, its manifests, its image, its package', () => {
   const root = resolve(import.meta.dirname, '..');
   const files = [
     ...filesUnder(join(root, 'src')),
@@ -212,6 +213,7 @@ test('the old name, "Bills & Receipts", is nowhere in v3: its code, its manifest
     join(root, 'Dockerfile'),
     join(root, 'package.json'),
     join(manifestsRoot, 'invoice-processing.v3.json'),
+    join(manifestsRoot, 'invoice-processing.v4.json'),
   ];
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
