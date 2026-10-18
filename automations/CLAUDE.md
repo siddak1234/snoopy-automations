@@ -1,4 +1,4 @@
-# automations/: one automation per folder, each its own image
+# One automation per folder, each its own image
 
 These rules apply here and nowhere else; the repository's are in [../CLAUDE.md](../CLAUDE.md). How an automation is built: [../README.md](../README.md#what-an-automation-looks-like).
 

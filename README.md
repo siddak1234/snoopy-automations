@@ -56,6 +56,7 @@ scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from 
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
+docs/MAP.md                  generated (npm run map): every folder, script, agent, hook and record
 ```
 
 The boundary is the **wire format, not a package.** Nothing here depends on the
@@ -815,8 +816,8 @@ version's alias, so a flow on a withdrawn version still runs.
 
 ```bash
 npm ci --ignore-scripts
-npm run verify        # format:check → build → typecheck → test, root, template and every workspace;
-                      # then re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
+npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gates and push");
+                      # its last step re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
 ```
 
