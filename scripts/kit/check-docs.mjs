@@ -8,7 +8,9 @@
 //   4 each rule whose code changed needs its docs changed in the range (generated
 //     files never count);
 //   5 backticked paths and relative links in changed docs (and in changed code's
-//     comments) resolve; a struck ~~`x`~~ only if git once added x;
+//     comments) resolve; a struck ~~`x`~~ only if git once added x; a built
+//     entrypoint (`<p>/dist/<f>.js`) through its source, and a path git ignores
+//     is not checked, as scripts/audit-doc-references.mjs reads them;
 //   6 a fact's pattern matches only in its home (archives, generated exempt).
 // Flags: --base <ref>, --map-only (1 and the limits), --json. A path under another
 // repository's name (the map's `repo` family, e.g. <family>-<name>/…) is not checked.
@@ -156,6 +158,10 @@ function commentLines(file, text) {
   });
 }
 
+const BUILT = /^(.*)\/dist\/(.+)\.(js|mjs|cjs)$/u;
+const SOURCE = { js: ['ts', 'tsx'], mjs: ['mts'], cjs: ['cts'] };
+const sources = (p) => (BUILT.test(p) ? SOURCE[BUILT.exec(p)[3]].map((t) => `${BUILT.exec(p)[1]}/src/${BUILT.exec(p)[2]}.${t}`) : []);
+
 /** Check 5 for the files changed in the range that still exist. */
 export function checkReferences(root, map, files, changed) {
   const problems = [];
@@ -184,8 +190,14 @@ export function checkReferences(root, map, files, changed) {
           const local = map.repo && landed.startsWith(`${map.repo}/`) ? landed.slice(map.repo.length + 1) : landed;
           if (local === landed && foreign(landed, map, topLevel)) continue;
           const candidates = kind === 'link' ? [local] : [local, posix.normalize(posix.join(dir, local))];
-          if (candidates.some((c) => (kind === 'link' ? exists(c) : has.has(c)))) continue;
-          if (struck && candidates.some(everAdded)) continue;
+          // Each reading on its own, as the audit judges each place.
+          const ignored = (c) => spawnSync('git', ['check-ignore', '-q', c], { cwd: root }).status === 0;
+          const resolves = (c) => {
+            const named = [c, ...sources(c)];
+            if (named.some((n) => (kind === 'link' ? exists(n) : has.has(n)))) return true;
+            return (!BUILT.test(c) && ignored(c)) || (struck && named.some(everAdded));
+          };
+          if (candidates.some(resolves)) continue;
         }
         problems.push({ check: 'references', file: `${file}:${index + 1}`, message: `${path} does not resolve${struck ? ' (struck, but git never added it)' : ''}`, fix: 'fix the path, or strike a removed file as ~~`path`~~' });
       }

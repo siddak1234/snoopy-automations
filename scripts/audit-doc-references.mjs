@@ -6,8 +6,8 @@
 // document, `.claude/`'s included, and `test/doc-references.test.ts` holds it.
 //
 // A reference is a backticked path with a folder and a file type the documents
-// name (`apps/api/src/app.ts`, `apps/api/src/app.ts:42`, `docs/openapi.yaml:10,20`,
-// `deploy/Caddyfile`), found from the repository root or from the document's own
+// name (`packages/automation-sdk/src/runner.ts`, `packages/automation-sdk/src/runner.ts:42`,
+// `contract/README.md:10,20`, `automations/invoice-check/Dockerfile`), found from the repository root or from the document's own
 // folder — or a relative Markdown link, inline or by definition (`[x](README.md)`,
 // `[x](path "title")`, `[x](<path>)`, `[id]: path`), found only where the link
 // lands: from its document's folder, or from the root when it starts with `/`, as
@@ -16,9 +16,9 @@
 // mistaken file link, read and reported missing. A query, `?plain=1`, is not part
 // of the name. A code span that starts with `/` or `~` is a host's or a
 // container's path, not a repository's. A built entrypoint is checked through its
-// source (`apps/runs/dist/main.js` is `apps/runs/src/main.ts`), so a mistyped one
-// is missing. A short form (`modules/upstream.ts`) is not accepted: it can match
-// the wrong file.
+// source (`packages/automation-sdk/dist/runner.js` is `packages/automation-sdk/src/runner.ts`),
+// so a mistyped one is missing. A short form (src/runner.ts, without the folder that
+// holds it) is not accepted: it can match the wrong file.
 // It audits this repository, `snoopy-automations`, or a planted one standing in
 // for it. Link syntax inside a code span or a fenced
 // block is text (a fenced block's backticked paths are still read, as the
@@ -30,7 +30,7 @@
 // build's output or an installed package (`.next/…`, `@supabase/…`), which no
 // repository tracks.
 //
-// A removed file stays namable in a record, struck through: ~~`providers/sendgrid.json`~~
+// A removed file stays namable in a record, struck through: ~~`automations/invoice-intake/src/run.ts`~~
 // names a file that was there when the sentence was written and is gone since. The
 // strike is believed only when a commit once added the file (a built entrypoint's
 // source counts); a struck name that is still here is found, and one no commit ever
@@ -42,8 +42,8 @@
 // tracked files still on disk, and untracked ones it does not ignore — never
 // whatever is on disk, in this checkout and in a sibling's. A path git ignores is
 // a build output or an install, there only once the checkout is built, so it is
-// not checked: `snoopy` F59, where a built checkout passed three references CI's
-// clean one failed.
+// not checked (the web repository's F59: a built checkout passed three references
+// CI's clean one failed).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, normalize, relative, resolve, sep } from 'node:path';
