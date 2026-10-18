@@ -195,7 +195,7 @@ export function checkReferences(root, map, files, changed) {
           const resolves = (c) => {
             const named = [c, ...sources(c)];
             if (named.some((n) => (kind === 'link' ? exists(n) : has.has(n)))) return true;
-            return (!BUILT.test(c) && ignored(c)) || (struck && named.some(everAdded));
+            return ((!BUILT.test(c) || c.split('/').includes('node_modules')) && ignored(c)) || (struck && named.some(everAdded));
           };
           if (candidates.some(resolves)) continue;
         }

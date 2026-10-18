@@ -245,6 +245,7 @@ describe('check-docs (STANDARD (e))', () => {
     { name: 'a struck file git never added fails', commits: [[{ 'docs/notes.md': '# notes\n\n~~`src/never.mjs`~~\n' }]], exit: 1, out: /git never added/u },
     { name: 'a path git ignores is not checked', base: { '.gitignore': 'dist/\n' }, commits: [[{ 'docs/notes.md': '# notes\n\n`dist/retry.js`\n' }]], exit: 0 },
     { name: 'a built entrypoint resolves through its source', base: { '.gitignore': 'dist/\n', 'docs/src/b.ts': 'export {};\n' }, commits: [[{ 'docs/notes.md': '# notes\n\n`docs/dist/b.js`\n' }]], exit: 0 },
+    { name: "an installed package's built file is not checked (Next's own AGENTS.md block names one)", base: { '.gitignore': 'node_modules/\n' }, commits: [[{ 'docs/notes.md': '# notes\n\n`node_modules/next/dist/server/lib/generate-agent-files.js`\n' }]], exit: 0 },
     { name: 'a mistyped built entrypoint fails, ignored or not', base: { '.gitignore': 'dist/\n' }, commits: [[{ 'docs/notes.md': '# notes\n\n`docs/dist/nope.js`\n' }]], exit: 1, out: /docs\/dist\/nope\.js does not resolve/u },
     { name: "another repository's path is not checked", commits: [[withDocs({ 'src/a.mjs': '// see `demo-api/src/x.mjs` and `demo/lib/y.ts`\n' })]], exit: 0 },
     { name: 'a router of 150 lines passes', base: { 'CLAUDE.md': linesOf(150) }, commits: [], args: ['--map-only'], exit: 0 },
