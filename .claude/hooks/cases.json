@@ -11,7 +11,7 @@
 {"name": "2: rm -r -f on a home folder", "input": {"tool_name": "Bash", "tool_input": {"command": "rm -r -f ${HOME}/Documents"}, "cwd": "${REPO}"}, "exit": 2},
 {"name": "2: rm --recursive --force on an unexpanded variable", "input": {"tool_name": "Bash", "tool_input": {"command": "rm --recursive --force $BUILD_DIR/out"}, "cwd": "${REPO}"}, "exit": 2},
 {"name": "2: cd home, then rm -rf a folder there", "input": {"tool_name": "Bash", "tool_input": {"command": "cd ~ && rm -rf Desktop"}, "cwd": "${REPO}"}, "exit": 2},
-{"name": "2: rm -rf leaving the repo by ..", "input": {"tool_name": "Bash", "tool_input": {"command": "rm -rf ../"}, "cwd": "${REPO}"}, "exit": 2},
+{"name": "2: rm -rf leaving /tmp by .., after a cd", "input": {"tool_name": "Bash", "tool_input": {"command": "cd app && rm -rf ../../../usr/autom8x-x"}, "cwd": "/tmp/autom8x-kit-none"}, "exit": 2},
 {"name": "2: rm -Rf through sudo", "input": {"tool_name": "Bash", "tool_input": {"command": "sudo rm -Rf /usr/local/lib/thing"}, "cwd": "${REPO}"}, "exit": 2},
 {"name": "2: a bare cd goes home, then rm -rf a folder there", "input": {"tool_name": "Bash", "tool_input": {"command": "cd && rm -rf Library"}, "cwd": "${REPO}"}, "exit": 2},
 {"name": "2: rm -rf / after a substitution that quotes parens", "input": {"tool_name": "Bash", "tool_input": {"command": "echo \"$(echo \"((\")\" ; rm -rf /"}, "cwd": "${REPO}"}, "exit": 2},

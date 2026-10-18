@@ -101,6 +101,13 @@ describe('guard (STANDARD (h) rows 1–8)', () => {
     assert.equal(decide(input, { HOME: values.HOME, toplevel: boom }).exit, 0);
   });
 
+  // The repository root as an allowed place, judged the same on every OS: a temp repo
+  // would sit under /tmp on Linux, which is allowed on its own.
+  test('rm -rf inside the git toplevel passes; leaving it, or a sibling sharing its prefix, is blocked', () => {
+    const rm = (command) => decide({ tool_name: 'Bash', tool_input: { command }, cwd: '/srv/autom8x-repo/app' }, { HOME: values.HOME, toplevel: () => '/srv/autom8x-repo' }).exit;
+    assert.deepEqual(['rm -rf node_modules', 'rm -rf ../dist', 'rm -rf ../../', 'rm -rf /srv/autom8x-repo-other'].map(rm), [0, 0, 2, 2]);
+  });
+
   test('cases.json holds 3 or more rows for each row of the table', () => {
     for (let row = 1; row <= 8; row++) {
       assert.ok(cases.filter((c) => c.name.startsWith(`${row}:`)).length >= 3, `row ${row}`);
