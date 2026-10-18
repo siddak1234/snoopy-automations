@@ -5,10 +5,9 @@
  * email step, a step's title by the flow's connection): an optional connection and the connection
  * setup fields that choose it, a setup field's step group, and the visible step groups — ported
  * from its `packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21
- * branch `round-17/b21-platform`; Build 22's rules from the session's spec of 2026-10-17, §2
- * "Manifest", in its words, built beside the platform's `round-17/b22-platform`), each refusal as
- * `<path>: <message>`, so a manifest that would be refused at registration fails this repository
- * first. Every manifest in `manifests/` is held to them.
+ * branch `round-17/b21-platform`; Build 22's rules as merged in its `32b33ae`, #215), each refusal
+ * as `<path>: <message>`, so a manifest that would be refused at registration fails this
+ * repository first. Every manifest in `manifests/` is held to them.
  */
 
 export type Json = Record<string, unknown>;
@@ -60,9 +59,11 @@ export function manifestProblems(manifest: Json): string[] {
   // `validateGroups` keeps it — another value, or a second one, is refused and is no one's step.
   let platform: string | undefined;
   if (manifest.groups !== undefined) {
-    const groups = list(manifest.groups);
-    if (groups.length < 2) add('groups', 'must declare at least 2 groups');
-    if (groups.length > 6) add('groups', 'must hold at most 6 items');
+    // As the platform's `problems.array`: more than 6 is refused, and then none is declared.
+    const tooMany = list(manifest.groups).length > 6;
+    const groups = tooMany ? [] : list(manifest.groups);
+    if (tooMany) add('groups', 'must contain at most 6 entries');
+    else if (groups.length < 2) add('groups', 'must declare at least 2 groups');
     declared = [];
     let platformAt: number | undefined;
     for (const [index, group] of groups.entries()) {

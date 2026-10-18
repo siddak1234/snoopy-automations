@@ -115,6 +115,18 @@ test('the rules refuse what the platform refuses', () => {
       "groups[5]: group 'filed' has no step and no setting",
     ],
     [
+      'more than six groups',
+      {
+        ...v2,
+        groups: [
+          ...(v2.groups ?? []),
+          { id: 'filed', title: 'Filed', description: 'Filed.' },
+          { id: 'sent', title: 'Sent', description: 'Sent.' },
+        ],
+      },
+      'groups: must contain at most 6 entries',
+    ],
+    [
       'a trigger outside the first group',
       {
         ...v2,

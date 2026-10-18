@@ -1,9 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `69b8d97`, re-pinned 2026-10-17 — the platform's
-`main` after its #213 squash-merged its Build 21 — with three files refreshed the same day from
-the contract of its Build 22, not yet merged (below). The platform emits them with
+(`snoopy-backend`, private) at commit `32b33ae`, re-pinned 2026-10-18 — the platform's
+`main` after its #215 squash-merged its Build 22 (below). The platform emits them with
 `npm run schemas:emit` and verifies the committed files against its TypeScript types byte for
 byte, so this copy is the
 contract it publishes to external automation authors. To refresh: copy the directory again
@@ -226,6 +225,20 @@ manifest declaring `titleByConnection` or `platform`, so `invoice-processing` v4
 this copy is re-vendored from the merge commit then, its bytes unchanged unless a review changed
 them.
 
+Re-pinned 2026-10-18 at `32b33ae`, the platform's `main` after #215 squash-merged
+`round-17/b22-platform` (2026-10-18 00:58Z): its tree is the branch head `ec5c2e3`'s (`203781b`),
+and all eight files are byte-identical to the copy above (each checked with `cmp` against
+`32b33ae`'s, read with `git show`), so only the commit above moves. Its `manifest-validation.ts`
+gives the ADR-0041 refusals below in the words quoted there: `test/manifest-rules.test.ts`'s
+cases, run against the merged validator, each find the same refusal. The one word that differed,
+older than Build 22 — more than six groups, "must contain at most 6 entries", where the port said
+"must hold at most 6 items" — is aligned and bitten. `invoice-processing` v1 to v4 each pass the
+merged schema and the merged `validateManifest`. The platform's `manifests/README.md` still words
+the old rule ("group '<id>' has no step"); its validator is quoted here. Until a promotion carries
+`32b33ae`, the live platform refuses a manifest declaring `titleByConnection` or `platform`;
+`invoice-processing` v4 is registered by the platform's pin change once this repository's `main`
+publishes its image.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -303,7 +316,7 @@ to the first group", and without `groups`, "group is only meaningful when groups
 Steps may come back to a group — v2's `verify-read` follows `check-document`.
 
 **A step that is a setting, the platform's step, a title by connection** (ADR-0041, Build 22;
-the session's spec of 2026-10-17, §2 "Manifest", in its words) — a group no pipeline step names is
+its `manifest-validation.ts` at `32b33ae`, in its words) — a group no pipeline step names is
 a step that is a setting, named by at least one setup field's `group`, or the platform's: else
 "group '<id>' has no step and no setting" (it was "group '<id>' has no step"). A group's
 `platform` "must be email"; "only one group may be the platform's"; "the platform's step is the
@@ -311,9 +324,9 @@ last group"; "no pipeline step may be in the platform's step"; "no setting may b
 platform's step". A `titleByConnection`'s `field` "must name a connection field"; each of its
 `titles[].providerId` "must be one of that field's providers" — its `providers`, or every optional
 connection for a manifest's one field naming none — and none "is declared more than once"; 1–16
-titles of 1–40 characters, as the schema says. Groups stay at most 6. `test/manifest-rules.ts`
-ports every rule in this section, and `test/manifest-rules.test.ts` holds every manifest here to
-them, each refusal bitten.
+titles of 1–40 characters, as the schema says. Groups stay at most 6: "must contain at most 6
+entries". `test/manifest-rules.ts` ports every rule in this section, and
+`test/manifest-rules.test.ts` holds every manifest here to them, each refusal bitten.
 
 **`artifacts`** — media types "must be a media type, optionally with a \* subtype"; an
 empty list "must declare at least one media type — omit `artifacts` entirely to accept no

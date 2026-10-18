@@ -479,9 +479,9 @@ vendor's title and its step are the session's choices (its S18, S19). The approv
 step (Set up only). No email setting, and the run sends no mail: the platform mails each run's
 results to the workspace's owners and admins, the person who started it and any address an owner
 or admin adds on step 5's screen (D1, the session's suggestion the owner approved, replacing AM3).
-Every v3 setting key is v4's, so the platform's move of each flow to v4 keeps it. Until the
-platform's Build 22 merges and a promotion carries it, v4 cannot be registered
-(`contract/README.md`). What follows describes v3, v2 and v1; where they differ, this paragraph
+Every v3 setting key is v4's, so the platform's move of each flow to v4 keeps it. The platform's
+Build 22 merged as `32b33ae` (its #215; `contract/README.md`); until a promotion carries it, v4
+cannot be registered. What follows describes v3, v2 and v1; where they differ, this paragraph
 wins.
 
 **v3** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8 change it). Its image served v3
