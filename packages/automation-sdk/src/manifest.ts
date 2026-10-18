@@ -23,7 +23,10 @@ export interface Manifest {
   pipeline: readonly ManifestStep[];
   /**
    * The visible step groups a person sees a run's progress in, in order (platform ADR-0037):
-   * 2–6, each named by at least one step, the trigger step's the first. Absent: none.
+   * 2–6, the trigger step's the first; each named by at least one step, or by a setting (a step
+   * that is a choice), or the platform's own last step (`platform`, ADR-0041). Absent: none. Typed
+   * here as far as an automation reads them: a group's `titleByConnection` and `platform` are for
+   * the clients and the platform, and are validated by the published schema.
    */
   groups?: readonly ManifestStepGroup[];
   /**
