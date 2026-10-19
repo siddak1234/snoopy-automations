@@ -379,12 +379,14 @@ test('no environment file and no recovered client data is tracked', () => {
 });
 
 test('source files stay under the line ceiling', () => {
+  // `.claude/` holds the shared kit's hooks (the engineering standard's section 0).
   const roots = [
     packagesRoot,
     automationsRoot,
     templatesRoot,
     join(repositoryRoot, 'scripts'),
     join(repositoryRoot, 'test'),
+    join(repositoryRoot, '.claude'),
   ];
   const over: string[] = [];
   for (const file of roots.flatMap((root) => sourceFiles(root))) {
