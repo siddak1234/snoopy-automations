@@ -205,7 +205,7 @@ function filesUnder(directory: string): string[] {
   });
 }
 
-test('the old name, "Bills & Receipts", is nowhere in v3 or v4: its code, its manifests, its image, its package', () => {
+test('the old name, "Bills & Receipts", is nowhere in v3, v4 or v5: its code, its manifests, its image, its package', () => {
   const root = resolve(import.meta.dirname, '..');
   const files = [
     ...filesUnder(join(root, 'src')),
@@ -214,6 +214,7 @@ test('the old name, "Bills & Receipts", is nowhere in v3 or v4: its code, its ma
     join(root, 'package.json'),
     join(manifestsRoot, 'invoice-processing.v3.json'),
     join(manifestsRoot, 'invoice-processing.v4.json'),
+    join(manifestsRoot, 'invoice-processing.v5.json'),
   ];
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
