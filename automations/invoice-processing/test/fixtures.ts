@@ -23,6 +23,7 @@ import {
 import {
   PROMPTS,
   RETRY,
+  SERVED_VERSIONS,
   TEMPLATE_ID,
   define,
   perDocumentSpecs,
@@ -197,7 +198,7 @@ export function setUp(options: SetUp = {}) {
   const request: InvokeRequest = invokeFixture({
     ...(options.runId === undefined ? {} : { runId: options.runId }),
     templateId: TEMPLATE_ID,
-    templateVersion: 4,
+    templateVersion: SERVED_VERSIONS[0],
     config: options.config ?? QUICKBOOKS,
     input: options.input ?? { invoiceFile: FILE_ID },
     deadline: new Date(Math.max(now, Date.now()) + (options.deadlineInMs ?? 900_000)).toISOString(),
