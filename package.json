@@ -19,7 +19,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.test.json && npm run typecheck --workspaces --if-present",
     "test": "tsx --test \"test/**/*.test.ts\" \"templates/automation/test/**/*.test.ts\" && npm test --workspaces --if-present",
     "facts": "tsx scripts/repo-facts.ts",
-    "verify": "npm run format:check && npm run build && npm run typecheck && npm test && tsx scripts/repo-facts.ts --gate verify"
+    "check:docs": "node scripts/kit/check-docs.mjs",
+    "map": "node scripts/kit/map.mjs",
+    "verify": "npm run format:check && npm run check:docs && npm run map -- --check && node scripts/audit-doc-references.mjs && npm run build && npm run typecheck && npm test && tsx scripts/repo-facts.ts --gate verify"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

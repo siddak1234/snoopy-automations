@@ -56,6 +56,7 @@ scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from 
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
+docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
 The boundary is the **wire format, not a package.** Nothing here depends on the
@@ -232,7 +233,7 @@ await platform.callModel(extractFields, input, {
   anything is sent, in the words of the platform's 400.
 - **The owner's setting wins.** The owner switches any automation's model on the
   platform at once, with no restart and nothing released here (the platform's
-  `scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
+  `snoopy-backend/scripts/set-automation-model.mjs` writes it, and every call reads it); while it is
   set its models — up to three, each with a reasoning setting (25.2.23) — are the only
   ones, whatever `MODELS` says. The switch holds each model to the owner's rules against
   OpenRouter's lists (25.2.24); the models a step names in code are held to them only by
@@ -286,7 +287,7 @@ and sends no measurements.
 
 Every callback reaches the platform through its Edge, which sheds a flood before it reads
 anything: 120 requests a minute per source, counted in a fixed one-minute window (the platform's
-`apps/api/src/app.ts`, `DEFAULT_EDGE_RATE_LIMIT`). In production every automation on a host
+`snoopy-backend/apps/api/src/app.ts`, `DEFAULT_EDGE_RATE_LIMIT`). In production every automation on a host
 calls back through the same address, so they share that one bucket, and one Invoice Processing
 document costs 25–44 callbacks. The Edge's refusal is a 429 problem with the code
 `TOO_MANY_REQUESTS`, no `details.reason`, and a `retry-after` header — the whole seconds until
@@ -464,9 +465,9 @@ of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-
 **v4, the version this code serves** (Build 22; the session's spec of 2026-10-17, §3, V1). The
 image serves v4 alone (`SERVED_VERSIONS`; its Dockerfile copies only
 `manifests/invoice-processing.v4.json`); v1, v2 and v3 stay registered and immutable,
-`test/manifest.test.ts` holding each to its sha256. v4 is v3's automation, unchanged — the same 22
+`automations/invoice-processing/test/manifest.test.ts` holding each to its sha256. v4 is v3's automation, unchanged — the same 22
 steps, prompts, checks, holds, QuickBooks writes, result and `outputSchema`, and the same model
-calls per file: `test/v4.test.ts` runs one file on v4's manifest and on v3's and finds the same
+calls per file: `automations/invoice-processing/test/v4.test.ts` runs one file on v4's manifest and on v3's and finds the same
 steps reported, the same calls and the same result — shown in the five steps the owner asked for
 on build 21 (2026-10-17: "1. Upooad Invoice / 2. Connect integration … / 3. Then something about
 AI Processing / 4. Quickbooks updated / 5. Email sent"): **Upload invoice** (`receive`) ·
@@ -487,22 +488,22 @@ wins.
 **v3** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8 change it). Its image served v3
 alone; v1 and v2 stay registered and immutable, and v3 since the platform's thirty-second pin (its
 #214). A file holds
-any number of documents: `extract` reads them all with `prompts/extract-documents.v1.json`, in
+any number of documents: `extract` reads them all with `automations/invoice-processing/prompts/extract-documents.v1.json`, in
 parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
-8,000-token cap — each its own entry with its own seller and details (`src/run/extract.ts`,
-`test/documents-parts.test.ts`). Nothing is left out silently: a part that says the file is done
+8,000-token cap — each its own entry with its own seller and details (`automations/invoice-processing/src/run/extract.ts`,
+`automations/invoice-processing/test/documents-parts.test.ts`). Nothing is left out silently: a part that says the file is done
 while it counts more documents than were read is followed by one from the next document, and a
 reading still short of that count has its last document wait, "the file may hold more
 documents"; a reading stopped inside a document marks its lines — a statement's rows too —
-incomplete (`test/documents-counted.test.ts`). Each QuickBooks lookup and write runs once per document,
+incomplete (`automations/invoice-processing/test/documents-counted.test.ts`). Each QuickBooks lookup and write runs once per document,
 under its document's part of the step's key (`<key>.d1`, the SDK's `part`;
-`src/run/fan-out.ts`); the three company reads run once for all. One document never fails the
+`automations/invoice-processing/src/run/fan-out.ts`); the three company reads run once for all. One document never fails the
 others: one the checks cannot use is read again (`verify-documents.v1`, 20 a call), and one
 still unclear — or a page clearly not a financial document — waits for one approval that names
 each ("Document 2: the total can't be read.") while the rest are recorded or saved; a quote, a
 purchase order, a bank statement or any other financial document QuickBooks keeps no record of
-is saved with all its data (AM8; `test/documents-hold.test.ts`). The result carries every
-document whole (`RunDocument`, `src/run/documents.ts`): its type (`invoice` among them), seller
+is saved with all its data (AM8; `automations/invoice-processing/test/documents-hold.test.ts`). The result carries every
+document whole (`RunDocument`, `automations/invoice-processing/src/run/documents.ts`): its type (`invoice` among them), seller
 and place, `number`, `numberLabel` and `references`, date and time, each line's words, quantity,
 unit price and amount, the totals as decimal strings, how it was paid, `recordedIn` and the
 lines a person reads beside it — no limit but the callback body's 256 KiB
@@ -513,7 +514,7 @@ Four step groups — Received, Read, Checked, Done — over 22 steps. Each promp
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an
 image's 8,000 px kept, the size the models take). v2's recordings were made for v2's prompts and
-are removed with them; v3's are still to be made (`scripts/recording-request.ts`). The
+are removed with them; v3's are still to be made (`automations/invoice-processing/scripts/recording-request.ts`). The
 platform's Build 21 contract merged as `69b8d97` (`contract/README.md`). What follows describes
 v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, and v4's above it.
 
@@ -521,23 +522,23 @@ v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, an
 retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
 chosen in its one `connection` setup field, `vendor` — "None" by default; two settings, the
 approval limit and "Also email", neither required, and no setting can fail a run
-(`test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
+(`automations/invoice-processing/test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
 setting and the journal entries are gone; and five visible step groups — Received, Read,
 Checked, Done, Emailed — over 24 steps, `save-details` new. With the vendor "None" a run is
 receive → extract → check-document → (verify-read) → save-details → notify, and calls
-QuickBooks for nothing (`test/none-path.test.ts`). `find-accounts` reads the company's chart
-with one query (the kit's `chartQuery()`), and `decide` picks from it (`src/decide/picks.ts`,
-`test/picks.test.ts`): the category by the spend type's list of names, else its detail type,
+QuickBooks for nothing (`automations/invoice-processing/test/none-path.test.ts`). `find-accounts` reads the company's chart
+with one query (the kit's `chartQuery()`), and `decide` picks from it (`automations/invoice-processing/src/decide/picks.ts`,
+`automations/invoice-processing/test/picks.test.ts`): the category by the spend type's list of names, else its detail type,
 else Uncategorized Expense; what a receipt or a refund was paid from — the card its printed
 digits name, the only card, the only bank — else it waits for approval showing the first by
 name. The second AI read runs only when the first shows a problem, or, with QuickBooks, over the
-limit (decision 3; `test/second-read.test.ts`). A document QuickBooks cannot take — one of its
+limit (decision 3; `automations/invoice-processing/test/second-read.test.ts`). A document QuickBooks cannot take — one of its
 recording rules, or QuickBooks failing mid-run, a write it may have made included (decision 6,
 through the SDK's `recover`) — never fails the run: its details are saved and the result says
 "Saved. Not recorded in QuickBooks: …", or "Saved. QuickBooks didn't confirm. Check QuickBooks
 before you run it again." Every word a person reads is the spec's (its §3.E and §3.F): timeline
 lines of 80 characters at most, a one-sentence result, the run's `details` as label and value
-lines, the same lines mailed, and no reason code anywhere (`test/words.test.ts`). The
+lines, the same lines mailed, and no reason code anywhere (`automations/invoice-processing/test/words.test.ts`). The
 manifest's additions and the result's `details` are the platform's #210 (ADR-0037), copied
 into `contract/schemas/` from its branch before it merges (`contract/README.md`): until it
 merges and is promoted, v2 cannot be registered. What follows describes v1, and what v2 keeps
@@ -568,7 +569,7 @@ which would otherwise turn the card check off unseen; `find-payer`, when a
 person switched on "I paid for this with my own money", finds who paid among the flow's
 owners and partners, or as an employee in QuickBooks — an inactive one, found by the
 "(deleted)" name QuickBooks gives it, failing as inactive — before anything is read. `extract`,
-the first of its two model calls, sends `prompts/extract-document.v1.json` — 17 rules and a
+the first of its two model calls, sends ~~`automations/invoice-processing/prompts/extract-document.v1.json`~~ — 17 rules and a
 27-field answer schema, 16 of its fields nullable — with a fixed task, `MODELS`
 (`anthropic/claude-haiku-4.5`, then `google/gemini-3.1-flash-lite`) and the run's file by
 its id; it starts no call with less than 260 seconds to the deadline, repeats one only when
@@ -581,7 +582,7 @@ vendor credit, a statement compared only, or what an employee, an owner or a con
 personally), holds it to the 28 fail rules in the plan's order, each a fixed sentence, runs
 the arithmetic in whole cents within 1¢, and keeps `state.document` with what decide is to
 hold on; the raw answer leaves the state there. `verify-read`, the second model call, sends
-`prompts/verify-document.v1.json` — read 1's own definitions for the type and the 13 fields
+~~`automations/invoice-processing/prompts/verify-document.v1.json`~~ — read 1's own definitions for the type and the 13 fields
 that go into QuickBooks, 14 fields of which 8 nullable — blind to the first read, with
 `excludeModelAuthors` set to the maker of the model that served it; without a maker to leave
 out, or answered `no_model_left`, it is not made, never made without the exclusion. It
@@ -590,7 +591,7 @@ records the second total only when it alone adds up (and runs the arithmetic aga
 keeps `state.verification` for decide: a difference holds, a statement's disputed type fails
 (F7), a second read not made holds; out of time and the platform's faults fail. Nine lookups
 follow (steps 9–17), each ONE `query.run` per document type, as the plan's §5 table runs it,
-or skipped (`src/lookups/queries.ts` builds every text, and fixed-text tests hold each):
+or skipped (`automations/invoice-processing/src/lookups/queries.ts` builds every text, and fixed-text tests hold each):
 `find-vendor` and `find-vendor-company` find the seller — or the contractor who paid — by the
 exact name and the "<name> (deleted)" QuickBooks gives a vendor it made inactive (sandbox
 G4–5), so an inactive vendor is never taken for a new one, then by company name, which
@@ -609,15 +610,15 @@ never sent, a full answer is a possible duplicate (D6) whose line always keeps "
 a statement's listed invoice numbers — each once, whatever its case, one past 21 characters
 counted as not in QuickBooks — and open bills are this vendor's, and a statement's lookup
 QuickBooks refuses ends "Compare the statement in QuickBooks". The bank-feed check (D21) searches
-expenses by amount in its window: `EXPENSE_SEARCH` is `'amount'` (`src/lookups/expense-search.ts`),
+expenses by amount in its window: `EXPENSE_SEARCH` is `'amount'` (`automations/invoice-processing/src/lookups/expense-search.ts`),
 because sandbox S4 answered on 2026-10-12 that Intuit filters `TotalAmt =` within a date range;
 the plan's fallback, `'window'` — the window alone, newest first, 50 at most, a bill's D32 check
 dropped — stays in the code, run only by the suites. `decide` (`src/decide/`, step 18) makes
 one result: a fixed sentence, one hold with every reason (the SDK's held outcome, an approval
 resuming after it), a statement
-compared, or the record planned; its whole input is `src/decide/contract.ts`, and the
+compared, or the record planned; its whole input is `automations/invoice-processing/src/decide/contract.ts`, and the
 lookups and decide share one table of which lookups run (`lookupUses`,
-`src/decide/lookup-uses.ts`). What decide saves — the record planned, the re-check an approval
+`automations/invoice-processing/src/decide/lookup-uses.ts`). What decide saves — the record planned, the re-check an approval
 repeats, the company it checked — is the ONLY input of the six steps after it (24 of the 24 the
 platform allows): an approval resumes at `confirm-company`, which compares the company's names,
 country and file creation time with QuickBooks' again; `confirm-vendor` looks a new vendor up
@@ -628,7 +629,7 @@ which Intuit applies before the bound: sandbox G4–5), so a copy made while the
 never past it, by the document's number only when the record will carry it, else by
 its total and date — and fails on a matching record added while the run waited ("A matching
 record was added in QuickBooks while this waited for approval, possibly from your bank feed."),
-by the one rule decide holds on (`src/decide/duplicate-rule.ts`): one the approver never saw,
+by the one rule decide holds on (`automations/invoice-processing/src/decide/duplicate-rule.ts`): one the approver never saw,
 unless decide's lookup was full and QuickBooks created it before that answer, which the approved
 "too many to check" covered; a first run skips all four. `create-record` then makes the one
 record — a bill, an expense, a refund to the card, a vendor credit or a journal entry, through
@@ -647,7 +648,7 @@ contractor or an owner is repaid. `notify` mails a plain-text summary, built fro
 answer — the document's number on its line, "in the memo" when the record was not sent it, and
 the number QuickBooks gave an expense or a credit itself on its own — to the optional "Also email"
 address — a statement's counts and what QuickBooks shows open — and is skipped when it is empty;
-a mail that fails never fails the run. The run's result (`src/output.ts`, described by the
+a mail that fails never fails the run. The run's result (`automations/invoice-processing/src/output.ts`, described by the
 manifest's `outputSchema`, which the tests hold every output
 to with Ajv) is the record made — its type and QuickBooks Id, payment type, payee, payer, Paid
 from account, the next step, why it was held — or a statement's comparison with the full list of
@@ -658,7 +659,7 @@ platform refusing a step's report, say) names it and says to check QuickBooks be
 it again, never "run it again in a few minutes". The measurements — `measuredKind`, `pageCount`,
 `widthPixels`, `heightPixels` — are copied into the SDK's `ArtifactReference` from the
 platform's pull request before it merged (its BUILD-PLAN 25.2.28, merged unchanged as its
-`main` `7086e5e`), and `measurementsOf` in `src/file.ts` is the one place that reads them;
+`main` `7086e5e`), and `measurementsOf` in `automations/invoice-processing/src/file.ts` is the one place that reads them;
 the manifest declares the page and pixel limits, without which the platform measures
 nothing.
 
@@ -683,10 +684,10 @@ All 50 are recorded — read 1 by agents on `claude-opus-5-5`, read 2 on `claude
 each given only its read's request and the document under a neutral file name — and the tests
 over them run each pair through steps 1–8 with the model answering as recorded, check-document,
 read 2's comparison and decide (the vendor matched, nothing found): the sample's marker reaches
-no line, sentence, reason or saved data. `test/planted-marker.test.ts` plants each marker in
+no line, sentence, reason or saved data. `automations/invoice-processing/test/planted-marker.test.ts` plants each marker in
 every field the code reads but never passes on — read 1's currency, card digits, dates and
 listed references (not a statement's, which are carried), read 2's currency, card digits and
-dates — on every path, held and straight through — and `test/writes-marker.test.ts` takes each
+dates — on every path, held and straight through — and `automations/invoice-processing/test/writes-marker.test.ts` takes each
 sample's marker through every step on the simulator, approved when it held: no QuickBooks
 request, mail, line or result carries it.
 
@@ -789,14 +790,14 @@ MetaData.CreateTime` on every transaction), and
    proven digest with the commit.
 5. Open a pull request adding the manifest to the platform repository's
    `manifests/` directory, with the container's `.internal` alias and digest pin in
-   its `deploy/compose.prod.yml`. There is no registration endpoint, and the
+   its `snoopy-backend/deploy/compose.prod.yml`. There is no registration endpoint, and the
    platform's ADR-0020 decided there will not be one: `service.origin` is where
    customer documents get sent, review is the authorization, and a pull request is
    the only write path that carries one. The rules a manifest must meet beyond the
    schema are in `contract/README.md`, in the validator's own words.
 6. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
    service account of its own for each version: one container per manifest version for
-   everything new (the platform's D2), and its `scripts/add-automation.mjs` refuses any
+   everything new (the platform's D2), and its `snoopy-backend/scripts/add-automation.mjs` refuses any
    other origin. The platform gives that version's container the name as a network
    alias, so it is reachable only on the compose network by construction.
    `invoice-check` and `invoice-intake` predate the rule: each v1 keeps
@@ -815,8 +816,8 @@ version's alias, so a flow on a withdrawn version still runs.
 
 ```bash
 npm ci --ignore-scripts
-npm run verify        # format:check → build → typecheck → test, root, template and every workspace;
-                      # then re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
+npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gates and push");
+                      # its last step re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
 ```
 

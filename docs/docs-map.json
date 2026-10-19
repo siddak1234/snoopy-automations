@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "repo": "snoopy-automations",
+  "generated": ["docs/MAP.md", "docs/repo-facts/snoopy-automations.json"],
+  "ignore": ["**/*.test.ts", "**/test/**"],
+  "unmapped": {
+    "docs": "the documents themselves: records, the generated map and the repo-facts file"
+  },
+  "rules": [
+    { "id": "sdk", "code": ["packages/automation-sdk/src/**"], "docs": ["README.md"] },
+    { "id": "kit", "code": ["packages/automation-kit/src/**"], "docs": ["README.md"] },
+    {
+      "id": "automations",
+      "code": ["automations/*/src/**", "automations/*/prompts/**"],
+      "docs": ["README.md"]
+    },
+    { "id": "manifests", "code": ["manifests/**"], "docs": ["README.md"] },
+    { "id": "contract", "code": ["contract/**"], "docs": ["contract/README.md"] },
+    {
+      "id": "tooling",
+      "code": ["templates/**", "scripts/**", ".github/**"],
+      "docs": ["README.md"]
+    },
+    { "id": "claude", "code": [".claude/**"], "docs": ["CLAUDE.md"] }
+  ],
+  "facts": [{ "key": "sdk-callbacks", "home": "README.md", "pattern": "\\bsix callbacks\\b" }],
+  "records": {
+    "current": ["docs/records/round-record.md"],
+    "archive": ["docs/records/round-record.archive.md"]
+  },
+  "map": {
+    "kind": "automation",
+    "readFirst": [
+      "CLAUDE.md",
+      "snoopy-backend/docs/platform/ENGINEERING-STANDARD.md",
+      "docs/records/round-record.md"
+    ],
+    "folders": ["automations"],
+    "lists": [
+      { "title": "Automations", "glob": "automations/*", "as": "automation" },
+      { "title": "Packages", "glob": "packages/*", "as": "package" },
+      { "title": "Template", "glob": "templates/*", "as": "package" },
+      { "title": "Contract schemas", "glob": "contract/schemas/*.json", "as": "header-line" },
+      { "title": "Scripts", "glob": "scripts/**", "as": "header-line" },
+      { "title": "Tests", "glob": "test/*.test.ts", "as": "test-prefixes" }
+    ]
+  }
+}

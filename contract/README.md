@@ -44,8 +44,8 @@ open, `949dc8d`, carries the same blobs): **all seven files are byte-identical t
 `db66611`** — nothing moved. What did change is what the platform SERVES without emitting:
 the sixth callback, `POST /v1/automations/callbacks/mail` (its ADR-0021: the platform is
 the only sender). Its `AutomationMailRequest` is exported from the platform's contracts
-package and `docs/openapi.yaml`'s callback enum names `mail`, but `schemas/` carries no
-`automation-mail-request.json`, and the split `docs/openapi/automations.yaml` still
+package and `snoopy-backend/docs/openapi.yaml`'s callback enum names `mail`, but `schemas/` carries no
+`automation-mail-request.json`, and the split `snoopy-backend/docs/openapi/automations.yaml` still
 names five messages. So the SDK's `MailRequest` is copied from the handler's allow-list —
 `to`, `subject`, `body`, `idempotencyKey` (`runId` optional there and never sent) — and
 `packages/automation-sdk/test/contract.test.ts` holds it to that list by name. It is the
@@ -54,7 +54,7 @@ finding with this refresh.
 
 Refreshed 2026-10-09 at `e0d58d4`: **eight files**. `automation-mail-request.json` arrived — the
 platform emits it since `ccc10e4` (#179, its BUILD-PLAN 25.3.7), and its split
-`docs/openapi/automations.yaml` names `mail` among the callbacks — so the finding above is
+`snoopy-backend/docs/openapi/automations.yaml` names `mail` among the callbacks — so the finding above is
 answered, and `packages/automation-sdk/test/contract.test.ts` validates `MailRequest` against the
 schema as it does every other message. The other seven files are byte-identical to `867d0ee`'s.
 
@@ -133,7 +133,7 @@ Re-pinned 2026-10-11 at `7086e5e`, the platform's `main` after #197 squash-merge
 `round-17/upload-file-measurement` (its BUILD-PLAN 25.2.28): `automation-manifest.json` is
 `cmp`-equal to `7086e5e`'s, so the bytes copied from `550663f` are the merged ones and only the
 commit above moves; the other six files the platform's `main` carries are `cmp`-equal too, and
-its `test/wire-schema.test.ts` samples and `manifest-validation.ts` did not change between
+its `snoopy-backend/test/wire-schema.test.ts` samples and `manifest-validation.ts` did not change between
 `550663f` and `7086e5e`. `automation-model-request.json` stays as copied from `e25fd74`: the
 branch `round-17/model-author-exclusion` was rebased onto `7086e5e`, and its head `2482a2c`
 (its BUILD-PLAN 25.2.29 and 25.2.30) carries the same bytes (`cmp`-equal) and the same rule and
@@ -145,7 +145,7 @@ Re-pinned 2026-10-11 at `df4bbad`, the platform's `main` after #198 squash-merge
 squash-merged `round-17/quickbooks-writes` (25.2.31): all eight files are `cmp`-equal to
 `df4bbad`'s, so `automation-model-request.json`, copied from `e25fd74`, is the merged one and
 only the commit above moves. Between `7086e5e` and `df4bbad` only that file changed; the
-platform's `test/wire-schema.test.ts` and `manifest-validation.ts` did not. Until a promotion
+platform's `snoopy-backend/test/wire-schema.test.ts` and `manifest-validation.ts` did not. Until a promotion
 carries `c2d6c6b`, the live platform answers `excludeModelAuthors` with a 400.
 
 Refreshed 2026-10-14 at `9516c0e` — the head of the platform's branch
@@ -233,7 +233,7 @@ gives the ADR-0041 refusals below in the words quoted there: `test/manifest-rule
 cases, run against the merged validator, each find the same refusal. The one word that differed,
 older than Build 22 — more than six groups, "must contain at most 6 entries", where the port said
 "must hold at most 6 items" — is aligned and bitten. `invoice-processing` v1 to v4 each pass the
-merged schema and the merged `validateManifest`. The platform's `manifests/README.md` still words
+merged schema and the merged `validateManifest`. The platform's `snoopy-backend/manifests/README.md` still words
 the old rule ("group '<id>' has no step"); its validator is quoted here. Until a promotion carries
 `32b33ae`, the live platform refuses a manifest declaring `titleByConnection` or `platform`;
 `invoice-processing` v4 is registered by the platform's pin change once this repository's `main`
@@ -248,7 +248,7 @@ directory's example manifest the same way.
 The schema says everything a JSON Schema can. The platform's `validateManifest`
 enforces these further rules at registration, quoted in its own refusal words so a
 refusal is read here before it is received. This section is vendored from the
-platform's `manifests/README.md` (ADR-0020 §2); bounds named as "N" are its `LIMITS`.
+platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds named as "N" are its `LIMITS`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
