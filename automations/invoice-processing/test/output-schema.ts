@@ -9,7 +9,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { manifestsRoot } from './fixtures.js';
 
 /**
- * The served manifest's `outputSchema` (v5's, v4's and v3's unchanged — `test/manifest.test.ts`), compiled as the repository's architecture test compiles
+ * The served manifest's `outputSchema` (v5's, v4's and v3's unchanged — `automations/invoice-processing/test/manifest.test.ts`), compiled as the repository's architecture test compiles
  * schemas — Ajv's 2020-12 draft, strict, every error — to hold each run's output to it: the platform
  * only requires an object, so this is where the description is checked (ip-review
  * design-after-approval-writes-notify-tests.json cross_cutting[5]). And the platform's published

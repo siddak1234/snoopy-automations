@@ -61,10 +61,10 @@ import { receive } from './steps/receive.js';
  * - `save-documents`; `ask-approval`, ONE approval for every document that waits; and after it the
  *   checks an approval repeats, the writes, and `save-approved`.
  *
- * The vendor choice is the flow's `vendor` setting (`src/quickbooks-path.ts`): "None" reads and
+ * The vendor choice is the flow's `vendor` setting (`automations/invoice-processing/src/quickbooks-path.ts`): "None" reads and
  * saves, and calls QuickBooks for nothing. One document never fails another or the run; QuickBooks
  * failing mid-run saves the details instead (v2's decision 6, per document). The result is every
- * document, whole (`src/run/documents.ts`), the summary, and the structured output.
+ * document, whole (`automations/invoice-processing/src/run/documents.ts`), the summary, and the structured output.
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
@@ -76,7 +76,7 @@ export const SERVED_VERSIONS = [5] as const;
  * 502/503/504 naming no reason — at the SDK's floor and ceilings: three attempts, 10 s then 20 s,
  * never past the deadline. A repeat sends the same request under the same key, which the platform
  * answers from its record when it has one; a step done per document goes on from the document it
- * failed at (`src/run/fan-out.ts`).
+ * failed at (`automations/invoice-processing/src/run/fan-out.ts`).
  */
 const READ_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
 
@@ -131,7 +131,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 /**
  * Every step v4's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
- * (`src/lookups/expense-search.ts`).
+ * (`automations/invoice-processing/src/lookups/expense-search.ts`).
  */
 export function pipelineSteps(
   clock: Clock,
@@ -205,7 +205,7 @@ export function define(
     steps: pipelineSteps(clock, expenseSearch, log),
     retry: RETRY,
     recover: recoverQuickBooks(log, perDocumentSpecs(clock, expenseSearch)),
-    // Every document, whole; the summary; and the structured output (`src/run/result.ts`).
+    // Every document, whole; the summary; and the structured output (`automations/invoice-processing/src/run/result.ts`).
     result: (state, request) => runResult(state, request),
   });
   return withFixedSentences(automation, log);
