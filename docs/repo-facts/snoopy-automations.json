@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
   "repository": "snoopy-automations",
-  "head": "57f394a",
+  "head": "22d6216",
   "readAt": "2026-10-19",
+  "gate": "verify",
   "counts": {
     "typescriptFiles": {
       "value": 276,
