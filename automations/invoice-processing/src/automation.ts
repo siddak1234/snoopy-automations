@@ -36,7 +36,9 @@ import { receive } from './steps/receive.js';
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
  * every document carries its numbers). v1, v2 and v3, under their own names, are registered and
  * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v4 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version).
+ * v5 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v5 (Build 23)
+ * is v4 with step 5 named "Run completed" — done only when the run succeeds (the owner's build 22
+ * feedback); nothing else changed.
  *
  * v4 (Build 22, the platform's BUILD-PLAN 25.4.54; the session's spec of 2026-10-17, §3) is v3's
  * code and v3's 22 steps, unchanged, shown in the five steps the owner asked for on build 21
@@ -67,7 +69,7 @@ import { receive } from './steps/receive.js';
 export const TEMPLATE_ID = 'invoice-processing';
 
 /** The manifest versions this code serves: v4 alone. v1's, v2's and v3's containers run their own images. */
-export const SERVED_VERSIONS = [4] as const;
+export const SERVED_VERSIONS = [5] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
@@ -176,7 +178,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v4's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v5's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),

@@ -40,7 +40,7 @@
 
 - `automations/invoice-check/` (`@autom8x/invoice-check`): Checks a submitted invoice against a workspace threshold, holds the large ones for approval, records the decision, and emails the outcome t… · manifests v1, v2, v3, v4
 - `automations/invoice-intake/` (`@autom8x/invoice-intake`): Receives invoice webhooks, holds invoices above a workspace threshold, and emails the outcome through the workspace's Google connection. · manifests v1, v2, v3
-- `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v4): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v1, v2, v3, v4
+- `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v4): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v1, v2, v3, v4, v5
 
 ### Packages
 

@@ -40,7 +40,8 @@ const sha256 = (version: number) =>
   createHash('sha256')
     .update(readFileSync(file(version)))
     .digest('hex');
-const manifest = read(4);
+const manifest = read(5);
+const v4 = read(4);
 const v3 = read(3);
 
 /**
@@ -57,30 +58,31 @@ function stepTitle(group: Group, config: JsonObject): string {
   return titled.titles.find((each) => each.providerId === chosen)?.title ?? group.title;
 }
 
-test('v4 is the one version this code serves; v1, v2 and v3 stay registered, byte for byte', () => {
-  assert.deepEqual([...SERVED_VERSIONS], [4]);
+test('v5 is the one version this code serves; v1 to v4 stay registered, byte for byte', () => {
+  assert.deepEqual([...SERVED_VERSIONS], [5]);
   assert.deepEqual(
     manifests.map((each) => each.version),
-    [4],
+    [5],
   );
   assert.deepEqual(
-    [1, 2, 3].map(sha256),
+    [1, 2, 3, 4].map(sha256),
     [
       'd712dd7e399e268a030619ca08144fd0249b730211ab5f37b8bc57b853155f25',
       '867b4eca9f022f09bc3cc92a1023719381374631c5041e6842a52777b1feca98',
       '3c7f1134b2c8918b578d08f4f23e5c69daf04ea930aaa3fbf0f14dd993ddcab9',
+      'b07092537297d442538c629b0488ba9810fb752f2e3fc6b0e89202355476d750',
     ],
-    'v1, v2 and v3 untouched: a registered version is immutable',
+    'v1 to v4 untouched: a registered version is immutable',
   );
   assert.equal(
-    sha256(4),
-    'b07092537297d442538c629b0488ba9810fb752f2e3fc6b0e89202355476d750',
-    "v4 is the spec's bytes, which the platform's pin change copies",
+    sha256(5),
+    '3845b67842a4ffa923d850328d9a3836418d1d3f61015a2f37b20f1d3c6472bf',
+    "v5 is these bytes, which the platform's pin change copies",
   );
-  assert.equal(manifest.version, 4);
+  assert.equal(manifest.version, 5);
 });
 
-test('the five steps, in order, in their words: Upload invoice · Connect integration · AI processing · Details saved, or QuickBooks updated · Email sent', () => {
+test('the five steps, in order, in their words: Upload invoice · Connect integration · AI processing · Details saved, or QuickBooks updated · Run completed', () => {
   assert.deepEqual(manifest.groups, [
     { id: 'upload', title: 'Upload invoice', description: 'Add a PDF or photo.' },
     { id: 'connect', title: 'Connect integration', description: 'QuickBooks, or None.' },
@@ -96,8 +98,8 @@ test('the five steps, in order, in their words: Upload invoice · Connect integr
     },
     {
       id: 'email',
-      title: 'Email sent',
-      description: 'The results are emailed.',
+      title: 'Run completed',
+      description: 'Done when the run succeeds.',
       platform: 'email',
     },
   ]);
@@ -110,14 +112,14 @@ test('step 4 says "QuickBooks updated" when the flow chose QuickBooks and "Detai
     'Connect integration',
     'AI processing',
     'QuickBooks updated',
-    'Email sent',
+    'Run completed',
   ]);
   assert.deepEqual(titles(NONE), [
     'Upload invoice',
     'Connect integration',
     'AI processing',
     'Details saved',
-    'Email sent',
+    'Run completed',
   ]);
   assert.deepEqual(titles({}), titles(NONE), 'a flow that has not chosen has None, the default');
 });
@@ -187,7 +189,7 @@ test('the vendor choice is step 2, titled "Integration", under the key v3 had; t
       required: false,
     },
   ]);
-  // The keys v3's flows carry, unchanged: the platform's move to v4 keeps each setting (S3).
+  // The keys v3's flows carry, unchanged: each move (v4, then v5) keeps each setting (S3).
   assert.deepEqual(
     manifest.setup.map((field) => [field.key, field.control, field.defaultValue]),
     v3.setup.map((field) => [field.key, field.control, field.defaultValue]),
@@ -303,10 +305,10 @@ test('the 22 steps, each in its step: its kicker, step, title and description as
   );
 });
 
-test("its own container: v4's origin and service account; the rest of the service v3's", () => {
+test("its own container: v5's origin and service account; the rest of the service v3's", () => {
   assert.deepEqual(manifest.service, {
-    origin: 'http://invoice-processing-v4.autom8x.internal:8080',
-    serviceAccount: 'invoice-processing-v4@autom8x.iam.gserviceaccount.com',
+    origin: 'http://invoice-processing-v5.autom8x.internal:8080',
+    serviceAccount: 'invoice-processing-v5@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
@@ -347,4 +349,27 @@ test("the plain-words rule (§3.0 rule 4): no 'solution', 'pipeline', 'provider'
   ]) {
     assert.ok(!words.includes(banned), banned);
   }
+});
+
+test('v5 is v4 with step 5 named "Run completed" (done only when the run succeeds) — nothing else moved', () => {
+  const step5 = (each: Manifest) => each.groups.find((group) => group.id === 'email');
+  assert.deepEqual(step5(v4), {
+    id: 'email',
+    title: 'Email sent',
+    description: 'The results are emailed.',
+    platform: 'email',
+  });
+  assert.deepEqual(step5(manifest), {
+    id: 'email',
+    title: 'Run completed',
+    description: 'Done when the run succeeds.',
+    platform: 'email',
+  });
+  const without = (each: Manifest) => ({
+    ...each,
+    version: undefined,
+    groups: each.groups.filter((group) => group.id !== 'email'),
+    service: { ...each.service, origin: undefined, serviceAccount: undefined },
+  });
+  assert.deepEqual(without(manifest), without(v4));
 });
