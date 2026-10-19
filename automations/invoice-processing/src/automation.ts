@@ -36,7 +36,9 @@ import { receive } from './steps/receive.js';
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
  * every document carries its numbers). v1, v2 and v3, under their own names, are registered and
  * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v4 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version).
+ * v5 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v5 (Build 23)
+ * is v4 with step 5 named "Run completed" — done only when the run succeeds (the owner's build 22
+ * feedback); nothing else changed.
  *
  * v4 (Build 22, the platform's BUILD-PLAN 25.4.54; the session's spec of 2026-10-17, §3) is v3's
  * code and v3's 22 steps, unchanged, shown in the five steps the owner asked for on build 21
@@ -59,22 +61,22 @@ import { receive } from './steps/receive.js';
  * - `save-documents`; `ask-approval`, ONE approval for every document that waits; and after it the
  *   checks an approval repeats, the writes, and `save-approved`.
  *
- * The vendor choice is the flow's `vendor` setting (`src/quickbooks-path.ts`): "None" reads and
+ * The vendor choice is the flow's `vendor` setting (`automations/invoice-processing/src/quickbooks-path.ts`): "None" reads and
  * saves, and calls QuickBooks for nothing. One document never fails another or the run; QuickBooks
  * failing mid-run saves the details instead (v2's decision 6, per document). The result is every
- * document, whole (`src/run/documents.ts`), the summary, and the structured output.
+ * document, whole (`automations/invoice-processing/src/run/documents.ts`), the summary, and the structured output.
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
 /** The manifest versions this code serves: v4 alone. v1's, v2's and v3's containers run their own images. */
-export const SERVED_VERSIONS = [4] as const;
+export const SERVED_VERSIONS = [5] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
  * 502/503/504 naming no reason — at the SDK's floor and ceilings: three attempts, 10 s then 20 s,
  * never past the deadline. A repeat sends the same request under the same key, which the platform
  * answers from its record when it has one; a step done per document goes on from the document it
- * failed at (`src/run/fan-out.ts`).
+ * failed at (`automations/invoice-processing/src/run/fan-out.ts`).
  */
 const READ_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
 
@@ -129,7 +131,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 /**
  * Every step v4's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
- * (`src/lookups/expense-search.ts`).
+ * (`automations/invoice-processing/src/lookups/expense-search.ts`).
  */
 export function pipelineSteps(
   clock: Clock,
@@ -176,7 +178,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v4's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v5's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),
@@ -203,7 +205,7 @@ export function define(
     steps: pipelineSteps(clock, expenseSearch, log),
     retry: RETRY,
     recover: recoverQuickBooks(log, perDocumentSpecs(clock, expenseSearch)),
-    // Every document, whole; the summary; and the structured output (`src/run/result.ts`).
+    // Every document, whole; the summary; and the structured output (`automations/invoice-processing/src/run/result.ts`).
     result: (state, request) => runResult(state, request),
   });
   return withFixedSentences(automation, log);

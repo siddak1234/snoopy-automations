@@ -462,9 +462,16 @@ in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN
 25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
 of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v4, the version this code serves** (Build 22; the session's spec of 2026-10-17, §3, V1). The
-image serves v4 alone (`SERVED_VERSIONS`; its Dockerfile copies only
-`manifests/invoice-processing.v4.json`); v1, v2 and v3 stay registered and immutable,
+**v5, the version this code serves** (Build 23; the owner's build 22 feedback of 2026-10-18). v5 is
+v4 with step 5 named **"Run completed"** ("Done when the run succeeds.") instead of "Email sent": the
+clients check it only when the run succeeds, and a held run's approval email never checks it. Nothing
+else moved — `automations/invoice-processing/test/manifest.test.ts` holds v5 to v4 less the version,
+the container's origin and service account, and step 5's words. The image serves v5 alone
+(`SERVED_VERSIONS`; its Dockerfile copies only `manifests/invoice-processing.v5.json`); v1 to v4 stay
+registered and immutable, held to their sha256 by the same test.
+
+**v4** (Build 22; the session's spec of 2026-10-17, §3, V1) — served until v5's release. Its
+image served v4 alone; v1, v2 and v3 stay registered and immutable,
 `automations/invoice-processing/test/manifest.test.ts` holding each to its sha256. v4 is v3's automation, unchanged — the same 22
 steps, prompts, checks, holds, QuickBooks writes, result and `outputSchema`, and the same model
 calls per file: `automations/invoice-processing/test/v4.test.ts` runs one file on v4's manifest and on v3's and finds the same

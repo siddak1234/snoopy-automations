@@ -23,6 +23,7 @@ import {
 import {
   PROMPTS,
   RETRY,
+  SERVED_VERSIONS,
   TEMPLATE_ID,
   define,
   perDocumentSpecs,
@@ -34,8 +35,8 @@ import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-searc
 import { reads } from './answers.js';
 
 /**
- * The suite's world: the repository's own v4 manifest — the one this code serves, v3's steps under
- * v4's five groups — a run started
+ * The suite's world: the repository's own v5 manifest — the one this code serves, v3's steps under
+ * v4's five groups (v5 renames step 5) — a run started
  * with one upload and the vendor QuickBooks, QuickBooks behind the platform (the kit's simulator,
  * holding Connections to its rules), a model that reads the file as one document, `GOOD_ANSWER`,
  * or as the documents a test gives — and, asked the second read's prompt, gives each document's 14
@@ -132,7 +133,7 @@ export interface SetUp {
   now?: number;
   simulator?: QuickBooksSimulator;
   runId?: string;
-  /** The last step the run takes (default `verify-read`); `all` is the whole of v4 (v3's steps). */
+  /** The last step the run takes (default `verify-read`); `all` is the whole of v5 (v3's steps). */
   through?: string;
   /**
    * Sandbox S4's answer for the run (default `EXPENSE_SEARCH`). A simulator made here searches an
@@ -150,7 +151,7 @@ function automationThrough(
 ): Automation {
   const [manifest] = manifests;
   const at = manifest?.pipeline.findIndex((step) => step.id === stepId) ?? -1;
-  if (!manifest || at < 0) throw new Error(`v4 declares no step ${stepId}`);
+  if (!manifest || at < 0) throw new Error(`v5 declares no step ${stepId}`);
   const pipeline = manifest.pipeline.slice(0, at + 1);
   const ids = pipeline.map((step) => step.id);
   const steps = pipelineSteps(dependencies.clock, dependencies.expenseSearch, dependencies.log);
@@ -197,7 +198,7 @@ export function setUp(options: SetUp = {}) {
   const request: InvokeRequest = invokeFixture({
     ...(options.runId === undefined ? {} : { runId: options.runId }),
     templateId: TEMPLATE_ID,
-    templateVersion: 4,
+    templateVersion: SERVED_VERSIONS[0],
     config: options.config ?? QUICKBOOKS,
     input: options.input ?? { invoiceFile: FILE_ID },
     deadline: new Date(Math.max(now, Date.now()) + (options.deadlineInMs ?? 900_000)).toISOString(),

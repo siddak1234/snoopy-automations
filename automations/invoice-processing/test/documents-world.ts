@@ -103,11 +103,11 @@ export interface DocumentsRun {
   /** No vendor in the company: every seller is new. */
   readonly bare?: boolean;
   readonly company?: (simulator: QuickBooksSimulator) => void;
-  /** The manifests the run's automation is given; the served ones (v4's) by default. */
+  /** The manifests the run's automation is given; the served ones (v5's) by default. */
   readonly manifests?: readonly Manifest[];
 }
 
-/** A whole run of v4 — v3's steps — on a photo of the documents given. */
+/** A whole run of v5 — v3's steps — on a photo of the documents given. */
 export async function documentsRun(run: DocumentsRun) {
   const simulator = new QuickBooksSimulator({ refusal: refusalFixture });
   simulator.expenseAmountSearchable = true;
