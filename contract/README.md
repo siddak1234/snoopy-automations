@@ -1,10 +1,12 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `84ed9bc` of its `round-17/b24` branch, re-pinned
-2026-10-20 for Build 24: `RunDocument.source` (the file, and its pages when told) and
-`RunDocumentRecord.accountName`, both optional (the platform's ADR-0045). Re-pinned to that
-pull request's merge commit before this repository's pull request merges. Before it, `32b33ae`,
+(`snoopy-backend`, private) at commit `708ed6e`, the platform's `main` after its #222
+squash-merged Build 24 (2026-10-20): `RunDocument.source` (the file, and its pages when told)
+and `RunDocumentRecord.accountName`, both optional (the platform's ADR-0045). First pinned at
+`84ed9bc` of its `round-17/b24` branch; `708ed6e`'s tree is that pull request's head's (`3f59de5`,
+`be5e0bc`), so all eight files are byte-identical (each checked with `cmp` against `708ed6e`)
+and only the commit moved. Before it, `32b33ae`,
 the platform's `main` after its #215 squash-merged its Build 22 (below). The platform emits them with
 `npm run schemas:emit` and verifies the committed files against its TypeScript types byte for
 byte, so this copy is the
