@@ -215,6 +215,7 @@ test('the old name, "Bills & Receipts", is nowhere in v3, v4 or v5: its code, it
     join(manifestsRoot, 'invoice-processing.v3.json'),
     join(manifestsRoot, 'invoice-processing.v4.json'),
     join(manifestsRoot, 'invoice-processing.v5.json'),
+    join(manifestsRoot, 'invoice-processing.v6.json'),
   ];
   for (const file of files) {
     const text = readFileSync(file, 'utf8');

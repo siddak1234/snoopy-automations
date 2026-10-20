@@ -117,11 +117,20 @@ function detailsOf(entry: Entry, outcome: Outcome): { label: string; value: stri
   return kept([['Category', purchase ? SPEND_TYPE_WORDS[read.spendType] : null], ...printed]);
 }
 
-/** One document, whole, as the result carries it. */
-export function runDocumentOf(entry: Entry, request: Pick<InvokeRequest, 'config'>): RunDocument {
+/**
+ * One document, whole, as the result carries it. v6 adds where it came from — `source.file`, the
+ * run's one upload (its pages are not told: the read does not report them) — and, for a recorded
+ * one, the QuickBooks company it went to, from the state its write saved (`recordedIn.accountName`).
+ */
+export function runDocumentOf(
+  entry: Entry,
+  request: Pick<InvokeRequest, 'config'>,
+  file?: string,
+): RunDocument {
   const { read } = entry;
   const outcome = outcomeOf(entry, request);
   const recorded = outcome.status === 'recorded' ? recordedOf(entry) : undefined;
+  const accountName = recorded === undefined ? undefined : readSaved(entry.engine)?.company.name;
   return {
     index: entry.index,
     status: outcome.status,
@@ -145,8 +154,14 @@ export function runDocumentOf(entry: Entry, request: Pick<InvokeRequest, 'config
     recordedIn:
       recorded === undefined
         ? null
-        : { providerId: QUICKBOOKS, recordType: recorded.outcome.noun, recordId: recorded.id },
+        : {
+            providerId: QUICKBOOKS,
+            recordType: recorded.outcome.noun,
+            recordId: recorded.id,
+            ...(accountName === undefined ? {} : { accountName }),
+          },
     details: detailsOf(entry, outcome),
+    ...(file === undefined ? {} : { source: { file } }),
   };
 }
 
@@ -164,8 +179,9 @@ export function summarised(entry: Entry, request: Pick<InvokeRequest, 'config'>)
 export function runDocumentsOf(
   documents: readonly Entry[],
   request: Pick<InvokeRequest, 'config'>,
+  file?: string,
 ): RunDocument[] {
-  return documents.map((entry) => runDocumentOf(entry, request));
+  return documents.map((entry) => runDocumentOf(entry, request, file));
 }
 
 /** Whether a state's documents include one QuickBooks may hold now: recorded, or written unconfirmed. */

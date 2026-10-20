@@ -197,7 +197,7 @@ test('a NUL or half a surrogate pair never reaches the wire: the platform cannot
     },
   ])!;
   assert.ok(bounded);
-  // The platform's own test (`packages/contracts/src/run-documents.ts`, `textCheck`).
+  // The platform's own test (`snoopy-backend/packages/contracts/src/run-documents.ts`, `textCheck`).
   const unstorable = /[\u0000\ud800-\udfff]/u;
   const texts = [
     bounded.statusText,
@@ -268,4 +268,46 @@ test("the one size guard: a success whose body would pass the platform's 256 KiB
     { outcome: 'success', output: { outcome: 'documents' } },
     'kept when it fits',
   );
+});
+
+/**
+ * Where a document is, and where it went (the platform's ADR-0045; Invoice Processing v6): an
+ * optional `source` — the uploaded file's artifact id and, when the automation can tell, its
+ * pages — and an optional `recordedIn.accountName`. Both validate as published; a value the
+ * platform would refuse is left out, never sent, so the document itself still reports.
+ */
+test('a source and an account name validate as published, and a value the platform would refuse is left out', () => {
+  const validate = validator('automation-run-result');
+  const file = '5d0f3a8e-2c41-4b7a-9e15-0a6c3f2b7d94';
+  const recordedIn = { ...EXAMPLE.recordedIn!, accountName: 'Northwind Trading LLC' };
+  const placed = { ...EXAMPLE, recordedIn, source: { file, pages: [1, 2] } };
+  assertValid(validate, { outcome: 'success', documents: [placed] }, 'a source with pages');
+  assertValid(
+    validate,
+    { outcome: 'success', documents: [{ ...placed, source: { file } }] },
+    'a source without pages (v6: one file, pages not told)',
+  );
+  assert.equal(
+    validate({ outcome: 'success', documents: [{ ...placed, source: { pages: [1] } }] }),
+    false,
+    'a source names its file',
+  );
+  assert.deepEqual(boundedDocuments([placed]), [placed], 'kept whole within every bound');
+
+  const [noPages, badFile, longName] = boundedDocuments([
+    { ...placed, source: { file, pages: [2, 1] } },
+    { ...placed, source: { file: 'not-an-id' } },
+    { ...placed, recordedIn: { ...recordedIn, accountName: 'x'.repeat(201) } },
+  ])!;
+  assert.deepEqual(noPages!.source, { file }, 'pages out of order are left out; the file stays');
+  assert.equal('source' in badFile!, false, 'a file id the platform would refuse: no source');
+  assert.equal('accountName' in longName!.recordedIn!, false, 'past 200 characters: left out');
+  assert.deepEqual(
+    boundedDocuments([{ ...placed, source: { file, pages: [0] } }])![0]!.source,
+    { file },
+    'page 0 is not a page',
+  );
+  for (const document of [noPages, badFile, longName]) {
+    assertValid(validate, { outcome: 'success', documents: [document] }, 'what is sent validates');
+  }
 });

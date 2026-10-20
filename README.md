@@ -462,7 +462,18 @@ in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN
 25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
 of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v5, the version this code serves** (Build 23; the owner's build 22 feedback of 2026-10-18). v5 is
+**v6, the version this code serves** (Build 24; the owner's build 23 feedback of 2026-10-20, F15 and
+F16). v6's results also say, for each document, the uploaded file it came from (`source.file` — a run
+has one upload; its pages are not told, because the read does not report them) and, for a recorded
+one, the QuickBooks company it went to (`recordedIn.accountName`, from the state its write saved):
+what the run page's Format and the run package's cover read (the platform's ADR-0045). Its manifest
+is v5's but for its version and its own container — `automations/invoice-processing/test/manifest.test.ts`
+holds that — and the image serves v6 alone (its Dockerfile copies only
+`manifests/invoice-processing.v6.json`); v1 to v5 stay registered and immutable, each held to its
+sha256. The SDK's `boundedDocuments` carries both fields and leaves out a value the platform would
+refuse (`packages/automation-sdk/src/documents.ts`).
+
+**v5** (Build 23; the owner's build 22 feedback of 2026-10-18) — served until v6's release. v5 is
 v4 with step 5 named **"Run completed"** ("Done when the run succeeds.") instead of "Email sent": the
 clients check it only when the run succeeds, and a held run's approval email never checks it. Nothing
 else moved — `automations/invoice-processing/test/manifest.test.ts` holds v5 to v4 less the version,

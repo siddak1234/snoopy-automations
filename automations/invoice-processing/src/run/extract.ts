@@ -2,8 +2,6 @@ import {
   CallbackRefusedError,
   DEFAULT_MODEL_TIMEOUT_MS,
   ModelRefusedError,
-  artifactIdProblem,
-  isObject,
   isUnsent,
   modelAuthor,
   readJsonCompletion,
@@ -17,7 +15,7 @@ import {
 import { partAnswerOf, v2AnswerOf, type DocumentAnswer, type PartAnswer } from './answer.js';
 import { documentReadOf, joinedAnswer } from './document-read.js';
 import { MODELS, extractFailed, extractRefused } from './model-refusals.js';
-import { KIND_OF, type Entry } from './state.js';
+import { KIND_OF, artifactIdOf, type Entry } from './state.js';
 import { DOUBTS, readLine } from './words.js';
 
 /**
@@ -26,7 +24,7 @@ import { DOUBTS, readLine } from './words.js';
  * should work … we should get a json out that clearly seperates accordingly"), with no limit on
  * how many (AM1). One model call reads a part: at most `PART_SIZES[0]` documents and lines, so an
  * answer never passes the platform's answer cap (8,000 tokens, snoopy-backend
- * `packages/config/src/index.ts:243`) and cuts a document off; the answer says where the next part
+ * `snoopy-backend/packages/config/src/index.ts:243`) and cuts a document off; the answer says where the next part
  * starts, and the next call starts there — a long receipt goes on from its next line. A clean file
  * of a few receipts is ONE call. A part the platform says was cut at its answer cap is asked again,
  * smaller (`PART_SIZES`), never skipped.
@@ -137,12 +135,6 @@ export function withPart(
     };
   }
   return { documents, next: null };
-}
-
-/** The upload `receive` kept, in the platform's id shape. */
-function artifactIdOf(state: JsonObject): string | undefined {
-  const id = isObject(state.file) ? state.file.artifactId : undefined;
-  return typeof id === 'string' && artifactIdProblem(id) === undefined ? id : undefined;
 }
 
 /**

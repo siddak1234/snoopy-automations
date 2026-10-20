@@ -9,7 +9,7 @@ import { lineWith } from '../words.js';
 import { outcomeOf, runDocumentsOf, summarised } from './documents.js';
 import { stopped } from './fan-out.js';
 import { planned, quickBooksRun } from './quickbooks.js';
-import { runStateOf, withEntries, type Entry } from './state.js';
+import { artifactIdOf, runStateOf, withEntries, type Entry } from './state.js';
 import { DOUBTS, approvalReason, countLine } from './words.js';
 
 /**
@@ -70,7 +70,7 @@ export const askApproval: Step = async (context) => {
     heldReason: reason,
     reason,
     state: context.state,
-    documents: runDocumentsOf(run.documents, context.request),
+    documents: runDocumentsOf(run.documents, context.request, artifactIdOf(context.state)),
   });
 };
 
