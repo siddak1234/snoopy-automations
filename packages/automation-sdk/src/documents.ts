@@ -60,7 +60,7 @@ export const RUN_DOCUMENT_LIMITS = {
 /**
  * An amount or a quantity: a decimal string of any number of whole digits and decimals — the
  * vendored `automation-run-result.json`'s `RunDocumentAmount` (the platform's P6 of Build 22, AM1
- * and AM7: no limit but size), which `test/documents.test.ts` holds this to.
+ * and AM7: no limit but size), which `packages/automation-sdk/test/documents.test.ts` holds this to.
  */
 export const RUN_DOCUMENT_DECIMAL_PATTERN = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/u;
 /** A time as printed: `HH:MM`, 24-hour, no zone. */
@@ -69,6 +69,11 @@ const DATE_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
 const CARD_PATTERN = /^[0-9]{4}$/u;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u;
+/** An uploaded file's artifact id, as the platform writes one: a UUID. */
+const FILE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+/** The platform's bounds on `RunDocumentRecord.accountName` and `RunDocumentSource.pages`. */
+const ACCOUNT_NAME_MAX = 200;
+const SOURCE_PAGES_MAX = 500;
 
 export interface RunDocumentVendor {
   readonly name: string | null;
@@ -100,6 +105,17 @@ export interface RunDocumentRecord {
   readonly providerId: string;
   readonly recordType: string;
   readonly recordId: string;
+  /** The account it went to, as the provider names it — a QuickBooks company's name. Optional. */
+  readonly accountName?: string;
+}
+
+/**
+ * Where a document is in the files uploaded for its run: the file's artifact id and, when the
+ * automation can tell, its pages from 1, strictly ascending (an image is page 1). Optional.
+ */
+export interface RunDocumentSource {
+  readonly file: string;
+  readonly pages?: readonly number[];
 }
 
 export interface RunDocument {
@@ -132,6 +148,7 @@ export interface RunDocument {
   readonly payment: RunDocumentPayment;
   readonly recordedIn: RunDocumentRecord | null;
   readonly details: readonly { readonly label: string; readonly value: string }[];
+  readonly source?: RunDocumentSource;
 }
 
 /**
@@ -181,13 +198,34 @@ function boundedRecord(value: RunDocumentRecord | null): RunDocumentRecord | nul
   if (value === null || !PROVIDER_ID_PATTERN.test(value.providerId)) return null;
   const recordType = text(value.recordType);
   const recordId = text(value.recordId);
-  return recordType === null || recordId === null
-    ? null
+  if (recordType === null || recordId === null) return null;
+  // An account name past the platform's bound is left out, never cut: the record still stands.
+  const accountName = text(value.accountName);
+  return accountName !== null && [...accountName].length <= ACCOUNT_NAME_MAX
+    ? { providerId: value.providerId, recordType, recordId, accountName }
     : { providerId: value.providerId, recordType, recordId };
+}
+
+/**
+ * The source as the wire accepts it: none without a file id the platform reads as one; its pages
+ * only when every one is a whole number from 1, strictly ascending, within the platform's bound.
+ */
+function boundedSource(value: RunDocumentSource | undefined): RunDocumentSource | undefined {
+  if (value === undefined || !FILE_ID_PATTERN.test(value.file)) return undefined;
+  const pages = value.pages;
+  const ordered =
+    pages !== undefined &&
+    pages.length >= 1 &&
+    pages.length <= SOURCE_PAGES_MAX &&
+    pages.every(
+      (page, at) => Number.isInteger(page) && page >= 1 && (at === 0 || page > pages[at - 1]!),
+    );
+  return ordered ? { file: value.file, pages: [...pages] } : { file: value.file };
 }
 
 /** One document as the wire accepts it. Its `statusText` must not be empty: the platform refuses that too. */
 function boundedDocument(document: RunDocument): RunDocument {
+  const source = boundedSource(document.source);
   const statusText = text(document.statusText);
   if (statusText === null) throw new Error(`documents[${document.index}].statusText is empty`);
   const references: RunDocumentReference[] = [];
@@ -237,6 +275,7 @@ function boundedDocument(document: RunDocument): RunDocument {
     },
     recordedIn: boundedRecord(document.recordedIn),
     details,
+    ...(source === undefined ? {} : { source }),
   };
 }
 

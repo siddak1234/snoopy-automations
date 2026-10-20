@@ -72,15 +72,15 @@ function assertTrackerInOrder(stepIds: readonly string[], label: string): void {
   );
 }
 
-test('the image serves v5 alone: of v1 to v5 it keeps v5, and refuses a run pinned to v3 before any step or call', async () => {
+test('the image serves v6 alone: of v1 to v6 it keeps v6, and refuses a run pinned to v3 before any step or call', async () => {
   const all = readManifests(manifestsRoot, TEMPLATE_ID);
   assert.deepEqual(
     all.map((each) => each.version),
-    [1, 2, 3, 4, 5],
+    [1, 2, 3, 4, 5, 6],
   );
   const automation = define(all, { log: () => undefined });
-  assert.deepEqual(automation.versions, [5]);
-  assert.throws(() => servedManifests([v3]), /serves v5, and no such manifest was given/u);
+  assert.deepEqual(automation.versions, [6]);
+  assert.throws(() => servedManifests([v3]), /serves v6, and no such manifest was given/u);
 
   const platform = new RecordingPlatform();
   const result = await automation.execute(

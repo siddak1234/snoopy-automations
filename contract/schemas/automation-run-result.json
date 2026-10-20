@@ -339,6 +339,11 @@
                       "recordId": {
                         "type": "string",
                         "minLength": 1
+                      },
+                      "accountName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
                       }
                     }
                   }
@@ -363,6 +368,28 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
+                    }
+                  }
+                }
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                  },
+                  "pages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
                     }
                   }
                 }
@@ -700,6 +727,11 @@
                       "recordId": {
                         "type": "string",
                         "minLength": 1
+                      },
+                      "accountName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
                       }
                     }
                   }
@@ -724,6 +756,28 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
+                    }
+                  }
+                }
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                  },
+                  "pages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
                     }
                   }
                 }
