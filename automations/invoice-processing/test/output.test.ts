@@ -26,7 +26,7 @@ import {
 } from './output-schema.js';
 
 /**
- * The run's result once its documents are done (`src/run/result.ts`, `src/run/documents.ts`): for
+ * The run's result once its documents are done (`automations/invoice-processing/src/run/result.ts`, `automations/invoice-processing/src/run/documents.ts`): for
  * each document its output item — v2's record made, statement compared, or details saved (§2.8),
  * with its place — the run's summary in v2's words for one document, and the document whole, its
  * status line and the lines a person reads beside it (`details`); the output as the manifest's
@@ -115,6 +115,7 @@ test('each record made, in the result line §3.F words: "Recorded in QuickBooks:
       providerId: 'quickbooks',
       recordType: noun,
       recordId: '145',
+      accountName: 'Sample Bakery',
     });
   }
   // The vendor's name as QuickBooks wrote it on the record wins; its total is the one shown.

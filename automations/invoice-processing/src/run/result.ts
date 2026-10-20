@@ -4,7 +4,7 @@ import { comparedOutput, recordedOutput } from '../output.js';
 import { quickBooksStateOf } from '../quickbooks-path.js';
 import { createdOf, newVendorOf, readSaved, statementOf } from '../writes/saved-state.js';
 import { runDocumentsOf, summarised } from './documents.js';
-import { runStateOf, type Entry } from './state.js';
+import { artifactIdOf, runStateOf, type Entry } from './state.js';
 import { runSummary } from './words.js';
 
 /**
@@ -55,6 +55,6 @@ export function runResult(state: JsonObject, request: Pick<InvokeRequest, 'confi
   return {
     output: { outcome: 'documents', documents: run.documents.map(outputOf) },
     summary: runSummary(run.documents.map((entry) => summarised(entry, request))),
-    documents: runDocumentsOf(run.documents, request),
+    documents: runDocumentsOf(run.documents, request, artifactIdOf(state)),
   };
 }

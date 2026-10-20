@@ -103,7 +103,7 @@ export interface DocumentsRun {
   /** No vendor in the company: every seller is new. */
   readonly bare?: boolean;
   readonly company?: (simulator: QuickBooksSimulator) => void;
-  /** The manifests the run's automation is given; the served ones (v5's) by default. */
+  /** The manifests the run's automation is given; the served ones (v6's) by default. */
   readonly manifests?: readonly Manifest[];
 }
 

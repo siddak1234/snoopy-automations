@@ -1,4 +1,5 @@
 import {
+  artifactIdProblem,
   isObject,
   type JsonObject,
   type RunDocumentLineItem,
@@ -13,7 +14,7 @@ import { READ_TYPES, type ReadType } from './answer.js';
 
 /**
  * v3's run state: v2's envelope for what the run shares — the file, the model that read it, and on
- * the QuickBooks path the company, its settings and its chart (`src/state.ts`) — and `documents`,
+ * the QuickBooks path the company, its settings and its chart (`automations/invoice-processing/src/state.ts`) — and `documents`,
  * one entry per document the file holds, in its order. Each entry carries what was read of it,
  * cleaned once for the run's result (`read`), and `engine`: exactly the state v2's steps kept for
  * ONE document, so v2's checks, lookups, decide and writes run on each document unchanged.
@@ -126,6 +127,12 @@ function isEntry(value: unknown): value is Entry {
     (value.answer === undefined || isObject(value.answer)) &&
     (value.waitingFor === undefined || typeof value.waitingFor === 'string')
   );
+}
+
+/** The upload `receive` kept, in the platform's id shape; undefined before it, or malformed. */
+export function artifactIdOf(state: JsonObject): string | undefined {
+  const id = isObject(state.file) ? state.file.artifactId : undefined;
+  return typeof id === 'string' && artifactIdProblem(id) === undefined ? id : undefined;
 }
 
 /** The state with its documents, each well formed and in the file's order; undefined otherwise. */

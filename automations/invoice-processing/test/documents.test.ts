@@ -13,7 +13,7 @@ import {
   keysOf,
   statuses,
 } from './documents-world.js';
-import { NONE } from './fixtures.js';
+import { FILE_ID, NONE } from './fixtures.js';
 import { assertOutputValid } from './output-schema.js';
 
 /**
@@ -73,6 +73,8 @@ test("each document carries everything read of it: its seller's place, its numbe
     payment: { method: 'card', cardLast4: '4417' },
     recordedIn: null,
     details: [{ label: 'Category', value: 'Materials' }],
+    // v6: the run's one upload, which the run page's Format and the run package read.
+    source: { file: FILE_ID },
   });
 });
 
@@ -88,9 +90,19 @@ test('with QuickBooks, each receipt is recorded as its own expense, each write u
   assert.deepEqual(statuses(world.result), ['recorded', 'recorded', 'recorded']);
   const purchases = world.simulator.company.purchases;
   assert.equal(purchases.length, 3);
+  // v6: each says the QuickBooks company it went to, and every one the file it came from.
   assert.deepEqual(
     documents.map((each) => each.recordedIn),
-    purchases.map((row) => ({ providerId: 'quickbooks', recordType: 'expense', recordId: row.Id })),
+    purchases.map((row) => ({
+      providerId: 'quickbooks',
+      recordType: 'expense',
+      recordId: row.Id,
+      accountName: 'Sample Bakery',
+    })),
+  );
+  assert.deepEqual(
+    documents.map((each) => each.source),
+    [{ file: FILE_ID }, { file: FILE_ID }, { file: FILE_ID }],
   );
   // Each expense names its own seller: the two known vendors, and Lowe's as it was added.
   const added = world.simulator.company.vendors.find((row) => row.DisplayName === "Lowe's");

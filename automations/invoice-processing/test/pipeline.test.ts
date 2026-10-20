@@ -87,7 +87,12 @@ test('the steps run in order, each QuickBooks call under its own key, one AI rea
     [
       'recorded',
       'Recorded in QuickBooks: bill',
-      { providerId: 'quickbooks', recordType: 'bill', recordId: '1001' },
+      {
+        providerId: 'quickbooks',
+        recordType: 'bill',
+        recordId: '1001',
+        accountName: 'Sample Bakery',
+      },
       [
         { label: 'Category', value: 'Office Supplies' },
         { label: 'Decided', value: 'Automatically' },

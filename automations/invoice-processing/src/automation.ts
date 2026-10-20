@@ -34,11 +34,15 @@ import { receive } from './steps/receive.js';
  * then saves each one's details, or records or compares it in QuickBooks Online (the platform's
  * BUILD-PLAN 25.4.31–25.4.36; the session's spec of 2026-10-15, §3, as the owner's corrections
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
- * every document carries its numbers). v1, v2 and v3, under their own names, are registered and
+ * every document carries its numbers). v1 to v5, under their own names, are registered and
  * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v5 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v5 (Build 23)
- * is v4 with step 5 named "Run completed" — done only when the run succeeds (the owner's build 22
- * feedback); nothing else changed.
+ * v6 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v6 (Build 24)
+ * is v5 whose results also say, for each document, the uploaded file it came from (`source.file`;
+ * its pages are not told — the read does not report them) and, for a recorded one, the QuickBooks
+ * company it went to (`recordedIn.accountName`): what the run page's Format and the run package's
+ * cover read (the platform's ADR-0045; the owner's build 23 feedback, F15 and F16). Its manifest is
+ * v5's but for its version and its own container; nothing else changed. v5 (Build 23) is v4 with
+ * step 5 named "Run completed" — done only when the run succeeds (the owner's build 22 feedback).
  *
  * v4 (Build 22, the platform's BUILD-PLAN 25.4.54; the session's spec of 2026-10-17, §3) is v3's
  * code and v3's 22 steps, unchanged, shown in the five steps the owner asked for on build 21
@@ -68,8 +72,8 @@ import { receive } from './steps/receive.js';
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
-/** The manifest versions this code serves: v4 alone. v1's, v2's and v3's containers run their own images. */
-export const SERVED_VERSIONS = [5] as const;
+/** The manifest versions this code serves: v6 alone. v1's to v5's containers run their own images. */
+export const SERVED_VERSIONS = [6] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
@@ -178,7 +182,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v5's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v6's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),
