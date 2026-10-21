@@ -29,7 +29,7 @@ import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing (template `invoice-processing`), version 4 — reads EVERY bill, invoice,
+ * Invoice Processing (template `invoice-processing`), version 6 — reads EVERY bill, invoice,
  * receipt, credit note, statement and other financial document in a PDF or photo, each on its own,
  * then saves each one's details, or records or compares it in QuickBooks Online (the platform's
  * BUILD-PLAN 25.4.31–25.4.36; the session's spec of 2026-10-15, §3, as the owner's corrections
@@ -133,7 +133,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 }
 
 /**
- * Every step v4's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
+ * Every step v6's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
  * (`automations/invoice-processing/src/lookups/expense-search.ts`).
  */

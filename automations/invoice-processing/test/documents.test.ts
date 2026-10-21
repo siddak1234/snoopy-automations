@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { PROVIDER_REFUSALS } from '@autom8x/automation-kit/testing';
 import { idempotencyKeyFor, type JsonObject, type RunResult } from '@autom8x/automation-sdk';
+
+import { UNCONFIRMED_LINE } from '../src/quickbooks-path.js';
 
 import {
   HARROWGATE,
@@ -13,7 +16,7 @@ import {
   keysOf,
   statuses,
 } from './documents-world.js';
-import { FILE_ID, NONE } from './fixtures.js';
+import { FILE_ID, NONE, lines } from './fixtures.js';
 import { assertOutputValid } from './output-schema.js';
 
 /**
@@ -137,6 +140,64 @@ test('two receipts from one new seller: one vendor added, two expenses, both nam
   assert.deepEqual(
     world.simulator.company.purchases.map((row) => (row.EntityRef as JsonObject).value),
     [added[0]!.Id, added[0]!.Id],
+  );
+});
+
+test("a receipt's new seller whose vendor add gets no answer three times: the expense is still recorded, naming no vendor, and says so truly (Gate 25's R5d)", async () => {
+  const feed = { ...LOWES, vendorName: 'Fresno Feed & Seed', documentNumber: '7710' };
+  const lost = { lost: 'before_record' } as const;
+  const none = { refuse: PROVIDER_REFUSALS.noAnswer() };
+  const started = Date.now();
+  // Lowe's alone, QuickBooks making the vendor each time and the answer lost; and Lowe's beside
+  // a second new seller, nothing reaching QuickBooks — so that one's add is never tried.
+  const [made, neither] = await Promise.all([
+    documentsRun({
+      documents: [LOWES],
+      company: (sim) => sim.script('vendor.create', [lost, lost, lost]),
+    }),
+    documentsRun({
+      documents: [LOWES, feed],
+      company: (sim) => sim.script('vendor.create', [none, none, none]),
+    }),
+  ]);
+  assert.ok(Date.now() - started >= 30_000, 'three attempts: 10 s, then 20 s');
+  for (const [world, count] of [
+    [made, 1],
+    [neither, 2],
+  ] as const) {
+    assert.equal(world.result.outcome, 'success', JSON.stringify(world.result).slice(0, 400));
+    const vendors = idempotencyKeyFor(world.request.runId, 'create-vendors');
+    assert.deepEqual(keysOf(world, 'vendor.create'), Array(3).fill(`${vendors}.d1`));
+    assert.deepEqual(
+      lines(world.platform).find(([stepId]) => stepId === 'create-vendors'),
+      ['create-vendors', 'failed', `${UNCONFIRMED_LINE} (after 3 attempts)`],
+    );
+    const purchases = world.simulator.company.purchases.slice(-count);
+    assert.equal(keysOf(world, 'purchase.create').length, count, 'each expense sent');
+    assert.deepEqual(statuses(world.result), Array(count).fill('recorded'));
+    const documents = documentsOf(world.result);
+    assert.deepEqual(
+      documents.map((each) => [each.statusText, each.recordedIn?.recordId]),
+      purchases.map((row) => ['Recorded in QuickBooks: expense', row.Id]),
+    );
+    // Naming no vendor, the seller in its memo.
+    assert.deepEqual(
+      purchases.map((row) => row.EntityRef),
+      Array(count).fill(undefined),
+    );
+    assert.match(String(purchases[0]?.PrivateNote), /Receipt 48291 from Lowe's\.$/u);
+  }
+  assert.equal(
+    made.simulator.company.vendors.filter((row) => row.DisplayName === "Lowe's").length,
+    1,
+  );
+  assert.equal(
+    neither.simulator.company.vendors.filter((row) => row.DisplayName === "Lowe's").length,
+    0,
+  );
+  assert.match(
+    String(neither.simulator.company.purchases.at(-1)?.PrivateNote),
+    /from Fresno Feed & Seed\.$/u,
   );
 });
 

@@ -6,7 +6,7 @@ import { boundedDocuments } from './documents.js';
 
 /**
  * The most bytes the result callback's body may take: the platform reads at most 256 KiB of it
- * (snoopy-backend `apps/runs/src/routes-callbacks.ts:47`, `REQUEST_BODY_LIMIT_BYTES`). The one
+ * (`snoopy-backend/apps/runs/src/routes-callbacks.ts:47`, `REQUEST_BODY_LIMIT_BYTES`). The one
  * size guard a result has — never a count of documents (the owner's AM1 and AM7, 2026-10-15: "no
  * limits other than size").
  */
@@ -20,7 +20,12 @@ const bodyBytes = (result: RunResult): number =>
  * The result with every one-line field, each line of its `details` and each of its `documents`,
  * normalised to what the wire accepts. A success whose body would pass `RESULT_BODY_LIMIT_BYTES`
  * leaves out its `output` — the structured result the platform keeps and never publishes — so the
- * documents a person reads still arrive; nothing a person reads is ever left out for size.
+ * documents a person reads still arrive; nothing a person reads in a success is ever left out for
+ * size. A held result past it never leaves out its `held.state`, which comes back with the
+ * approval and carries every read the continuation's result sends: it first sends each document
+ * without its lines (`lineItems` empty, `lineItemsComplete` false), so the run page and the
+ * waiting email still show each one's seller, number, totals and status, and only when even that
+ * does not fit leaves out its `documents`. A state that alone passes the limit cannot be sent.
  */
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
@@ -43,11 +48,25 @@ export function boundedResult(result: RunResult): RunResult {
     case 'held': {
       const { documents, ...rest } = result;
       const kept = boundedDocuments(documents);
-      return {
+      const bounded: Extract<RunResult, { outcome: 'held' }> = {
         ...rest,
         held: { ...result.held, reason: oneLine(result.held.reason, 'held.reason') },
         ...(kept === undefined ? {} : { documents: kept }),
       };
+      if (bounded.documents === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
+        return bounded;
+      }
+      const withoutLines: Extract<RunResult, { outcome: 'held' }> = {
+        ...bounded,
+        documents: bounded.documents.map((document) => ({
+          ...document,
+          lineItems: [],
+          lineItemsComplete: false,
+        })),
+      };
+      if (bodyBytes(withoutLines) <= RESULT_BODY_LIMIT_BYTES) return withoutLines;
+      const { documents: _documents, ...withoutDocuments } = bounded;
+      return withoutDocuments;
     }
     case 'failed':
       return { ...result, failureReason: oneLine(result.failureReason, 'failureReason') };

@@ -10,6 +10,7 @@ import {
   isUnsent,
   modelAuthor,
   readJsonCompletion,
+  type InvokeRequest,
   type JsonObject,
   type ModelCompletion,
   type ModelRefusalReason,
@@ -48,7 +49,9 @@ import { DOUBTS } from './words.js';
  * A second read that cannot be made is recorded on each document, and on the QuickBooks path the
  * document holds: "second read not made" (v2's D6). Out of time and a fault on the platform's side
  * fail the run, as v2's; an answer that never came is thrown on unchanged, for the runner's one
- * repeat of a call that never reached the platform.
+ * repeat of a call that never reached the platform. That repeat goes on from the call that never
+ * left: what the calls before it settled is kept for the run (`secondReads`), so no answered call
+ * is sent — and billed — again (Gate 25's R5d).
  */
 
 /** The fixed task: blind — nothing of the first read, nothing a person typed. */
@@ -168,6 +171,23 @@ function makersOf(state: JsonObject): string[] | undefined {
     : undefined;
 }
 
+/**
+ * Each run's documents read again so far, kept across the runner's repeats of the step — keyed by
+ * its request, as `extract.ts` keeps its reading, and only for the state every attempt is handed.
+ */
+const secondReads = new WeakMap<
+  InvokeRequest,
+  { readonly state: JsonObject; readonly read: Map<number, Entry> }
+>();
+
+function secondReadsOf(request: InvokeRequest, state: JsonObject): Map<number, Entry> {
+  const kept = secondReads.get(request);
+  if (kept?.state === state) return kept.read;
+  const read = new Map<number, Entry>();
+  secondReads.set(request, { state, read });
+  return read;
+}
+
 export function verifyRead(prompt: PromptModule, clock: Pick<Clock, 'now'>): Step {
   return async ({ request, state, platform }) => {
     const run = runStateOf(state);
@@ -179,7 +199,7 @@ export function verifyRead(prompt: PromptModule, clock: Pick<Clock, 'now'>): Ste
       return failed('platform_fault');
     }
     const makers = makersOf(state);
-    const read = new Map<number, Entry>();
+    const read = secondReadsOf(request, state);
     const notMadeAll = (reason: NotMadeReason, entries: readonly Entry[]) =>
       entries.forEach((entry) => read.set(entry.index, notMade(entry, reason)));
     if (makers === undefined) notMadeAll('no_other_maker', doubtful);
@@ -189,6 +209,8 @@ export function verifyRead(prompt: PromptModule, clock: Pick<Clock, 'now'>): Ste
       at += VERIFY_DOCUMENTS_PER_CALL
     ) {
       const chunk = doubtful.slice(at, at + VERIFY_DOCUMENTS_PER_CALL);
+      // Settled by an earlier attempt's call: not sent again.
+      if (chunk.every((entry) => read.has(entry.index))) continue;
       if (Date.parse(request.deadline) - Date.now() < DEFAULT_MODEL_TIMEOUT_MS) {
         return failed('out_of_time');
       }
