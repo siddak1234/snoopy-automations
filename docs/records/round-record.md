@@ -4,7 +4,7 @@ The rounds open in this repository, one section per round. Moved verbatim from t
 
 ## Round 18
 
-**OPEN 2026-10-21 in the platform (its BUILD-PLAN Phase 27, MASTER-PLAN §0.1): the flow standard.** This repository's part: 27.3.1, the `new-flow` skill and its spec template ([.claude/skills/new-flow/](../../.claude/skills/new-flow/SKILL.md)), on `round-18/new-flow`; then 27.3.2, Invoice Processing v7, once the platform's 27.2.1 lands and `contract/schemas` is refreshed from it.
+**OPEN 2026-10-21 in the platform (its BUILD-PLAN Phase 27, MASTER-PLAN §0.1): the flow standard.** This repository's part: 27.3.1, the `new-flow` skill and its spec template ([.claude/skills/new-flow/](../../.claude/skills/new-flow/SKILL.md)), on `round-18/new-flow`; then 27.3.2, Invoice Processing v7 — v6 with `display.documentWords` "Invoice" and "Invoices" — on `round-18/v7`, `contract/schemas/automation-manifest.json` refreshed from the platform's 27.2.1 and pinned at its merge, `d371251` (#231).
 
 ## Round 17
 

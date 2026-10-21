@@ -1,7 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `708ed6e`, the platform's `main` after its #222
+(`snoopy-backend`, private) at commit `d371251`, the platform's `main` after its #231 squash-merged
+Round 18's 27.2 (2026-10-21): `display.documentWords` ("Re-pinned 2026-10-21" below). Before it,
+`708ed6e`, the platform's `main` after its #222
 squash-merged Build 24 (2026-10-20): `RunDocument.source` (the file, and its pages when told)
 and `RunDocumentRecord.accountName`, both optional (the platform's ADR-0045). First pinned at
 `84ed9bc` of its `round-17/b24` branch; `708ed6e`'s tree is that pull request's head's (`3f59de5`,
@@ -243,6 +245,23 @@ the old rule ("group '<id>' has no step"); its validator is quoted here. Until a
 `32b33ae`, the live platform refuses a manifest declaring `titleByConnection` or `platform`;
 `invoice-processing` v4 is registered by the platform's pin change once this repository's `main`
 publishes its image.
+
+Refreshed 2026-10-21 from the head of the platform's branch `round-18/backend` (its BUILD-PLAN
+27.2.1, Round 18), not yet merged — as `dcb8ddb` and `1137ac9` were above, this repository's half
+built beside the platform's. One file moved, additively: `automation-manifest.json`'s `display` gains
+the optional `documentWords`, `{ singular, plural }`, each 1–40 characters — what a flow calls one
+of the documents its runs return, and many, which the platform publishes on the catalog entry and
+both clients and the run package print ("Invoice 1 of 3"; a flow that declares none, "Document 1 of
+3"). `manifests/invoice-processing.v7.json` declares "Invoice" and "Invoices" (27.3.2). The other
+seven files are byte-identical to `708ed6e`'s (each checked with `cmp`). Until that branch merges
+and a promotion carries it, the live platform refuses a manifest declaring `documentWords`, so v7
+is registered only by the platform's pin change after both; this copy is re-pinned to the merge
+commit then, its bytes unchanged unless a review changed them.
+
+Re-pinned 2026-10-21 at `d371251`, the platform's `main` after #231 squash-merged `round-18/backend`
+(23:02:39Z): all eight files are byte-identical to it (each checked with `cmp` against
+`git show d371251:schemas/<file>`), so only the commit above moves. The live platform accepts
+`documentWords` once a promotion carries `d371251` — the pin that serves v7 (its BUILD-PLAN 27.4.1).
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
