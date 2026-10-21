@@ -38,14 +38,17 @@ import { refusalOf } from './read.js';
  * context (`packages/automation-sdk/src/runner.ts`) — so the write notes, against that
  * object, an attempt it threw on; a step's first answer is judged as it always was.
  *
- * **The mark is kept per step, not per write.** It is keyed by the step's platform object
- * alone, which is right because every step makes at most one QuickBooks write: today
- * Invoice Processing's `create-vendor` (the vendor; `src/steps/confirm-vendor.ts`) and
- * `create-record` (the bill, expense, vendor credit or journal entry; its
- * `src/steps/create-record.ts`) each make one. A step that made two would have its second
- * write's own certain refusal reported as not confirmed, because of the first write's
- * unanswered attempt: such a step needs the mark keyed by write kind (the platform object
- * and `kind`), changed here with that step.
+ * **The mark is kept per platform object, not per write.** It is keyed by the platform
+ * object the write is handed alone, so each object must carry at most one QuickBooks write.
+ * Invoice Processing v6's write steps — `create-vendors`, `create-records`,
+ * `create-approved-vendors` and `create-approved-records` — each write once PER DOCUMENT,
+ * and hold to that because each document's write is handed its own part platform: one object
+ * per step and document, the same on every attempt (`partPlatform` in
+ * `automations/invoice-processing/src/run/fan-out.ts`), so the mark stays with that one
+ * document's write. A caller handing two writes one object would have the second write's own
+ * certain refusal reported as not confirmed, because of the first write's unanswered attempt:
+ * it needs an object per write, or the mark keyed by write kind (the platform object and
+ * `kind`), changed here with it.
  *
  * A Fault is named by its number alone, in `detail`: the caller maps the codes it knows
  * (Group 5's 6140, 6210, …) to its own sentences. Intuit's `Message` and `Detail` are
@@ -62,7 +65,7 @@ export const QUICKBOOKS_WRITES = {
     entity: 'JournalEntry',
     noun: 'journal entry',
   },
-  /** A new vendor a bill names: created only after an approval, before the bill. */
+  /** A new vendor a record names: a bill's, a receipt's or a card refund's seller. */
   vendor: { operation: 'vendor.create', entity: 'Vendor', noun: 'vendor' },
 } as const;
 export type QuickBooksWriteKind = keyof typeof QUICKBOOKS_WRITES;
@@ -128,10 +131,10 @@ type Failed = (
 ) => QuickBooksWrite;
 
 /**
- * The step platforms whose write was thrown on unanswered — no answer, or a refusal the
- * platform did not decide — so that the step's next attempt, handed the same object, knows
- * an earlier one may have made the record. Per step, not per write: every step makes at most
- * one write (above).
+ * The platform objects whose write was thrown on unanswered — no answer, or a refusal the
+ * platform did not decide — so that the next attempt, handed the same object, knows an earlier
+ * one may have made the record. Per platform object, not per write: each carries at most one
+ * write (above; Invoice Processing hands each document's write its own part platform).
  */
 const unanswered = new WeakSet<object>();
 

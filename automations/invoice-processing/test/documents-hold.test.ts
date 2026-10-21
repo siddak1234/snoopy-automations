@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { test } from 'node:test';
 
-import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
+import {
+  RESULT_BODY_LIMIT_BYTES,
+  boundedResult,
+  type JsonObject,
+  type ModelRequest,
+  type RunResult,
+} from '@autom8x/automation-sdk';
 
 import {
   HARROWGATE,
@@ -17,10 +24,11 @@ import {
   documentAnswer,
   isSecondRead,
   manifests,
+  partAnswer,
   positionsOf,
   secondAnswer,
 } from './fixtures.js';
-import { assertOutputValid } from './output-schema.js';
+import { assertOutputValid, assertResultValid } from './output-schema.js';
 
 /**
  * One document never fails the others (the session's spec, B4; the owner's AM6 and AM8): a
@@ -142,6 +150,65 @@ test('two copies of one receipt in one file: the second waits, "same as document
     'Document 2: same as document 1.',
   );
   assert.deepEqual(statuses(world.result), ['saved', 'waiting']);
+});
+
+/** The held run's reason. */
+const reasonOf = (result: RunResult) =>
+  (result as Extract<RunResult, { outcome: 'held' }>).held.reason;
+
+/** The body the result callback sends, in bytes, as the platform counts it. */
+const bodyBytes = (result: RunResult) =>
+  Buffer.byteLength(JSON.stringify({ runId: '00000000-0000-4000-8000-000000000000', ...result }));
+
+/** One receipt of 1,200 lines at $1.25, read 80 lines a part. */
+const LINES = Array.from({ length: 1_200 }, (_, at) => ({
+  description: `Item ${at + 1}: 2X4-8 STUD, KILN DRIED, PREMIUM GRADE, AISLE 14`,
+  quantity: 1,
+  unitPrice: 1.25,
+  amount: 1.25,
+}));
+const LONG: JsonObject = {
+  ...TIDEWELL,
+  subtotal: 1_500,
+  tax: 0,
+  total: 1_500,
+  lineItems: LINES,
+  lineItemCount: LINES.length,
+};
+
+function longInParts(call: ModelRequest): JsonObject {
+  const from = Number(call.input.fromLine);
+  const lines = LINES.slice(from - 1, from - 1 + Number(call.input.maximumLines));
+  const next =
+    from - 1 + lines.length < LINES.length ? { document: 1, line: from + lines.length } : null;
+  return partAnswer([{ ...LONG, lineItems: lines }], next, 1);
+}
+
+test("a held run of one 1,200-line receipt fits the platform's 256 KiB: each document sent without its lines, never its state, and the run is held, not failed (Gate 25's R5d)", async () => {
+  const first = await documentsRun({ documents: [LONG], parts: longInParts });
+  assert.equal(first.result.outcome, 'held', JSON.stringify(first.result).slice(0, 400));
+  assert.equal(reasonOf(first.result), 'Document 1: over the $500 limit.');
+  // As the automation hands it over: every line twice, in the state and in the documents.
+  assert.ok(bodyBytes(first.result) > RESULT_BODY_LIMIT_BYTES, `${bodyBytes(first.result)} bytes`);
+  const sent = boundedResult(first.result) as Extract<RunResult, { outcome: 'held' }>;
+  assert.ok(bodyBytes(sent) <= RESULT_BODY_LIMIT_BYTES, `sent: ${bodyBytes(sent)} bytes`);
+  assert.equal(sent.outcome, 'held');
+  assert.deepEqual(sent.held, (first.result as Extract<RunResult, { outcome: 'held' }>).held);
+  // What the run page and the waiting email show: the receipt, its seller, total and status.
+  const [waiting] = sent.documents ?? [];
+  assert.deepEqual(
+    [waiting?.status, waiting?.vendor.name, waiting?.number, waiting?.total],
+    ['waiting', 'Tidewell Hardware', '55120', '1500'],
+  );
+  assert.deepEqual([waiting?.lineItems, waiting?.lineItemsComplete], [[], false]);
+  assertResultValid(sent, 'what the held run sends');
+  // Approved, the continuation's result carries the document with every line.
+  const approved = await approve(first);
+  const done = boundedResult(approved.result) as Extract<RunResult, { outcome: 'success' }>;
+  assert.ok(bodyBytes(done) <= RESULT_BODY_LIMIT_BYTES, `success: ${bodyBytes(done)} bytes`);
+  assert.equal(done.documents?.[0]?.lineItems.length, 1_200);
+  assert.equal(done.documents?.[0]?.lineItemsComplete, true);
+  assert.equal(done.documents?.[0]?.status, 'recorded');
 });
 
 test('no email setting: the results go to the people the platform picks, never an address the flow types (AM3)', async () => {

@@ -116,6 +116,12 @@ export interface FanOut {
   line(turns: readonly Extract<Turn, { entry: Entry }>[]): string;
   /** Whether it writes: a document it gave up on mid-write may have been recorded. */
   readonly writes?: boolean;
+  /**
+   * What a document it gave up on becomes, from the entry before and the entry `gaveUp` stopped:
+   * that stop, unless the step says otherwise — a vendor step lets a purchase go on naming no
+   * vendor, as it does after any vendor failure (`writes.ts`).
+   */
+  readonly gaveUpOn?: (before: Entry, stopped: Entry) => Entry;
 }
 
 type Done = Extract<Turn, { entry: Entry }>;
@@ -185,7 +191,8 @@ export function stopped(entry: Entry, stop: JsonObject): Entry {
  * The step ended once the runner's repeats are spent: each document it finished as it finished;
  * the one it was writing when nothing answered — or, when the error names none, each it had not
  * finished — "QuickBooks didn't confirm"; every other it had not finished, "not recorded in
- * QuickBooks: QuickBooks didn't answer" — and the run goes on.
+ * QuickBooks: QuickBooks didn't answer" — each passed through the step's `gaveUpOn`, so a vendor
+ * step's purchase is still recorded — and the run goes on.
  */
 export function gaveUp(spec: FanOut, error: unknown, context: StepContext): StepResult | undefined {
   const run = runStateOf(context.state);
@@ -197,9 +204,11 @@ export function gaveUp(spec: FanOut, error: unknown, context: StepContext): Step
     if (turn) return turn.entry;
     if (!spec.eligible(entry, run, context.request)) return entry;
     // A write whose error names no document may have been made for any it had not finished.
-    return spec.writes === true && (thrown === undefined || entry.index === thrown)
-      ? stopped(entry, { unconfirmed: true })
-      : stopped(entry, { notRecorded: NOT_RECORDED.no_answer });
+    const stop =
+      spec.writes === true && (thrown === undefined || entry.index === thrown)
+        ? stopped(entry, { unconfirmed: true })
+        : stopped(entry, { notRecorded: NOT_RECORDED.no_answer });
+    return spec.gaveUpOn?.(entry, stop) ?? stop;
   });
   return {
     outcome: 'failed',

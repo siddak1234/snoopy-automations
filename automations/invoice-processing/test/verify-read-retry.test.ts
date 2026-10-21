@@ -5,7 +5,22 @@ import { isUnanswered, isUnsent } from '@autom8x/automation-sdk';
 import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
 import { RUN_FAILS } from '../src/words.js';
-import { QUICKBOOKS, everythingSaid, isSecondRead, lines, reads, setUp } from './fixtures.js';
+import { receipt } from './check-world.js';
+import {
+  QUICKBOOKS,
+  completion,
+  documentAnswer,
+  everythingSaid,
+  isSecondRead,
+  jpeg,
+  lines,
+  partAnswer,
+  positionsOf,
+  reads,
+  secondAnswer,
+  setUp,
+  verifyAnswer,
+} from './fixtures.js';
 import { proxyPage, refusedConnection, timedOut } from './wire.js';
 
 /**
@@ -92,4 +107,37 @@ test('repeated once, 10 s later, when nothing reached the platform; twice, the r
     stepId: 'verify-read',
     error: 'TimeoutError',
   });
+});
+
+test("a repeat goes on from the call that never left: 21 doubtful documents, the second call unsent — three second-read calls, never the answered one again (Gate 25's R5d)", async () => {
+  const refused = await refusedConnection();
+  const documents = Array.from({ length: 21 }, (_, at) =>
+    documentAnswer(receipt({ vendorName: `Store ${at + 1}`, documentNumber: `R-${at + 1}` })),
+  );
+  const world = setUp({
+    config: { ...QUICKBOOKS, holdAboveAmount: 0 },
+    file: jpeg(),
+    through: 'all',
+  });
+  let seconds = 0;
+  world.platform.model = (call, model) => {
+    if (!isSecondRead(call)) {
+      return Promise.resolve(completion(model, partAnswer(documents)));
+    }
+    seconds += 1;
+    if (seconds === 2) return Promise.reject(refused);
+    const named = positionsOf(call).map(
+      (position) => [position, secondAnswer({ ...documents[position - 1] })] as const,
+    );
+    return Promise.resolve(completion(model, verifyAnswer(named, documents.length)));
+  };
+  const result = await world.run();
+  assert.equal(result.outcome, 'held', JSON.stringify(result).slice(0, 300));
+  const twenty = Array.from({ length: 20 }, (_, at) => at + 1);
+  assert.deepEqual(world.platform.modelCalls.filter(isSecondRead).map(positionsOf), [
+    twenty,
+    [21],
+    [21],
+  ]);
+  assert.match(verifyLine(world.platform)?.[2] ?? '', / \(after 2 attempts\)$/u);
 });

@@ -140,6 +140,31 @@ test("with no time left to repeat it, a new vendor that got no answer: QuickBook
   }
 });
 
+test("after approval, a receipt's new seller QuickBooks never answered for — looked up again or added — still has its expense recorded, naming no vendor (Gate 25's R5d)", async () => {
+  for (const [stepId, operation, writes] of [
+    ['confirm-vendors', 'query.run', ['purchase.create']],
+    ['create-approved-vendors', 'vendor.create', ['vendor.create', 'purchase.create']],
+  ] as const) {
+    // Over a limit of 0, its seller new and every check of the name clear: a vendor to add (B3).
+    const first = await firstRun({ answer: receipt(), config: HELD, bare: true });
+    first.simulator.script(operation, [{ refuse: PROVIDER_REFUSALS.noAnswer() }]);
+    const approved = await approve(first, { deadline: noTimeToRepeat() });
+    assert.equal(approved.result.outcome, 'success', `${stepId}: ${summaryOf(approved.result)}`);
+    assert.equal(approved.steps.find(([id]) => id === stepId)?.[1], 'failed', stepId);
+    assert.deepEqual(
+      writesOf(approved.providerCalls).map(([written]) => written),
+      writes,
+      stepId,
+    );
+    assert.deepEqual((outputOf(approved.result).record as JsonObject).payee, { kind: 'none' });
+    assert.equal(
+      summaryOf(approved.result),
+      'Recorded in QuickBooks: expense from Tidewell Hardware, $60.63.',
+      stepId,
+    );
+  }
+});
+
 /**
  * The platform refusing a create — certain on its first answer, nothing having reached QuickBooks —
  * with the reason it is not recorded for, and the word a repeat's "didn't confirm" names in the log:
