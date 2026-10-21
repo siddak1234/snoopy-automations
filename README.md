@@ -527,11 +527,15 @@ still unclear — or a page clearly not a financial document — waits for one a
 each ("Document 2: the total can't be read.") while the rest are recorded or saved; a quote, a
 purchase order, a bank statement or any other financial document QuickBooks keeps no record of
 is saved with all its data (AM8; `automations/invoice-processing/test/documents-hold.test.ts`).
-Two copies of one purchase in one file — the same seller, date and total — make the later one
-wait, "same as document 1" (B1), and only one is ever written: right before each write, a copy
-whose twin QuickBooks holds or may hold — written in the first run, or earlier in the same step
-after the approval — is kept out, "Saved. Not recorded in QuickBooks: same as document 1"
-(Gate 25's R5d; `automations/invoice-processing/src/run/writes.ts`). A receipt's or a card
+Two documents in one file with the same seller, date and total make the later one wait, "same
+as document 1" (B1). That doubt alone never keeps a document out: two bills with their own
+numbers, a bill and its credit note, or a receipt and its refund are each recorded. A copy is kept
+out only when the ONE duplicate rule (`automations/invoice-processing/src/decide/duplicate-rule.ts`)
+matches its twin's record: a twin recorded in the first run is found by confirm-no-duplicates'
+lookup — "Saved. Not recorded in QuickBooks: may already be in QuickBooks" — and a twin written
+after the approval, which that check runs too early to see, by the write itself — "Saved. Not
+recorded in QuickBooks: same as document 1" (Gate 25's R5d, PR #47's review;
+`automations/invoice-processing/src/run/writes.ts`, `automations/invoice-processing/test/copies.test.ts`). A receipt's or a card
 refund's seller QuickBooks has no vendor for is added as one only when every check of its name
 is clear (B3), and never keeps its expense out: refused, or unanswered once the step's repeats
 are spent, the expense is recorded naming no vendor, the seller in its memo. The result carries
@@ -540,11 +544,15 @@ and place, `number`, `numberLabel` and `references`, date and time, each line's 
 unit price and amount, the totals as decimal strings, how it was paid, `recordedIn` and the
 lines a person reads beside it — no limit but the callback body's 256 KiB
 (`RESULT_BODY_LIMIT_BYTES`; AM1, AM7): past it, the SDK's `boundedResult` leaves out a success's
-`output` and a held run's `documents` — never the held state, which carries every read for the
-continuation's result — so a held run is still offered for approval; a NUL or half a surrogate
-pair, which the platform cannot store, never reaches it (`boundedDocuments`). The run sends no
-mail and has no email setting: the platform mails each run's results to the person who started
-it, or the owner and admins (AM3).
+`output`, and sends a held run's documents without their lines (`lineItems` empty,
+`lineItemsComplete` false), so the run page and the waiting email still show each one's seller,
+number, totals and status, leaving the documents out only when even that does not fit. It never
+leaves out the held state, which carries every read for the continuation's result, so the reads
+themselves are the bound: measured with lines whose descriptions run to about 60 characters, a
+file of 2,000 lines is sent, and one of 2,100 is refused, held or not, and the run fails. A NUL
+or half a surrogate pair, which the platform cannot store, never reaches it
+(`boundedDocuments`). The run sends no mail and has no email setting: the platform mails each
+run's results to the person who started it, or the owner and admins (AM3).
 Four step groups — Received, Read, Checked, Done — over 22 steps. Each prompt has at most 16
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an

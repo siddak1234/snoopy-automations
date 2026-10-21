@@ -138,6 +138,10 @@ export interface RunDocument {
   /** ISO 4217. */
   readonly currency: string | null;
   readonly lineItems: readonly RunDocumentLineItem[];
+  /**
+   * False when not every line is here: the read stopped inside the document, or a held result
+   * past the body's limit sent it without its lines (`boundedResult`, `result.ts`).
+   */
   readonly lineItemsComplete: boolean;
   readonly subtotal: string | null;
   readonly tax: string | null;

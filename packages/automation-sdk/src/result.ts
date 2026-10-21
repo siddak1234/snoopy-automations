@@ -21,9 +21,11 @@ const bodyBytes = (result: RunResult): number =>
  * normalised to what the wire accepts. A success whose body would pass `RESULT_BODY_LIMIT_BYTES`
  * leaves out its `output` — the structured result the platform keeps and never publishes — so the
  * documents a person reads still arrive; nothing a person reads in a success is ever left out for
- * size. A held result past it leaves out its `documents`, never its `held.state`: the state comes
- * back with the approval and carries what the continuation needs to send every document then, and
- * a held run the platform could not read would never be offered for approval at all.
+ * size. A held result past it never leaves out its `held.state`, which comes back with the
+ * approval and carries every read the continuation's result sends: it first sends each document
+ * without its lines (`lineItems` empty, `lineItemsComplete` false), so the run page and the
+ * waiting email still show each one's seller, number, totals and status, and only when even that
+ * does not fit leaves out its `documents`. A state that alone passes the limit cannot be sent.
  */
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
@@ -54,6 +56,15 @@ export function boundedResult(result: RunResult): RunResult {
       if (bounded.documents === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
         return bounded;
       }
+      const withoutLines: Extract<RunResult, { outcome: 'held' }> = {
+        ...bounded,
+        documents: bounded.documents.map((document) => ({
+          ...document,
+          lineItems: [],
+          lineItemsComplete: false,
+        })),
+      };
+      if (bodyBytes(withoutLines) <= RESULT_BODY_LIMIT_BYTES) return withoutLines;
       const { documents: _documents, ...withoutDocuments } = bounded;
       return withoutDocuments;
     }

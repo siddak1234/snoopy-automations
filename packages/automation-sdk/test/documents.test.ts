@@ -11,6 +11,7 @@ import {
   boundedDocuments,
   decimalOf,
 } from '../src/documents.js';
+import { ARTIFACT_ID_PATTERN } from '../src/model-request.js';
 import { RESULT_BODY_LIMIT_BYTES, boundedResult } from '../src/platform.js';
 import { EXAMPLE } from './document-fixture.js';
 import { assertValid, schemas, validator } from './published-schemas.js';
@@ -271,7 +272,7 @@ test("the one size guard: a success whose body would pass the platform's 256 KiB
   );
 });
 
-test("a held result whose body would pass the platform's 256 KiB leaves out its documents, never its state, so the approval is still offered", () => {
+test("a held result whose body would pass the platform's 256 KiB sends each document without its lines, never leaving out its state; past even that, no documents", () => {
   const validate = validator('automation-run-result');
   const bytes = (result: RunResult) =>
     Buffer.byteLength(JSON.stringify({ runId: '00000000-0000-4000-8000-000000000000', ...result }));
@@ -292,8 +293,20 @@ test("a held result whose body would pass the platform's 256 KiB leaves out its 
   assert.ok(bytes(bounded) <= RESULT_BODY_LIMIT_BYTES, `within it: ${bytes(bounded)} bytes`);
   assert.equal(bounded.outcome, 'held');
   assert.deepEqual(bounded.held, held, 'the state and the reason kept whole');
-  assert.equal('documents' in bounded, false, 'the documents left out');
+  // Each document still says what it is and what became of it — its lines left out, and said so.
+  assert.deepEqual(bounded.documents, [{ ...EXAMPLE, lineItems: [], lineItemsComplete: false }]);
   assertValid(validate, { runId: 'r', ...bounded }, 'what is sent validates');
+
+  // A state that leaves too little room even for each document without its lines: none is sent.
+  const nearly = { blob: 'z'.repeat(RESULT_BODY_LIMIT_BYTES - 2_000) };
+  const many = Array.from({ length: 20 }, (_, at) => ({ ...document, index: at + 1 }));
+  const crowded = { outcome: 'held' as const, held: { ...held, state: nearly }, documents: many };
+  const sent = boundedResult(crowded) as Extract<RunResult, { outcome: 'held' }>;
+  assert.ok(bytes(sent) <= RESULT_BODY_LIMIT_BYTES, `within it: ${bytes(sent)} bytes`);
+  assert.deepEqual(sent.held.state, nearly, 'the state kept whole');
+  assert.equal('documents' in sent, false, 'the documents left out');
+  assertValid(validate, { runId: 'r', ...sent }, 'what is sent validates');
+
   // Within the limit, nothing is left out.
   const small = { outcome: 'held' as const, held, documents: [EXAMPLE] };
   assert.deepEqual(boundedResult(small), small, 'kept when it fits');
@@ -323,32 +336,54 @@ test('a source and an account name validate as published, and a value the platfo
   );
   assert.deepEqual(boundedDocuments([placed]), [placed], 'kept whole within every bound');
 
-  // A UUID in shape whose version digit is not 1–8, or whose variant digit is not 8, 9, a or b:
-  // the schema's `source.file` refuses both (Gate 25's R5d), so the SDK sends neither.
-  const notVersioned = '11111111-1111-1111-1111-111111111111';
-  const notVariant = '5d0f3a8e-2c41-4b7a-7e15-0a6c3f2b7d94';
-  for (const id of [notVersioned, notVariant]) {
+  // The SDK's bound is the schema's own: each `source.file` pattern the published result carries
+  // (a success's documents and a held run's) is `ARTIFACT_ID_PATTERN`, character for character.
+  const filePatterns: string[] = [];
+  const walk = (value: unknown, key?: string): void => {
+    if (Array.isArray(value)) value.forEach((item) => walk(item));
+    else if (typeof value === 'object' && value !== null) {
+      const node = value as Record<string, unknown>;
+      if (key === 'source' && typeof node.properties === 'object' && node.properties !== null) {
+        const fileNode = (node.properties as Record<string, { pattern?: unknown }>).file;
+        if (typeof fileNode?.pattern === 'string') filePatterns.push(fileNode.pattern);
+      }
+      for (const [child, inner] of Object.entries(node)) walk(inner, child);
+    }
+  };
+  walk(JSON.parse(readFileSync(join(schemas, 'automation-run-result.json'), 'utf8')));
+  assert.equal(filePatterns.length, 2, "a success's documents and a held run's");
+  for (const pattern of filePatterns) assert.equal(pattern, ARTIFACT_ID_PATTERN.source);
+
+  // A UUID in shape whose version digit is not 1–8 (0 here), or whose variant digit is not 8, 9,
+  // a or b (7, and 1 in the all-ones id): the schema refuses each (Gate 25's R5d), so the SDK
+  // sends none of them.
+  const versionZero = '5d0f3a8e-2c41-0b7a-8e15-0a6c3f2b7d94';
+  const variantSeven = '5d0f3a8e-2c41-4b7a-7e15-0a6c3f2b7d94';
+  const variantOne = '11111111-1111-1111-1111-111111111111';
+  for (const id of [versionZero, variantSeven, variantOne]) {
     const sent = { ...placed, source: { file: id } };
     assert.equal(validate({ outcome: 'success', documents: [sent] }), false, `${id}: refused`);
   }
-  const [noPages, badFile, longName, unversioned, unvariant] = boundedDocuments([
+  const [noPages, badFile, longName, unversioned, unvariant, ones] = boundedDocuments([
     { ...placed, source: { file, pages: [2, 1] } },
     { ...placed, source: { file: 'not-an-id' } },
     { ...placed, recordedIn: { ...recordedIn, accountName: 'x'.repeat(201) } },
-    { ...placed, source: { file: notVersioned } },
-    { ...placed, source: { file: notVariant } },
+    { ...placed, source: { file: versionZero } },
+    { ...placed, source: { file: variantSeven } },
+    { ...placed, source: { file: variantOne } },
   ])!;
   assert.deepEqual(noPages!.source, { file }, 'pages out of order are left out; the file stays');
   assert.equal('source' in badFile!, false, 'a file id the platform would refuse: no source');
-  assert.equal('source' in unversioned!, false, 'version digit 1: no source');
+  assert.equal('source' in unversioned!, false, 'version digit 0: no source');
   assert.equal('source' in unvariant!, false, 'variant digit 7: no source');
+  assert.equal('source' in ones!, false, 'variant digit 1 (version 1 is allowed): no source');
   assert.equal('accountName' in longName!.recordedIn!, false, 'past 200 characters: left out');
   assert.deepEqual(
     boundedDocuments([{ ...placed, source: { file, pages: [0] } }])![0]!.source,
     { file },
     'page 0 is not a page',
   );
-  for (const document of [noPages, badFile, longName, unversioned, unvariant]) {
+  for (const document of [noPages, badFile, longName, unversioned, unvariant, ones]) {
     assertValid(validate, { outcome: 'success', documents: [document] }, 'what is sent validates');
   }
 });
