@@ -1,5 +1,6 @@
 import { truncateText } from './contract.js';
 import { RUN_DETAIL_LIMITS } from './details.js';
+import { ARTIFACT_ID_PATTERN } from './model-request.js';
 
 /**
  * A run's `documents` (the platform's BUILD-PLAN 25.4.27, its ADR-0039; the session's spec of
@@ -69,8 +70,6 @@ const DATE_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
 const CARD_PATTERN = /^[0-9]{4}$/u;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u;
-/** An uploaded file's artifact id, as the platform writes one: a UUID. */
-const FILE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 /** The platform's bounds on `RunDocumentRecord.accountName` and `RunDocumentSource.pages`. */
 const ACCOUNT_NAME_MAX = 200;
 const SOURCE_PAGES_MAX = 500;
@@ -207,11 +206,13 @@ function boundedRecord(value: RunDocumentRecord | null): RunDocumentRecord | nul
 }
 
 /**
- * The source as the wire accepts it: none without a file id the platform reads as one; its pages
- * only when every one is a whole number from 1, strictly ascending, within the platform's bound.
+ * The source as the wire accepts it: none without a file id in the platform's artifact-id shape —
+ * the vendored schema's `source.file` pattern, the SDK's `ARTIFACT_ID_PATTERN` (a UUID whose
+ * version digit is 1–8 and variant digit 8, 9, a or b); its pages only when every one is a whole
+ * number from 1, strictly ascending, within the platform's bound.
  */
 function boundedSource(value: RunDocumentSource | undefined): RunDocumentSource | undefined {
-  if (value === undefined || !FILE_ID_PATTERN.test(value.file)) return undefined;
+  if (value === undefined || !ARTIFACT_ID_PATTERN.test(value.file)) return undefined;
   const pages = value.pages;
   const ordered =
     pages !== undefined &&

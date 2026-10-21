@@ -13,6 +13,7 @@ import { confirmNoDuplicate } from '../steps/confirm-no-duplicate.js';
 import { addVendor, confirmVendor, type NewVendor } from '../steps/confirm-vendor.js';
 import { createRecord } from '../steps/create-record.js';
 import { createdOf, newVendorOf, readSaved } from '../writes/saved-state.js';
+import { written } from './documents.js';
 import {
   partOf,
   partPlatform,
@@ -24,7 +25,7 @@ import {
 } from './fan-out.js';
 import { planned, quickBooksRun } from './quickbooks.js';
 import type { Entry, RunState } from './state.js';
-import { countLine } from './words.js';
+import { countLine, sameAs } from './words.js';
 
 /**
  * The writes, per document (the session's spec, §3.2 steps 13–14 and 18–21; B3): each document its
@@ -38,7 +39,14 @@ import { countLine } from './words.js';
  *
  * A receipt's or a card refund's new seller is added only when every check of its name came back
  * clear (`addsSeller`), and is never what keeps its expense out of QuickBooks: when it cannot be
- * found or added, the expense is recorded naming no vendor, the seller in its memo, as v2 did.
+ * found or added — refused, or no answer once the step's repeats are spent (`gaveUpOn`) — the
+ * expense is recorded naming no vendor, the seller in its memo, as v2 did.
+ *
+ * Two copies of one purchase in one file both wait — the second "same as document N"
+ * (`check.ts`) — and confirm-no-duplicates checks every waiting document before any is written, so
+ * it cannot see the record a copy's twin is about to make. Each write therefore first looks for a
+ * twin QuickBooks holds or may hold, written in the first run or earlier in the same step, and
+ * keeps the copy out: "Not recorded in QuickBooks: same as document N" (Gate 25's R5d).
  */
 
 type Done = Extract<Turn, { entry: Entry }>;
@@ -69,6 +77,30 @@ function afterVendor(before: Entry, after: Entry): Entry {
   return purchase(before) ? unlinked({ ...before, engine: after.engine }) : after;
 }
 
+/** The first document in the file this one is a copy of ("same as document N"); else its own index. */
+function firstCopyOf(entry: Entry, documents: readonly Entry[]): number {
+  return (
+    documents.find((other) => entry.doubts.includes(sameAs(other.index)))?.index ?? entry.index
+  );
+}
+
+/**
+ * A copy of this document in the file — the same seller, date and total — that QuickBooks holds or
+ * may hold before this write: recorded, or written unconfirmed, in the first run or earlier in this
+ * step (each document's entry as this step's turns left it).
+ */
+function writtenCopy(entry: Entry, run: RunState, earlier: readonly Done[]): Entry | undefined {
+  const first = firstCopyOf(entry, run.documents);
+  const now = new Map(run.documents.map((other) => [other.index, other]));
+  for (const turn of earlier) now.set(turn.entry.index, turn.entry);
+  return [...now.values()].find(
+    (other) =>
+      other.index !== entry.index &&
+      firstCopyOf(other, run.documents) === first &&
+      written(other.engine) !== null,
+  );
+}
+
 /** The name a vendor step tried for a document, and what stopped it, kept for the others with it. */
 function tried(entry: Entry, name: string, stop: unknown): Entry {
   const vendorTried = isObject(stop) ? { name, stop } : { name };
@@ -89,6 +121,7 @@ function addVendors(stage: 'ready' | 'waiting'): FanOut {
   const takes = writable(stage);
   return {
     writes: true,
+    gaveUpOn: afterVendor,
     eligible: (entry, run, request) =>
       takes(entry, run, request) && newVendorOfPlan(entry) !== undefined,
     async turn(context: StepContext, entry: Entry, _run, earlier) {
@@ -123,16 +156,29 @@ function addVendors(stage: 'ready' | 'waiting'): FanOut {
   };
 }
 
-/** Recording: v2's create-record on each document, which is done either way. */
+/**
+ * Recording: v2's create-record on each document, which is done either way — but never a copy
+ * whose twin in the file QuickBooks already holds or may hold (`writtenCopy`).
+ */
 function records(stage: 'ready' | 'waiting'): FanOut {
   return {
     writes: true,
     eligible: writable(stage),
-    async turn(context, entry, run) {
+    async turn(context, entry, run, earlier) {
+      const after = stage === 'waiting' ? { afterApproval: true } : {};
+      const copy = writtenCopy(entry, run, earlier);
+      if (copy) {
+        const reason = sameAs(copy.index);
+        const kept = stopped(entry, { notRecorded: reason });
+        return {
+          entry: { ...kept, stage: 'done', ...after },
+          summary: `Not recorded in QuickBooks: ${reason}`,
+          failed: false,
+        };
+      }
       const result = await runForDocument(createRecord(), context, run, entry, partOf(entry.index));
       const turn = turnOf(entry, result);
       if ('end' in turn) return turn;
-      const after = stage === 'waiting' ? { afterApproval: true } : {};
       return { ...turn, entry: { ...turn.entry, stage: 'done', ...after } };
     },
     line(turns: readonly Done[]) {
@@ -150,6 +196,7 @@ function records(stage: 'ready' | 'waiting'): FanOut {
 function again(eligible: FanOut['eligible'], step: Step, label: string, vendor: boolean): FanOut {
   return {
     eligible,
+    ...(vendor ? { gaveUpOn: afterVendor } : {}),
     async turn(context, entry, run) {
       const result = await runForDocument(step, context, run, entry, partOf(entry.index));
       const turn = turnOf(entry, result);

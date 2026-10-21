@@ -413,11 +413,14 @@ defineAutomation({
   last error. A result the step returns — `ok`, `failed`, `skipped` or `held` — ends
   the attempts, so a held step is never run twice.
 
-`invoice-processing` declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
-reads and for its two QuickBooks writes, `create-vendor` and `create-record` (the owner's
-"Retry the creates", 2026-10-12, on sandbox S6 — the kit's `writeQuickBooks` throws the
-transient failures on, for the retry), and `{ attempts: 2, backoffMs: 10_000, when:
-'unsent' }` for `extract` and `verify-read`, its two model calls. Neither older automation
+`invoice-processing` (v6) declares `{ attempts: 3, backoffMs: 10_000 }` for each of its
+reads and for its four QuickBooks write steps, `create-vendors`, `create-records`,
+`create-approved-vendors` and `create-approved-records`, each writing once per document under
+the document's part (the owner's "Retry the creates", 2026-10-12, on sandbox S6 — the kit's
+`writeQuickBooks` throws the transient failures on, for the retry), and `{ attempts: 2,
+backoffMs: 10_000, when: 'unsent' }` for its two model steps, `extract` (one call per part)
+and `verify-read` (one call per 20 doubtful documents); a repeat of either goes on from the
+call that never left, never sending an answered call again. Neither older automation
 declares a policy:
 `invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
 own failure and reports it, so a policy there would never fire; `invoice-check`'s
@@ -470,8 +473,11 @@ what the run page's Format and the run package's cover read (the platform's ADR-
 is v5's but for its version and its own container — `automations/invoice-processing/test/manifest.test.ts`
 holds that — and the image serves v6 alone (its Dockerfile copies only
 `manifests/invoice-processing.v6.json`); v1 to v5 stay registered and immutable, each held to its
-sha256. The SDK's `boundedDocuments` carries both fields and leaves out a value the platform would
-refuse (`packages/automation-sdk/src/documents.ts`).
+sha256. The SDK's `boundedDocuments` carries both fields and leaves out each value the published
+schema refuses — a `source.file` not in the platform's artifact-id shape (`ARTIFACT_ID_PATTERN`: a
+UUID whose version digit is 1–8 and variant digit 8, 9, a or b), pages that are not whole numbers
+from 1, strictly ascending, at most 500 of them, an `accountName` past 200 characters — and keeps
+the document itself (`packages/automation-sdk/src/documents.ts`).
 
 **v5** (Build 23; the owner's build 22 feedback of 2026-10-18) — served until v6's release. v5 is
 v4 with step 5 named **"Run completed"** ("Done when the run succeeds.") instead of "Email sent": the
@@ -520,14 +526,25 @@ others: one the checks cannot use is read again (`verify-documents.v1`, 20 a cal
 still unclear — or a page clearly not a financial document — waits for one approval that names
 each ("Document 2: the total can't be read.") while the rest are recorded or saved; a quote, a
 purchase order, a bank statement or any other financial document QuickBooks keeps no record of
-is saved with all its data (AM8; `automations/invoice-processing/test/documents-hold.test.ts`). The result carries every
-document whole (`RunDocument`, `automations/invoice-processing/src/run/documents.ts`): its type (`invoice` among them), seller
+is saved with all its data (AM8; `automations/invoice-processing/test/documents-hold.test.ts`).
+Two copies of one purchase in one file — the same seller, date and total — make the later one
+wait, "same as document 1" (B1), and only one is ever written: right before each write, a copy
+whose twin QuickBooks holds or may hold — written in the first run, or earlier in the same step
+after the approval — is kept out, "Saved. Not recorded in QuickBooks: same as document 1"
+(Gate 25's R5d; `automations/invoice-processing/src/run/writes.ts`). A receipt's or a card
+refund's seller QuickBooks has no vendor for is added as one only when every check of its name
+is clear (B3), and never keeps its expense out: refused, or unanswered once the step's repeats
+are spent, the expense is recorded naming no vendor, the seller in its memo. The result carries
+every document whole (`RunDocument`, `automations/invoice-processing/src/run/documents.ts`): its type (`invoice` among them), seller
 and place, `number`, `numberLabel` and `references`, date and time, each line's words, quantity,
 unit price and amount, the totals as decimal strings, how it was paid, `recordedIn` and the
 lines a person reads beside it — no limit but the callback body's 256 KiB
-(`RESULT_BODY_LIMIT_BYTES`; AM1, AM7); a NUL or half a surrogate pair, which the platform cannot
-store, never reaches it (`boundedDocuments`). The run sends no mail and has no email setting: the
-platform mails each run's results to the person who started it, or the owner and admins (AM3).
+(`RESULT_BODY_LIMIT_BYTES`; AM1, AM7): past it, the SDK's `boundedResult` leaves out a success's
+`output` and a held run's `documents` — never the held state, which carries every read for the
+continuation's result — so a held run is still offered for approval; a NUL or half a surrogate
+pair, which the platform cannot store, never reaches it (`boundedDocuments`). The run sends no
+mail and has no email setting: the platform mails each run's results to the person who started
+it, or the owner and admins (AM3).
 Four step groups — Received, Read, Checked, Done — over 22 steps. Each prompt has at most 16
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an

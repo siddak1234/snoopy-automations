@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
+import { Buffer } from 'node:buffer';
 
+import {
+  RESULT_BODY_LIMIT_BYTES,
+  boundedResult,
+  type JsonObject,
+  type ModelRequest,
+  type RunResult,
+} from '@autom8x/automation-sdk';
+
+import { bill } from './check-world.js';
 import {
   HARROWGATE,
   LOWES,
@@ -11,16 +20,19 @@ import {
   documentsOf,
   documentsRun,
   statuses,
+  type Run,
 } from './documents-world.js';
 import {
   NONE,
+  QUICKBOOKS,
   documentAnswer,
   isSecondRead,
   manifests,
+  partAnswer,
   positionsOf,
   secondAnswer,
 } from './fixtures.js';
-import { assertOutputValid } from './output-schema.js';
+import { assertOutputValid, assertResultValid } from './output-schema.js';
 
 /**
  * One document never fails the others (the session's spec, B4; the owner's AM6 and AM8): a
@@ -142,6 +154,133 @@ test('two copies of one receipt in one file: the second waits, "same as document
     'Document 2: same as document 1.',
   );
   assert.deepEqual(statuses(world.result), ['saved', 'waiting']);
+});
+
+/** The held run's reason. */
+const reasonOf = (result: RunResult) =>
+  (result as Extract<RunResult, { outcome: 'held' }>).held.reason;
+
+/** The continuation's QuickBooks writes, by operation. */
+const writesIn = (approved: Awaited<ReturnType<typeof approve>>) =>
+  approved.providerCalls
+    .map((call) => call.operation)
+    .filter((operation) => operation.endsWith('.create'));
+
+/** The step's line in the continuation. */
+const lineIn = (approved: Awaited<ReturnType<typeof approve>>, stepId: string) =>
+  approved.steps.find(([id]) => id === stepId)?.[2];
+
+/** Two copies of one purchase, both waiting: after the one approval, ONE record (Gate 25's R5d). */
+async function bothWaitThenOne(first: Run) {
+  assert.deepEqual(statuses(first.result), ['waiting', 'waiting']);
+  const approved = await approve(first);
+  assert.equal(approved.result.outcome, 'success', JSON.stringify(approved.result).slice(0, 400));
+  assert.deepEqual(statuses(approved.result), ['recorded', 'not_recorded']);
+  assert.equal(
+    documentsOf(approved.result)[1]?.statusText,
+    'Saved. Not recorded in QuickBooks: same as document 1',
+  );
+  assert.equal(
+    lineIn(approved, 'create-approved-records'),
+    '1 recorded in QuickBooks, 1 not recorded',
+  );
+  return approved;
+}
+
+test('the same bill twice in one file from a new vendor: one approval, then one vendor and ONE bill, the copy "same as document 1" (Gate 25\'s R5d)', async () => {
+  const twice = documentAnswer(bill(), { numberLabel: 'Invoice #' });
+  const first = await documentsRun({ documents: [twice, { ...twice }], bare: true });
+  assert.equal(first.result.outcome, 'held', JSON.stringify(first.result).slice(0, 400));
+  assert.match(
+    reasonOf(first.result),
+    /^Document 1: new vendor.*Document 2: new vendor.*same as document 1\.$/u,
+  );
+  const approved = await bothWaitThenOne(first);
+  assert.deepEqual(writesIn(approved), ['vendor.create', 'bill.create']);
+  assert.equal(first.simulator.company.bills.length, 1, 'one bill in QuickBooks');
+  assert.equal(first.simulator.company.vendors.length, 1, 'one vendor');
+});
+
+test('two copies of one receipt over the limit: one approval, then ONE expense, the copy "same as document 1" (Gate 25\'s R5d)', async () => {
+  const first = await documentsRun({
+    documents: [TIDEWELL, { ...TIDEWELL }],
+    config: { ...QUICKBOOKS, holdAboveAmount: 50 },
+  });
+  assert.equal(first.result.outcome, 'held', JSON.stringify(first.result).slice(0, 400));
+  assert.equal(
+    reasonOf(first.result),
+    'Document 1: over the $50 limit. Document 2: over the $50 limit, same as document 1.',
+  );
+  const before = first.simulator.company.purchases.length;
+  const approved = await bothWaitThenOne(first);
+  assert.deepEqual(writesIn(approved), ['purchase.create']);
+  assert.equal(first.simulator.company.purchases.length, before + 1, 'one expense in QuickBooks');
+});
+
+test('a receipt recorded in the first run and its copy waiting: after approval the copy is kept out as already in QuickBooks, and nothing is written', async () => {
+  const first = await documentsRun({ documents: [TIDEWELL, { ...TIDEWELL }] });
+  assert.equal(first.result.outcome, 'held', JSON.stringify(first.result).slice(0, 400));
+  assert.deepEqual(statuses(first.result), ['recorded', 'waiting']);
+  assert.equal(reasonOf(first.result), 'Document 2: same as document 1.');
+  const approved = await approve(first);
+  assert.deepEqual(statuses(approved.result), ['recorded', 'not_recorded']);
+  assert.equal(
+    documentsOf(approved.result)[1]?.statusText,
+    'Saved. Not recorded in QuickBooks: may already be in QuickBooks',
+  );
+  assert.equal(
+    lineIn(approved, 'confirm-no-duplicates'),
+    'Not recorded in QuickBooks: may already be in QuickBooks',
+  );
+  assert.deepEqual(writesIn(approved), []);
+});
+
+/** The body the result callback sends, in bytes, as the platform counts it. */
+const bodyBytes = (result: RunResult) =>
+  Buffer.byteLength(JSON.stringify({ runId: '00000000-0000-4000-8000-000000000000', ...result }));
+
+/** One receipt of 1,200 lines at $1.25, read 80 lines a part. */
+const LINES = Array.from({ length: 1_200 }, (_, at) => ({
+  description: `Item ${at + 1}: 2X4-8 STUD, KILN DRIED, PREMIUM GRADE, AISLE 14`,
+  quantity: 1,
+  unitPrice: 1.25,
+  amount: 1.25,
+}));
+const LONG: JsonObject = {
+  ...TIDEWELL,
+  subtotal: 1_500,
+  tax: 0,
+  total: 1_500,
+  lineItems: LINES,
+  lineItemCount: LINES.length,
+};
+
+function longInParts(call: ModelRequest): JsonObject {
+  const from = Number(call.input.fromLine);
+  const lines = LINES.slice(from - 1, from - 1 + Number(call.input.maximumLines));
+  const next =
+    from - 1 + lines.length < LINES.length ? { document: 1, line: from + lines.length } : null;
+  return partAnswer([{ ...LONG, lineItems: lines }], next, 1);
+}
+
+test("a held run of one 1,200-line receipt fits the platform's 256 KiB: its documents left out, never its state, and the run is held, not failed (Gate 25's R5d)", async () => {
+  const first = await documentsRun({ documents: [LONG], parts: longInParts });
+  assert.equal(first.result.outcome, 'held', JSON.stringify(first.result).slice(0, 400));
+  assert.equal(reasonOf(first.result), 'Document 1: over the $500 limit.');
+  // As the automation hands it over: every line twice, in the state and in the documents.
+  assert.ok(bodyBytes(first.result) > RESULT_BODY_LIMIT_BYTES, `${bodyBytes(first.result)} bytes`);
+  const sent = boundedResult(first.result) as Extract<RunResult, { outcome: 'held' }>;
+  assert.ok(bodyBytes(sent) <= RESULT_BODY_LIMIT_BYTES, `sent: ${bodyBytes(sent)} bytes`);
+  assert.equal(sent.outcome, 'held');
+  assert.deepEqual(sent.held, (first.result as Extract<RunResult, { outcome: 'held' }>).held);
+  assert.equal('documents' in sent, false);
+  assertResultValid(sent, 'what the held run sends');
+  // Approved, the continuation's result carries the document with every line.
+  const approved = await approve(first);
+  const done = boundedResult(approved.result) as Extract<RunResult, { outcome: 'success' }>;
+  assert.ok(bodyBytes(done) <= RESULT_BODY_LIMIT_BYTES, `success: ${bodyBytes(done)} bytes`);
+  assert.equal(done.documents?.[0]?.lineItems.length, 1_200);
+  assert.equal(done.documents?.[0]?.status, 'recorded');
 });
 
 test('no email setting: the results go to the people the platform picks, never an address the flow types (AM3)', async () => {
