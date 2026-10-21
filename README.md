@@ -814,6 +814,10 @@ MetaData.CreateTime` on every transaction), and
 
 ## Adding an automation
 
+A new flow starts from the owner's idea, written down as a spec the owner approves, words
+included, before any code: `/new-flow` ([SKILL.md](.claude/skills/new-flow/SKILL.md)), whose spec
+becomes `automations/<templateId>/README.md`. Its build is the steps below.
+
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
    with your templateId everywhere (`package.json`, `Dockerfile`, `src/`). Give it a
    lockfile: copy an existing automation's `package-lock.json` and change its two
