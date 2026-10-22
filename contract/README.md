@@ -34,10 +34,9 @@ and this copy carries the result:
   nothing ever read them. A failed run is re-run as a fresh run.
 - `automation-manifest.json` admits `http` on a non-routable host — `localhost`,
   `127.0.0.1`, `::1`, `*.internal`, `*.localhost` — exactly as the validator always did
-  (platform §12.1 #83). `invoice-intake` now declares
-  `http://invoice-intake.autom8x.internal:8080`, the shape the platform's ADR-0020
-  chose for every automation: the container carries the name as a network alias, so it
-  is reachable only on the compose network by construction.
+  (platform §12.1 #83) — `http://<templateId>-v<n>.autom8x.internal:8080`, the shape the
+  platform's ADR-0020 chose for every automation: the container carries the name as a
+  network alias, so it is reachable only on the compose network by construction.
 - `pricing.monthlyPriceUsd` carries `multipleOf: 0.01`; `requiredConnections` and
   `requiredCapabilities` carry `uniqueItems` (platform §12.1 #86).
 

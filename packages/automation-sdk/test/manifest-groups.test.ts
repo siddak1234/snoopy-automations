@@ -15,8 +15,9 @@ import { assertValid, validator } from './published-schemas.js';
  * `test/architecture.test.ts` holds this repository's manifests to them.
  */
 
+/** The retired `invoice-check` v1's manifest, kept byte for byte as test data (the platform's 25.4.11). */
 const reference = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, 'fixtures/reference-manifest.json'), 'utf8'),
 ) as Record<string, unknown> & { display: Record<string, unknown>; pipeline: { id: string }[] };
 
 test('the category is one of the team kinds, spelt exactly', () => {

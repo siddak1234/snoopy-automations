@@ -181,7 +181,7 @@ test('no automation depends on, imports from, or copies another automation (ADR-
 test('the rule takes the SDK and a library under packages/, and still refuses another automation', () => {
   const automations = new Map([
     ['@autom8x/invoice-processing', 'invoice-processing'],
-    ['@autom8x/invoice-check', 'invoice-check'],
+    ['@autom8x/other-automation', 'other-automation'],
   ]);
   const libraries = new Map([
     ['@autom8x/automation-sdk', 'automation-sdk'],
@@ -195,13 +195,13 @@ test('the rule takes the SDK and a library under packages/, and still refuses an
   assert.equal(problem('tsx', '^4.19.0'), undefined, 'a registry dependency is not a local one');
 
   assert.match(
-    problem('@autom8x/invoice-check', 'file:../../automations/invoice-check') ?? '',
+    problem('@autom8x/other-automation', 'file:../../automations/other-automation') ?? '',
     /another automation/u,
   );
-  assert.match(problem('@autom8x/invoice-check', '^0.1.0') ?? '', /another automation/u);
+  assert.match(problem('@autom8x/other-automation', '^0.1.0') ?? '', /another automation/u);
   // A library's name at another path, a path outside packages/, a name packages/ does not hold.
   assert.match(
-    problem('@autom8x/automation-kit', 'file:../../automations/invoice-check') ?? '',
+    problem('@autom8x/automation-kit', 'file:../../automations/other-automation') ?? '',
     /a local dependency is/u,
   );
   assert.match(

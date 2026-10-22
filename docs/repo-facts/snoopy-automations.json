@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "repository": "snoopy-automations",
-  "head": "1eb4fe5",
-  "readAt": "2026-10-21",
+  "head": "ab08a66",
+  "readAt": "2026-10-22",
   "gate": "verify",
   "counts": {
     "typescriptFiles": {
-      "value": 278,
+      "value": 270,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)**/*.ts' | wc -l"
     },
     "automations": {
-      "value": 3,
+      "value": 1,
       "command": "ls -d automations/*/ | wc -l"
     },
     "sdkPackages": {
@@ -18,7 +18,7 @@
       "command": "ls -d packages/*/ | wc -l"
     },
     "manifests": {
-      "value": 14,
+      "value": 7,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)manifests/*.json' | wc -l"
     },
     "promptTemplates": {
@@ -26,7 +26,7 @@
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)automations/*/prompts/*.json' | wc -l"
     },
     "testFiles": {
-      "value": 120,
+      "value": 117,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)**/*.test.ts' | wc -l"
     }
   }
