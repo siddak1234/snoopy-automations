@@ -164,11 +164,12 @@ test('provider and model requests validate', () => {
 test('a manifest may declare the files its runs accept, in the published block', () => {
   // The platform's BUILD-PLAN 25.2.21: until it, the schema had no `artifacts` and closed
   // the manifest, so a manifest declaring the block its validator has always read
-  // failed this copy. The verdicts are its validator's (snoopy-backend
-  // `test/wire-schema.test.ts` at `4875579`), copied as data.
+  // failed this copy. The verdicts are its validator's
+  // (`snoopy-backend/test/wire-schema.test.ts` at `4875579`), copied as data.
   const validate = validator('automation-manifest');
+  // The retired `invoice-check` v1's manifest, kept byte for byte as test data (the platform's 25.4.11).
   const reference = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, 'fixtures/reference-manifest.json'), 'utf8'),
   ) as Record<string, unknown>;
   const withArtifacts = (artifacts: unknown) => ({ ...reference, artifacts });
   assertValid(validate, reference, 'the reference manifest alone');
@@ -228,11 +229,12 @@ test('a manifest may declare the files its runs accept, in the published block',
 
 test("the artifacts block may limit a PDF's pages and an image's sides, within the published bounds", () => {
   // The platform's BUILD-PLAN 25.2.28, measured when an upload is sealed; its verdicts
-  // (snoopy-backend `test/wire-schema.test.ts` at `550663f`, merged unchanged as `7086e5e`),
+  // (`snoopy-backend/test/wire-schema.test.ts` at `550663f`, merged unchanged as `7086e5e`),
   // copied as data.
   const validate = validator('automation-manifest');
+  // The retired `invoice-check` v1's manifest, kept byte for byte as test data (the platform's 25.4.11).
   const reference = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, 'fixtures/reference-manifest.json'), 'utf8'),
   ) as Record<string, unknown>;
   const limiting = (limits: Record<string, unknown>) => ({
     ...reference,

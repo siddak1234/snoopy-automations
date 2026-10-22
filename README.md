@@ -420,41 +420,20 @@ the document's part (the owner's "Retry the creates", 2026-10-12, on sandbox S6 
 `writeQuickBooks` throws the transient failures on, for the retry), and `{ attempts: 2,
 backoffMs: 10_000, when: 'unsent' }` for its two model steps, `extract` (one call per part)
 and `verify-read` (one call per 20 doubtful documents); a repeat of either goes on from the
-call that never left, never sending an answered call again. Neither older automation
-declares a policy:
-`invoice-intake` calls the platform only in `notify`, and `notify` in both catches its
-own failure and reports it, so a policy there would never fire; `invoice-check`'s
-`receive` only reads the file its run was given and is the one safe candidate. The
+call that never left, never sending an answered call again. The
 template declares none and says why beside its `define`: its `act` is a provider
 write. In a suite, `refusalFixture('provider', { status: 502, code:
 'DEPENDENCY_FAILURE', detail: 'Runs service is unreachable' })` from
 `@autom8x/automation-sdk/testing` is a transient answer to rehearse a retry with; the
 rehearsal waits the floor, 10 seconds, in real time.
 
-## Invoice intake
+## Retired: invoice-intake and invoice-check
 
-`invoice-intake` is the first automation written in this repository. A verified
-webhook delivery carrying `vendor`, `amount`, and `reference` starts it. The platform
-wraps that JSON in the invoke envelope, deduplicates the delivery, and supplies the
-run-scoped token; the automation implements none of that ingress itself.
-
-The subscription configures an approval threshold and the vendor's address.
-Invoices above the threshold end their first run held at `validate`, then resume at
-`notify` from returned state only after approval. The vendor is told through the
-platform's `mail` callback, from automations@autom8x.ai; there is no model callback
-and no provider call. One container serves v1, v2 and v3 — v1 still declares a Gmail
-scope, by an immutable registered manifest, that nothing here spends.
-
-## Invoice check
-
-`invoice-check` is the platform's first automation, moved here from the platform
-repository on 2026-10-08 (its BUILD-PLAN 25.3.8) and ported to the SDK. A manual run
-carries `vendor`, `amount`, `reference` and optionally a file; the amount is checked
-against the threshold, held above it, and recorded; v2 and later email the outcome
-through the platform when an address is set. One container serves v1 to v4, and a
-v1 run never reaches `notify` because v1's pipeline does not declare it. Its result
-summary is bounded by the SDK before it is sent, so a long reference no longer fails
-a run already recorded (platform §12.1 #220).
+`invoice-intake`, the first automation written here, and `invoice-check`, the platform's first,
+moved here on 2026-10-08, left production with the platform's BUILD-PLAN 25.4.5 (2026-10-13) and
+this repository with its 25.4.11 (2026-10-22): their code, their manifests and their images'
+publishing. The platform's catalog keeps their rows, withdrawn, never deleted; their history is in
+`docs/records/round-record.archive.md`.
 
 ## Invoice processing
 
@@ -854,17 +833,11 @@ becomes `automations/<templateId>/README.md`. Its build is the steps below.
    everything new (the platform's D2), and its `snoopy-backend/scripts/add-automation.mjs` refuses any
    other origin. The platform gives that version's container the name as a network
    alias, so it is reachable only on the compose network by construction.
-   `invoice-check` and `invoice-intake` predate the rule: each v1 keeps
-   `http://<templateId>.autom8x.internal:8080`, and one container answers every
-   version's alias.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
 called. The platform's decision of 2026-10-08 (D2) is one container and one image
-per manifest version for everything new; `invoice-check` and `invoice-intake` keep
-their several versions on one container. The superseded ones were retired from the
-platform's catalog on 2026-10-09 (its BUILD-PLAN 25.3.8), and the containers keep every
-version's alias, so a flow on a withdrawn version still runs.
+per manifest version.
 
 ## Working here
 

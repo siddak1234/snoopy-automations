@@ -7,7 +7,7 @@
 //
 // A reference is a backticked path with a folder and a file type the documents
 // name (`packages/automation-sdk/src/runner.ts`, `packages/automation-sdk/src/runner.ts:42`,
-// `contract/README.md:10,20`, `automations/invoice-check/Dockerfile`), found from the repository root or from the document's own
+// `contract/README.md:10,20`, `automations/invoice-processing/Dockerfile`), found from the repository root or from the document's own
 // folder — or a relative Markdown link, inline or by definition (`[x](README.md)`,
 // `[x](path "title")`, `[x](<path>)`, `[id]: path`), found only where the link
 // lands: from its document's folder, or from the root when it starts with `/`, as
