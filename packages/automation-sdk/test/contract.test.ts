@@ -167,8 +167,9 @@ test('a manifest may declare the files its runs accept, in the published block',
   // failed this copy. The verdicts are its validator's (snoopy-backend
   // `test/wire-schema.test.ts` at `4875579`), copied as data.
   const validate = validator('automation-manifest');
+  // The retired `invoice-check` v1's manifest, kept byte for byte as test data (the platform's 25.4.11).
   const reference = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, 'fixtures/reference-manifest.json'), 'utf8'),
   ) as Record<string, unknown>;
   const withArtifacts = (artifacts: unknown) => ({ ...reference, artifacts });
   assertValid(validate, reference, 'the reference manifest alone');
@@ -231,8 +232,9 @@ test("the artifacts block may limit a PDF's pages and an image's sides, within t
   // (snoopy-backend `test/wire-schema.test.ts` at `550663f`, merged unchanged as `7086e5e`),
   // copied as data.
   const validate = validator('automation-manifest');
+  // The retired `invoice-check` v1's manifest, kept byte for byte as test data (the platform's 25.4.11).
   const reference = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, '../../../manifests/invoice-check.v1.json'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, 'fixtures/reference-manifest.json'), 'utf8'),
   ) as Record<string, unknown>;
   const limiting = (limits: Record<string, unknown>) => ({
     ...reference,
