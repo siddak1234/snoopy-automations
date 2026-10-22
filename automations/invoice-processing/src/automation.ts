@@ -29,14 +29,18 @@ import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing (template `invoice-processing`), version 6 — reads EVERY bill, invoice,
+ * Invoice Processing (template `invoice-processing`), version 7 — reads EVERY bill, invoice,
  * receipt, credit note, statement and other financial document in a PDF or photo, each on its own,
  * then saves each one's details, or records or compares it in QuickBooks Online (the platform's
  * BUILD-PLAN 25.4.31–25.4.36; the session's spec of 2026-10-15, §3, as the owner's corrections
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
  * every document carries its numbers). v1 to v5, under their own names, are registered and
  * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v6 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v6 (Build 24)
+ * v7 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v7 (Round 18,
+ * the platform's BUILD-PLAN 27.3.2) is v6 whose manifest names its documents — `display.documentWords`,
+ * "Invoice" and "Invoices" — so the website, the app and the run package say "Invoice 1 of 3" from
+ * the flow's own words, and every other flow "Document" (the owner, 2026-10-21: "invoice is invoice
+ * processing specific"); its code is v6's. v6 (Build 24)
  * is v5 whose results also say, for each document, the uploaded file it came from (`source.file`;
  * its pages are not told — the read does not report them) and, for a recorded one, the QuickBooks
  * company it went to (`recordedIn.accountName`): what the run page's Format and the run package's
@@ -72,8 +76,8 @@ import { receive } from './steps/receive.js';
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
-/** The manifest versions this code serves: v6 alone. v1's to v5's containers run their own images. */
-export const SERVED_VERSIONS = [6] as const;
+/** The manifest versions this code serves: v7 alone. v6's container runs its own image. */
+export const SERVED_VERSIONS = [7] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
@@ -133,7 +137,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 }
 
 /**
- * Every step v6's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
+ * Every step v7's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
  * (`automations/invoice-processing/src/lookups/expense-search.ts`).
  */
@@ -182,7 +186,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v6's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v7's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),

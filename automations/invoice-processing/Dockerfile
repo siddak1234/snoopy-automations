@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Invoice Processing v6, built from the repository root:
+# The image of Invoice Processing v7, built from the repository root:
 #   docker build --file automations/invoice-processing/Dockerfile .
 #
 # The SDK, the kit and the automation are workspaces during development, so the build
@@ -56,9 +56,9 @@ COPY --chown=node:node --from=production-dependencies /workspace/automations/inv
 # and verify-documents v1.
 COPY --chown=node:node automations/invoice-processing/prompts ./prompts
 # The ONE manifest version this image serves (src/automation.ts SERVED_VERSIONS): one image
-# per version (the platform's D2) — v1's to v5's containers keep their own pinned digests
-# until each is retired. The runner refuses a run pinned to any other (src/main.ts reads this dir).
-COPY --chown=node:node manifests/invoice-processing.v6.json ./manifests/
+# per version (the platform's D2) — v6's container keeps its own pinned digest until it is
+# retired. The runner refuses a run pinned to any other (src/main.ts reads this dir).
+COPY --chown=node:node manifests/invoice-processing.v7.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

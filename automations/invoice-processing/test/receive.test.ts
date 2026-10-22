@@ -187,7 +187,7 @@ test("the limits are the manifest's artifacts block, the pages and pixels the pl
   // Without a page or pixel limit the platform measures nothing (its BUILD-PLAN 25.2.28), and
   // receive, failing closed, would refuse every file.
   const manifest = JSON.parse(
-    readFileSync(join(manifestsRoot, 'invoice-processing.v6.json'), 'utf8'),
+    readFileSync(join(manifestsRoot, 'invoice-processing.v7.json'), 'utf8'),
   ) as { artifacts: unknown };
   assert.deepEqual(manifest.artifacts, {
     acceptedContentTypes: FILE_LIMITS.acceptedContentTypes,
