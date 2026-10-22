@@ -58,6 +58,26 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 40
+        },
+        "documentWords": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "singular",
+            "plural"
+          ],
+          "properties": {
+            "singular": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "plural": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
         }
       }
     },

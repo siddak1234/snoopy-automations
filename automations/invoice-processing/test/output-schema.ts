@@ -17,7 +17,7 @@ import { manifestsRoot } from './fixtures.js';
  */
 
 const manifest = JSON.parse(
-  readFileSync(join(manifestsRoot, 'invoice-processing.v6.json'), 'utf8'),
+  readFileSync(join(manifestsRoot, 'invoice-processing.v7.json'), 'utf8'),
 ) as { outputSchema: { properties: { documents: { items: object } } } };
 
 /** One document's output item, as the manifest describes it: v2's shapes, each with its place. */

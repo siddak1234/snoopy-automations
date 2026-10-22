@@ -40,8 +40,7 @@ const sha256 = (version: number) =>
   createHash('sha256')
     .update(readFileSync(file(version)))
     .digest('hex');
-const manifest = read(6);
-const v5 = read(5);
+const manifest = read(7);
 const v4 = read(4);
 const v3 = read(3);
 
@@ -59,11 +58,11 @@ function stepTitle(group: Group, config: JsonObject): string {
   return titled.titles.find((each) => each.providerId === chosen)?.title ?? group.title;
 }
 
-test('v6 is the one version this code serves; v1 to v5 stay registered, byte for byte', () => {
-  assert.deepEqual([...SERVED_VERSIONS], [6]);
+test('v7 is the one version this code serves; v1 to v6 stay registered, byte for byte', () => {
+  assert.deepEqual([...SERVED_VERSIONS], [7]);
   assert.deepEqual(
     manifests.map((each) => each.version),
-    [6],
+    [7],
   );
   assert.deepEqual(
     [1, 2, 3, 4].map(sha256),
@@ -83,9 +82,14 @@ test('v6 is the one version this code serves; v1 to v5 stay registered, byte for
   assert.equal(
     sha256(6),
     '166742dcba1530901c82e696efa9eb635aee6ab093d774e93c45c533505fb142',
-    "v6 is these bytes, which the platform's pin change copies",
+    'v6 untouched: a registered version is immutable',
   );
-  assert.equal(manifest.version, 6);
+  assert.equal(
+    sha256(7),
+    '85a85536b46aa199d14c42a7f77a44f0f666e23bb0da4537a413c69c8775afe4',
+    "v7 is these bytes, which the platform's pin change copies",
+  );
+  assert.equal(manifest.version, 7);
 });
 
 test('the five steps, in order, in their words: Upload invoice · Connect integration · AI processing · Details saved, or QuickBooks updated · Run completed', () => {
@@ -214,10 +218,11 @@ test('the vendor choice is step 2, titled "Integration", under the key v3 had; t
 test("nothing else moved from v3: the name, price, trigger, connection, capability, file limits, the 22 steps' words and order, and the outputSchema", () => {
   // v4 less what the spec changes (§3: version, groups, each step's and the vendor's group, the
   // vendor's title, the approval limit's group, the origin and the service account) is v3 less
-  // the same, exactly.
+  // the same, exactly — and v7's words for its documents (the platform's BUILD-PLAN 27.3.2).
   const without = (each: Manifest) => ({
     ...each,
     version: undefined,
+    display: { ...each.display, documentWords: undefined },
     groups: undefined,
     pipeline: each.pipeline.map(({ group: _group, ...step }) => step),
     setup: each.setup.map(({ group: _group, title: _title, ...field }) => field),
@@ -230,6 +235,7 @@ test("nothing else moved from v3: the name, price, trigger, connection, capabili
     description: 'Reads bills and receipts, then saves the details or records them in QuickBooks.',
     category: 'Accounting',
     icon: 'Receipt',
+    documentWords: { singular: 'Invoice', plural: 'Invoices' },
   });
 });
 
@@ -311,10 +317,10 @@ test('the 22 steps, each in its step: its kicker, step, title and description as
   );
 });
 
-test("its own container: v6's origin and service account; the rest of the service v3's", () => {
+test("its own container: v7's origin and service account; the rest of the service v3's", () => {
   assert.deepEqual(manifest.service, {
-    origin: 'http://invoice-processing-v6.autom8x.internal:8080',
-    serviceAccount: 'invoice-processing-v6@autom8x.iam.gserviceaccount.com',
+    origin: 'http://invoice-processing-v7.autom8x.internal:8080',
+    serviceAccount: 'invoice-processing-v7@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
@@ -355,38 +361,4 @@ test("the plain-words rule (§3.0 rule 4): no 'solution', 'pipeline', 'provider'
   ]) {
     assert.ok(!words.includes(banned), banned);
   }
-});
-
-test('v5 is v4 with step 5 named "Run completed" (done only when the run succeeds) — nothing else moved', () => {
-  const step5 = (each: Manifest) => each.groups.find((group) => group.id === 'email');
-  assert.deepEqual(step5(v4), {
-    id: 'email',
-    title: 'Email sent',
-    description: 'The results are emailed.',
-    platform: 'email',
-  });
-  assert.deepEqual(step5(v5), {
-    id: 'email',
-    title: 'Run completed',
-    description: 'Done when the run succeeds.',
-    platform: 'email',
-  });
-  const without = (each: Manifest) => ({
-    ...each,
-    version: undefined,
-    groups: each.groups.filter((group) => group.id !== 'email'),
-    service: { ...each.service, origin: undefined, serviceAccount: undefined },
-  });
-  assert.deepEqual(without(v5), without(v4));
-});
-
-test("v6 is v5 but for its version and its own container: what changed is in the code's results, not the manifest", () => {
-  const without = (each: Manifest) => ({
-    ...each,
-    version: undefined,
-    service: { ...each.service, origin: undefined, serviceAccount: undefined },
-  });
-  assert.deepEqual(without(manifest), without(v5));
-  assert.notEqual(manifest.service.origin, v5.service.origin);
-  assert.notEqual(manifest.service.serviceAccount, v5.service.serviceAccount);
 });

@@ -465,15 +465,22 @@ in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN
 25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
 of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v6, the version this code serves** (Build 24; the owner's build 23 feedback of 2026-10-20, F15 and
+**v7, the version this code serves** (Round 18, the platform's BUILD-PLAN 27.3.2; the owner,
+2026-10-21: "invoice is invoice processing specific"). v7 is v6 whose manifest names its documents —
+`display.documentWords`, "Invoice" and "Invoices" — so the website, the app and the run package head
+each document "Invoice 1 of 3" from the flow's own words, and any other flow "Document 1 of 3"; its
+code is v6's. `automations/invoice-processing/test/manifest.test.ts` holds that v7 is v6 but for its
+version, its own container and those words; the image serves v7 alone (its Dockerfile copies only
+`manifests/invoice-processing.v7.json`); v1 to v6 stay registered and immutable, each held to its
+sha256.
+
+**v6** (Build 24; the owner's build 23 feedback of 2026-10-20, F15 and
 F16). v6's results also say, for each document, the uploaded file it came from (`source.file` — a run
 has one upload; its pages are not told, because the read does not report them) and, for a recorded
 one, the QuickBooks company it went to (`recordedIn.accountName`, from the state its write saved):
 what the run page's Format and the run package's cover read (the platform's ADR-0045). Its manifest
 is v5's but for its version and its own container — `automations/invoice-processing/test/manifest.test.ts`
-holds that — and the image serves v6 alone (its Dockerfile copies only
-`manifests/invoice-processing.v6.json`); v1 to v5 stay registered and immutable, each held to its
-sha256. The SDK's `boundedDocuments` carries both fields and leaves out each value the published
+holds that. The SDK's `boundedDocuments` carries both fields and leaves out each value the published
 schema refuses — a `source.file` not in the platform's artifact-id shape (`ARTIFACT_ID_PATTERN`: a
 UUID whose version digit is 1–8 and variant digit 8, 9, a or b), pages that are not whole numbers
 from 1, strictly ascending, at most 500 of them, an `accountName` past 200 characters — and keeps
