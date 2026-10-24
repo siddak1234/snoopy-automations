@@ -38,6 +38,22 @@ export interface Manifest {
   requiredConnections?: readonly ManifestConnection[];
   /** The flow's settings, as far as an automation reads them by type. */
   setup?: readonly ManifestSetupField[];
+  /**
+   * The flow's items (platform ADR-0046): things a person makes once, from a file, that its runs
+   * then belong to. Typed as far as an automation reads them; the words, fields and reading's
+   * schema are for the platform and the clients, and are validated by the published schema.
+   */
+  items?: ManifestItems;
+}
+
+/**
+ * A flow's items as the runner reads them: the item run's own steps — the run that reads a new
+ * item's file (`readsItem`) reports these, and only these — and the key its file arrives under in
+ * that run's `input`.
+ */
+export interface ManifestItems {
+  file: { key: string };
+  pipeline: readonly { id: string }[];
 }
 
 /** One pipeline step: its id, and its group when the manifest declares groups. */
@@ -97,6 +113,19 @@ export function isManifest(value: unknown): value is Manifest {
     value.requiredCapabilities.every((capability) => typeof capability === 'string') &&
     Array.isArray(value.pipeline) &&
     value.pipeline.length > 0 &&
+    value.pipeline.every((step) => isObject(step) && typeof step.id === 'string') &&
+    (value.items === undefined || isManifestItems(value.items))
+  );
+}
+
+/** An `items` block the runner can run: its file's key, and a non-empty pipeline of step ids. */
+function isManifestItems(value: unknown): value is ManifestItems {
+  return (
+    isObject(value) &&
+    isObject(value.file) &&
+    typeof value.file.key === 'string' &&
+    Array.isArray(value.pipeline) &&
+    value.pipeline.length > 0 &&
     value.pipeline.every((step) => isObject(step) && typeof step.id === 'string')
   );
 }
@@ -111,7 +140,7 @@ export function readManifest(path: string): Manifest {
   }
   if (!isManifest(parsed)) {
     throw new Error(
-      `${path} is not a manifest: templateId, version, requiredCapabilities and a non-empty pipeline of step ids are required`,
+      `${path} is not a manifest: templateId, version, requiredCapabilities and a non-empty pipeline of step ids are required, and items, when declared, a file key and a non-empty pipeline of step ids`,
     );
   }
   return parsed;

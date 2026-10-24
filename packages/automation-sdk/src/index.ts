@@ -40,6 +40,7 @@ export { CONNECTION_NONE, isManifest, readManifest, readManifests } from './mani
 export type {
   Manifest,
   ManifestConnection,
+  ManifestItems,
   ManifestSetupField,
   ManifestStep,
   ManifestStepGroup,
@@ -47,6 +48,17 @@ export type {
 } from './manifest.js';
 export { RUN_DETAIL_LIMITS, boundedDetails } from './details.js';
 export type { RunDetail } from './details.js';
+export { isInvokeItem } from './item.js';
+export type { InvokeItem } from './item.js';
+export {
+  RUN_RESULT_LIMITS,
+  RUN_SECTION_LIMITS,
+  boundedScore,
+  boundedSections,
+  boundedTitle,
+  isRunSectionUrl,
+} from './sections.js';
+export type { RunSection, RunSectionEntry } from './sections.js';
 export {
   RUN_DOCUMENT_DECIMAL_PATTERN,
   RUN_DOCUMENT_LIMITS,

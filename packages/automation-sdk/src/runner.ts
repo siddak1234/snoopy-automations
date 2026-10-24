@@ -26,7 +26,8 @@ import {
  *
  * An automation is the manifest's declared pipeline, a function per step, and a
  * result. The runner runs the pipeline of the manifest VERSION the run pinned, in
- * order; reports each step through the step callback under the id the manifest
+ * order — on an item run (`readsItem`), that version's `items.pipeline` instead;
+ * reports each step through the step callback under the id the manifest
  * declares and no other; derives one idempotency key per run and step and attaches
  * it to every provider request and every mail; renders prompts by capability and
  * sends them to the models a step names, if any; re-attempts a step that declared a
@@ -44,8 +45,9 @@ import {
  *
  * Checked here, once, at startup — a container that fails this never answers the
  * probe, which is louder than a 422 on the first run: every step a served manifest
- * declares is implemented; every implemented step is declared by a served
- * manifest; every prompt's capability is in EVERY served manifest's
+ * declares — in its `pipeline`, or in its `items.pipeline` for the item run — is
+ * implemented, and no id is declared twice across the two; every implemented step is
+ * declared by a served manifest; every prompt's capability is in EVERY served manifest's
  * `requiredCapabilities` (one container serves these versions and any of its runs
  * may reach the step that sends the prompt — platform D2 makes that one version
  * for everything new); no prompt or step id repeats; and every retry policy names
@@ -71,8 +73,10 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       throw new Error(`${templateId} v${manifest.version} is served twice`);
     }
     byVersion.set(manifest.version, manifest);
+    // A run's steps, then — a flow with items (platform ADR-0046) — its item run's, which a
+    // run never shares: each id once across both, and each implemented.
     const ids = new Set<string>();
-    for (const step of manifest.pipeline) {
+    for (const step of [...manifest.pipeline, ...(manifest.items?.pipeline ?? [])]) {
       if (ids.has(step.id)) {
         throw new Error(`${templateId} v${manifest.version} declares step "${step.id}" twice`);
       }
@@ -126,7 +130,16 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
         `this container serves ${templateId} v${versions.join(', v')}, not v${request.templateVersion}`,
       );
     }
-    const pipeline = manifest.pipeline.map((step) => step.id);
+    // An item run (`readsItem`, platform ADR-0046) runs the manifest's `items.pipeline`, and only
+    // it; every other run, the `pipeline`. A version without items has no item run.
+    if (request.readsItem === true && manifest.items === undefined) {
+      return failed(
+        `${templateId} v${manifest.version} declares no items, so it has no item run to run`,
+      );
+    }
+    const pipeline = (
+      request.readsItem === true ? (manifest.items?.pipeline ?? []) : manifest.pipeline
+    ).map((step) => step.id);
 
     let state: JsonObject = {};
     let from = 0;
@@ -239,13 +252,16 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       }
     }
 
-    const { output, summary, details, documents } = result(state, request);
+    const { output, summary, details, documents, title, score, sections } = result(state, request);
     return {
       outcome: 'success',
       ...(output === undefined ? {} : { output }),
       ...(summary === undefined ? {} : { summary }),
       ...(details === undefined ? {} : { details }),
       ...(documents === undefined ? {} : { documents }),
+      ...(title === undefined ? {} : { title }),
+      ...(score === undefined ? {} : { score }),
+      ...(sections === undefined ? {} : { sections }),
     };
   }
 

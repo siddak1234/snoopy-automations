@@ -12,6 +12,7 @@ import type {
   StepReport,
 } from './contract.js';
 import { oneLine, toArtifactListing } from './contract.js';
+import type { InvokeItem } from './item.js';
 import { readManifest } from './manifest.js';
 import { modelAuthor, modelRequestProblem } from './model-request.js';
 import { outputSchemaProblem, schemaMismatch, type SchemaMismatch } from './output-schema.js';
@@ -279,6 +280,20 @@ export function invokeFixture(overrides: Partial<InvokeRequest> = {}): InvokeReq
   };
 }
 
+/**
+ * An item as the invoke carries it on a run of a flow with items (platform ADR-0046): pass it as
+ * `invokeFixture({ item: itemFixture({ … }) })`, with `readsItem: true` and a null `reading` for
+ * the item run itself.
+ */
+export function itemFixture(overrides: Partial<InvokeItem> = {}): InvokeItem {
+  return {
+    id: '44444444-4444-4444-8444-444444444444',
+    fields: {},
+    reading: null,
+    ...overrides,
+  };
+}
+
 /** A reference shaped exactly as the artifact callback answers. */
 export function artifactFixture(overrides: Partial<ArtifactReference> = {}): ArtifactReference {
   return {
@@ -356,6 +371,14 @@ export function refusalFixture(callback: string, problem: ProblemInput): Callbac
  */
 export function declaredSteps(manifestPath: string): Set<string> {
   return new Set(readManifest(manifestPath).pipeline.map((step) => step.id));
+}
+
+/**
+ * The step ids a manifest's item run may report — its `items.pipeline` (platform ADR-0046) —
+ * READ FROM THE MANIFEST, for the same reason; empty for a manifest without items.
+ */
+export function declaredItemSteps(manifestPath: string): Set<string> {
+  return new Set((readManifest(manifestPath).items?.pipeline ?? []).map((step) => step.id));
 }
 
 /** The capabilities a manifest declares, READ FROM THE MANIFEST, for the same reason. */

@@ -131,6 +131,24 @@ the run go on. `invoice-processing` uses it to end a QuickBooks step that never 
 recorded in QuickBooks" and save the details instead (below); `undefined` lets the run fail as
 before.
 
+**A flow's items** (the platform's ADR-0046, Round 19). A manifest may declare `items`: things a
+person makes once, from a file, that its runs then belong to — Candidate Reviewer's jobs. Making
+one starts an **item run**: the invoke carries `readsItem: true`, the item's file under
+`items.file.key` in its `input`, and the runner runs that version's `items.pipeline` instead of
+its `pipeline` — those steps there and only there; a version without items has no item run, and
+the runner fails one in a fixed sentence. The item run's success `output` is the item's reading,
+which the platform holds to `items.outputSchema`. Every later run of the item carries `item` —
+its `id`, the `fields` a person gave it and its `reading` (`InvokeItem`; null on the item run) —
+and its success may return a `title` (what names it on the item's list), a `score` (an integer
+from 0 to 100 the item's runs are ranked by) and `sections` (rows a person opens: up to 12, each
+of up to 40 entries with a title, a subtitle, a text and an http(s) link). The SDK bounds those
+before they are sent (`packages/automation-sdk/src/sections.ts`): a title one line of at most 80
+characters, a score kept only when it is such an integer — never rounded or moved into range —
+each row cut at its bound, a link the platform would not keep left off its row, and none sent
+when none is left. `defineAutomation` refuses at startup an item step with no code and an id
+declared in both pipelines; `itemFixture` and `declaredItemSteps` in
+`@autom8x/automation-sdk/testing` build an item for a suite and read a manifest's item steps.
+
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
@@ -720,6 +738,58 @@ dates — on every path, held and straight through — and `automations/invoice-
 sample's marker through every step on the simulator, approved when it held: no QuickBooks
 request, mail, line or result carries it.
 
+## Candidate reviewer
+
+`candidate-reviewer` — **Candidate Reviewer**, in HR — reads a job description once into the job's
+reading, then reads each candidate's resume and scores it against that reading (the platform's
+BUILD-PLAN Phase 28, Round 19). It is the first flow with items ("A flow's items", above): a job is
+its item, a candidate its run. What it does, in the words a person reads — the prompts and what
+they read ([§4](automations/candidate-reviewer/README.md#4-ai-steps)), the steps ([§6](automations/candidate-reviewer/README.md#6-steps-a-person-sees)), the title,
+score bands, summary and sections in their order ([§7](automations/candidate-reviewer/README.md#7-what-a-run-gives)), and every
+failure's sentence ([§8](automations/candidate-reviewer/README.md#8-when-it-fails)) — is its spec,
+[automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), the build's source of truth word for word.
+Where the code does it:
+
+- **v1, the version this code serves**: `SERVED_VERSIONS` in
+  `automations/candidate-reviewer/src/automation.ts`; its Dockerfile copies only
+  `manifests/candidate-reviewer.v1.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  holds to the spec and the code's constants to (the file types and size in
+  `automations/candidate-reviewer/src/file.ts`, the two file keys).
+- **A job** — the item run, `items.pipeline` (`job-received`, `read-job`, `save-job`):
+  `automations/candidate-reviewer/src/steps/job.ts`. The reading is `extract-posting`'s answer,
+  cleaned (`automations/candidate-reviewer/src/reading.ts`), the item run's output held to the
+  manifest's `items.outputSchema`; its sections are `postingSections` in
+  `automations/candidate-reviewer/src/sections.ts`.
+- **A candidate** — `pipeline` (`receive`, `read-resume`, `check-resume`, `score`, `save`):
+  `automations/candidate-reviewer/src/steps/candidate.ts`. `scored` there is what the scoring call
+  reads: the resume without the fields §4 leaves out, and without any line quoting a direction the
+  resume printed to its reader, which is sent apart. The years are worked out in
+  `automations/candidate-reviewer/src/years.ts` (overlapping roles once, a current role to today);
+  the score, its flags — "years not shown", and each direction — and the requirements a direction
+  was quoted for, moved from met to missing, in `automations/candidate-reviewer/src/scoring.ts`;
+  the sections in `candidateSections`. A model's refusal of the file (its type, size, bytes or
+  password) is "could not be read" (`readDocument` in
+  `automations/candidate-reviewer/src/prompts.ts`); any other refusal ends the run in the
+  platform's words.
+- **Directions planted in a document**: each of the three prompts reads its document as content,
+  never as instructions to it; `extract-resume` copies what tries to direct its reader into
+  `directions`, which the code keeps out of what the score judges and flags
+  (`automations/candidate-reviewer/test/candidate.test.ts` plants one).
+- **Word files** (`automations/candidate-reviewer/src/docx.ts`): Node's `zlib` alone, no
+  dependency. `word/document.xml` and the page headers and footers (`word/header<n>.xml`,
+  `word/footer<n>.xml`, read first) are found through the ZIP's central directory; their text
+  comes from `w:t`, their lines from `w:p`, with tabs and breaks. Entries that together claim more
+  than 5 MB inflated, any with a ratio over 100, an encrypted one or one not stored with deflate
+  are refused before anything is inflated, and each inflation stops at the size its entry claims;
+  a refused file could not be read, and nothing is spent on it.
+- **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
+  `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
+
+The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
+manifest's pull request, the image pin and the container's alias, once CI publishes the image on
+`main`. Until the platform's Round 19 merges and is promoted, it refuses a manifest declaring
+`items`.
+
 ## The kit
 
 `packages/automation-kit` (`@autom8x/automation-kit`) is a library automations build
@@ -801,8 +871,10 @@ MetaData.CreateTime` on every transaction), and
 ## Adding an automation
 
 A new flow starts from the owner's idea, written down as a spec the owner approves, words
-included, before any code: `/new-flow` ([SKILL.md](.claude/skills/new-flow/SKILL.md)), whose spec
-becomes `automations/<templateId>/README.md`. Its build is the steps below.
+included, before any code: `/create-flow`, the shared kit's skill
+(`snoopy-backend/.claude/skills/create-flow/`, installed to the workspace and run from there, the
+platform's BUILD-PLAN 28.2.5), whose spec becomes `automations/<templateId>/README.md`. Its build
+is the steps below.
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
    with your templateId everywhere (`package.json`, `Dockerfile`, `src/`). Give it a

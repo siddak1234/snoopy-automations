@@ -52,6 +52,17 @@ updates:
       - dependency-name: node
         update-types: ['version-update:semver-major']
 
+  # candidate-reviewer, Round 19 (the platform's BUILD-PLAN Phase 28): the same base image and
+  # the same rule.
+  - package-ecosystem: docker
+    directory: /automations/candidate-reviewer
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -1,0 +1,25 @@
+{
+  "name": "@autom8x/candidate-reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Candidate Reviewer (v1): reads a job description once into the job's reading, then reads each candidate's resume — a PDF, a photo or a Word file — and scores it against that reading, with the reasons; the candidates of a job are listed highest score first.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@autom8x/automation-sdk": "file:../../packages/automation-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "ajv": "^8.17.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
