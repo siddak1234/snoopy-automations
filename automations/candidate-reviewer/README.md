@@ -35,14 +35,14 @@ added by "owners and admins for now"; the command is `/create-flow`. Name "Candi
 
 | Field   | Value                                                                                                                                     | Limit                                                                                                                                       |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Trigger | manual: a person adds a candidate to a posting                                                                                            | manual, schedule (every 60 s to 366 days) or webhook; an event from an integration is not offered yet (section 10)                          |
+| Trigger | manual: a person adds a candidate to a job                                                                                                | manual, schedule (every 60 s to 366 days) or webhook; an event from an integration is not offered yet (section 10)                          |
 | Files   | PDF, JPEG, PNG or Word (.docx), up to 3,500,000 bytes; no page or pixel limit is declared, since Word is not a type the platform measures | a size up to 100 MiB, PDF pages up to 1,000, an image's side up to 20,000 px; the model reads only these three types, up to 3,750,000 bytes |
 
 Run inputs, asked when a person starts it (at most 16):
 
-| Key (camelCase) | Title  | Description (200)          | Control: toggle, money, text, email, artifact | Required |
-| --------------- | ------ | -------------------------- | --------------------------------------------- | -------- |
-| resumeFile      | Resume | A PDF, Word file or photo. | artifact                                      | yes      |
+| Key (camelCase) | Title  | Description (200)          | Control: toggle, money, text, email, artifact | Required                                                                                                                         |
+| --------------- | ------ | -------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| resumeFile      | Resume | A PDF, Word file or photo. | artifact                                      | no: the platform refuses a required file field; the screens ask for the file, and a run without one fails as "could not be read" |
 
 The job the candidate is added to is not a question: "Add candidate" sits on the job's page, so the
 run carries the job (section 10, items).
@@ -86,7 +86,10 @@ Rules the prompts carry: read only what is printed, never guess; an unreadable o
 empty or null and listed in `uncertainFields`; the score follows the posting's must-haves first,
 nice-to-haves second, and names each reason; a resume with no dates scores on what it shows and
 flags "years not shown". Years of experience are computed by the code from the dates read, never by
-the model. A Word file (.docx) is not sent as a file: its text is read by the flow (Node's `zlib`,
+the model. The resume prompt also answers whether the file is a resume (`document`), and the job
+prompt whether the description could be read (`readable`) — the two checks of section 8; the job's
+stored reading leaves `readable` out. The scoring call is sent the two readings without the
+candidate's name or contact details. A Word file (.docx) is not sent as a file: its text is read by the flow (Node's `zlib`,
 no dependency, bounded) and sent as the prompt's input; a PDF or photo is sent as the file.
 
 ## 5. Setup questions
@@ -112,13 +115,13 @@ platform's email):
 
 Steps, in order (at most 24; only the first is the trigger; title 80, description 200):
 
-| Step id      | Kind    | Title            | Description                                               | Group  | Retries |
-| ------------ | ------- | ---------------- | --------------------------------------------------------- | ------ | ------- |
-| receive      | TRIGGER | Resume received  | A PDF, Word file or photo arrives.                        | upload | no      |
-| read-resume  | AI STEP | Resume read      | AI reads experience, education, certifications and links. | review | no      |
-| check-resume | ACTION  | Resume checked   | Checks it is a resume and can be read.                    | review | no      |
-| score        | AI STEP | Candidate scored | Scored against the posting, with reasons.                 | review | no      |
-| save         | ACTION  | Candidate saved  | Added to the posting's list, highest score first.         | ranked | yes     |
+| Step id      | Kind    | Title            | Description                                               | Group  | Retries                                     |
+| ------------ | ------- | ---------------- | --------------------------------------------------------- | ------ | ------------------------------------------- |
+| receive      | TRIGGER | Resume received  | A PDF, Word file or photo arrives.                        | upload | no                                          |
+| read-resume  | AI STEP | Resume read      | AI reads experience, education, certifications and links. | review | no                                          |
+| check-resume | ACTION  | Resume checked   | Checks it is a resume and can be read.                    | review | no                                          |
+| score        | AI STEP | Candidate scored | Scored against the job, with reasons.                     | review | no                                          |
+| save         | ACTION  | Candidate saved  | Added to the job's list, highest score first.             | ranked | no: it calls nothing that could be repeated |
 
 The job's own steps (section 10, items: `items.pipeline`), reported while a job is made; the screens
 show only "Reading…", then the job:
@@ -131,30 +134,31 @@ show only "Reading…", then the job:
 
 ## 7. What a run gives
 
-| Part           | Value                                                                                                                                                                                                                                                                                                                                       | Limit                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Title          | the candidate's name, as read ("Jane Doe"); "Unnamed candidate" when none is printed; section 10                                                                                                                                                                                                                                            | 80 characters                                                |
-| Score          | 0 to 100 (section 10); the bands are the summary's words: 80+ Strong match, 60–79 Good match, 40–59 Partial match, under 40 Weak match                                                                                                                                                                                                      | integer                                                      |
-| Summary        | "Strong match · meets 3 of 3 must-haves"                                                                                                                                                                                                                                                                                                    | one line, 200 characters                                     |
-| Sections       | collapsed rows, in this order: Contact (email, phone, location, links); Experience (each role: "Senior Accountant · Acme", "2021 – now · 4 years", its highlights); Education; Projects; Certifications; Skills; Languages; Why this score (each must-have met or missing, each nice-to-have met); a section with nothing in it is left out | up to 12 sections of up to 40 rows; section 10               |
-| Details        | none: the sections hold it                                                                                                                                                                                                                                                                                                                  | —                                                            |
-| Documents      | none: a resume is not a financial document                                                                                                                                                                                                                                                                                                  | only for financial documents                                 |
-| Document words | none                                                                                                                                                                                                                                                                                                                                        | —                                                            |
-| Output         | the posting's reading, the resume's reading and the score, whole                                                                                                                                                                                                                                                                            | never shown to a person (platform SYSTEM-MANIFEST §12.1 #67) |
-| Held           | never: nothing waits for approval                                                                                                                                                                                                                                                                                                           | —                                                            |
-| Email          | the platform's own, at a run's end                                                                                                                                                                                                                                                                                                          | the flow sends none of its own                               |
+| Part           | Value                                                                                                                                                                                                                                                                                                                                                       | Limit                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Title          | the candidate's name, as read ("Jane Doe"); "Unnamed candidate" when none is printed; section 10                                                                                                                                                                                                                                                            | 80 characters                                                |
+| Score          | 0 to 100 (section 10); the bands are the summary's words: 80+ Strong match, 60–79 Good match, 40–59 Partial match, under 40 Weak match                                                                                                                                                                                                                      | integer                                                      |
+| Summary        | "Strong match · meets 3 of 3 must-haves"                                                                                                                                                                                                                                                                                                                    | one line, 200 characters                                     |
+| Sections       | collapsed rows, in this order: Contact (email, phone, location, links); Experience (each role: "Senior Accountant · Acme", "2021 – now · 4 years", its highlights); Education; Projects; Certifications; Skills; Languages; Why this score (each must-have met or missing, each nice-to-have met, then any flags); a section with nothing in it is left out | up to 12 sections of up to 40 rows; section 10               |
+| Details        | none: the sections hold it                                                                                                                                                                                                                                                                                                                                  | —                                                            |
+| Documents      | none: a resume is not a financial document                                                                                                                                                                                                                                                                                                                  | only for financial documents                                 |
+| Document words | none                                                                                                                                                                                                                                                                                                                                                        | —                                                            |
+| Output         | the posting's reading, the resume's reading and the score, whole                                                                                                                                                                                                                                                                                            | never shown to a person (platform SYSTEM-MANIFEST §12.1 #67) |
+| Held           | never: nothing waits for approval                                                                                                                                                                                                                                                                                                                           | —                                                            |
+| Email          | the platform's own, at a run's end                                                                                                                                                                                                                                                                                                                          | the flow sends none of its own                               |
 
 A job's page lists its candidates highest score first (section 10). The job shows what AI read, as
 collapsed sections: Must-haves, Nice to have, Responsibilities, Details (location, type, years, education, pay).
 
 ## 8. When it fails
 
-| When                                                       | What the person reads (200, plain)                                 | The run stops, or goes on |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------- |
-| The file is not a resume (a receipt, a letter)             | This file does not look like a resume.                             | stops                     |
-| The file cannot be read (blurred, empty, a blank scan)     | The file could not be read. Try a clearer PDF or photo.            | stops                     |
-| The job description cannot be read                         | The job description could not be read. Try a clearer PDF or photo. | the posting is not made   |
-| The model refuses, or the plan's monthly calls are used up | the platform's own words for the refusal                           | stops                     |
+| When                                                                                   | What the person reads (200, plain)                                 | The run stops, or goes on |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------- |
+| The file is not a resume (a receipt, a letter)                                         | This file does not look like a resume.                             | stops                     |
+| The file cannot be read (blurred, empty, a blank scan)                                 | The file could not be read. Try a clearer PDF or photo.            | stops                     |
+| The job description cannot be read                                                     | The job description could not be read. Try a clearer PDF or photo. | the job is not made       |
+| A run whose job has no reading (the platform refuses such a run first; never expected) | This candidate's job has not been read yet.                        | stops                     |
+| The model refuses, or the plan's monthly calls are used up                             | the platform's own words for the refusal                           | stops                     |
 
 ## 9. Test cases
 
@@ -163,11 +167,11 @@ Made-up inputs only.
 | Input                                                                        | What the run must give                                                                           |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | A clear two-page PDF resume against a posting with three must-haves it meets | score 80 or more, Strong match, each must-have named under Why or Skills matched, 3 links listed |
-| A resume meeting one of three must-haves                                     | a score under 60, the two missing must-haves under Gaps                                          |
+| A resume meeting one of three must-haves                                     | a score under 60, the two missing must-haves under Why this score                                |
 | A photo of a one-page resume with no dates                                   | a score, Experience "years not shown", the flag listed                                           |
 | A receipt uploaded as a resume                                               | fails: This file does not look like a resume.                                                    |
 | A blank page                                                                 | fails: The file could not be read. Try a clearer PDF or photo.                                   |
-| A job description photo                                                      | the posting made: title, must-haves and nice-to-haves read; Posting saved                        |
+| A job description photo                                                      | the job made: title, must-haves and nice-to-haves read; Job saved                                |
 
 ## 10. Needs the platform first
 

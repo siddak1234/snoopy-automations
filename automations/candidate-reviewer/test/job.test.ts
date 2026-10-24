@@ -26,7 +26,7 @@ type Success = Extract<RunResult, { outcome: 'success' }>;
 
 const JOB_UNREADABLE = 'The job description could not be read. Try a clearer PDF or photo.';
 
-test('§9: a job description photo makes the posting — title, must-haves, nice-to-haves; Posting saved', async () => {
+test('§9: a job description photo makes the posting — title, must-haves, nice-to-haves; Job saved', async () => {
   const { automation, platform } = world(
     { posting: postingAnswer() },
     { contentType: 'image/png' },
@@ -42,7 +42,7 @@ test('§9: a job description photo makes the posting — title, must-haves, nice
     [
       ['job-received', 'Job description received: a PDF or photo the model reads'],
       ['read-job', 'Job read: 3 must-haves, 2 nice-to-haves'],
-      ['save-job', 'Posting saved: 3 must-haves, 2 nice-to-haves'],
+      ['save-job', 'Job saved: 3 must-haves, 2 nice-to-haves'],
     ],
   );
   const steps = declaredItemSteps(manifestPath);

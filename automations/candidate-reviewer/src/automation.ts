@@ -52,7 +52,7 @@ function job(state: JsonObject) {
   const posting = state.posting as unknown as Posting;
   return {
     output: posting as unknown as JsonObject,
-    summary: `Posting saved: ${counted(posting)}`,
+    summary: `Job saved: ${counted(posting)}`,
     sections: postingSections(posting),
   };
 }

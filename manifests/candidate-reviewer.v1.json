@@ -84,14 +84,14 @@
       "kicker": "AI STEP",
       "group": "review",
       "title": "Candidate scored",
-      "description": "Scored against the posting, with reasons."
+      "description": "Scored against the job, with reasons."
     },
     {
       "id": "save",
       "kicker": "ACTION",
       "group": "ranked",
       "title": "Candidate saved",
-      "description": "Added to the posting's list, highest score first."
+      "description": "Added to the job's list, highest score first."
     }
   ],
   "items": {

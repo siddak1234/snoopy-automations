@@ -43,7 +43,7 @@ const readJob: Step = async ({ state, platform }) => {
 const saveJob: Step = ({ state }) => {
   const posting = state.posting as Posting | undefined;
   if (posting === undefined) return Promise.resolve(stops(FAILURES.jobUnreadable));
-  return Promise.resolve({ outcome: 'ok', summary: `Posting saved: ${counted(posting)}` });
+  return Promise.resolve({ outcome: 'ok', summary: `Job saved: ${counted(posting)}` });
 };
 
 /** What a job's lines say of its reading: counts, never its words. */
