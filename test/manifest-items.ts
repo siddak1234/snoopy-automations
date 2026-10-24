@@ -2,7 +2,7 @@
  * The platform's validator rules for a flow's `items` that a JSON Schema cannot say (its
  * ADR-0046, Round 19), ported from its
  * `snoopy-backend/packages/contracts/src/manifest-validation.ts` (`validateItems`, and
- * `heldSchemaProblem` in its `items.ts`) at `7a4baa6`, each refusal as
+ * `heldSchemaProblem` in its `items.ts`) at `2d93d99`, each refusal as
  * `<path>: <message>` in its words. `test/manifest-rules.ts` adds them to every manifest's.
  * What the schema already refuses — an unknown key, a length, a count, an option twice — is
  * left to the schema, which `test/architecture.test.ts` holds every manifest to.

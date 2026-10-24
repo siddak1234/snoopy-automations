@@ -1,8 +1,8 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `7a4baa6`, the head of its branch `round-19/items`, not yet
-merged: Round 19's contract, a flow's items (its ADR-0046; "Refreshed 2026-10-24" below). Before it,
+(`snoopy-backend`, private) at commit `2d93d99`, the platform's `main` after its #239 squash-merged
+Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed 2026-10-24" below). Before it,
 `d371251`, the platform's `main` after its #231 squash-merged Round 18's 27.2 (2026-10-21):
 `display.documentWords` ("Re-pinned 2026-10-21" below). Before it,
 `708ed6e`, the platform's `main` after its #222
@@ -289,7 +289,9 @@ above, this repository's half built beside the platform's. Three files moved, ad
   (`packages/automation-sdk/src/sections.ts`) bound what an automation returns to all of it.
 
 The other five files are byte-identical to `d371251`'s, and all eight to `7a4baa6`'s (each checked
-with `cmp`). Until that branch merges and a promotion carries it, the live platform refuses a
+with `cmp`). **Re-pinned 2026-10-24** to `2d93d99`, the platform's `main` after #239 squash-merged that
+branch: all eight byte-identical to it (`cmp`), and its validator's items refusals unchanged (only two
+helpers' parameter types widened). Until that branch merges and a promotion carries it, the live platform refuses a
 manifest declaring `items` and a result carrying `title`, `score` or `sections`, so
 `candidate-reviewer` v1 is registered only by the platform's pin change after both; this copy is
 re-pinned to the merge commit then, its bytes unchanged unless a review changed them.
@@ -404,7 +406,7 @@ application/pdf, image/jpeg or image/png when a page or pixel limit is declared"
 the platform measures, which the schema cannot say); and any other key "is not an artifacts
 property", as the schema's `additionalProperties: false` already refused it.
 
-**A flow's items** (ADR-0046, Round 19; its `manifest-validation.ts` at `7a4baa6`, in its
+**A flow's items** (ADR-0046, Round 19; its `manifest-validation.ts` at `2d93d99`, in its
 words — `snoopy-backend/manifests/README.md` names them since its #239) — `items` "needs
 trigger.kind 'manual': a person makes an item and starts its runs" and "needs an artifacts block:
 an item is made from a file"; a key the schema does not name "is not an items property" (and so

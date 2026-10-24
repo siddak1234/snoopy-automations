@@ -8,7 +8,7 @@
  * file the run asks for, and the items — ported from its
  * `snoopy-backend/packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21 branch
  * `round-17/b21-platform`; Build 22's rules as merged in its `32b33ae`, #215; ADR-0030's and
- * ADR-0046's at `7a4baa6`), each refusal as `<path>: <message>`, so a manifest that would be
+ * ADR-0046's at `2d93d99`), each refusal as `<path>: <message>`, so a manifest that would be
  * refused at registration fails this repository first. Every manifest in `manifests/` is held to
  * them.
  */
