@@ -1,17 +1,21 @@
 # Dependency updates arrive as pull requests, through the same CI gate as any
-# other change. ONE pull request per ecosystem per MONTH, everything grouped —
-# the owner's direction 2026-09-08 after a week's worth (ten pull requests,
-# each a notification) arrived in one batch. A major that must not move is
-# `ignore`d below rather than left to be closed by hand every month.
+# other change. ONE pull request per ecosystem per WEEK, everything grouped, and a
+# change every flow shares (a base image) in one pull request for all of them — the
+# owner, 2026-10-24: "i want fixes and updates as normal. it is okay if it is frequent
+# just should update all rather than one at a time". _Was, from 2026-09-08 (ten pull
+# requests, each a notification, in one batch):_ one per ecosystem per MONTH.
+# GitHub's security updates are opened per lockfile whatever this file says
+# (`group-by` groups version updates only). A major that must not move is
+# `ignore`d below rather than left to be closed by hand at each run.
 #
-# The Docker entries point at the shipping automations; pointing Dependabot at a
-# directory that holds no Dockerfile only produces a failed update run.
+# The Docker entry's glob matches only the shipping automations' folders, each with its
+# Dockerfile; a folder without one would only produce a failed update run.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     open-pull-requests-limit: 1
     groups:
       everything:
@@ -41,24 +45,19 @@ updates:
   # invoice-intake's and invoice-check's entries left with their code (the platform's
   # BUILD-PLAN 25.4.11, 2026-10-22).
 
-  # invoice-processing, Round 17's first automation (its BUILD-PLAN 25.4.1): the same
-  # base image and the same rule.
+  # Every automation's base image in one pull request (`group-by: dependency-name` across
+  # `directories`): invoice-processing (Round 17, its BUILD-PLAN 25.4.1) and candidate-reviewer
+  # (Round 19, Phase 28) build FROM the same image, and a new automation's folder joins by the
+  # glob. A Node major stays the platform's deliberate move.
   - package-ecosystem: docker
-    directory: /automations/invoice-processing
+    directories:
+      - /automations/*
     schedule:
-      interval: monthly
+      interval: weekly
     open-pull-requests-limit: 1
-    ignore:
-      - dependency-name: node
-        update-types: ['version-update:semver-major']
-
-  # candidate-reviewer, Round 19 (the platform's BUILD-PLAN Phase 28): the same base image and
-  # the same rule.
-  - package-ecosystem: docker
-    directory: /automations/candidate-reviewer
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 1
+    groups:
+      base-images:
+        group-by: dependency-name
     ignore:
       - dependency-name: node
         update-types: ['version-update:semver-major']
@@ -66,7 +65,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     open-pull-requests-limit: 1
     groups:
       everything:
