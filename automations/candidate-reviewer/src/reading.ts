@@ -52,6 +52,13 @@ export interface Resume {
   skills: string[];
   languages: string[];
   uncertainFields: string[];
+  /**
+   * Text the resume prints that tries to direct its reader — to give a score, to call it a match,
+   * to ignore the rules — as the model copied it, never followed: a candidate controls every word
+   * of a resume, hidden ones included. The score never judges it (`steps/candidate.ts`) and flags
+   * it (`scoring.ts`).
+   */
+  directions: string[];
 }
 
 export type ResumeDocument = 'resume' | 'not_a_resume' | 'unreadable';
@@ -182,6 +189,7 @@ export function resumeOf(answer: JsonObject): { document: ResumeDocument; resume
     ),
     skills: lines(answer.skills, SHORT),
     languages: lines(answer.languages, SHORT),
+    directions: lines(answer.directions, SHORT),
     uncertainFields: lines(answer.uncertainFields, 40),
   };
   const read =

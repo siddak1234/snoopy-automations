@@ -740,60 +740,50 @@ request, mail, line or result carries it.
 
 ## Candidate reviewer
 
-`candidate-reviewer` — shown to people as **Candidate Reviewer**, in HR — reads a job description
-once into the job's reading, then reads each candidate's resume and scores it against that
-reading, with the reasons; a job's candidates are listed highest score first (the platform's
-BUILD-PLAN Phase 28, Round 19; the owner's idea of 2026-10-23 and answers of 2026-10-24). Its spec,
-which the owner approves and which is the build's source of truth word for word, is
-[automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md). It is the
-first flow with items ("A flow's items", above): a job is its item, a candidate its run.
+`candidate-reviewer` — **Candidate Reviewer**, in HR — reads a job description once into the job's
+reading, then reads each candidate's resume and scores it against that reading (the platform's
+BUILD-PLAN Phase 28, Round 19). It is the first flow with items ("A flow's items", above): a job is
+its item, a candidate its run. What it does, in the words a person reads — the prompts and what
+they read ([§4](automations/candidate-reviewer/README.md#4-ai-steps)), the steps ([§6](automations/candidate-reviewer/README.md#6-steps-a-person-sees)), the title,
+score bands, summary and sections in their order ([§7](automations/candidate-reviewer/README.md#7-what-a-run-gives)), and every
+failure's sentence ([§8](automations/candidate-reviewer/README.md#8-when-it-fails)) — is its spec,
+[automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), the build's source of truth word for word.
+Where the code does it:
 
-**v1, the version this code serves** (its Dockerfile copies only
-`manifests/candidate-reviewer.v1.json`):
-
-- **A job** — the item run, `items.pipeline`: `job-received`, `read-job`, `save-job`
-  (`automations/candidate-reviewer/src/steps/job.ts`). The job description — a PDF, a JPEG or a
-  PNG the model reads as the file, or a Word file whose text is read here — is read once by
-  `extract-posting` (document-extraction) into the job's reading: title, department, location,
-  type, summary, must-haves, nice-to-haves, responsibilities, minimum years, education,
-  certifications, skills, pay and uncertain fields. The reading is the item run's output, held to
-  the manifest's `items.outputSchema`; its sections — Must-haves, Nice to have, Responsibilities,
-  Details — are what the job shows as read. A job description the model cannot read, or of which
-  nothing a candidate could be held to is read, makes no job: "The job description could not be
-  read. Try a clearer PDF or photo."
-- **A candidate** — `pipeline`: `receive`, `read-resume`, `check-resume`, `score`, `save`
-  (`automations/candidate-reviewer/src/steps/candidate.ts`). The resume is read by
-  `extract-resume` (document-extraction) the same way; checked to be a resume ("This file does not
-  look like a resume.") that could be read ("The file could not be read. Try a clearer PDF or
-  photo."); and scored by `score-candidate` (screening), text only, against the job's reading —
-  without the candidate's name, email, phone or links, which a score should not follow — with the
-  years of experience worked out by the code from the dates read
-  (`automations/candidate-reviewer/src/years.ts`: overlapping roles counted once, a current role
-  to today, a resume with none dated flagged "years not shown" whether or not the model said so).
-  The run returns the candidate's name as its `title` ("Unnamed candidate" when none is printed),
-  the score, the summary line ("Strong match · meets 3 of 3 must-haves": 80 and above Strong,
-  60–79 Good, 40–59 Partial, under 40 Weak) and the sections in the spec's order — Contact,
-  Experience, Education, Projects, Certifications, Skills, Languages, Why this score — a section
-  with nothing in it left out. Its `output`, never shown, is the job's reading, the resume's
-  reading, the years and the score, whole. A refusal by the model, or a plan's calls used up, ends
-  the run in the platform's own words; a refusal of the file itself (its type, size, bytes or
-  password) is "could not be read".
+- **v1, the version this code serves**: `SERVED_VERSIONS` in
+  `automations/candidate-reviewer/src/automation.ts`; its Dockerfile copies only
+  `manifests/candidate-reviewer.v1.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  holds to the spec and the code's constants to (the file types and size in
+  `automations/candidate-reviewer/src/file.ts`, the two file keys).
+- **A job** — the item run, `items.pipeline` (`job-received`, `read-job`, `save-job`):
+  `automations/candidate-reviewer/src/steps/job.ts`. The reading is `extract-posting`'s answer,
+  cleaned (`automations/candidate-reviewer/src/reading.ts`), the item run's output held to the
+  manifest's `items.outputSchema`; its sections are `postingSections` in
+  `automations/candidate-reviewer/src/sections.ts`.
+- **A candidate** — `pipeline` (`receive`, `read-resume`, `check-resume`, `score`, `save`):
+  `automations/candidate-reviewer/src/steps/candidate.ts`. `scored` there is what the scoring call
+  reads: the resume without the fields §4 leaves out, and without any line quoting a direction the
+  resume printed to its reader, which is sent apart. The years are worked out in
+  `automations/candidate-reviewer/src/years.ts` (overlapping roles once, a current role to today);
+  the score, its flags — "years not shown", and each direction — and the requirements a direction
+  was quoted for, moved from met to missing, in `automations/candidate-reviewer/src/scoring.ts`;
+  the sections in `candidateSections`. A model's refusal of the file (its type, size, bytes or
+  password) is "could not be read" (`readDocument` in
+  `automations/candidate-reviewer/src/prompts.ts`); any other refusal ends the run in the
+  platform's words.
+- **Directions planted in a document**: each of the three prompts reads its document as content,
+  never as instructions to it; `extract-resume` copies what tries to direct its reader into
+  `directions`, which the code keeps out of what the score judges and flags
+  (`automations/candidate-reviewer/test/candidate.test.ts` plants one).
 - **Word files** (`automations/candidate-reviewer/src/docx.ts`): Node's `zlib` alone, no
-  dependency. `word/document.xml` is found through the ZIP's central directory and inflated; its
-  text comes from `w:t`, its lines from `w:p`, with tabs and breaks. An entry claiming more than 5
-  MB inflated or a ratio over 100, an encrypted entry and one not stored with deflate are refused
-  before anything is inflated, and the inflation stops at the size the entry claims; a refused
-  file could not be read, and nothing is spent on it.
-- **Models and retries**: Invoice Processing's two models ("Pick a model"). No step declares a
-  retry (the spec's §6) — `save` neither: it makes no callback a retry could repeat, as the
-  platform keeps the candidate from the result.
-- **The manifest** (`manifests/candidate-reviewer.v1.json`): the spec's §1–§7, the jobs its
-  `items` — a department from the sixteen (HR first and the default) or one typed (`allowOther`),
-  and a role of up to 80 characters that names the job — and the four file types up to 3,500,000
-  bytes with no page or pixel limit, since the platform measures no Word file. The resume's run
-  input is `required: false`, as the platform demands of every file field.
-  `automations/candidate-reviewer/test/manifest.test.ts` holds the manifest to the spec and the
-  code's constants to the manifest.
+  dependency. `word/document.xml` and the page headers and footers (`word/header<n>.xml`,
+  `word/footer<n>.xml`, read first) are found through the ZIP's central directory; their text
+  comes from `w:t`, their lines from `w:p`, with tabs and breaks. Entries that together claim more
+  than 5 MB inflated, any with a ratio over 100, an encrypted one or one not stored with deflate
+  are refused before anything is inflated, and each inflation stops at the size its entry claims;
+  a refused file could not be read, and nothing is spent on it.
+- **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
+  `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
 
 The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
 manifest's pull request, the image pin and the container's alias, once CI publishes the image on

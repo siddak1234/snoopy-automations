@@ -70,6 +70,7 @@ const EMPTY_RESUME = {
   skills: [],
   languages: [],
   uncertainFields: [],
+  directions: [],
 };
 
 /** `extract-resume`'s answer for a resume: Jane Doe, made up, with three links. */
@@ -81,9 +82,9 @@ export const resumeAnswer = (overrides: JsonObject = {}): JsonObject => ({
   phone: '+1 555 0100',
   location: 'Austin, TX',
   links: [
-    { url: 'https://www.linkedin.com/in/jane-doe-example', label: 'LinkedIn' },
+    { url: 'https://linkedin.example.com/in/jane-doe', label: 'LinkedIn' },
     { url: 'janedoe.example.com', label: 'Portfolio' },
-    { url: 'https://github.com/jane-doe-example', label: '' },
+    { url: 'https://code.example.org/jane-doe', label: '' },
   ],
   summary: 'CPA with eight years in distribution accounting.',
   experience: [
@@ -106,7 +107,11 @@ export const resumeAnswer = (overrides: JsonObject = {}): JsonObject => ({
   ],
   education: [{ degree: 'B.S.', field: 'Accounting', school: 'State University', year: '2018' }],
   projects: [
-    { name: 'Close checklist', description: 'A shared checklist for the close.', url: '' },
+    {
+      name: 'Close checklist',
+      description: 'A shared checklist for the close.',
+      url: 'https://code.example.org/jane-doe/close-checklist',
+    },
   ],
   certifications: [{ name: 'CPA', issuer: 'Texas State Board', year: '2020' }],
   skills: ['Reconciliations', 'Excel', 'NetSuite'],
@@ -269,6 +274,10 @@ export const documentXml = (body: string) =>
 /** A paragraph of one run of text. */
 export const paragraph = (text: string) =>
   `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
+/** A page header's or footer's XML holding these paragraphs. */
+export const partXml = (part: 'hdr' | 'ftr', body: string) =>
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:${part} ${W}>${body}</w:${part}>`;
 
 /** A Word file whose body is these paragraphs, its content types first as Word writes them. */
 export function docx(body: string, document: Partial<ZipEntry> = {}): Uint8Array {

@@ -3,7 +3,7 @@ import { isObject, readJsonCompletion, type JsonObject, type Step } from '@autom
 import { fileFromState, fileIdOf, fileLine, fileState, readFile } from '../file.js';
 import { EXTRACT_RESUME, MODELS, SCORE_CANDIDATE, readDocument } from '../prompts.js';
 import { postingOf, resumeOf, type Posting, type Resume } from '../reading.js';
-import { scoringOf, summaryLine, type Scoring } from '../scoring.js';
+import { quotesDirection, scoringOf, summaryLine, type Scoring } from '../scoring.js';
 import { candidateSections } from '../sections.js';
 import { FAILURES, bandOf, plural, stops } from '../words.js';
 import { yearsOfExperience } from '../years.js';
@@ -25,6 +25,37 @@ export interface Candidate {
   score: number;
   summary: string;
   sections: JsonObject[];
+}
+
+/**
+ * The resume as the score reads it (the spec's §4): text only, without the candidate's name or
+ * contact details — email, phone, location, links, a project's link — which the score should not
+ * follow; and without any line that quotes a direction the resume printed to its reader, which
+ * is sent apart (`directions`) to be flagged and never judged.
+ */
+export function scored(resume: Resume): JsonObject {
+  const {
+    name: _name,
+    email: _email,
+    phone: _phone,
+    location: _location,
+    links: _links,
+    projects,
+    ...rest
+  } = resume;
+  const shown = { ...rest, projects: projects.map(({ url: _url, ...project }) => project) };
+  const { directions } = resume;
+  const clean = (value: unknown): unknown => {
+    if (typeof value === 'string') return quotesDirection(value, directions) ? '' : value;
+    if (Array.isArray(value)) {
+      return value.map(clean).filter((each) => each !== '');
+    }
+    if (typeof value === 'object' && value !== null) {
+      return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, clean(each)]));
+    }
+    return value;
+  };
+  return { ...(clean({ ...shown, directions: [] }) as JsonObject), directions };
 }
 
 /** The steps, on a clock: a current role runs to `now`. */
@@ -70,18 +101,16 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     const posting = postingOf(request.item?.reading ?? {}).posting;
     const resume = state.resume as unknown as Resume;
     const years = yearsOfExperience(resume.experience, now());
-    // Text only, and not the candidate's name or contact details: nothing the score should follow.
-    const { name: _name, email: _email, phone: _phone, links: _links, ...shown } = resume;
     const completion = await platform.callModel(
       SCORE_CANDIDATE,
       {
         posting: posting as unknown as JsonObject,
-        resume: shown as unknown as JsonObject,
+        resume: scored(resume) as unknown as JsonObject,
         yearsOfExperience: years,
       },
       MODELS,
     );
-    const scoring = scoringOf(readJsonCompletion(completion), years);
+    const scoring = scoringOf(readJsonCompletion(completion), years, resume.directions);
     return {
       outcome: 'ok',
       summary: `Scored ${scoring.score}: ${bandOf(scoring.score)}`,

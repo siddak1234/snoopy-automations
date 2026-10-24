@@ -39,7 +39,7 @@ test('§2–§5: started by hand with a resume; PDF, JPEG, PNG or Word; no conne
         title: 'Resume',
         description: 'A PDF, Word file or photo.',
         control: 'artifact',
-        // The spec's "yes": the platform refuses a required file field, so the run asks for it.
+        // The spec's "no: the platform refuses a required file field"; the run asks for it.
         required: false,
       },
     ],
@@ -77,13 +77,37 @@ test("§6: four steps a person sees, five a run reports, the email the platform'
     ],
   );
   assert.deepEqual(
-    (m.pipeline as Entry[]).map((step) => [step.id, step.kicker, step.group, step.title]),
+    (m.pipeline as Entry[]).map((step) => [
+      step.id,
+      step.kicker,
+      step.group,
+      step.title,
+      step.description,
+    ]),
     [
-      ['receive', 'TRIGGER', 'upload', 'Resume received'],
-      ['read-resume', 'AI STEP', 'review', 'Resume read'],
-      ['check-resume', 'ACTION', 'review', 'Resume checked'],
-      ['score', 'AI STEP', 'review', 'Candidate scored'],
-      ['save', 'ACTION', 'ranked', 'Candidate saved'],
+      ['receive', 'TRIGGER', 'upload', 'Resume received', 'A PDF, Word file or photo arrives.'],
+      [
+        'read-resume',
+        'AI STEP',
+        'review',
+        'Resume read',
+        'AI reads experience, education, certifications and links.',
+      ],
+      [
+        'check-resume',
+        'ACTION',
+        'review',
+        'Resume checked',
+        'Checks it is a resume and can be read.',
+      ],
+      ['score', 'AI STEP', 'review', 'Candidate scored', 'Scored against the job, with reasons.'],
+      [
+        'save',
+        'ACTION',
+        'ranked',
+        'Candidate saved',
+        "Added to the job's list, highest score first.",
+      ],
     ],
   );
 });
@@ -133,11 +157,11 @@ test('§2 and §6: jobs — a department from the sixteen, or typed; a role; the
     description: 'A PDF, Word file or photo.',
   });
   assert.deepEqual(
-    items.pipeline.map((step) => [step.id, step.title]),
+    items.pipeline.map((step) => [step.id, step.title, step.description]),
     [
-      ['job-received', 'Job description received'],
-      ['read-job', 'Job read'],
-      ['save-job', 'Job saved'],
+      ['job-received', 'Job description received', 'A PDF, Word file or photo arrives.'],
+      ['read-job', 'Job read', "AI reads the role's requirements."],
+      ['save-job', 'Job saved', 'Ready for candidates.'],
     ],
   );
 });

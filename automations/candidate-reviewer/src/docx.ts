@@ -4,19 +4,21 @@ import { inflateRawSync } from 'node:zlib';
  * A Word file's text (.docx), read here with Node's `zlib` alone — no dependency (the spec's §4:
  * a Word file is not sent to the model as a file; its text is sent as the prompt's input).
  *
- * A .docx is a ZIP archive whose body is `word/document.xml`. That entry is found through the
- * archive's central directory — never by scanning for local headers, which a crafted file can
- * plant — and inflated, bounded against a ZIP bomb: an entry that would inflate past
- * `DOCX_LIMITS.inflatedBytes`, or by more than `DOCX_LIMITS.ratio` times its stored size, is
- * refused before it is inflated, and the inflation itself stops at the size the entry claims.
- * An encrypted entry, or one not stored with deflate, is refused too. A refusal is a reason word
- * for a test, never shown: the person reads "could not be read".
+ * A .docx is a ZIP archive whose body is `word/document.xml`; its page headers and footers
+ * (`word/header<n>.xml`, `word/footer<n>.xml`) often hold a resume's name and contact lines, so
+ * their text is read too, and comes first. Each entry is found through the archive's central
+ * directory — never by scanning for local headers, which a crafted file can plant — and
+ * inflated, bounded against a ZIP bomb: entries that together would inflate past
+ * `DOCX_LIMITS.inflatedBytes`, or any that would by more than `DOCX_LIMITS.ratio` times its
+ * stored size, are refused before anything is inflated, and each inflation stops at the size its
+ * entry claims. An encrypted entry, or one not stored with deflate, is refused too. A refusal is
+ * a reason word for a test, never shown: the person reads "could not be read".
  */
 
 export const DOCX_LIMITS = {
-  /** The most `word/document.xml` may inflate to: 5 MB. */
+  /** The most the entries read may inflate to, together: 5 MB. */
   inflatedBytes: 5_000_000,
-  /** The most it may inflate by: 100 times its stored size. */
+  /** The most any one may inflate by: 100 times its stored size. */
   ratio: 100,
   /** The most entries a central directory is read for. */
   entries: 10_000,
@@ -31,41 +33,55 @@ const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
 const LOCAL_ENTRY = 0x04034b50;
 const DOCUMENT = 'word/document.xml';
+/** A page header or footer, by the name Word gives it. */
+const HEADER_OR_FOOTER = /^word\/(header|footer)\d*\.xml$/u;
 /** Bit 0 of an entry's flags: the entry is encrypted. */
 const ENCRYPTED = 0x0001;
 const DEFLATE = 8;
 
 const refused = (refusal: DocxRefusal): DocxText => ({ ok: false, refusal });
 
-/** `word/document.xml`'s text: paragraphs one a line, tabs and breaks kept. */
+/**
+ * The text of the headers, then the footers, then `word/document.xml`: paragraphs one a line,
+ * tabs and breaks kept, a header or footer that repeats another's text read once.
+ */
 export function docxText(bytes: Uint8Array): DocxText {
-  const entry = documentEntry(bytes);
-  if (!('offset' in entry)) return entry;
-  let xml: Buffer;
-  try {
-    // Stopped at the size the entry claims, itself within the bound: an entry that inflates
-    // past its claim is refused before more of it is written.
-    xml = inflateRawSync(entry.data, { maxOutputLength: Math.max(1, entry.inflated) });
-  } catch {
-    return refused('corrupt');
+  const entries = textEntries(bytes);
+  if (!Array.isArray(entries)) return entries;
+  const texts: string[] = [];
+  for (const entry of entries) {
+    let xml: Buffer;
+    try {
+      // Stopped at the size the entry claims, itself within the bound: an entry that inflates
+      // past its claim is refused before more of it is written.
+      xml = inflateRawSync(entry.data, { maxOutputLength: Math.max(1, entry.inflated) });
+    } catch {
+      return refused('corrupt');
+    }
+    const text = textOf(xml.toString('utf8'));
+    if (text !== '' && !texts.includes(text)) texts.push(text);
   }
-  return { ok: true, text: textOf(xml.toString('utf8')) };
+  return { ok: true, text: texts.join('\n') };
 }
 
 interface Entry {
-  offset: number;
+  name: string;
   data: Uint8Array;
   inflated: number;
 }
 
-/** The document's entry, read through the central directory and held to the bounds. */
-function documentEntry(bytes: Uint8Array): Entry | DocxText {
+/**
+ * The entries read, in reading order — headers, footers, the document — found through the
+ * central directory and held to the bounds, one budget for all of them.
+ */
+function textEntries(bytes: Uint8Array): Entry[] | DocxText {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const end = endOfDirectory(view);
   if (end === undefined) return refused('not-a-zip');
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
   if (count > DOCX_LIMITS.entries) return refused('corrupt');
+  const entries: Entry[] = [];
   for (let index = 0; index < count; index += 1) {
     if (at + 46 > view.byteLength || view.getUint32(at, true) !== DIRECTORY_ENTRY) {
       return refused('corrupt');
@@ -74,14 +90,25 @@ function documentEntry(bytes: Uint8Array): Entry | DocxText {
     const skip = 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
     if (at + 46 + nameLength > view.byteLength) return refused('corrupt');
     const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength));
-    if (name === DOCUMENT) return bounded(view, bytes, at);
+    if (name === DOCUMENT || HEADER_OR_FOOTER.test(name)) {
+      const entry = bounded(view, bytes, at, name);
+      if (!('data' in entry)) return entry;
+      entries.push(entry);
+    }
     at += skip;
   }
-  return refused('no-document');
+  if (!entries.some((entry) => entry.name === DOCUMENT)) return refused('no-document');
+  const total = entries.reduce((sum, entry) => sum + entry.inflated, 0);
+  if (total > DOCX_LIMITS.inflatedBytes) return refused('too-large');
+  const rank = (name: string) =>
+    name.startsWith('word/header') ? 0 : name.startsWith('word/footer') ? 1 : 2;
+  return entries.sort(
+    (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name, 'en', { numeric: true }),
+  );
 }
 
 /** The entry at this central-directory record, or why it is refused. */
-function bounded(view: DataView, bytes: Uint8Array, at: number): Entry | DocxText {
+function bounded(view: DataView, bytes: Uint8Array, at: number, name: string): Entry | DocxText {
   const flags = view.getUint16(at + 8, true);
   const method = view.getUint16(at + 10, true);
   const stored = view.getUint32(at + 20, true);
@@ -97,7 +124,7 @@ function bounded(view: DataView, bytes: Uint8Array, at: number): Entry | DocxTex
   }
   const offset = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
   if (offset + stored > view.byteLength) return refused('corrupt');
-  return { offset, data: bytes.subarray(offset, offset + stored), inflated };
+  return { name, data: bytes.subarray(offset, offset + stored), inflated };
 }
 
 /** The end-of-central-directory record: in the last 22 bytes, or before a comment of up to 64 KiB. */

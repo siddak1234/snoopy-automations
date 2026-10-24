@@ -66,6 +66,7 @@ test('§9: a job description photo makes the posting — title, must-haves, nice
     { title: "Bachelor's degree in accounting", subtitle: 'Education' },
     { title: '$85,000–$100,000 a year', subtitle: 'Pay' },
   ]);
+  assert.equal(result.summary, 'Job saved: 3 must-haves, 2 nice-to-haves');
   assert.equal(result.title, undefined, 'a job is named by its role, not by its run');
   assert.equal(result.score, undefined);
 });

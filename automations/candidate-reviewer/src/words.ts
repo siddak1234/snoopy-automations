@@ -1,4 +1,4 @@
-import type { StepResult } from '@autom8x/automation-sdk';
+import { truncateText, type StepResult } from '@autom8x/automation-sdk';
 
 /**
  * The words a person reads when a run stops — the spec's §8, exactly
@@ -14,8 +14,8 @@ export const FAILURES = {
   /** A job description that cannot be read: the job is not made. */
   jobUnreadable: 'The job description could not be read. Try a clearer PDF or photo.',
   /**
-   * A run whose job carries no reading. The platform starts a candidate's run only on a job that
-   * is ready (its ADR-0046), so this answers a platform fault; the spec names no words for it.
+   * A run whose job carries no reading (the spec's §8, fourth row). The platform starts a
+   * candidate's run only on a job that is ready (its ADR-0046), so this answers a platform fault.
    */
   jobNotRead: "This candidate's job has not been read yet.",
 } as const;
@@ -38,6 +38,12 @@ export function bandOf(score: number): string {
 
 /** The flag a resume with no dates carries (the spec's §4): it scores on what it shows. */
 export const YEARS_NOT_SHOWN = 'years not shown';
+
+/** The flag for text a resume printed to direct its reader, quoted in at most 120 characters. */
+export function directionFlag(direction: string): string {
+  const quoted = direction.length > 120 ? `${truncateText(direction, 119).trimEnd()}…` : direction;
+  return `Text that tries to direct the reader: "${quoted}"`;
+}
 
 /** A count and its noun: "1 role", "3 roles". */
 export const plural = (count: number, one: string, many: string): string =>

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import { deflateRawSync } from 'node:zlib';
 
 import { DOCX_LIMITS, docxText } from '../src/docx.js';
-import { docx, documentXml, paragraph, zip } from './fixtures.js';
+import { docx, documentXml, paragraph, partXml, zip } from './fixtures.js';
 
 /**
  * A Word file's text, read with Node's `zlib` alone (the spec's §4), from files this suite builds
@@ -56,6 +57,35 @@ test('the document is found through the central directory, wherever it sits', ()
   assert.equal(text(bytes), 'Found');
 });
 
+test("a page header's and footer's text is read too, first, and a repeated one once", () => {
+  const xml = (text: string) => Buffer.from(text, 'utf8');
+  const bytes = zip([
+    { name: 'word/document.xml', data: xml(documentXml(paragraph('Senior Accountant'))) },
+    { name: 'word/footer1.xml', data: xml(partXml('ftr', paragraph('jane.doe@example.com'))) },
+    { name: 'word/header2.xml', data: xml(partXml('hdr', paragraph('Jane Doe'))) },
+    { name: 'word/header1.xml', data: xml(partXml('hdr', paragraph('Jane Doe'))) },
+    { name: 'word/headers.xml', data: xml(partXml('hdr', paragraph('not a header part'))) },
+  ]);
+  assert.equal(text(bytes), 'Jane Doe\njane.doe@example.com\nSenior Accountant');
+});
+
+test('a header is held to the same bounds, and every entry read shares one 5 MB budget', () => {
+  const body = { name: 'word/document.xml', data: Buffer.from(documentXml(paragraph('x'))) };
+  const header = (data: Buffer) => ({ name: 'word/header1.xml', data });
+  assert.equal(refusal(zip([body, header(Buffer.alloc(1_000_000, 'a'))])), 'ratio');
+  assert.equal(
+    refusal(zip([body, { ...header(Buffer.from(partXml('hdr', ''))), flags: 0x0001 }])),
+    'encrypted',
+  );
+  // Two parts of 2.6 MB each that hardly compress: each within the bound, together past it.
+  const half = () => randomBytes(2_600_000);
+  assert.equal(
+    refusal(zip([{ ...body, data: half() }, header(half())])),
+    'too-large',
+    'refused before either is inflated',
+  );
+});
+
 test('what is not a Word file is refused: not a ZIP, or no document in it', () => {
   assert.equal(refusal(new TextEncoder().encode('%PDF-1.7 not a zip')), 'not-a-zip');
   assert.equal(refusal(new Uint8Array()), 'not-a-zip');
@@ -63,6 +93,8 @@ test('what is not a Word file is refused: not a ZIP, or no document in it', () =
     refusal(zip([{ name: 'word/other.xml', data: Buffer.from('<x/>') }])),
     'no-document',
   );
+  const header = Buffer.from(partXml('hdr', paragraph('Jane Doe')));
+  assert.equal(refusal(zip([{ name: 'word/header1.xml', data: header }])), 'no-document');
 });
 
 test('an encrypted entry, or one not stored with deflate, is refused', () => {
