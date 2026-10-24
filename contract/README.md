@@ -1,8 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `d371251`, the platform's `main` after its #231 squash-merged
-Round 18's 27.2 (2026-10-21): `display.documentWords` ("Re-pinned 2026-10-21" below). Before it,
+(`snoopy-backend`, private) at commit `7a4baa6`, the head of its branch `round-19/items`, not yet
+merged: Round 19's contract, a flow's items (its ADR-0046; "Refreshed 2026-10-24" below). Before it,
+`d371251`, the platform's `main` after its #231 squash-merged Round 18's 27.2 (2026-10-21):
+`display.documentWords` ("Re-pinned 2026-10-21" below). Before it,
 `708ed6e`, the platform's `main` after its #222
 squash-merged Build 24 (2026-10-20): `RunDocument.source` (the file, and its pages when told)
 and `RunDocumentRecord.accountName`, both optional (the platform's ADR-0045). First pinned at
@@ -262,6 +264,36 @@ Re-pinned 2026-10-21 at `d371251`, the platform's `main` after #231 squash-merge
 `git show d371251:schemas/<file>`), so only the commit above moves. The live platform accepts
 `documentWords` once a promotion carries `d371251` — the pin that serves v7 (its BUILD-PLAN 27.4.1).
 
+Refreshed 2026-10-24 from the head of the platform's branch `round-19/items`, `7a4baa6` (Round
+19's contract: its ADR-0046, a flow's items), not yet merged — as `dcb8ddb` and `1137ac9` were
+above, this repository's half built beside the platform's. Three files moved, additively:
+
+- `automation-manifest.json`: the optional `items` block — `words` and `runWords`
+  (`{ singular, plural }`, each 1–40 characters); `titleField` and the optional `groupField`,
+  field keys; `fields`, 1–4, each a `key`, a `title`, an optional `description`, `required` and a
+  `control`: `text`, with an optional `maxLength` of 1–200, or `select`, with 1–32 unique `options`
+  of 1–40 characters, an optional `allowOther` and an optional `defaultValue`; `file` (`key`,
+  `title`, `description`); `pipeline`, the item run's 1–8 steps (`id`, `title`, `description`);
+  and `outputSchema`, the reading's, an object schema. `manifests/candidate-reviewer.v1.json`
+  declares one.
+- `automation-invoke-request.json`: the optional `item` — `id`, `fields` (each a string) and
+  `reading` (an object, or null on the item run itself) — and `readsItem`, whose one value is
+  `true`, sent only on the item run. The SDK's `InvokeRequest` reads both
+  (`packages/automation-sdk/src/item.ts`), and its runner runs `items.pipeline` on an item run.
+- `automation-run-result.json`: the success branch's optional `title` (1–80 characters), `score`
+  (an integer from 0 to 100) and `sections` (1–12, each a `title` of 1–40 characters and 1–40
+  `entries`: a `title` of 1–120, and optionally a `subtitle` of 1–120, a `text` of 1–600 and a
+  `url` of at most 2,048 starting `http://` or `https://` in either case). The platform also
+  refuses a url a URL parser does not read as `http:` or `https:`, which a schema cannot say. The
+  SDK's `boundedTitle`, `boundedScore` and `boundedSections`
+  (`packages/automation-sdk/src/sections.ts`) bound what an automation returns to all of it.
+
+The other five files are byte-identical to `d371251`'s, and all eight to `7a4baa6`'s (each checked
+with `cmp`). Until that branch merges and a promotion carries it, the live platform refuses a
+manifest declaring `items` and a result carrying `title`, `score` or `sections`, so
+`candidate-reviewer` v1 is registered only by the platform's pin change after both; this copy is
+re-pinned to the merge commit then, its bytes unchanged unless a review changed them.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -282,6 +314,10 @@ length. `setup[].key`: "must be camelCase, starting with a lowercase letter".
 
 **`pricing.monthlyPriceUsd`** — "must be a non-negative number"; "must not have sub-cent
 precision".
+
+**`display.category`** — "must be one of: HR, Accounting, Finance, …" — one of the sixteen team
+kinds, spelt exactly (ADR-0036): a flow added from the catalog goes to the workspace's team of its
+category. The schema says it as an `enum`.
 
 **`requiredConnections`** — a `providerId` "is declared more than once" is refused; the
 schema's `uniqueItems` compares whole entries, the validator compares `providerId`
@@ -306,7 +342,12 @@ boolean"; `defaultValue` "must be a `<type>` for a `<control>` control" and, for
 `everySeconds` "is only meaningful when kind is 'schedule'" and must lie within the
 platform's schedule bounds; a `provider-event` trigger cannot name a connection the
 manifest does not declare; a trigger kind the platform does not implement is refused at
-registration.
+registration. `input` (ADR-0030) "is only meaningful when kind is 'manual'"; each field takes the
+setup field's properties except `section` and `notifies` — anything else "is not a run input
+property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact`; an `email`
+value "must be an email address for an email control"; an `artifact` field "must be false for an
+artifact control" when required and "is not meaningful for an artifact control" with a default —
+a file is uploaded, never required or shared; a key "is declared more than once" refused.
 
 **`pipeline`** — "must declare at least the trigger step"; a step `id` "is declared more
 than once" refused; "only the first step may be a TRIGGER".
@@ -363,8 +404,27 @@ application/pdf, image/jpeg or image/png when a page or pixel limit is declared"
 the platform measures, which the schema cannot say); and any other key "is not an artifacts
 property", as the schema's `additionalProperties: false` already refused it.
 
-**Arrays** — connections, capabilities, setup fields, pipeline steps and scopes per
-connection each "must contain at most N entries".
+**A flow's items** (ADR-0046, Round 19; its `manifest-validation.ts` at `7a4baa6`, in its
+words — its `snoopy-backend/manifests/README.md` does not name them yet) — `items` "needs
+trigger.kind 'manual': a person makes an item and starts its runs" and "needs an artifacts block:
+an item is made from a file"; a key the schema does not name "is not an items property" (and so
+in a field, the file, a step and the words); a field's `key` camelCase, none "is declared more
+than once"; `options`, `allowOther` and `defaultValue` each "is only meaningful on a 'select'
+field", and `maxLength` "is only meaningful on a 'text' field"; a select "must declare at least 1
+option", none "is declared more than once", and its `defaultValue` "must be one of options";
+`titleField` "must name a field of items.fields" and "must name a required field: its value names
+the item"; `groupField` "must name a 'select' field of items.fields"; `file.key` "must not be a key
+of items.fields" and "must not be a key of trigger.input"; an item step's `id` shaped as a step
+id, none "is declared more than once", and none "is a pipeline step id: an item run reports its
+own steps"; `outputSchema.type` "must be 'object': the reading is an object", every keyword in it
+one the platform holds an output to — else "uses <keyword>, which the platform cannot hold an
+output to" — nested at most 32 levels. A manifest accepting a type outside PDF, JPEG and PNG
+declares no page or pixel limit (`artifacts`, below). `test/manifest-items.ts` ports these,
+`test/manifest-rules.ts` the `artifact` field's two rules above, and `test/manifest-items.test.ts`
+bites each.
+
+**Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
+scopes per connection each "must contain at most N entries".
 
 **At registration** — the filename must match `templateId` and `version`; a registered
 version is immutable; `service.origin` and `service.serviceAccount` are unique across

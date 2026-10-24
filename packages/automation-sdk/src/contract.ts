@@ -16,6 +16,8 @@
 
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
+import { isInvokeItem, type InvokeItem } from './item.js';
+import type { RunSection } from './sections.js';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -58,6 +60,10 @@ export interface InvokeRequest {
   input: JsonObject;
   /** Present only when this run continues an earlier one. */
   continuation?: Continuation;
+  /** The item this run belongs to, on each run of a flow declaring `items` (ADR-0046, `item.ts`). */
+  item?: InvokeItem;
+  /** Present, and true, only on an item run: the run that reads a new item's file (ADR-0046). */
+  readsItem?: true;
   callbackOrigin: string;
   /** Scoped to this run, expires with it. The only thing this automation may present. */
   runToken: string;
@@ -113,12 +119,17 @@ export type RunResult =
   // the one-run read; it never parses them. `documents` (its ADR-0039, BUILD-PLAN 25.4.27) are the
   // documents the run read from its file, one object each, kept with the run, shown on the one-run
   // read and downloadable as a JSON file — on a success and on a held run, never on a failed one.
+  // `title`, `score` and `sections` (its ADR-0046) name, rank and show a run of a flow with items
+  // (`sections.ts`).
   | {
       outcome: 'success';
       output?: JsonObject;
       summary?: string;
       details?: readonly RunDetail[];
       documents?: readonly RunDocument[];
+      title?: string;
+      score?: number;
+      sections?: readonly RunSection[];
     }
   | {
       outcome: 'held';
@@ -329,6 +340,8 @@ export function isInvokeRequest(value: unknown): value is InvokeRequest {
     isObject(value.config) &&
     isObject(value.input) &&
     (value.continuation === undefined || isContinuation(value.continuation)) &&
+    (value.item === undefined || isInvokeItem(value.item)) &&
+    (value.readsItem === undefined || value.readsItem === true) &&
     typeof value.callbackOrigin === 'string' &&
     typeof value.runToken === 'string' &&
     typeof value.deadline === 'string'

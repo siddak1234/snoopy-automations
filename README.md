@@ -131,6 +131,24 @@ the run go on. `invoice-processing` uses it to end a QuickBooks step that never 
 recorded in QuickBooks" and save the details instead (below); `undefined` lets the run fail as
 before.
 
+**A flow's items** (the platform's ADR-0046, Round 19). A manifest may declare `items`: things a
+person makes once, from a file, that its runs then belong to — Candidate Reviewer's jobs. Making
+one starts an **item run**: the invoke carries `readsItem: true`, the item's file under
+`items.file.key` in its `input`, and the runner runs that version's `items.pipeline` instead of
+its `pipeline` — those steps there and only there; a version without items has no item run, and
+the runner fails one in a fixed sentence. The item run's success `output` is the item's reading,
+which the platform holds to `items.outputSchema`. Every later run of the item carries `item` —
+its `id`, the `fields` a person gave it and its `reading` (`InvokeItem`; null on the item run) —
+and its success may return a `title` (what names it on the item's list), a `score` (an integer
+from 0 to 100 the item's runs are ranked by) and `sections` (rows a person opens: up to 12, each
+of up to 40 entries with a title, a subtitle, a text and an http(s) link). The SDK bounds those
+before they are sent (`packages/automation-sdk/src/sections.ts`): a title one line of at most 80
+characters, a score kept only when it is such an integer — never rounded or moved into range —
+each row cut at its bound, a link the platform would not keep left off its row, and none sent
+when none is left. `defineAutomation` refuses at startup an item step with no code and an id
+declared in both pipelines; `itemFixture` and `declaredItemSteps` in
+`@autom8x/automation-sdk/testing` build an item for a suite and read a manifest's item steps.
+
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
@@ -720,6 +738,68 @@ dates — on every path, held and straight through — and `automations/invoice-
 sample's marker through every step on the simulator, approved when it held: no QuickBooks
 request, mail, line or result carries it.
 
+## Candidate reviewer
+
+`candidate-reviewer` — shown to people as **Candidate Reviewer**, in HR — reads a job description
+once into the job's reading, then reads each candidate's resume and scores it against that
+reading, with the reasons; a job's candidates are listed highest score first (the platform's
+BUILD-PLAN Phase 28, Round 19; the owner's idea of 2026-10-23 and answers of 2026-10-24). Its spec,
+which the owner approves and which is the build's source of truth word for word, is
+[automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md). It is the
+first flow with items ("A flow's items", above): a job is its item, a candidate its run.
+
+**v1, the version this code serves** (its Dockerfile copies only
+`manifests/candidate-reviewer.v1.json`):
+
+- **A job** — the item run, `items.pipeline`: `job-received`, `read-job`, `save-job`
+  (`automations/candidate-reviewer/src/steps/job.ts`). The job description — a PDF, a JPEG or a
+  PNG the model reads as the file, or a Word file whose text is read here — is read once by
+  `extract-posting` (document-extraction) into the job's reading: title, department, location,
+  type, summary, must-haves, nice-to-haves, responsibilities, minimum years, education,
+  certifications, skills, pay and uncertain fields. The reading is the item run's output, held to
+  the manifest's `items.outputSchema`; its sections — Must-haves, Nice to have, Responsibilities,
+  Details — are what the job shows as read. A job description the model cannot read, or of which
+  nothing a candidate could be held to is read, makes no job: "The job description could not be
+  read. Try a clearer PDF or photo."
+- **A candidate** — `pipeline`: `receive`, `read-resume`, `check-resume`, `score`, `save`
+  (`automations/candidate-reviewer/src/steps/candidate.ts`). The resume is read by
+  `extract-resume` (document-extraction) the same way; checked to be a resume ("This file does not
+  look like a resume.") that could be read ("The file could not be read. Try a clearer PDF or
+  photo."); and scored by `score-candidate` (screening), text only, against the job's reading —
+  without the candidate's name, email, phone or links, which a score should not follow — with the
+  years of experience worked out by the code from the dates read
+  (`automations/candidate-reviewer/src/years.ts`: overlapping roles counted once, a current role
+  to today, a resume with none dated flagged "years not shown" whether or not the model said so).
+  The run returns the candidate's name as its `title` ("Unnamed candidate" when none is printed),
+  the score, the summary line ("Strong match · meets 3 of 3 must-haves": 80 and above Strong,
+  60–79 Good, 40–59 Partial, under 40 Weak) and the sections in the spec's order — Contact,
+  Experience, Education, Projects, Certifications, Skills, Languages, Why this score — a section
+  with nothing in it left out. Its `output`, never shown, is the job's reading, the resume's
+  reading, the years and the score, whole. A refusal by the model, or a plan's calls used up, ends
+  the run in the platform's own words; a refusal of the file itself (its type, size, bytes or
+  password) is "could not be read".
+- **Word files** (`automations/candidate-reviewer/src/docx.ts`): Node's `zlib` alone, no
+  dependency. `word/document.xml` is found through the ZIP's central directory and inflated; its
+  text comes from `w:t`, its lines from `w:p`, with tabs and breaks. An entry claiming more than 5
+  MB inflated or a ratio over 100, an encrypted entry and one not stored with deflate are refused
+  before anything is inflated, and the inflation stops at the size the entry claims; a refused
+  file could not be read, and nothing is spent on it.
+- **Models and retries**: Invoice Processing's two models ("Pick a model"). No step declares a
+  retry (the spec's §6) — `save` neither: it makes no callback a retry could repeat, as the
+  platform keeps the candidate from the result.
+- **The manifest** (`manifests/candidate-reviewer.v1.json`): the spec's §1–§7, the jobs its
+  `items` — a department from the sixteen (HR first and the default) or one typed (`allowOther`),
+  and a role of up to 80 characters that names the job — and the four file types up to 3,500,000
+  bytes with no page or pixel limit, since the platform measures no Word file. The resume's run
+  input is `required: false`, as the platform demands of every file field.
+  `automations/candidate-reviewer/test/manifest.test.ts` holds the manifest to the spec and the
+  code's constants to the manifest.
+
+The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
+manifest's pull request, the image pin and the container's alias, once CI publishes the image on
+`main`. Until the platform's Round 19 merges and is promoted, it refuses a manifest declaring
+`items`.
+
 ## The kit
 
 `packages/automation-kit` (`@autom8x/automation-kit`) is a library automations build
@@ -801,8 +881,10 @@ MetaData.CreateTime` on every transaction), and
 ## Adding an automation
 
 A new flow starts from the owner's idea, written down as a spec the owner approves, words
-included, before any code: `/new-flow` ([SKILL.md](.claude/skills/new-flow/SKILL.md)), whose spec
-becomes `automations/<templateId>/README.md`. Its build is the steps below.
+included, before any code: `/create-flow`, the shared kit's skill
+(`snoopy-backend/.claude/skills/create-flow/`, installed to the workspace and run from there, the
+platform's BUILD-PLAN 28.2.5), whose spec becomes `automations/<templateId>/README.md`. Its build
+is the steps below.
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
    with your templateId everywhere (`package.json`, `Dockerfile`, `src/`). Give it a

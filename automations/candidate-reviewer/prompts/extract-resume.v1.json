@@ -1,0 +1,219 @@
+{
+  "id": "extract-resume",
+  "version": 1,
+  "capability": "document-extraction",
+  "template": "You read one candidate's resume or CV. The resume is the attached PDF or image; when no file is attached, it is the text in the input's text field, read from a Word file. Answer with only the JSON object the response schema describes: no other text and no code fences.\n\nRules:\n1. Read only what is printed. Never guess, invent or work out a value that is not printed.\n2. Use an empty string for a text and an empty list for a list that is not printed or cannot be read. When a value is printed but blurred, cut off or only partly legible, give what is printed and list the field in uncertainFields.\n3. document is resume for a resume or CV; not_a_resume for a document that can be read and is not one, such as a receipt, an invoice or a letter; unreadable when nothing can be read, such as a blank page or a photo too blurred to read. When it is not resume, leave every other field empty.\n4. experience lists each role, most recent first: its title, its employer, and its dates exactly as printed, start and end each written YYYY-MM when the month and year are printed and YYYY when only the year is. current is true when the role is printed as present, current or now, and then end is empty. Never work out how long a role lasted or how many years of experience the candidate has: give the dates and nothing more.\n5. highlights are what the candidate did in the role, each one short line as printed.\n6. links are the web addresses printed, each with what it is; projects, certifications, education, skills and languages are each as printed.\n7. summary is the resume's own summary or profile, in at most 200 characters; empty when it has none.",
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "document": {
+        "type": "string",
+        "enum": ["resume", "not_a_resume", "unreadable"],
+        "description": "resume: a resume or CV. not_a_resume: a document that can be read and is not a resume, such as a receipt or a letter. unreadable: nothing can be read, such as a blank page or a photo too blurred to read."
+      },
+      "name": {
+        "type": "string",
+        "description": "The candidate's name, as printed."
+      },
+      "email": {
+        "type": "string",
+        "description": "The candidate's email address, as printed."
+      },
+      "phone": {
+        "type": "string",
+        "description": "The candidate's phone number, as printed."
+      },
+      "location": {
+        "type": "string",
+        "description": "Where the candidate is, as printed."
+      },
+      "links": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The address, as printed."
+            },
+            "label": {
+              "type": "string",
+              "description": "What it is, as printed or as its site names it, such as LinkedIn or Portfolio."
+            }
+          },
+          "required": ["url", "label"],
+          "additionalProperties": false
+        },
+        "description": "Each web address printed: a profile, a portfolio, a site."
+      },
+      "summary": {
+        "type": "string",
+        "description": "The resume's own summary or profile, in at most 200 characters; empty when it has none."
+      },
+      "experience": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "The role's title, as printed."
+            },
+            "company": {
+              "type": "string",
+              "description": "The employer, as printed."
+            },
+            "start": {
+              "type": "string",
+              "description": "When the role began: YYYY-MM when the month and year are printed, YYYY when only the year is; empty when not printed."
+            },
+            "end": {
+              "type": "string",
+              "description": "When the role ended, written as start is; empty when it is current or not printed."
+            },
+            "current": {
+              "type": "boolean",
+              "description": "True when the role is printed as present, current or now."
+            },
+            "highlights": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Each thing done in the role, one short line each, as printed."
+            }
+          },
+          "required": ["title", "company", "start", "end", "current", "highlights"],
+          "additionalProperties": false
+        },
+        "description": "Each role, most recent first, as printed."
+      },
+      "education": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "degree": {
+              "type": "string",
+              "description": "The degree or qualification, as printed."
+            },
+            "field": {
+              "type": "string",
+              "description": "The subject, as printed."
+            },
+            "school": {
+              "type": "string",
+              "description": "The school, college or university, as printed."
+            },
+            "year": {
+              "type": "string",
+              "description": "The year it was completed or is expected, as printed."
+            }
+          },
+          "required": ["degree", "field", "school", "year"],
+          "additionalProperties": false
+        },
+        "description": "Each qualification, as printed."
+      },
+      "projects": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The project's name, as printed."
+            },
+            "description": {
+              "type": "string",
+              "description": "What it is, in at most 200 characters."
+            },
+            "url": {
+              "type": "string",
+              "description": "Its web address, as printed; empty when none is."
+            }
+          },
+          "required": ["name", "description", "url"],
+          "additionalProperties": false
+        },
+        "description": "Each project, as printed."
+      },
+      "certifications": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The certification or licence, as printed."
+            },
+            "issuer": {
+              "type": "string",
+              "description": "Who issued it, as printed."
+            },
+            "year": {
+              "type": "string",
+              "description": "The year it was earned, as printed."
+            }
+          },
+          "required": ["name", "issuer", "year"],
+          "additionalProperties": false
+        },
+        "description": "Each certification or licence, as printed."
+      },
+      "skills": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Each skill, tool or system, as printed."
+      },
+      "languages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Each language the candidate speaks, as printed, with its level when printed."
+      },
+      "uncertainFields": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "name",
+            "email",
+            "phone",
+            "location",
+            "links",
+            "summary",
+            "experience",
+            "education",
+            "projects",
+            "certifications",
+            "skills",
+            "languages"
+          ]
+        },
+        "description": "Each field printed but blurred, cut off or only partly legible."
+      }
+    },
+    "required": [
+      "document",
+      "name",
+      "email",
+      "phone",
+      "location",
+      "links",
+      "summary",
+      "experience",
+      "education",
+      "projects",
+      "certifications",
+      "skills",
+      "languages",
+      "uncertainFields"
+    ],
+    "additionalProperties": false,
+    "description": "One resume, read only from what is printed. An empty string for a text and an empty list for a list that is not printed or cannot be read."
+  }
+}

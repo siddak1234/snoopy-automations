@@ -20,8 +20,9 @@ import {
  * manifests declare.
  *
  * - every step the code can report is declared by a manifest the container
- *   serves, and every declared step is implemented — the platform refuses an
- *   undeclared step with 422 and does not store it;
+ *   serves — in its `pipeline`, or in its `items.pipeline` for the item run — and every
+ *   declared step is implemented — the platform refuses an undeclared step with 422 and
+ *   does not store it;
  * - every capability a prompt uses is in `requiredCapabilities` of every served
  *   manifest — the platform refuses an undeclared capability with 403 before
  *   anything reaches a vendor;
@@ -32,8 +33,9 @@ import {
  *   Dockerfile copies exactly those files, so the image cannot serve a version its code dropped.
  *
  * `defineAutomation` refuses the first two at startup; this test states the rules
- * for the repository and reads each automation's definition the way `main.ts`
- * builds it, from `src/automation.ts`'s `define(manifests)`.
+ * for the repository and reads each automation's definition the way its `main.ts`
+ * builds it, from the `define(manifests)` its automation file exports
+ * (`automations/candidate-reviewer/src/automation.ts`, for one).
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -75,8 +77,13 @@ function assertConforms(
   manifests: readonly Manifest[],
   label: string,
 ): void {
+  // A version's steps: its runs' `pipeline` and, for a flow with items, its item run's
+  // `items.pipeline` (platform ADR-0046) — each reported by the code, each declared.
   const declared = new Map(
-    manifests.map((manifest) => [manifest.version, new Set(manifest.pipeline.map((s) => s.id))]),
+    manifests.map((manifest) => [
+      manifest.version,
+      new Set([...manifest.pipeline, ...(manifest.items?.pipeline ?? [])].map((s) => s.id)),
+    ]),
   );
   for (const stepId of automation.steps) {
     assert.ok(

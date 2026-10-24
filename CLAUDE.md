@@ -17,7 +17,7 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 
 | Task                                    | Read or use                                                                                                                                                                          |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A new flow, from the owner's idea       | `/new-flow` ([SKILL.md](.claude/skills/new-flow/SKILL.md)): a spec the owner approves, words included, before any code                                                               |
+| A new flow, from the owner's idea       | `/create-flow`, the kit's skill (`snoopy-backend/.claude/skills/create-flow/`), run from the workspace: a spec the owner approves, words included, before any code                   |
 | What each repository holds              | `snoopy-backend/docs/platform/AUTOM8X-MASTER-PLAN.md` §3.4, read only: the flows here; registration, secrets and shared integrations in the platform; the clients draw what it sends |
 | A new automation, or a new version      | `/new-automation-version` ([SKILL.md](.claude/skills/new-automation-version/SKILL.md)); [README.md](README.md#adding-an-automation)                                                  |
 | Anything inside `automations/`          | [automations/CLAUDE.md](automations/CLAUDE.md)                                                                                                                                       |
