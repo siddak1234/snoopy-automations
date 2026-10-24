@@ -1,6 +1,6 @@
 # Candidate Reviewer: spec
 
-**Approved:** <the words: pending> — the design decided 2026-10-24 by the owner's five answers (below) and "now continue and complete in parallel" · **Version:** v1 · **Built in:** <PR link, once built>
+**Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v1 · **Built in:** [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin
 
 **Changed since the words were shown to the owner (2026-10-24):** the step descriptions "Scored
 against the job, with reasons." and "Added to the job's list, highest score first." (were "posting");
