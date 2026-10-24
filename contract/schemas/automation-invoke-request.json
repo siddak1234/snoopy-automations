@@ -62,6 +62,35 @@
         }
       }
     },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fields",
+        "reading"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "reading": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "readsItem": {
+      "const": true
+    },
     "callbackOrigin": {
       "type": "string",
       "format": "uri"

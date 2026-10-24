@@ -38,6 +38,7 @@
 
 ### Automations
 
+- `automations/candidate-reviewer/` (`@autom8x/candidate-reviewer`): Candidate Reviewer (v1): reads a job description once into the job's reading, then reads each candidate's resume — a PDF, a photo or a Word… · manifests v1
 - `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v6): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v1, v2, v3, v4, v5, v6, v7
 
 ### Packages
@@ -75,7 +76,6 @@
 ## Skills, agents and hooks
 
 - skill `new-automation-version`: Use when adding a new automation, or a new manifest version of an existing one, in snoopy-automations. Walks the template or the existing folder, the manifest,… ([.claude/skills/new-automation-version/SKILL.md](../.claude/skills/new-automation-version/SKILL.md))
-- skill `new-flow`: Use when the owner brings an idea for a new flow — a document, a diagram, notes or a description. Writes it down as one spec in a fixed form, limited to what t… ([.claude/skills/new-flow/SKILL.md](../.claude/skills/new-flow/SKILL.md))
 - agent `builder`: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns a leftovers list and the path of a summary… ([.claude/agents/builder.md](../.claude/agents/builder.md))
 - agent `explorer`: Read-only search. Use to find where something lives or is described before reading or editing; returns path:line findings and what was not found. Never edits. ([.claude/agents/explorer.md](../.claude/agents/explorer.md))
 - agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS/FAIL verdict with 10 findings or fewer … ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))

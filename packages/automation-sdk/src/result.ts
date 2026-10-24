@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import { oneLine, type RunResult } from './contract.js';
 import { boundedDetails } from './details.js';
 import { boundedDocuments } from './documents.js';
+import { boundedScore, boundedSections, boundedTitle } from './sections.js';
 
 /**
  * The most bytes the result callback's body may take: the platform reads at most 256 KiB of it
@@ -18,10 +19,11 @@ const bodyBytes = (result: RunResult): number =>
 
 /**
  * The result with every one-line field, each line of its `details` and each of its `documents`,
- * normalised to what the wire accepts. A success whose body would pass `RESULT_BODY_LIMIT_BYTES`
- * leaves out its `output` — the structured result the platform keeps and never publishes — so the
- * documents a person reads still arrive; nothing a person reads in a success is ever left out for
- * size. A held result past it never leaves out its `held.state`, which comes back with the
+ * normalised to what the wire accepts — and a success's `title`, `score` and `sections` too
+ * (`sections.ts`: cut, or left out, never refused). A success whose body would pass
+ * `RESULT_BODY_LIMIT_BYTES` leaves out its `output` — the structured result the platform keeps and
+ * never publishes — so the documents and sections a person reads still arrive; nothing a person
+ * reads in a success is ever left out for size. A held result past it never leaves out its `held.state`, which comes back with the
  * approval and carries every read the continuation's result sends: it first sends each document
  * without its lines (`lineItems` empty, `lineItemsComplete` false), so the run page and the
  * waiting email still show each one's seller, number, totals and status, and only when even that
@@ -30,14 +32,20 @@ const bodyBytes = (result: RunResult): number =>
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
     case 'success': {
-      const { details, documents, ...rest } = result;
+      const { details, documents, title, score, sections, ...rest } = result;
       const lines = boundedDetails(details);
       const kept = boundedDocuments(documents);
+      const named = boundedTitle(title);
+      const ranked = boundedScore(score);
+      const shown = boundedSections(sections);
       const bounded: Extract<RunResult, { outcome: 'success' }> = {
         ...rest,
         ...(result.summary === undefined ? {} : { summary: oneLine(result.summary, 'summary') }),
         ...(lines === undefined ? {} : { details: lines }),
         ...(kept === undefined ? {} : { documents: kept }),
+        ...(named === undefined ? {} : { title: named }),
+        ...(ranked === undefined ? {} : { score: ranked }),
+        ...(shown === undefined ? {} : { sections: shown }),
       };
       if (bounded.output === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
         return bounded;

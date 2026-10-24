@@ -1,14 +1,18 @@
 /**
  * The platform's validator rules a JSON Schema cannot say, for the manifest additions of its
  * ADR-0037 (spec §1.2 and §1.4 of the Invoice Processing update), its ADR-0040 (Build 21, C4:
- * one connection per step) and its ADR-0041 (Build 22: a step that is a setting, the platform's
- * email step, a step's title by the flow's connection): an optional connection and the connection
- * setup fields that choose it, a setup field's step group, and the visible step groups — ported
- * from its `packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21
- * branch `round-17/b21-platform`; Build 22's rules as merged in its `32b33ae`, #215), each refusal
- * as `<path>: <message>`, so a manifest that would be refused at registration fails this
- * repository first. Every manifest in `manifests/` is held to them.
+ * one connection per step), its ADR-0041 (Build 22: a step that is a setting, the platform's
+ * email step, a step's title by the flow's connection), its ADR-0030 (a run's file field) and its
+ * ADR-0046 (Round 19: a flow's items, `manifest-items.ts`): an optional connection and the
+ * connection setup fields that choose it, a setup field's step group, the visible step groups, a
+ * file the run asks for, and the items — ported from its
+ * `snoopy-backend/packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21 branch
+ * `round-17/b21-platform`; Build 22's rules as merged in its `32b33ae`, #215; ADR-0030's and
+ * ADR-0046's at `2d93d99`), each refusal as `<path>: <message>`, so a manifest that would be
+ * refused at registration fails this repository first. Every manifest in `manifests/` is held to
+ * them.
  */
+import { itemsProblems } from './manifest-items.js';
 
 export type Json = Record<string, unknown>;
 const list = (value: unknown): Json[] => (Array.isArray(value) ? (value as Json[]) : []);
@@ -114,6 +118,17 @@ export function manifestProblems(manifest: Json): string[] {
     }
   }
   titlesByConnection(list(manifest.groups), list(manifest.setup), optional, add);
+  // ADR-0030 — a run's file is uploaded: never required, never a default (its `validateRunInput`).
+  for (const [index, field] of list(trigger.input).entries()) {
+    if (field.control !== 'artifact') continue;
+    const path = `trigger.input[${index}]`;
+    if (field.required === true) add(`${path}.required`, 'must be false for an artifact control');
+    if (field.defaultValue !== undefined) {
+      add(`${path}.defaultValue`, 'is not meaningful for an artifact control');
+    }
+  }
+  // ADR-0046 — a flow's items (`test/manifest-items.ts`).
+  itemsProblems(manifest, add);
   return problems;
 }
 
