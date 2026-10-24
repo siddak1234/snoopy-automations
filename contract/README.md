@@ -405,7 +405,7 @@ the platform measures, which the schema cannot say); and any other key "is not a
 property", as the schema's `additionalProperties: false` already refused it.
 
 **A flow's items** (ADR-0046, Round 19; its `manifest-validation.ts` at `7a4baa6`, in its
-words — its `snoopy-backend/manifests/README.md` does not name them yet) — `items` "needs
+words — `snoopy-backend/manifests/README.md` names them since its #239) — `items` "needs
 trigger.kind 'manual': a person makes an item and starts its runs" and "needs an artifacts block:
 an item is made from a file"; a key the schema does not name "is not an items property" (and so
 in a field, the file, a step and the words); a field's `key` camelCase, none "is declared more

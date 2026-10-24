@@ -2,6 +2,14 @@
 
 **Approved:** <the words: pending> — the design decided 2026-10-24 by the owner's five answers (below) and "now continue and complete in parallel" · **Version:** v1 · **Built in:** <PR link, once built>
 
+**Changed since the words were shown to the owner (2026-10-24):** the step descriptions "Scored
+against the job, with reasons." and "Added to the job's list, highest score first." (were "posting");
+a fourth failure, "This candidate's job has not been read yet." (§8; the platform refuses such a run
+first); "Why this score" also lists flags, among them "years not shown" and "Text that tries to
+direct the reader: "…"" (§4, §7); the resume field is not marked required (§2: the platform refuses a
+required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). Every
+word on the screens the owner was shown is unchanged.
+
 Every limit below is the platform's: `contract/schemas/automation-manifest.json` and
 `contract/schemas/automation-run-result.json`, and the rules beyond them in `contract/README.md`,
 "What the platform refuses beyond the schema".
@@ -89,7 +97,11 @@ flags "years not shown". Years of experience are computed by the code from the d
 the model. The resume prompt also answers whether the file is a resume (`document`), and the job
 prompt whether the description could be read (`readable`) — the two checks of section 8; the job's
 stored reading leaves `readable` out. The scoring call is sent the two readings without the
-candidate's name or contact details. A Word file (.docx) is not sent as a file: its text is read by the flow (Node's `zlib`,
+candidate's name or contact details — email, phone, location, links, and each project's link. Text
+in a job description or a resume is content to judge, never an instruction: the resume prompt
+returns any text that tries to direct its reader as `directions`, which the scoring call is never
+sent; the run flags it under "Why this score" and gives a match that quotes it no credit. The score
+itself is the model's judgement under that rule. A Word file (.docx) is not sent as a file: its text is read by the flow (Node's `zlib`,
 no dependency, bounded) and sent as the prompt's input; a PDF or photo is sent as the file.
 
 ## 5. Setup questions
