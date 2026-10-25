@@ -1,9 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `cf17dbb` on the platform's branch
-`round-19/feedback-b28`, not yet merged: Round 19's build 28 contract, verdict words and a run's
-verdict ("Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
+(`snoopy-backend`, private) at commit `d0e4201`, the platform's `main` after its #242
+squash-merged Round 19's build 28 contract, verdict words and a run's verdict (2026-10-25;
+"Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
 its #239 squash-merged Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed
 2026-10-24" below). Before it,
 `d371251`, the platform's `main` after its #231 squash-merged Round 18's 27.2 (2026-10-21):
@@ -316,10 +316,10 @@ repository's half built beside the platform's. Two files moved, additively:
   job's.
 
 The other six files are byte-identical to `2d93d99`'s, and all eight to `cf17dbb`'s (each checked
-with `cmp`). Until that branch merges and a promotion carries it, the live platform refuses a
-manifest declaring `verdictWords` and a result carrying `verdict`, so `candidate-reviewer` v2 is
-registered only by the platform's pin change after both; this copy is re-pinned to the merge
-commit then, its bytes unchanged unless a review changed them.
+with `cmp`). Re-pinned 2026-10-25 to `d0e4201`, #242's merge: all eight byte-identical to it
+(`cmp`), the review between them having changed only the OpenAPI's words. Until a promotion
+carries it, the live platform refuses a manifest declaring `verdictWords` and a result carrying
+`verdict`, so `candidate-reviewer` v2 is registered only by the platform's pin change after it.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
