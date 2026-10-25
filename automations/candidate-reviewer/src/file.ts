@@ -1,6 +1,13 @@
-import { truncateText, type JsonObject, type StepPlatform } from '@autom8x/automation-sdk';
+import {
+  truncateText,
+  type ArtifactReference,
+  type JsonObject,
+  type StepPlatform,
+} from '@autom8x/automation-sdk';
 
-import { docxText } from './docx.js';
+import { docxLinks, docxText } from './docx.js';
+import { pdfLinks } from './pdf.js';
+import { fileLinks } from './reading.js';
 
 /**
  * The files Resume Screening takes — a job description and a resume alike (the spec's §2): a
@@ -22,6 +29,12 @@ export const MAXIMUM_TEXT_LENGTH = 50_000;
 /** What the model reads: the run's file by its id, or a Word file's text. */
 export type FileRead = { kind: 'file'; artifactId: string } | { kind: 'text'; text: string };
 
+/** A resume's file as the model reads it, and the http(s) addresses the file itself links to. */
+export interface ResumeFile {
+  read: FileRead;
+  links: string[];
+}
+
 /** The type the upload declared, without its parameters, in lower case. */
 const typeOf = (contentType: string) => contentType.split(';')[0]!.trim().toLowerCase();
 
@@ -35,13 +48,61 @@ export async function readFile(
   platform: StepPlatform,
   artifactId: string,
 ): Promise<FileRead | undefined> {
+  return (await opened(platform, artifactId, false))?.read;
+}
+
+/**
+ * A resume's file as `readFile` reads it, and the addresses the file links to (the spec's §4):
+ * a PDF's bytes are read for them too (`pdf.ts`), a Word file's from its relationships
+ * (`docx.ts`); a photo holds none.
+ */
+export function readResumeFile(
+  platform: StepPlatform,
+  artifactId: string,
+): Promise<ResumeFile | undefined> {
+  return opened(platform, artifactId, true);
+}
+
+async function opened(
+  platform: StepPlatform,
+  artifactId: string,
+  withLinks: boolean,
+): Promise<ResumeFile | undefined> {
   const reference = await platform.readArtifact(artifactId);
   const type = typeOf(reference.contentType);
-  if ((MODEL_TYPES as readonly string[]).includes(type)) return { kind: 'file', artifactId };
+  if (withLinks && type === 'application/pdf') {
+    const bytes = await bytesOrNone(platform, reference);
+    return {
+      read: { kind: 'file', artifactId },
+      links: bytes === undefined ? [] : fileLinks(pdfLinks(bytes)),
+    };
+  }
+  if ((MODEL_TYPES as readonly string[]).includes(type)) {
+    return { read: { kind: 'file', artifactId }, links: [] };
+  }
   if (type !== WORD_TYPE) return undefined;
-  const read = docxText(await platform.readArtifactBytes(reference));
+  const bytes = await platform.readArtifactBytes(reference);
+  const read = docxText(bytes);
   if (!read.ok || read.text === '') return undefined;
-  return { kind: 'text', text: truncateText(read.text, MAXIMUM_TEXT_LENGTH) };
+  return {
+    read: { kind: 'text', text: truncateText(read.text, MAXIMUM_TEXT_LENGTH) },
+    links: withLinks ? fileLinks(docxLinks(bytes)) : [],
+  };
+}
+
+/**
+ * A PDF's bytes, or `undefined` when they cannot be fetched: that costs the links alone, since
+ * the model is sent the file by its id either way.
+ */
+async function bytesOrNone(
+  platform: StepPlatform,
+  reference: ArtifactReference,
+): Promise<Uint8Array | undefined> {
+  try {
+    return await platform.readArtifactBytes(reference);
+  } catch {
+    return undefined;
+  }
 }
 
 /** The upload's id the run's input carries under `key`, or `undefined`. */

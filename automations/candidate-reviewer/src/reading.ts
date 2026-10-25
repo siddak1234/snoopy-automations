@@ -1,5 +1,7 @@
 import { truncateText, type JsonObject } from '@autom8x/automation-sdk';
 
+import { linkLabel } from './words.js';
+
 /**
  * The two readings, cleaned from the model's answers
  * (`automations/candidate-reviewer/prompts/extract-posting.v1.json`,
@@ -43,6 +45,7 @@ export interface Resume {
   email: string;
   phone: string;
   location: string;
+  /** The links the model read, then those only the file links to (`withFileLinks`). */
   links: { url: string; label: string }[];
   summary: string;
   experience: Role[];
@@ -219,4 +222,43 @@ export function linkUrl(value: unknown): string {
   if (/^https?:\/\//iu.test(text)) return text;
   if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/iu.test(text)) return `https://${text}`;
   return '';
+}
+
+/**
+ * The addresses a resume's file links to (`pdf.ts`, `docx.ts`) as links a person can open: each
+ * through `linkUrl`, so http and https alone — a `mailto:`, a `javascript:` dropped — and one a
+ * URL parser reads; each once, the first seen first, at most `LIST`.
+ */
+export function fileLinks(targets: readonly string[]): string[] {
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  for (const target of targets) {
+    const url = linkUrl(target);
+    if (url === '' || !URL.canParse(url) || seen.has(sameAddress(url))) continue;
+    seen.add(sameAddress(url));
+    kept.push(url);
+    if (kept.length === LIST) break;
+  }
+  return kept;
+}
+
+/**
+ * The resume's links (the spec's §4): the model's, as it read them, then each address the file
+ * links to that the model did not read, named by its site (`linkLabel`); at most `LIST`. A link
+ * already there keeps the model's label. They stay contact details: `scored` never sends them.
+ */
+export function withFileLinks(links: Resume['links'], targets: readonly string[]): Resume['links'] {
+  const read = new Set(links.map((link) => sameAddress(link.url)));
+  const added = fileLinks(targets)
+    .filter((url) => !read.has(sameAddress(url)))
+    .map((url) => ({ url, label: linkLabel(url) }));
+  return [...links, ...added].slice(0, LIST);
+}
+
+/** An address as two are compared: its scheme and host in lower case, a trailing slash dropped. */
+function sameAddress(url: string): string {
+  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)(.*)$/iu.exec(url);
+  if (parts === null) return url;
+  const [, scheme = '', host = '', rest = ''] = parts;
+  return `${scheme.toLowerCase()}${host.toLowerCase()}${rest.replace(/\/$/u, '')}`;
 }

@@ -791,6 +791,17 @@ Where the code does it:
   than 5 MB inflated, any with a ratio over 100, an encrypted one or one not stored with deflate
   are refused before anything is inflated, and each inflation stops at the size its entry claims;
   a refused file could not be read, and nothing is spent on it.
+- **The file's own links** (§4; build 28's F8): `readResumeFile` in
+  `automations/candidate-reviewer/src/file.ts`, for a candidate's file only, reads the addresses it
+  links to — a PDF's URI actions, as written and in each `/FlateDecode` stream, object streams
+  among them (`automations/candidate-reviewer/src/pdf.ts`: each inflation stopped at 5 MB and the
+  stream then not read, 20 MB in all, at most 500 streams and 200 addresses; an encrypted PDF
+  none), and a Word file's external hyperlinks in `word/_rels/document.xml.rels` (`docxLinks`,
+  through the same directory and bounds). `fileLinks` and `withFileLinks` in
+  `automations/candidate-reviewer/src/reading.ts` keep http and https alone, each once, and add
+  each the model did not read after its own, named by `linkLabel`
+  (`automations/candidate-reviewer/src/words.ts`). A PDF whose bytes cannot be fetched or parsed
+  gives none, and the run goes on; `scored` never sends them.
 - **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
   `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
 

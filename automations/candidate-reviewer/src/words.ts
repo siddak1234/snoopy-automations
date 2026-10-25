@@ -59,3 +59,19 @@ export function directionFlag(direction: string): string {
 /** A count and its noun: "1 role", "3 roles". */
 export const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
+
+/** The sites a link only the file gave is named by (the spec's §7), by host. */
+const SITES: Readonly<Record<string, string>> = {
+  'linkedin.com': 'LinkedIn',
+  'github.com': 'GitHub',
+  'huggingface.co': 'Hugging Face',
+};
+
+/**
+ * What names a link the file alone gave, the model having read no label for it: its site, or its
+ * host without `www.` — "example.com" for `https://www.example.com/jane`.
+ */
+export function linkLabel(url: string): string {
+  const host = URL.canParse(url) ? new URL(url).hostname.replace(/^www\./u, '') : '';
+  return SITES[host] ?? host;
+}
