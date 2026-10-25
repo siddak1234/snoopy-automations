@@ -437,7 +437,7 @@
               "properties": {
                 "url": {
                   "type": "string",
-                  "description": "The address, as printed."
+                  "description": "The address, as printed or as the file links to it."
                 },
                 "label": {
                   "type": "string",
@@ -447,7 +447,7 @@
               "required": ["url", "label"],
               "additionalProperties": false
             },
-            "description": "Each web address printed: a profile, a portfolio, a site."
+            "description": "Each web address printed, and each the file links to behind a word: a profile, a portfolio, a site."
           },
           "summary": {
             "type": "string",

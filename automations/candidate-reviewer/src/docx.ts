@@ -71,7 +71,8 @@ export function docxLinks(bytes: Uint8Array): string[] {
   const xml = Array.isArray(entries) && entries[0] !== undefined ? inflated(entries[0]) : undefined;
   if (xml === undefined) return [];
   const links: string[] = [];
-  for (const [, attributes = ''] of xml.matchAll(/<(?:[\w-]+:)?Relationship\b([^>]*)>/gu)) {
+  // A tag's attributes stop at the next `<` as well as at its `>` (`TAG`).
+  for (const [, attributes = ''] of xml.matchAll(/<(?:[\w-]+:)?Relationship\b([^<>]*)>/gu)) {
     const type = attributeOf(attributes, 'Type');
     const target = attributeOf(attributes, 'Target');
     if (
@@ -204,6 +205,13 @@ function decode(text: string): string {
 }
 
 /**
+ * A tag, or the text between two. A tag ends at its `>` and never runs past the next `<`, which
+ * XML forbids inside one: a `<` with no `>` after it is no tag, and is not read to the end of the
+ * entry once for every such `<` — time that would grow with the square of its size.
+ */
+const TAG = /<([^<>]*)>|([^<]+)/gu;
+
+/**
  * The text of WordprocessingML: `w:t` runs, a `w:tab` a tab and a `w:br` or `w:cr` a line
  * break, each `w:p` its own line. A tab stop (`w:tab` inside `w:tabs`) is no tab, and a
  * `mc:Fallback` repeats what its `mc:Choice` holds, so neither is read.
@@ -214,7 +222,7 @@ function textOf(xml: string): string {
   let inText = false;
   let inTabs = 0;
   let inFallback = 0;
-  for (const match of xml.matchAll(/<([^>]*)>|([^<]+)/gu)) {
+  for (const match of xml.matchAll(TAG)) {
     const tag = match[1];
     if (tag === undefined) {
       if (inText) line += decode(match[2] ?? '');

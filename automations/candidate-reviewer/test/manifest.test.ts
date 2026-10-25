@@ -219,7 +219,13 @@ test('§1: its own container and service account, as v7 of Invoice Processing se
   });
 });
 
-test("v2 is v1 but for its name, departments, verdict words and container; the job's reading v1's", () => {
+/** A candidate's links in an output schema: their description and their address's. */
+function linksOf(schema: unknown) {
+  const resume = (schema as { properties: { resume: { properties: Entry } } }).properties.resume;
+  return resume.properties.links as { description: string; items: { properties: { url: Entry } } };
+}
+
+test("v2 is v1 but for its name, departments, verdict words, container and links' words; the job's reading v1's", () => {
   const v1 = JSON.parse(
     readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v1.json`), 'utf8'),
   ) as typeof manifest;
@@ -230,11 +236,32 @@ test("v2 is v1 but for its name, departments, verdict words and container; the j
     [1, 'Candidate Reviewer', 'http://candidate-reviewer-v1.autom8x.internal:8080', undefined],
   );
   assert.equal((v1Items.fields[0]!.options as unknown as string[]).length, 16);
-  // So a job made on v1 serves v2's runs, and v2's candidates are kept as v1's were.
+  // So a job made on v1 serves v2's runs, and v2's candidates are kept as v1's were: v2's output
+  // differs from v1's in its two descriptions of a resume's links alone (the spec's F8 note).
   assert.deepEqual(manifest.items.outputSchema, v1.items.outputSchema);
-  assert.deepEqual(manifest.outputSchema, v1.outputSchema);
+  const links = linksOf(manifest.outputSchema);
+  assert.deepEqual(
+    [links.description, links.items.properties.url.description],
+    [
+      'Each web address printed, and each the file links to behind a word: a profile, a portfolio, a site.',
+      'The address, as printed or as the file links to it.',
+    ],
+  );
+  const asV1 = structuredClone(manifest.outputSchema);
+  const v1Links = linksOf(v1.outputSchema);
+  Object.assign(linksOf(asV1), { description: v1Links.description });
+  Object.assign(linksOf(asV1).items.properties.url, v1Links.items.properties.url);
+  assert.deepEqual(asV1, v1.outputSchema);
   const rest = (each: typeof manifest) => {
-    const { version: _v, display, service, items: all, ...others } = each as Entry;
+    // The output, held above.
+    const {
+      version: _v,
+      display,
+      service,
+      items: all,
+      outputSchema: _out,
+      ...others
+    } = each as Entry;
     const { name: _name, ...shown } = display as Entry;
     const { origin: _o, serviceAccount: _s, ...container } = service as Entry;
     const { verdictWords: _w, fields, ...kept } = all as Entry & { fields: [Entry, ...Entry[]] };

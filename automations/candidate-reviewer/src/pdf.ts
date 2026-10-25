@@ -80,7 +80,11 @@ function* flateStreams(text: string, bytes: Uint8Array): Generator<Uint8Array> {
     const start = match.index + match[0].length;
     const end = text.indexOf('endstream', start);
     if (end === -1) return;
-    const head = Math.max(from, text.lastIndexOf('obj', match.index), match.index - WINDOW);
+    // The dictionary is read back to its `obj`, searched within `WINDOW` alone: a search to the
+    // file's start for each keyword would take time that grows with the square of its size.
+    const floor = Math.max(from, match.index - WINDOW);
+    const before = text.slice(floor, match.index);
+    const head = floor + Math.max(0, before.lastIndexOf('obj'));
     from = end;
     if (/\/FlateDecode\b/u.test(text.slice(head, match.index))) yield bytes.subarray(start, end);
   }

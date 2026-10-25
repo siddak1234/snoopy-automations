@@ -11,7 +11,7 @@ until it is retired. It needs the platform's build 28 contract first (§10).
 
 **v2, 2026-10-25 (build 28's F8: "If there is a url that should be in the section"):** a resume's
 links are also those its file links to behind a word, such as "LinkedIn" (§4), each named by its
-site (§7).
+site (§7); v2's output schema describes the links so (v1's: "Each web address printed").
 
 **Changed since the words were shown to the owner (2026-10-24):** the step descriptions "Scored
 against the job, with reasons." and "Added to the job's list, highest score first." (were "posting");
@@ -117,10 +117,10 @@ itself is the model's judgement under that rule. A Word file (.docx) is not sent
 no dependency, bounded) and sent as the prompt's input; a PDF or photo is sent as the file.
 A resume's links are those printed and those the file links to: a word such as "LinkedIn" whose
 address is only in the file's link is not printed, so the flow reads it from the file — a PDF's
-bytes, its compressed parts too, and a Word file's hyperlinks — the same way (Node's `zlib`, no
-dependency, bounded); a photo holds none, and an encrypted or broken file gives none, the run going
-on. Only `http` and `https` addresses are kept, each once, after the model's; one the model read
-keeps its label. The prompt is unchanged: it reads what is printed.
+bytes, its compressed parts too, and a Word file's body's hyperlinks — the same way (Node's `zlib`,
+no dependency, bounded); a photo holds none, and an encrypted or broken PDF gives none, the run
+going on. Only `http` and `https` addresses are kept, each once, after the model's; one the model
+read keeps its label. The prompt is unchanged: it reads what is printed.
 
 ## 5. Setup questions
 

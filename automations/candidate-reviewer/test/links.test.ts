@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
 
-import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
+import { RUN_SECTION_LIMITS, type JsonObject, type RunResult } from '@autom8x/automation-sdk';
 
 import { docxLinks } from '../src/docx.js';
 import { PDF_LIMITS, pdfLinks } from '../src/pdf.js';
@@ -266,4 +266,82 @@ test('a link only the file gave is named by its site, or its host without www.',
       { url: 'https://github.com/example', label: 'GitHub' },
     ],
   );
+});
+
+/** A Word file whose body links, through its relationships, to each of `targets`. */
+function wordLinkingTo(targets: readonly string[]): Uint8Array {
+  const rels = targets
+    .map(
+      (target, index) =>
+        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${target}" TargetMode="External"/>`,
+    )
+    .join('');
+  return zip([
+    { name: 'word/document.xml', data: Buffer.from(documentXml(paragraph('Jane Doe')), 'utf8') },
+    {
+      name: 'word/_rels/document.xml.rels',
+      data: Buffer.from(`<Relationships>${rels}</Relationships>`, 'utf8'),
+    },
+  ]);
+}
+
+test('a PDF of bare stream keywords is read in time that grows with its size alone', () => {
+  // 680 KB of streams with no `obj` before them: each dictionary is looked for within its window,
+  // never back to the file's start (6 seconds before the fix; 3.5 MB took three minutes).
+  const bytes = Buffer.from(`%PDF-1.7\n${'stream\nendstream\n'.repeat(40_000)}`, 'latin1');
+  const started = performance.now();
+  assert.deepEqual(pdfLinks(bytes), []);
+  assert.ok(performance.now() - started < 1_000, 'read in under a second');
+});
+
+test('a link longer than the platform keeps is left out, never cut to another address', async () => {
+  const long = `https://example.com/${'a'.repeat(RUN_SECTION_LIMITS.urlLength)}`;
+  const longest = `https://example.com/${'b'.repeat(RUN_SECTION_LIMITS.urlLength - 20)}`;
+  assert.equal(longest.length, RUN_SECTION_LIMITS.urlLength);
+  assert.deepEqual(fileLinks([long, longest]), [longest]);
+  // A Word file's target is read whole from its relationships, then held to the same bound.
+  const bytes = wordLinkingTo([long]);
+  assert.deepEqual(docxLinks(bytes), [long]);
+  assert.deepEqual(contactLinks((await run(bytes, WORD.contentType)).sent), MODEL_LINKS);
+});
+
+test("at most the links Contact can show beside the email, phone and location; a PDF's first 200 addresses", async () => {
+  const many = Array.from({ length: 45 }, (_, n) => `https://example.com/${n}`);
+  const shown = RUN_SECTION_LIMITS.entries - 3;
+  assert.deepEqual(fileLinks(many), many.slice(0, shown));
+  const { sent } = await run(pdf(many.map((url) => annotation(`(${url})`))));
+  const contact = sent.sections?.find((each) => each.title === 'Contact')?.entries ?? [];
+  assert.equal(contact.length, RUN_SECTION_LIMITS.entries);
+  // Every link the output keeps is a row of Contact: none is cut by the platform's 40 rows.
+  const kept = (sent.output?.resume as JsonObject & { links: { url: string }[] }).links;
+  assert.deepEqual(
+    contactLinks(sent).map(([, url]) => url),
+    kept.map((link) => link.url),
+  );
+  assert.deepEqual(contactLinks(sent).slice(0, 3), MODEL_LINKS);
+  const crowded = Array.from({ length: PDF_LIMITS.addresses + 1 }, (_, n) =>
+    annotation(`(https://example.com/${n})`),
+  );
+  assert.equal(pdfLinks(pdf(crowded)).length, PDF_LIMITS.addresses);
+});
+
+test('a link the model read is not added again with a www. or the other of http and https', async () => {
+  const resume = resumeAnswer({
+    links: [
+      { url: 'example.com/in/jane-doe', label: 'Profile' },
+      { url: 'https://example.org/work', label: 'Portfolio' },
+    ],
+  });
+  const bytes = pdf([
+    annotation('(https://www.example.com/in/jane-doe)'),
+    annotation('(http://example.org/work/)'),
+    annotation('(http://WWW.example.net/talks)'),
+    annotation('(https://example.net/talks/)'),
+  ]);
+  const { sent } = await run(bytes, 'application/pdf', resume);
+  assert.deepEqual(contactLinks(sent), [
+    ['Profile', 'https://example.com/in/jane-doe'],
+    ['Portfolio', 'https://example.org/work'],
+    ['example.net', 'http://WWW.example.net/talks'],
+  ]);
 });

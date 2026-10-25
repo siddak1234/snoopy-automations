@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import { deflateRawSync } from 'node:zlib';
 
-import { DOCX_LIMITS, docxText } from '../src/docx.js';
+import { DOCX_LIMITS, docxLinks, docxText } from '../src/docx.js';
 import { docx, documentXml, paragraph, partXml, zip } from './fixtures.js';
 
 /**
@@ -130,4 +130,28 @@ test('a directory pointing past the file, or an entry cut short, is refused', ()
     },
   ]);
   assert.equal(refusal(lying), 'corrupt');
+});
+
+test('a tag left open is no tag: read in time that grows with the size alone', () => {
+  // Each `<` with no `>` after it was read to the entry's end, once for each (25.8 s for 720 KB of
+  // relationships): 360 KB of them, behind what the entry holds, each a few random characters.
+  const open = (tag: string) =>
+    Array.from({ length: 12_000 }, () => `<${tag} ${randomBytes(12).toString('base64')}`).join('');
+  const hyperlink =
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/kept" TargetMode="External"/>';
+  const document = Buffer.from(documentXml(paragraph('Jane Doe')), 'utf8');
+  const bytes = zip([
+    { name: 'word/document.xml', data: Buffer.concat([document, Buffer.from(open('w:t'))]) },
+    {
+      name: 'word/_rels/document.xml.rels',
+      data: Buffer.from(`<Relationships>${hyperlink}</Relationships>${open('Relationship')}`),
+    },
+  ]);
+  const started = performance.now();
+  assert.deepEqual(docxLinks(bytes), ['https://example.com/kept']);
+  const links = performance.now() - started;
+  assert.equal(text(bytes), 'Jane Doe');
+  const read = performance.now() - started - links;
+  assert.ok(links < 1_000, `the links read in ${Math.round(links)} ms`);
+  assert.ok(read < 1_000, `the text read in ${Math.round(read)} ms`);
 });
