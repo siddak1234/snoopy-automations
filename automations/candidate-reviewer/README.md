@@ -1,6 +1,6 @@
 # Resume Screening (`candidate-reviewer`): spec
 
-**Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v2 · **Built in:** v1 in [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin; v2 on `round-19/resume-screening-v2`, not yet merged
+**Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v2 · **Built in:** v1 in [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin; v2 in [#57](https://github.com/siddak1234/snoopy-automations/pull/57) (`ea2a900`), registered by the platform's FORTY-SECOND pin and served since its read-back, 2026-10-25 07:07:47Z
 
 **v2, 2026-10-24 (the owner's decisions on build 28's feedback):** the name "Resume Screening"
 (§1; v1 is "Candidate Reviewer"); the department options A–Z, "AI" added among them, HR still the
