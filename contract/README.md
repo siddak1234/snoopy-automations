@@ -1,7 +1,7 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `cf17dbb`, the head of the platform's branch
+(`snoopy-backend`, private) at commit `cf17dbb` on the platform's branch
 `round-19/feedback-b28`, not yet merged: Round 19's build 28 contract, verdict words and a run's
 verdict ("Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
 its #239 squash-merged Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed

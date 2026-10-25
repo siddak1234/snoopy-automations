@@ -30,6 +30,21 @@ export const TEMPLATE_ID = 'candidate-reviewer';
 export const SERVED_VERSIONS: readonly number[] = [2];
 
 /**
+ * The manifests this image serves, of those given: `SERVED_VERSIONS` alone, as Invoice
+ * Processing's — so v2's code never answers a run pinned to v1, which declares no verdict words —
+ * and refused when none is left.
+ */
+export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
+  const served = manifests.filter((manifest) => SERVED_VERSIONS.includes(manifest.version));
+  if (served.length === 0) {
+    throw new Error(
+      `${TEMPLATE_ID} serves v${SERVED_VERSIONS.join(', v')}, and no such manifest was given`,
+    );
+  }
+  return served;
+}
+
+/**
  * The automation, on a clock — a current role's years run to `now`; `main.ts` and the
  * conformance test pass none, and the suite a fixed day.
  */
@@ -39,7 +54,7 @@ export function define(
 ): Automation {
   return defineAutomation({
     templateId: TEMPLATE_ID,
-    manifests,
+    manifests: servedManifests(manifests),
     prompts: PROMPTS,
     steps: { ...JOB_STEPS, ...candidateSteps(now) },
     // No step declares a retry. Each model step's call is a vendor call and a ledger row when

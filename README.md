@@ -141,8 +141,8 @@ which the platform holds to `items.outputSchema`. Every later run of the item ca
 its `id`, the `fields` a person gave it and its `reading` (`InvokeItem`; null on the item run) —
 and its success may return a `title` (what names it on the item's list), a `score` (an integer
 from 0 to 100 the item's runs are ranked by), a `verdict` (build 28: `positive` or `negative`,
-which its item counts and the manifest's `items.verdictWords` name; never on an item run, nor on
-a version declaring no words, which the platform refuses) and `sections` (rows a person opens: up
+which its item counts and the manifest's `items.verdictWords` name; where the platform refuses
+one: [contract/README.md](contract/README.md)) and `sections` (rows a person opens: up
 to 12, each of up to 40 entries with a title, a subtitle, a text and an http(s) link). The SDK
 bounds those before they are sent (`packages/automation-sdk/src/sections.ts`): a title one line of
 at most 80 characters, a score kept only when it is such an integer — never rounded or moved into
@@ -756,8 +756,9 @@ failure's sentence ([§8](automations/candidate-reviewer/README.md#8-when-it-fai
 Where the code does it:
 
 - **v2, the version this code serves**: `SERVED_VERSIONS` in
-  `automations/candidate-reviewer/src/automation.ts`; its Dockerfile copies only
-  `manifests/candidate-reviewer.v2.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  `automations/candidate-reviewer/src/automation.ts`, whose `servedManifests` keeps it alone of the
+  manifests `define` is given and refuses when none is left, as Invoice Processing's does; its
+  Dockerfile copies only `manifests/candidate-reviewer.v2.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
   holds to the spec and the code's constants to (the file types and size in
   `automations/candidate-reviewer/src/file.ts`, the two file keys), and to v1's
   `manifests/candidate-reviewer.v1.json` but for what v2 changed — its job's reading v1's. v1's
@@ -807,8 +808,7 @@ Where the code does it:
 
 The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
 manifest's pull request, the image pin and the container's alias, once CI publishes the image on
-`main`. Until the platform's build 28 contract merges and is promoted, it refuses v2's
-`items.verdictWords` and a result's `verdict` ([contract/README.md](contract/README.md)).
+`main`, after the platform's build 28 contract ([contract/README.md](contract/README.md)).
 
 ## The kit
 

@@ -169,10 +169,7 @@ export interface Answers {
 
 /** The automation on the fixed day, a platform answering as `answers` say, and one file given. */
 export function world(answers: Answers, file: { contentType?: string; bytes?: Uint8Array } = {}) {
-  const served = readManifests(manifestsRoot, TEMPLATE_ID).filter((each) =>
-    SERVED_VERSIONS.includes(each.version),
-  );
-  const automation = define(served, () => NOW);
+  const automation = define(readManifests(manifestsRoot, TEMPLATE_ID), () => NOW);
   const platform = new RecordingPlatform();
   platform.artifacts = [
     artifactFixture({

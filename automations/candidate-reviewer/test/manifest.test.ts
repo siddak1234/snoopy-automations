@@ -3,12 +3,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { SERVED_VERSIONS, TEMPLATE_ID } from '../src/automation.js';
+import { readManifests } from '@autom8x/automation-sdk';
+import { RecordingPlatform } from '@autom8x/automation-sdk/testing';
+
+import { SERVED_VERSIONS, TEMPLATE_ID, define } from '../src/automation.js';
 import { FILE_LIMITS } from '../src/file.js';
 import { EXTRACT_POSTING, EXTRACT_RESUME, PROMPTS, SCORE_CANDIDATE } from '../src/prompts.js';
 import { RESUME_FILE_KEY } from '../src/steps/candidate.js';
 import { JOB_FILE_KEY } from '../src/steps/job.js';
-import { manifest, manifestsRoot } from './fixtures.js';
+import { NOW, candidateRun, manifest, manifestsRoot } from './fixtures.js';
 
 /**
  * `manifests/candidate-reviewer.v2.json`, the version this image serves, as the spec words it
@@ -186,6 +189,23 @@ test("the job's reading is the posting prompt's answer less whether it was reada
     reading.required,
     prompt.required.filter((key) => key !== 'readable'),
   );
+});
+
+test('the image serves v2 alone: of v1 and v2 it keeps v2, and refuses a run pinned to v1 before any step or call', async () => {
+  const all = readManifests(manifestsRoot, TEMPLATE_ID);
+  assert.deepEqual(
+    all.map((each) => each.version),
+    [1, 2],
+  );
+  const automation = define(all, () => NOW);
+  assert.deepEqual(automation.versions, SERVED_VERSIONS);
+  const v1 = all.filter((each) => each.version === 1);
+  assert.throws(() => define(v1), /serves v2, and no such manifest was given/u);
+
+  const platform = new RecordingPlatform();
+  const result = await automation.execute({ ...candidateRun(), templateVersion: 1 }, platform);
+  assert.equal(result.outcome, 'failed', JSON.stringify(result));
+  assert.deepEqual([platform.steps, platform.artifactReads, platform.modelCalls], [[], [], []]);
 });
 
 test('§1: its own container and service account, as v7 of Invoice Processing set them', () => {

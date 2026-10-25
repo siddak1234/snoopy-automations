@@ -28,6 +28,9 @@ const section = (title: string, count: number, entry = { title: 'Row' }): RunSec
   entries: Array.from({ length: count }, () => entry),
 });
 
+/** A held run the schema accepts: a step id of its pattern, a reason, the state to go on from. */
+const HELD = { outcome: 'held', held: { stepId: 'save', reason: 'r', state: {} } } as const;
+
 test('a title, a score and sections within the bounds validate on a success, and nowhere else', () => {
   const validate = validator('automation-run-result');
   const sections = [
@@ -50,10 +53,12 @@ test('a title, a score and sections within the bounds validate on a success, and
   assertValid(validate, { outcome: 'success', title: 'x'.repeat(80) }, 'a title of 80');
   const url = (value: string) => [{ title: 'S', entries: [{ title: 'E', url: value }] }];
   assertValid(validate, { outcome: 'success', sections: url('HTTP://EXAMPLE.COM') }, 'any case');
+  // The held run below is refused for its score alone: without one, it validates.
+  assertValid(validate, HELD, 'a held run, without a score');
 
   const refused: [string, Record<string, unknown>][] = [
     ['a failed run', { outcome: 'failed', failureReason: 'x', title: 'Jane' }],
-    ['a held run', { outcome: 'held', held: { stepId: 's', reason: 'r', state: {} }, score: 1 }],
+    ['a held run', { ...HELD, score: 1 }],
     ['an empty title', { outcome: 'success', title: '' }],
     ['a title of 81', { outcome: 'success', title: 'x'.repeat(81) }],
     ['a score of 101', { outcome: 'success', score: 101 }],
@@ -107,15 +112,14 @@ test('a verdict of positive or negative validates on a success, and nowhere else
   for (const verdict of RUN_VERDICTS) {
     assertValid(validate, { outcome: 'success', score: 60, verdict }, verdict);
   }
+  // The held run below is refused for its verdict alone: without one, it validates.
+  assertValid(validate, HELD, 'a held run, without a verdict');
   const refused: [string, Record<string, unknown>][] = [
     ['a third verdict', { outcome: 'success', verdict: 'neutral' }],
     ["the flow's word, not the verdict", { outcome: 'success', verdict: 'Advance' }],
     ['a verdict of null', { outcome: 'success', verdict: null }],
     ['a failed run', { outcome: 'failed', failureReason: 'x', verdict: 'negative' }],
-    [
-      'a held run',
-      { outcome: 'held', held: { stepId: 's', reason: 'r', state: {} }, verdict: 'positive' },
-    ],
+    ['a held run', { ...HELD, verdict: 'positive' }],
   ];
   for (const [what, value] of refused) assert.equal(validate(value), false, what);
 });

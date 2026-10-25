@@ -5,9 +5,9 @@
 **v2, 2026-10-24 (the owner's decisions on build 28's feedback):** the name "Resume Screening"
 (§1; v1 is "Candidate Reviewer"); the department options A–Z, "AI" added among them, HR still the
 default (§2); a verdict on each candidate, "Advance" at a score of 60 or above and "Decline" below
-(§7). The job's reading, the prompts, the steps and every other word are v1's, so a job made on
-v1 serves v2's runs; v1 is served beside v2 until it is retired. It needs the platform's build 28
-contract first (§10).
+(§7), a label from the score alone: a person decides (§11). The job's reading, the prompts, the
+steps and every other word are v1's, so a job made on v1 serves v2's runs; v1 is served beside v2
+until it is retired. It needs the platform's build 28 contract first (§10).
 
 **v2, 2026-10-25 (build 28's F8: "If there is a url that should be in the section"):** a resume's
 links are also those its file links to behind a word, such as "LinkedIn" (§4), each named by its
@@ -18,8 +18,9 @@ against the job, with reasons." and "Added to the job's list, highest score firs
 a fourth failure, "This candidate's job has not been read yet." (§8; the platform refuses such a run
 first); "Why this score" also lists flags, among them "years not shown" and "Text that tries to
 direct the reader: "…"" (§4, §7); the resume field is not marked required (§2: the platform refuses a
-required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). Every
-word on the screens the owner was shown is unchanged.
+required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). At
+v1, every word on the screens the owner was shown is unchanged; what v2 changed is in the notes
+above.
 
 Every limit below is the platform's: `contract/schemas/automation-manifest.json` and
 `contract/schemas/automation-run-result.json`, and the rules beyond them in `contract/README.md`,
@@ -222,11 +223,11 @@ Everything here is built and live before this flow (Round 19, decision B: all fo
 
 ## 11. Open questions
 
-| Question                               | Proposed default                                                                                        |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| The score bands                        | 80+ Strong, 60–79 Good, 40–59 Partial, under 40 Weak                                                    |
-| The same person added twice to one job | two candidates, both listed; no merge                                                                   |
-| Is the score a decision?               | no: a recommendation with reasons; a person decides (rules on AI in hiring vary by place)               |
-| A job typed instead of uploaded        | not offered: a job description file is required                                                         |
-| Old Word files (.doc, before 2007)     | not accepted: only .docx; a .doc is saved again as .docx or PDF                                         |
-| The run email for each candidate       | as every flow today: the platform's email at each run's end (a toggle to turn it off is a later change) |
+| Question                                             | Proposed default                                                                                                                                    |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The score bands                                      | 80+ Strong, 60–79 Good, 40–59 Partial, under 40 Weak                                                                                                |
+| The same person added twice to one job               | two candidates, both listed; no merge                                                                                                               |
+| Is the score, or its Advance or Decline, a decision? | no: a recommendation with reasons, and Advance or Decline a label from the score alone (§7); a person decides (rules on AI in hiring vary by place) |
+| A job typed instead of uploaded                      | not offered: a job description file is required                                                                                                     |
+| Old Word files (.doc, before 2007)                   | not accepted: only .docx; a .doc is saved again as .docx or PDF                                                                                     |
+| The run email for each candidate                     | as every flow today: the platform's email at each run's end (a toggle to turn it off is a later change)                                             |
