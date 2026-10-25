@@ -1,4 +1,4 @@
-import { truncateText, type StepResult } from '@autom8x/automation-sdk';
+import { truncateText, type RunVerdict, type StepResult } from '@autom8x/automation-sdk';
 
 /**
  * The words a person reads when a run stops — the spec's §8, exactly
@@ -34,6 +34,17 @@ export function bandOf(score: number): string {
   if (score >= 60) return 'Good match';
   if (score >= 40) return 'Partial match';
   return 'Weak match';
+}
+
+/**
+ * The score from which a candidate's verdict is `positive`, "Advance" in the manifest's
+ * `items.verdictWords`; below it, `negative`, "Decline" (the spec's §7, v2).
+ */
+export const ADVANCE_FROM_SCORE = 60;
+
+/** A candidate's verdict, from the score alone: positive at `ADVANCE_FROM_SCORE` or above. */
+export function verdictOf(score: number): RunVerdict {
+  return score >= ADVANCE_FROM_SCORE ? 'positive' : 'negative';
 }
 
 /** The flag a resume with no dates carries (the spec's §4): it scores on what it shows. */

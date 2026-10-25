@@ -17,7 +17,7 @@ import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import type { PromptModule } from './prompt.js';
 import type { RetryPolicy } from './retry.js';
-import type { RunSection } from './sections.js';
+import type { RunSection, RunVerdict } from './sections.js';
 
 /**
  * What an automation is made of — its steps, what each step may reach and decide,
@@ -135,7 +135,7 @@ export interface AutomationDefinition {
   /**
    * The success result once the pipeline has run: the output, the one-line summary, the
    * `details` a person reads beside it (platform ADR-0037), the `documents` the run read
-   * (platform ADR-0039), and the `title`, `score` and `sections` of a run of a flow with items
+   * (platform ADR-0039), and the `title`, `score`, `verdict` and `sections` of a run of a flow with items
    * (platform ADR-0046; on an item run, `output` is the item's reading) — each bounded by the
    * client.
    */
@@ -149,6 +149,7 @@ export interface AutomationDefinition {
     documents?: readonly RunDocument[];
     title?: string;
     score?: number;
+    verdict?: RunVerdict;
     sections?: readonly RunSection[];
   };
   /**

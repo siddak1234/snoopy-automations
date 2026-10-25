@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { SERVED_VERSIONS, TEMPLATE_ID } from '../src/automation.js';
@@ -6,23 +8,24 @@ import { FILE_LIMITS } from '../src/file.js';
 import { EXTRACT_POSTING, EXTRACT_RESUME, PROMPTS, SCORE_CANDIDATE } from '../src/prompts.js';
 import { RESUME_FILE_KEY } from '../src/steps/candidate.js';
 import { JOB_FILE_KEY } from '../src/steps/job.js';
-import { manifest } from './fixtures.js';
+import { manifest, manifestsRoot } from './fixtures.js';
 
 /**
- * `manifests/candidate-reviewer.v1.json` as the spec words it (§1–§7): its name and department,
- * its one question, the files it takes, its four steps and five, its jobs, and its container —
- * and the code's constants held to it.
+ * `manifests/candidate-reviewer.v2.json`, the version this image serves, as the spec words it
+ * (§1–§7): its name and department, its one question, the files it takes, its four steps and
+ * five, its jobs and their verdict words, and its container — and the code's constants held to
+ * it; and v1, registered and immutable, as it was.
  */
 
 type Entry = Record<string, unknown>;
 const m = manifest as unknown as Record<string, Entry & Entry[]>;
 const items = manifest.items as unknown as Entry & { fields: Entry[]; pipeline: Entry[] };
 
-test('§1: Candidate Reviewer, in HR, free, drawn with UserPlus', () => {
+test('§1: Resume Screening, in HR, free, drawn with UserPlus', () => {
   assert.equal(m.templateId, TEMPLATE_ID);
   assert.deepEqual([m.version], SERVED_VERSIONS);
   assert.deepEqual(m.display, {
-    name: 'Candidate Reviewer',
+    name: 'Resume Screening',
     description: 'Reads resumes and scores each candidate against the job posting.',
     category: 'HR',
     icon: 'UserPlus',
@@ -112,7 +115,7 @@ test("§6: four steps a person sees, five a run reports, the email the platform'
   );
 });
 
-test('§2 and §6: jobs — a department from the sixteen, or typed; a role; the file; three steps', () => {
+test('§2 and §6: jobs — a department A–Z, AI among them, or typed; a role; the file; three steps', () => {
   assert.deepEqual(
     [items.words, items.runWords],
     [
@@ -122,24 +125,31 @@ test('§2 and §6: jobs — a department from the sixteen, or typed; a role; the
   );
   assert.deepEqual([items.titleField, items.groupField], ['role', 'department']);
   const [department, role] = items.fields as [Entry, Entry];
-  assert.deepEqual(department.options, [
-    'HR',
+  const options = department.options as unknown as string[];
+  assert.deepEqual(options, [
     'Accounting',
-    'Finance',
-    'Legal',
-    'Compliance',
-    'Data',
-    'Operations',
-    'Sales',
-    'Marketing',
-    'Customer Support',
-    'IT',
-    'Engineering',
-    'Product',
-    'Procurement',
     'Administration',
+    'AI',
+    'Compliance',
+    'Customer Support',
+    'Data',
+    'Engineering',
+    'Finance',
+    'HR',
+    'IT',
+    'Legal',
+    'Marketing',
+    'Operations',
+    'Procurement',
+    'Product',
     'Research',
+    'Sales',
   ]);
+  // A–Z as a person reads it, case aside: "AI" after "Administration", never first.
+  assert.deepEqual(
+    options,
+    [...options].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })),
+  );
   assert.deepEqual(
     [department.control, department.allowOther, department.defaultValue, department.required],
     ['select', true, 'HR', true],
@@ -156,6 +166,7 @@ test('§2 and §6: jobs — a department from the sixteen, or typed; a role; the
     title: 'Job description',
     description: 'A PDF, Word file or photo.',
   });
+  assert.deepEqual(items.verdictWords, { positive: 'Advance', negative: 'Decline' });
   assert.deepEqual(
     items.pipeline.map((step) => [step.id, step.title, step.description]),
     [
@@ -179,11 +190,37 @@ test("the job's reading is the posting prompt's answer less whether it was reada
 
 test('§1: its own container and service account, as v7 of Invoice Processing set them', () => {
   assert.deepEqual(m.service, {
-    origin: 'http://candidate-reviewer-v1.autom8x.internal:8080',
-    serviceAccount: 'candidate-reviewer-v1@autom8x.iam.gserviceaccount.com',
+    origin: 'http://candidate-reviewer-v2.autom8x.internal:8080',
+    serviceAccount: 'candidate-reviewer-v2@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
     runTimeoutSeconds: 900,
   });
+});
+
+test("v2 is v1 but for its name, departments, verdict words and container; the job's reading v1's", () => {
+  const v1 = JSON.parse(
+    readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v1.json`), 'utf8'),
+  ) as typeof manifest;
+  const v1Items = v1.items as unknown as Entry & { fields: Entry[] };
+  // v1 is registered and immutable: as it was built.
+  assert.deepEqual(
+    [v1.version, (v1.display as Entry).name, (v1.service as Entry).origin, v1Items.verdictWords],
+    [1, 'Candidate Reviewer', 'http://candidate-reviewer-v1.autom8x.internal:8080', undefined],
+  );
+  assert.equal((v1Items.fields[0]!.options as unknown as string[]).length, 16);
+  // So a job made on v1 serves v2's runs, and v2's candidates are kept as v1's were.
+  assert.deepEqual(manifest.items.outputSchema, v1.items.outputSchema);
+  assert.deepEqual(manifest.outputSchema, v1.outputSchema);
+  const rest = (each: typeof manifest) => {
+    const { version: _v, display, service, items: all, ...others } = each as Entry;
+    const { name: _name, ...shown } = display as Entry;
+    const { origin: _o, serviceAccount: _s, ...container } = service as Entry;
+    const { verdictWords: _w, fields, ...kept } = all as Entry & { fields: [Entry, ...Entry[]] };
+    const [first, ...after] = fields;
+    const { options: _options, ...department } = first;
+    return { others, shown, container, kept, fields: [department, ...after] };
+  };
+  assert.deepEqual(rest(manifest), rest(v1));
 });

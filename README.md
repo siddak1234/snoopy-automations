@@ -132,7 +132,7 @@ recorded in QuickBooks" and save the details instead (below); `undefined` lets t
 before.
 
 **A flow's items** (the platform's ADR-0046, Round 19). A manifest may declare `items`: things a
-person makes once, from a file, that its runs then belong to — Candidate Reviewer's jobs. Making
+person makes once, from a file, that its runs then belong to — Resume Screening's jobs. Making
 one starts an **item run**: the invoke carries `readsItem: true`, the item's file under
 `items.file.key` in its `input`, and the runner runs that version's `items.pipeline` instead of
 its `pipeline` — those steps there and only there; a version without items has no item run, and
@@ -140,14 +140,17 @@ the runner fails one in a fixed sentence. The item run's success `output` is the
 which the platform holds to `items.outputSchema`. Every later run of the item carries `item` —
 its `id`, the `fields` a person gave it and its `reading` (`InvokeItem`; null on the item run) —
 and its success may return a `title` (what names it on the item's list), a `score` (an integer
-from 0 to 100 the item's runs are ranked by) and `sections` (rows a person opens: up to 12, each
-of up to 40 entries with a title, a subtitle, a text and an http(s) link). The SDK bounds those
-before they are sent (`packages/automation-sdk/src/sections.ts`): a title one line of at most 80
-characters, a score kept only when it is such an integer — never rounded or moved into range —
-each row cut at its bound, a link the platform would not keep left off its row, and none sent
-when none is left. `defineAutomation` refuses at startup an item step with no code and an id
-declared in both pipelines; `itemFixture` and `declaredItemSteps` in
-`@autom8x/automation-sdk/testing` build an item for a suite and read a manifest's item steps.
+from 0 to 100 the item's runs are ranked by), a `verdict` (build 28: `positive` or `negative`,
+which its item counts and the manifest's `items.verdictWords` name; never on an item run, nor on
+a version declaring no words, which the platform refuses) and `sections` (rows a person opens: up
+to 12, each of up to 40 entries with a title, a subtitle, a text and an http(s) link). The SDK
+bounds those before they are sent (`packages/automation-sdk/src/sections.ts`): a title one line of
+at most 80 characters, a score kept only when it is such an integer — never rounded or moved into
+range — a verdict only when it is one of the two, each row cut at its bound, a link the platform
+would not keep left off its row, and none sent when none is left. `defineAutomation` refuses at
+startup an item step with no code and an id declared in both pipelines; `itemFixture` and
+`declaredItemSteps` in `@autom8x/automation-sdk/testing` build an item for a suite and read a
+manifest's item steps.
 
 ## Model calls
 
@@ -740,21 +743,25 @@ request, mail, line or result carries it.
 
 ## Candidate reviewer
 
-`candidate-reviewer` — **Candidate Reviewer**, in HR — reads a job description once into the job's
-reading, then reads each candidate's resume and scores it against that reading (the platform's
-BUILD-PLAN Phase 28, Round 19). It is the first flow with items ("A flow's items", above): a job is
-its item, a candidate its run. What it does, in the words a person reads — the prompts and what
+`candidate-reviewer` — **Resume Screening** from v2 (**Candidate Reviewer** at v1), in HR — reads a
+job description once into the job's reading, then reads each candidate's resume and scores it
+against that reading (the platform's BUILD-PLAN Phase 28, Round 19). It is the first flow with
+items ("A flow's items", above): a job is its item, a candidate its run. What it does, in the words
+a person reads — what v2 changed (its [top](automations/candidate-reviewer/README.md)), the
+departments ([§2](automations/candidate-reviewer/README.md#2-how-it-starts)), the prompts and what
 they read ([§4](automations/candidate-reviewer/README.md#4-ai-steps)), the steps ([§6](automations/candidate-reviewer/README.md#6-steps-a-person-sees)), the title,
-score bands, summary and sections in their order ([§7](automations/candidate-reviewer/README.md#7-what-a-run-gives)), and every
+score bands, verdict, summary and sections in their order ([§7](automations/candidate-reviewer/README.md#7-what-a-run-gives)), and every
 failure's sentence ([§8](automations/candidate-reviewer/README.md#8-when-it-fails)) — is its spec,
 [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), the build's source of truth word for word.
 Where the code does it:
 
-- **v1, the version this code serves**: `SERVED_VERSIONS` in
+- **v2, the version this code serves**: `SERVED_VERSIONS` in
   `automations/candidate-reviewer/src/automation.ts`; its Dockerfile copies only
-  `manifests/candidate-reviewer.v1.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  `manifests/candidate-reviewer.v2.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
   holds to the spec and the code's constants to (the file types and size in
-  `automations/candidate-reviewer/src/file.ts`, the two file keys).
+  `automations/candidate-reviewer/src/file.ts`, the two file keys), and to v1's
+  `manifests/candidate-reviewer.v1.json` but for what v2 changed — its job's reading v1's. v1's
+  container keeps its pinned image until it is retired.
 - **A job** — the item run, `items.pipeline` (`job-received`, `read-job`, `save-job`):
   `automations/candidate-reviewer/src/steps/job.ts`. The reading is `extract-posting`'s answer,
   cleaned (`automations/candidate-reviewer/src/reading.ts`), the item run's output held to the
@@ -767,7 +774,9 @@ Where the code does it:
   `automations/candidate-reviewer/src/years.ts` (overlapping roles once, a current role to today);
   the score, its flags — "years not shown", and each direction — and the requirements a direction
   was quoted for, moved from met to missing, in `automations/candidate-reviewer/src/scoring.ts`;
-  the sections in `candidateSections`. A model's refusal of the file (its type, size, bytes or
+  the sections in `candidateSections`; the verdict, from the score alone at one constant
+  (`ADVANCE_FROM_SCORE`, `verdictOf` in `automations/candidate-reviewer/src/words.ts`), on a
+  candidate's run and never on a job's. A model's refusal of the file (its type, size, bytes or
   password) is "could not be read" (`readDocument` in
   `automations/candidate-reviewer/src/prompts.ts`); any other refusal ends the run in the
   platform's words.
@@ -787,8 +796,8 @@ Where the code does it:
 
 The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
 manifest's pull request, the image pin and the container's alias, once CI publishes the image on
-`main`. Until the platform's Round 19 merges and is promoted, it refuses a manifest declaring
-`items`.
+`main`. Until the platform's build 28 contract merges and is promoted, it refuses v2's
+`items.verdictWords` and a result's `verdict` ([contract/README.md](contract/README.md)).
 
 ## The kit
 

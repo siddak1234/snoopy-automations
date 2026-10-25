@@ -69,6 +69,7 @@ test('§9: a job description photo makes the posting — title, must-haves, nice
   assert.equal(result.summary, 'Job saved: 3 must-haves, 2 nice-to-haves');
   assert.equal(result.title, undefined, 'a job is named by its role, not by its run');
   assert.equal(result.score, undefined);
+  assert.equal(result.verdict, undefined, 'a job is no candidate: the platform refuses a verdict');
 });
 
 test('a Word job description is read here and sent as text; empty sections are left out', async () => {

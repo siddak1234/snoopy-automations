@@ -2,8 +2,8 @@
  * The platform's validator rules for a flow's `items` that a JSON Schema cannot say (its
  * ADR-0046, Round 19), ported from its
  * `snoopy-backend/packages/contracts/src/manifest-validation.ts` (`validateItems`, and
- * `heldSchemaProblem` in its `items.ts`) at `2d93d99`, each refusal as
- * `<path>: <message>` in its words. `test/manifest-rules.ts` adds them to every manifest's.
+ * `heldSchemaProblem` in its `items.ts`) at `2d93d99`, and its verdict words at `cf17dbb`
+ * (build 28), each refusal as `<path>: <message>` in its words. `test/manifest-rules.ts` adds them to every manifest's.
  * What the schema already refuses — an unknown key, a length, a count, an option twice — is
  * left to the schema, which `test/architecture.test.ts` holds every manifest to.
  */
@@ -152,4 +152,12 @@ export function itemsProblems(manifest: Json, add: Add): void {
   });
   const held = heldSchemaProblem(items.outputSchema, 'items.outputSchema');
   if (held) add(held[0], held[1]);
+  // A verdict word is a display string: the schema says its length, never that it is blank.
+  const verdictWords = isRecord(items.verdictWords) ? items.verdictWords : {};
+  for (const name of ['positive', 'negative']) {
+    const word = verdictWords[name];
+    if (typeof word === 'string' && word.trim() === '') {
+      add(`items.verdictWords.${name}`, 'must not be empty');
+    }
+  }
 }

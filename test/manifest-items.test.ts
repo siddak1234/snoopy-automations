@@ -8,21 +8,41 @@ import { manifestProblems, type Json } from './manifest-rules.js';
 /**
  * A flow's items (the platform's ADR-0046) and a run's file field (its ADR-0030), held to the
  * platform's validator rules the schema cannot say (`test/manifest-items.ts`), each refusal
- * bitten in the platform's words on a copy of Candidate Reviewer v1 changed to break it.
+ * bitten in the platform's words on a copy of Candidate Reviewer v1 changed to break it; and
+ * Resume Screening, its v2, with its verdict words.
  */
 
-const v1 = JSON.parse(
-  readFileSync(
-    join(resolve(import.meta.dirname, '..', 'manifests'), 'candidate-reviewer.v1.json'),
-    'utf8',
-  ),
-) as Json & { items: Json & { fields: Json[]; pipeline: Json[]; file: Json }; trigger: Json };
+type Items = Json & {
+  items: Json & { fields: Json[]; pipeline: Json[]; file: Json };
+  trigger: Json;
+};
+const read = (version: number) =>
+  JSON.parse(
+    readFileSync(
+      join(resolve(import.meta.dirname, '..', 'manifests'), `candidate-reviewer.v${version}.json`),
+      'utf8',
+    ),
+  ) as Items;
+const v1 = read(1);
+const v2 = read(2);
 
 const withItems = (items: Json): Json => ({ ...v1, items: { ...v1.items, ...items } });
 const [department, role] = v1.items.fields as [Json, Json];
 
-test('Candidate Reviewer v1 passes every rule', () => {
+test('Candidate Reviewer v1 and Resume Screening v2 pass every rule', () => {
   assert.deepEqual(manifestProblems(v1), []);
+  assert.deepEqual(manifestProblems(v2), []);
+});
+
+test('a blank verdict word is refused, as the platform refuses it (build 28)', () => {
+  const words = v2.items.verdictWords as Json;
+  for (const [name, blank] of [
+    ['positive', '  '],
+    ['negative', '\n'],
+  ] as const) {
+    const manifest = { ...v2, items: { ...v2.items, verdictWords: { ...words, [name]: blank } } };
+    assert.deepEqual(manifestProblems(manifest), [`items.verdictWords.${name}: must not be empty`]);
+  }
 });
 
 test('the rules refuse what the platform refuses', () => {

@@ -3,7 +3,7 @@ import { truncateText, type JsonObject, type StepPlatform } from '@autom8x/autom
 import { docxText } from './docx.js';
 
 /**
- * The files Candidate Reviewer takes — a job description and a resume alike (the spec's §2): a
+ * The files Resume Screening takes — a job description and a resume alike (the spec's §2): a
  * PDF, a JPEG or a PNG, which the model reads as the file, or a Word file (.docx), whose text is
  * read here and sent as the prompt's input. All four are the manifest's `artifacts` block, and
  * `automations/candidate-reviewer/test/manifest.test.ts` holds them equal; no page or pixel limit

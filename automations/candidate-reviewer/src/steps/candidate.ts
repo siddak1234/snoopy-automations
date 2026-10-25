@@ -1,28 +1,35 @@
-import { isObject, readJsonCompletion, type JsonObject, type Step } from '@autom8x/automation-sdk';
+import {
+  isObject,
+  readJsonCompletion,
+  type JsonObject,
+  type RunVerdict,
+  type Step,
+} from '@autom8x/automation-sdk';
 
 import { fileFromState, fileIdOf, fileLine, fileState, readFile } from '../file.js';
 import { EXTRACT_RESUME, MODELS, SCORE_CANDIDATE, readDocument } from '../prompts.js';
 import { postingOf, resumeOf, type Posting, type Resume } from '../reading.js';
 import { quotesDirection, scoringOf, summaryLine, type Scoring } from '../scoring.js';
 import { candidateSections } from '../sections.js';
-import { FAILURES, bandOf, plural, stops } from '../words.js';
+import { FAILURES, bandOf, plural, stops, verdictOf } from '../words.js';
 import { yearsOfExperience } from '../years.js';
 
 /**
  * A candidate's run (the spec's §2 and §6, `pipeline`): the resume received, read by the model,
  * checked to be a resume that could be read, scored against the job's reading — text only, with
- * the years of experience worked out here — and saved as the run's title, score, summary and
- * sections, which the platform ranks on the job's page. Each step's line counts what it found and
- * never quotes the resume.
+ * the years of experience worked out here — and saved as the run's title, score, verdict, summary
+ * and sections, which the platform ranks and counts on the job's page. Each step's line counts
+ * what it found and never quotes the resume.
  */
 
 /** The key a candidate's run input carries the resume under: the manifest's `trigger.input`. */
 export const RESUME_FILE_KEY = 'resumeFile';
 
-/** What `save` leaves for the result: the run's title, score, summary and sections. */
+/** What `save` leaves for the result: the run's title, score, verdict, summary and sections. */
 export interface Candidate {
   title: string;
   score: number;
+  verdict: RunVerdict;
   summary: string;
   sections: JsonObject[];
 }
@@ -125,6 +132,7 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     const candidate: Candidate = {
       title: resume.name === '' ? 'Unnamed candidate' : resume.name,
       score: scoring.score,
+      verdict: verdictOf(scoring.score),
       summary: summaryLine(scoring, posting),
       sections: candidateSections(resume, scoring, now()) as unknown as JsonObject[],
     };
