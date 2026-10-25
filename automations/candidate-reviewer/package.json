@@ -2,7 +2,7 @@
   "name": "@autom8x/candidate-reviewer",
   "version": "0.1.0",
   "private": true,
-  "description": "Candidate Reviewer (v1): reads a job description once into the job's reading, then reads each candidate's resume — a PDF, a photo or a Word file — and scores it against that reading, with the reasons; the candidates of a job are listed highest score first.",
+  "description": "Resume Screening (v2; Candidate Reviewer at v1): reads a job description once into the job's reading, then reads each candidate's resume — a PDF, a photo or a Word file — and scores it against that reading, with the reasons and a verdict, Advance or Decline; the candidates of a job are listed highest score first.",
   "type": "module",
   "engines": {
     "node": ">=22"

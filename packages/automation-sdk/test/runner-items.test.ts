@@ -126,7 +126,7 @@ test('the runner refuses at startup an item step it cannot run, or an id the two
   ]);
 });
 
-test("a run's title, score and sections reach the result, bounded by the client", async () => {
+test("a run's title, score, verdict and sections reach the result, bounded by the client", async () => {
   const automation = define({
     manifests: [withItems()],
     steps,
@@ -134,6 +134,7 @@ test("a run's title, score and sections reach the result, bounded by the client"
       summary: 'Strong match · meets 3 of 3 must-haves',
       title: '  Jane   Doe ',
       score: 82,
+      verdict: 'positive',
       sections: [{ title: 'Skills', entries: [{ title: 'Reconciliations' }] }],
     }),
   });
@@ -144,6 +145,7 @@ test("a run's title, score and sections reach the result, bounded by the client"
   await platform.reportResult(run.runId, result);
   const [{ result: sent }] = platform.results as unknown as [{ result: Record<string, unknown> }];
   assert.equal(sent.title, 'Jane Doe');
+  assert.equal(sent.verdict, 'positive');
   assert.deepEqual(sent.sections, [{ title: 'Skills', entries: [{ title: 'Reconciliations' }] }]);
   assertValid(validator('automation-run-result'), { runId: run.runId, ...sent }, 'what is sent');
 });

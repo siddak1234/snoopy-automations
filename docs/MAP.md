@@ -38,7 +38,7 @@
 
 ### Automations
 
-- `automations/candidate-reviewer/` (`@autom8x/candidate-reviewer`): Candidate Reviewer (v1): reads a job description once into the job's reading, then reads each candidate's resume — a PDF, a photo or a Word… · manifests v1
+- `automations/candidate-reviewer/` (`@autom8x/candidate-reviewer`): Resume Screening (v2; Candidate Reviewer at v1): reads a job description once into the job's reading, then reads each candidate's resume — … · manifests v1, v2
 - `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v6): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v1, v2, v3, v4, v5, v6, v7
 
 ### Packages

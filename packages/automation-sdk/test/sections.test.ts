@@ -5,11 +5,14 @@ import type { RunResult } from '../src/contract.js';
 import { boundedResult } from '../src/platform.js';
 import {
   RUN_SECTION_LIMITS,
+  RUN_VERDICTS,
   boundedScore,
   boundedSections,
   boundedTitle,
+  boundedVerdict,
   isRunSectionUrl,
   type RunSection,
+  type RunVerdict,
 } from '../src/sections.js';
 import { assertValid, validator } from './published-schemas.js';
 
@@ -24,6 +27,9 @@ const section = (title: string, count: number, entry = { title: 'Row' }): RunSec
   title,
   entries: Array.from({ length: count }, () => entry),
 });
+
+/** A held run the schema accepts: a step id of its pattern, a reason, the state to go on from. */
+const HELD = { outcome: 'held', held: { stepId: 'save', reason: 'r', state: {} } } as const;
 
 test('a title, a score and sections within the bounds validate on a success, and nowhere else', () => {
   const validate = validator('automation-run-result');
@@ -47,10 +53,12 @@ test('a title, a score and sections within the bounds validate on a success, and
   assertValid(validate, { outcome: 'success', title: 'x'.repeat(80) }, 'a title of 80');
   const url = (value: string) => [{ title: 'S', entries: [{ title: 'E', url: value }] }];
   assertValid(validate, { outcome: 'success', sections: url('HTTP://EXAMPLE.COM') }, 'any case');
+  // The held run below is refused for its score alone: without one, it validates.
+  assertValid(validate, HELD, 'a held run, without a score');
 
   const refused: [string, Record<string, unknown>][] = [
     ['a failed run', { outcome: 'failed', failureReason: 'x', title: 'Jane' }],
-    ['a held run', { outcome: 'held', held: { stepId: 's', reason: 'r', state: {} }, score: 1 }],
+    ['a held run', { ...HELD, score: 1 }],
     ['an empty title', { outcome: 'success', title: '' }],
     ['a title of 81', { outcome: 'success', title: 'x'.repeat(81) }],
     ['a score of 101', { outcome: 'success', score: 101 }],
@@ -95,6 +103,32 @@ test('the client keeps a score only when it is an integer from 0 to 100, never m
   for (const kept of [0, 1, 59, 100]) assert.equal(boundedScore(kept), kept);
   for (const left of [-1, 101, 81.5, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
     assert.equal(boundedScore(left), undefined, String(left));
+  }
+});
+
+test('a verdict of positive or negative validates on a success, and nowhere else (build 28)', () => {
+  const validate = validator('automation-run-result');
+  assert.deepEqual(RUN_VERDICTS, ['positive', 'negative']);
+  for (const verdict of RUN_VERDICTS) {
+    assertValid(validate, { outcome: 'success', score: 60, verdict }, verdict);
+  }
+  // The held run below is refused for its verdict alone: without one, it validates.
+  assertValid(validate, HELD, 'a held run, without a verdict');
+  const refused: [string, Record<string, unknown>][] = [
+    ['a third verdict', { outcome: 'success', verdict: 'neutral' }],
+    ["the flow's word, not the verdict", { outcome: 'success', verdict: 'Advance' }],
+    ['a verdict of null', { outcome: 'success', verdict: null }],
+    ['a failed run', { outcome: 'failed', failureReason: 'x', verdict: 'negative' }],
+    ['a held run', { ...HELD, verdict: 'positive' }],
+  ];
+  for (const [what, value] of refused) assert.equal(validate(value), false, what);
+});
+
+test('the client keeps a verdict only when it is positive or negative, never guessing one', () => {
+  assert.equal(boundedVerdict('positive'), 'positive');
+  assert.equal(boundedVerdict('negative'), 'negative');
+  for (const left of ['Advance', 'Positive', ' positive', '', undefined]) {
+    assert.equal(boundedVerdict(left), undefined, String(left));
   }
 });
 
@@ -145,6 +179,7 @@ test('every result the client bounds validates, whatever the automation returned
     summary: 'Strong match · meets 3 of 3 must-haves',
     title: `  ${'Jane Doe '.repeat(20)} `,
     score: 82.5,
+    verdict: 'Advance' as RunVerdict,
     sections: [
       section('x'.repeat(60), 50, { title: 'y'.repeat(200) }),
       { title: 'Links', entries: [{ title: 'Bad', url: 'mailto:jane@example.com' }] },
@@ -154,6 +189,7 @@ test('every result the client bounds validates, whatever the automation returned
   const bounded = boundedResult(result);
   assertValid(validate, { runId: 'r', ...bounded }, 'the bounded result');
   assert.equal('score' in bounded, false, 'a fraction is left out, not rounded');
+  assert.equal('verdict' in bounded, false, 'a word that is no verdict is left out');
   assert.equal((bounded as { title?: string }).title?.length, 80);
   const sent = (bounded as { sections?: RunSection[] }).sections!;
   assert.deepEqual(
@@ -168,5 +204,10 @@ test('every result the client bounds validates, whatever the automation returned
     boundedResult({ outcome: 'success', summary: 'Saved' }),
     { outcome: 'success', summary: 'Saved' },
     'a result without them sends none',
+  );
+  assert.deepEqual(
+    boundedResult({ outcome: 'success', score: 59, verdict: 'negative' }),
+    { outcome: 'success', score: 59, verdict: 'negative' },
+    'a verdict is sent as given',
   );
 });

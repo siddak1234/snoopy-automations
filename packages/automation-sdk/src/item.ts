@@ -3,7 +3,7 @@ import type { JsonObject } from './contract.js';
 /**
  * The item a run belongs to (platform ADR-0046, Round 19: a flow's items) — the invoke
  * request's `item` (`automation-invoke-request.json`), on every run of a flow whose manifest
- * declares `items`. A person makes an item once, from a file — Candidate Reviewer's are jobs —
+ * declares `items`. A person makes an item once, from a file — Resume Screening's are jobs —
  * and its runs then belong to it. The platform sends it; the automation reads it and never
  * returns it.
  *

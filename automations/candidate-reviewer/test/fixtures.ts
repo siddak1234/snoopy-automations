@@ -10,17 +10,18 @@ import {
   itemFixture,
 } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, define } from '../src/automation.js';
+import { SERVED_VERSIONS, TEMPLATE_ID, define } from '../src/automation.js';
 import { WORD_TYPE } from '../src/file.js';
 
 /**
- * The suite's made-up world (the spec's §9: made-up inputs only): the manifest, a fixed day, a
- * recording platform whose model answers by prompt, the files a run is given, and Word files built
- * here in memory. No name, address or posting below is a real one.
+ * The suite's made-up world (the spec's §9: made-up inputs only): the manifest the image serves
+ * (v2), a fixed day, a recording platform whose model answers by prompt, the files a run is
+ * given, and Word files built here in memory. No name, address or posting below is a real one.
  */
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
-export const manifestPath = join(manifestsRoot, `${TEMPLATE_ID}.v1.json`);
+export const VERSION = SERVED_VERSIONS[0]!;
+export const manifestPath = join(manifestsRoot, `${TEMPLATE_ID}.v${VERSION}.json`);
 export const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as JsonObject & {
   items: JsonObject & { outputSchema: JsonObject };
   outputSchema: JsonObject;
@@ -195,7 +196,7 @@ export function world(answers: Answers, file: { contentType?: string; bytes?: Ui
 export const candidateRun = (reading: JsonObject | null = READING) =>
   invokeFixture({
     templateId: TEMPLATE_ID,
-    templateVersion: 1,
+    templateVersion: VERSION,
     input: { resumeFile: FILE_ID },
     item: itemFixture({ fields: { department: 'Finance', role: 'Senior Accountant' }, reading }),
   });
@@ -204,7 +205,7 @@ export const candidateRun = (reading: JsonObject | null = READING) =>
 export const jobRun = () =>
   invokeFixture({
     templateId: TEMPLATE_ID,
-    templateVersion: 1,
+    templateVersion: VERSION,
     input: { jobFile: FILE_ID },
     item: itemFixture({ fields: { department: 'Finance', role: 'Senior Accountant' } }),
     readsItem: true,

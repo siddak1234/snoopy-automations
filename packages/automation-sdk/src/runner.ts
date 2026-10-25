@@ -252,7 +252,10 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       }
     }
 
-    const { output, summary, details, documents, title, score, sections } = result(state, request);
+    const { output, summary, details, documents, title, score, verdict, sections } = result(
+      state,
+      request,
+    );
     return {
       outcome: 'success',
       ...(output === undefined ? {} : { output }),
@@ -261,6 +264,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       ...(documents === undefined ? {} : { documents }),
       ...(title === undefined ? {} : { title }),
       ...(score === undefined ? {} : { score }),
+      ...(verdict === undefined ? {} : { verdict }),
       ...(sections === undefined ? {} : { sections }),
     };
   }

@@ -1,4 +1,11 @@
-import { truncateText, type JsonObject } from '@autom8x/automation-sdk';
+import {
+  RUN_SECTION_LIMITS,
+  isRunSectionUrl,
+  truncateText,
+  type JsonObject,
+} from '@autom8x/automation-sdk';
+
+import { linkLabel } from './words.js';
 
 /**
  * The two readings, cleaned from the model's answers
@@ -43,6 +50,7 @@ export interface Resume {
   email: string;
   phone: string;
   location: string;
+  /** The links the model read, then those only the file links to (`withFileLinks`). */
   links: { url: string; label: string }[];
   summary: string;
   experience: Role[];
@@ -67,6 +75,11 @@ export type ResumeDocument = 'resume' | 'not_a_resume' | 'unreadable';
 const LINE = 600;
 const SHORT = 200;
 const LIST = 60;
+/**
+ * The most links a resume keeps: what Contact shows beside the email, phone and location
+ * (`candidateSections`), so the platform's 40 rows a section never cut one.
+ */
+const LINKS = RUN_SECTION_LIMITS.entries - 3;
 
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -219,4 +232,50 @@ export function linkUrl(value: unknown): string {
   if (/^https?:\/\//iu.test(text)) return text;
   if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/iu.test(text)) return `https://${text}`;
   return '';
+}
+
+/**
+ * The addresses a resume's file links to (`pdf.ts`, `docx.ts`) as links a person can open: each
+ * through `linkUrl`, so http and https alone — a `mailto:`, a `javascript:` dropped — and one the
+ * platform keeps (`isRunSectionUrl`); one longer than it keeps is left out, never cut to another
+ * address; each once, the first seen first, at most `LINKS`.
+ */
+export function fileLinks(targets: readonly string[]): string[] {
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  for (const target of targets) {
+    if (target.length > RUN_SECTION_LIMITS.urlLength) continue;
+    const url = linkUrl(target);
+    if (url === '' || !isRunSectionUrl(url) || seen.has(sameAddress(url))) continue;
+    seen.add(sameAddress(url));
+    kept.push(url);
+    if (kept.length === LINKS) break;
+  }
+  return kept;
+}
+
+/**
+ * The resume's links (the spec's §4): the model's, as it read them, then each address the file
+ * links to that the model did not read, named by its site (`linkLabel`); at most `LINKS`. A link
+ * already there keeps the model's label. They stay contact details: `scored` never sends them.
+ */
+export function withFileLinks(links: Resume['links'], targets: readonly string[]): Resume['links'] {
+  const read = new Set(links.map((link) => sameAddress(link.url)));
+  const added = fileLinks(targets)
+    .filter((url) => !read.has(sameAddress(url)))
+    .map((url) => ({ url, label: linkLabel(url) }));
+  return [...links, ...added].slice(0, LINKS);
+}
+
+/**
+ * An address as two are compared: `http` and `https` alike, the host in lower case and without a
+ * leading `www.`, a trailing slash dropped — a printed `linkedin.com/in/jane` (read as
+ * `https://linkedin.com/in/jane`) and a link to `http://www.linkedin.com/in/jane/` are one.
+ */
+function sameAddress(url: string): string {
+  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)(.*)$/iu.exec(url);
+  if (parts === null) return url;
+  const [, scheme = '', host = '', rest = ''] = parts;
+  const kind = scheme.toLowerCase().replace(/^https:/u, 'http:');
+  return `${kind}${host.toLowerCase().replace(/^www\./u, '')}${rest.replace(/\/$/u, '')}`;
 }

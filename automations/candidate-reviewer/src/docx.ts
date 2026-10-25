@@ -12,7 +12,8 @@ import { inflateRawSync } from 'node:zlib';
  * `DOCX_LIMITS.inflatedBytes`, or any that would by more than `DOCX_LIMITS.ratio` times its
  * stored size, are refused before anything is inflated, and each inflation stops at the size its
  * entry claims. An encrypted entry, or one not stored with deflate, is refused too. A refusal is
- * a reason word for a test, never shown: the person reads "could not be read".
+ * a reason word for a test, never shown: the person reads "could not be read". The addresses its
+ * body links to are read through the same directory and bounds (`docxLinks`).
  */
 
 export const DOCX_LIMITS = {
@@ -33,6 +34,8 @@ const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
 const LOCAL_ENTRY = 0x04034b50;
 const DOCUMENT = 'word/document.xml';
+/** The body's relationships: where Word keeps the address of each hyperlink. */
+const RELATIONSHIPS = 'word/_rels/document.xml.rels';
 /** A page header or footer, by the name Word gives it. */
 const HEADER_OR_FOOTER = /^word\/(header|footer)\d*\.xml$/u;
 /** Bit 0 of an entry's flags: the entry is encrypted. */
@@ -50,18 +53,57 @@ export function docxText(bytes: Uint8Array): DocxText {
   if (!Array.isArray(entries)) return entries;
   const texts: string[] = [];
   for (const entry of entries) {
-    let xml: Buffer;
-    try {
-      // Stopped at the size the entry claims, itself within the bound: an entry that inflates
-      // past its claim is refused before more of it is written.
-      xml = inflateRawSync(entry.data, { maxOutputLength: Math.max(1, entry.inflated) });
-    } catch {
-      return refused('corrupt');
-    }
-    const text = textOf(xml.toString('utf8'));
+    const xml = inflated(entry);
+    if (xml === undefined) return refused('corrupt');
+    const text = textOf(xml);
     if (text !== '' && !texts.includes(text)) texts.push(text);
   }
   return { ok: true, text: texts.join('\n') };
+}
+
+/**
+ * The addresses a Word file's body links to (the spec's §4), in the order written: each
+ * relationship in `word/_rels/document.xml.rels` of the hyperlink type whose `TargetMode` is
+ * `External`. None when the file holds none, or would be refused; never a failure.
+ */
+export function docxLinks(bytes: Uint8Array): string[] {
+  const entries = archiveEntries(bytes, (name) => name === RELATIONSHIPS);
+  const xml = Array.isArray(entries) && entries[0] !== undefined ? inflated(entries[0]) : undefined;
+  if (xml === undefined) return [];
+  const links: string[] = [];
+  // A tag's attributes stop at the next `<` as well as at its `>` (`TAG`).
+  for (const [, attributes = ''] of xml.matchAll(/<(?:[\w-]+:)?Relationship\b([^<>]*)>/gu)) {
+    const type = attributeOf(attributes, 'Type');
+    const target = attributeOf(attributes, 'Target');
+    if (
+      /\/relationships\/hyperlink$/u.test(type) &&
+      attributeOf(attributes, 'TargetMode') === 'External'
+    ) {
+      if (target !== '') links.push(target);
+    }
+  }
+  return links;
+}
+
+/** An attribute's value, its entities decoded; empty when it is not there. */
+function attributeOf(attributes: string, key: string): string {
+  const match = new RegExp(`(?:^|\\s)${key}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'u').exec(attributes);
+  return decode(match?.[1] ?? match?.[2] ?? '');
+}
+
+/**
+ * An entry's XML, or `undefined` when it will not inflate — stopped at the size the entry claims,
+ * itself within the bound: an entry that inflates past its claim is refused before more of it is
+ * written.
+ */
+function inflated(entry: Entry): string | undefined {
+  try {
+    return inflateRawSync(entry.data, { maxOutputLength: Math.max(1, entry.inflated) }).toString(
+      'utf8',
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 interface Entry {
@@ -75,6 +117,20 @@ interface Entry {
  * central directory and held to the bounds, one budget for all of them.
  */
 function textEntries(bytes: Uint8Array): Entry[] | DocxText {
+  const entries = archiveEntries(bytes, (name) => name === DOCUMENT || HEADER_OR_FOOTER.test(name));
+  if (!Array.isArray(entries)) return entries;
+  if (!entries.some((entry) => entry.name === DOCUMENT)) return refused('no-document');
+  const total = entries.reduce((sum, entry) => sum + entry.inflated, 0);
+  if (total > DOCX_LIMITS.inflatedBytes) return refused('too-large');
+  const rank = (name: string) =>
+    name.startsWith('word/header') ? 0 : name.startsWith('word/footer') ? 1 : 2;
+  return entries.sort(
+    (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name, 'en', { numeric: true }),
+  );
+}
+
+/** The entries `wanted` names, found through the central directory, each held to the bounds. */
+function archiveEntries(bytes: Uint8Array, wanted: (name: string) => boolean): Entry[] | DocxText {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const end = endOfDirectory(view);
   if (end === undefined) return refused('not-a-zip');
@@ -90,21 +146,14 @@ function textEntries(bytes: Uint8Array): Entry[] | DocxText {
     const skip = 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
     if (at + 46 + nameLength > view.byteLength) return refused('corrupt');
     const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength));
-    if (name === DOCUMENT || HEADER_OR_FOOTER.test(name)) {
+    if (wanted(name)) {
       const entry = bounded(view, bytes, at, name);
       if (!('data' in entry)) return entry;
       entries.push(entry);
     }
     at += skip;
   }
-  if (!entries.some((entry) => entry.name === DOCUMENT)) return refused('no-document');
-  const total = entries.reduce((sum, entry) => sum + entry.inflated, 0);
-  if (total > DOCX_LIMITS.inflatedBytes) return refused('too-large');
-  const rank = (name: string) =>
-    name.startsWith('word/header') ? 0 : name.startsWith('word/footer') ? 1 : 2;
-  return entries.sort(
-    (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name, 'en', { numeric: true }),
-  );
+  return entries;
 }
 
 /** The entry at this central-directory record, or why it is refused. */
@@ -156,6 +205,13 @@ function decode(text: string): string {
 }
 
 /**
+ * A tag, or the text between two. A tag ends at its `>` and never runs past the next `<`, which
+ * XML forbids inside one: a `<` with no `>` after it is no tag, and is not read to the end of the
+ * entry once for every such `<` — time that would grow with the square of its size.
+ */
+const TAG = /<([^<>]*)>|([^<]+)/gu;
+
+/**
  * The text of WordprocessingML: `w:t` runs, a `w:tab` a tab and a `w:br` or `w:cr` a line
  * break, each `w:p` its own line. A tab stop (`w:tab` inside `w:tabs`) is no tab, and a
  * `mc:Fallback` repeats what its `mc:Choice` holds, so neither is read.
@@ -166,7 +222,7 @@ function textOf(xml: string): string {
   let inText = false;
   let inTabs = 0;
   let inFallback = 0;
-  for (const match of xml.matchAll(/<([^>]*)>|([^<]+)/gu)) {
+  for (const match of xml.matchAll(TAG)) {
     const tag = match[1];
     if (tag === undefined) {
       if (inText) line += decode(match[2] ?? '');

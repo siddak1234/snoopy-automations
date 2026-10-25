@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Candidate Reviewer v1, built from the repository root:
+# The image of Resume Screening, v2 of candidate-reviewer, built from the repository root:
 #   docker build --file automations/candidate-reviewer/Dockerfile .
 #
 # The SDK and automation are workspaces during development, so the build uses the
@@ -51,7 +51,7 @@ COPY --chown=node:node automations/candidate-reviewer/prompts ./prompts
 # The ONE manifest version this image serves (src/automation.ts SERVED_VERSIONS): one image per
 # version (the platform's D2). The runner runs its pipeline, or its items.pipeline on an item
 # run, and refuses a run pinned to any other version (src/main.ts reads this dir).
-COPY --chown=node:node manifests/candidate-reviewer.v1.json ./manifests/
+COPY --chown=node:node manifests/candidate-reviewer.v2.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

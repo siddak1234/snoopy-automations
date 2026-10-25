@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { oneLine, type RunResult } from './contract.js';
 import { boundedDetails } from './details.js';
 import { boundedDocuments } from './documents.js';
-import { boundedScore, boundedSections, boundedTitle } from './sections.js';
+import { boundedScore, boundedSections, boundedTitle, boundedVerdict } from './sections.js';
 
 /**
  * The most bytes the result callback's body may take: the platform reads at most 256 KiB of it
@@ -19,7 +19,7 @@ const bodyBytes = (result: RunResult): number =>
 
 /**
  * The result with every one-line field, each line of its `details` and each of its `documents`,
- * normalised to what the wire accepts — and a success's `title`, `score` and `sections` too
+ * normalised to what the wire accepts — and a success's `title`, `score`, `verdict` and `sections` too
  * (`sections.ts`: cut, or left out, never refused). A success whose body would pass
  * `RESULT_BODY_LIMIT_BYTES` leaves out its `output` — the structured result the platform keeps and
  * never publishes — so the documents and sections a person reads still arrive; nothing a person
@@ -32,11 +32,12 @@ const bodyBytes = (result: RunResult): number =>
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
     case 'success': {
-      const { details, documents, title, score, sections, ...rest } = result;
+      const { details, documents, title, score, verdict, sections, ...rest } = result;
       const lines = boundedDetails(details);
       const kept = boundedDocuments(documents);
       const named = boundedTitle(title);
       const ranked = boundedScore(score);
+      const counted = boundedVerdict(verdict);
       const shown = boundedSections(sections);
       const bounded: Extract<RunResult, { outcome: 'success' }> = {
         ...rest,
@@ -45,6 +46,7 @@ export function boundedResult(result: RunResult): RunResult {
         ...(kept === undefined ? {} : { documents: kept }),
         ...(named === undefined ? {} : { title: named }),
         ...(ranked === undefined ? {} : { score: ranked }),
+        ...(counted === undefined ? {} : { verdict: counted }),
         ...(shown === undefined ? {} : { sections: shown }),
       };
       if (bounded.output === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
