@@ -1,11 +1,12 @@
 import { truncateText } from './contract.js';
 
 /**
- * A succeeded run's `title`, `score` and `sections` (platform ADR-0046, Round 19; the run
- * result's success branch in `automation-run-result.json`): what names a run on its item's
- * list — Candidate Reviewer's candidate's name — the number its item's runs are ranked by,
- * and the rows a person opens on the run page. On an item run, the `sections` are the item's
- * reading as people see it. The platform keeps all three with the run and never parses them.
+ * A succeeded run's `title`, `score`, `verdict` and `sections` (platform ADR-0046, Round 19; the
+ * run result's success branch in `automation-run-result.json`): what names a run on its item's
+ * list — Resume Screening's candidate's name — the number its item's runs are ranked by, the
+ * verdict its item counts (build 28; the manifest's `items.verdictWords` name it), and the rows a
+ * person opens on the run page. On an item run, the `sections` are the item's reading as people
+ * see it. The platform keeps all four with the run and never parses them.
  */
 
 /** One row of a section: a title, and optionally a subtitle, a text and an http(s) link. */
@@ -24,6 +25,12 @@ export interface RunSection {
 
 /** The platform's bounds on `title` and `score` (`automation-run-result.json`; its `RUN_RESULT_LIMITS`). */
 export const RUN_RESULT_LIMITS = { titleLength: 80, scoreMinimum: 0, scoreMaximum: 100 } as const;
+
+/** A run's verdict: the schema's `enum`, the platform's `RUN_VERDICTS`. */
+export type RunVerdict = 'positive' | 'negative';
+
+/** The two verdicts, as the platform lists them (its `RUN_VERDICTS`). */
+export const RUN_VERDICTS: readonly RunVerdict[] = ['positive', 'negative'];
 
 /** The platform's bounds on `sections` (its `RUN_SECTION_LIMITS`): the schema's, and its route's. */
 export const RUN_SECTION_LIMITS = {
@@ -76,6 +83,17 @@ export function boundedScore(score: number | undefined): number | undefined {
     (score as number) >= RUN_RESULT_LIMITS.scoreMinimum &&
     (score as number) <= RUN_RESULT_LIMITS.scoreMaximum
     ? score
+    : undefined;
+}
+
+/**
+ * The verdict as the wire accepts it: `positive` or `negative`, else left out — never guessed
+ * from another value. The platform also refuses one on an item run and on a version declaring no
+ * `items.verdictWords`; an automation gives none there.
+ */
+export function boundedVerdict(verdict: string | undefined): RunVerdict | undefined {
+  return (RUN_VERDICTS as readonly (string | undefined)[]).includes(verdict)
+    ? (verdict as RunVerdict)
     : undefined;
 }
 

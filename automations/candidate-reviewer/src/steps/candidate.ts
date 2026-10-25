@@ -1,28 +1,36 @@
-import { isObject, readJsonCompletion, type JsonObject, type Step } from '@autom8x/automation-sdk';
+import {
+  isObject,
+  readJsonCompletion,
+  type JsonObject,
+  type RunVerdict,
+  type Step,
+} from '@autom8x/automation-sdk';
 
-import { fileFromState, fileIdOf, fileLine, fileState, readFile } from '../file.js';
+import { fileFromState, fileIdOf, fileLine, fileState, readResumeFile } from '../file.js';
 import { EXTRACT_RESUME, MODELS, SCORE_CANDIDATE, readDocument } from '../prompts.js';
-import { postingOf, resumeOf, type Posting, type Resume } from '../reading.js';
+import { postingOf, resumeOf, withFileLinks, type Posting, type Resume } from '../reading.js';
 import { quotesDirection, scoringOf, summaryLine, type Scoring } from '../scoring.js';
 import { candidateSections } from '../sections.js';
-import { FAILURES, bandOf, plural, stops } from '../words.js';
+import { FAILURES, bandOf, plural, stops, verdictOf } from '../words.js';
 import { yearsOfExperience } from '../years.js';
 
 /**
- * A candidate's run (the spec's §2 and §6, `pipeline`): the resume received, read by the model,
+ * A candidate's run (the spec's §2 and §6, `pipeline`): the resume received, with the addresses
+ * its file links to; read by the model, those links added to what it read (the spec's §4);
  * checked to be a resume that could be read, scored against the job's reading — text only, with
- * the years of experience worked out here — and saved as the run's title, score, summary and
- * sections, which the platform ranks on the job's page. Each step's line counts what it found and
- * never quotes the resume.
+ * the years of experience worked out here — and saved as the run's title, score, verdict, summary
+ * and sections, which the platform ranks and counts on the job's page. Each step's line counts
+ * what it found and never quotes the resume.
  */
 
 /** The key a candidate's run input carries the resume under: the manifest's `trigger.input`. */
 export const RESUME_FILE_KEY = 'resumeFile';
 
-/** What `save` leaves for the result: the run's title, score, summary and sections. */
+/** What `save` leaves for the result: the run's title, score, verdict, summary and sections. */
 export interface Candidate {
   title: string;
   score: number;
+  verdict: RunVerdict;
   summary: string;
   sections: JsonObject[];
 }
@@ -65,12 +73,12 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     // job that is ready, so a missing one ends the run before anything is spent.
     if (!isObject(request.item?.reading)) return stops(FAILURES.jobNotRead);
     const id = fileIdOf(request.input, RESUME_FILE_KEY);
-    const read = id === undefined ? undefined : await readFile(platform, id);
-    if (read === undefined) return stops(FAILURES.resumeUnreadable);
+    const file = id === undefined ? undefined : await readResumeFile(platform, id);
+    if (file === undefined) return stops(FAILURES.resumeUnreadable);
     return {
       outcome: 'ok',
-      summary: `Resume received: ${fileLine(read)}`,
-      state: { file: fileState(read) },
+      summary: `Resume received: ${fileLine(file.read)}`,
+      state: { file: fileState(file.read), links: file.links },
     };
   };
 
@@ -80,6 +88,11 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     const answer = await readDocument(platform, EXTRACT_RESUME, file);
     if (answer === undefined) return stops(FAILURES.resumeUnreadable);
     const { document, resume } = resumeOf(answer);
+    const links = Array.isArray(state.links) ? state.links : [];
+    resume.links = withFileLinks(
+      resume.links,
+      links.filter((link): link is string => typeof link === 'string'),
+    );
     return {
       outcome: 'ok',
       summary: `Resume read: ${[
@@ -125,6 +138,7 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     const candidate: Candidate = {
       title: resume.name === '' ? 'Unnamed candidate' : resume.name,
       score: scoring.score,
+      verdict: verdictOf(scoring.score),
       summary: summaryLine(scoring, posting),
       sections: candidateSections(resume, scoring, now()) as unknown as JsonObject[],
     };

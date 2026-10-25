@@ -460,6 +460,12 @@
               }
             }
           }
+        },
+        "verdict": {
+          "enum": [
+            "positive",
+            "negative"
+          ]
         }
       }
     },

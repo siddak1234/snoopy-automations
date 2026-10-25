@@ -1,8 +1,11 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `2d93d99`, the platform's `main` after its #239 squash-merged
-Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed 2026-10-24" below). Before it,
+(`snoopy-backend`, private) at commit `d0e4201`, the platform's `main` after its #242
+squash-merged Round 19's build 28 contract, verdict words and a run's verdict (2026-10-25;
+"Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
+its #239 squash-merged Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed
+2026-10-24" below). Before it,
 `d371251`, the platform's `main` after its #231 squash-merged Round 18's 27.2 (2026-10-21):
 `display.documentWords` ("Re-pinned 2026-10-21" below). Before it,
 `708ed6e`, the platform's `main` after its #222
@@ -296,6 +299,28 @@ manifest declaring `items` and a result carrying `title`, `score` or `sections`,
 `candidate-reviewer` v1 is registered only by the platform's pin change after both; this copy is
 re-pinned to the merge commit then, its bytes unchanged unless a review changed them.
 
+Refreshed 2026-10-24, build 28, from the head of the platform's branch `round-19/feedback-b28`,
+`cf17dbb` (Round 19's build 28 contract), not yet merged — as `7a4baa6` was above, this
+repository's half built beside the platform's. Two files moved, additively:
+
+- `automation-manifest.json`: `items` gains the optional `verdictWords`, `{ positive, negative }`,
+  each 1–40 characters — what a run's verdict is called, which the platform publishes on the
+  catalog's items and both clients print. `manifests/candidate-reviewer.v2.json` declares "Advance"
+  and "Decline".
+- `automation-run-result.json`: the success branch's optional `verdict`, `positive` or `negative`,
+  which the platform keeps with the run and counts on its item. Beyond the schema, the result
+  callback answers 400 with `details.field: verdict` when the run's pinned version declares no
+  `items.verdictWords`, and on an item run (the platform's `snoopy-backend/docs/openapi/automations.yaml`).
+  The SDK's `boundedVerdict` (`packages/automation-sdk/src/sections.ts`) keeps a verdict only when
+  it is one of the two; `candidate-reviewer` v2 gives one on a candidate's run and never on a
+  job's.
+
+The other six files are byte-identical to `2d93d99`'s, and all eight to `cf17dbb`'s (each checked
+with `cmp`). Re-pinned 2026-10-25 to `d0e4201`, #242's merge: all eight byte-identical to it
+(`cmp`), the review between them having changed only the OpenAPI's words. Until a promotion
+carries it, the live platform refuses a manifest declaring `verdictWords` and a result carrying
+`verdict`, so `candidate-reviewer` v2 is registered only by the platform's pin change after it.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -421,9 +446,12 @@ id, none "is declared more than once", and none "is a pipeline step id: an item 
 own steps"; `outputSchema.type` "must be 'object': the reading is an object", every keyword in it
 one the platform holds an output to — else "uses <keyword>, which the platform cannot hold an
 output to" — nested at most 32 levels. A manifest accepting a type outside PDF, JPEG and PNG
-declares no page or pixel limit (`artifacts`, below). `test/manifest-items.ts` ports these,
-`test/manifest-rules.ts` the `artifact` field's two rules above, and `test/manifest-items.test.ts`
-bites each.
+declares no page or pixel limit (`artifacts`, below). Since `cf17dbb` (build 28), `verdictWords`
+"must be an object", a key besides `positive` and `negative` "is not a verdict word", and each word
+is a display string of at most 40 characters ("Text", above); of these only a blank word, "must not
+be empty", is one the schema cannot say. `test/manifest-items.ts` ports the rules here the schema
+cannot say, `test/manifest-rules.ts` the `artifact` field's two rules above, and
+`test/manifest-items.test.ts` bites each.
 
 **Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
 scopes per connection each "must contain at most N entries".

@@ -14,17 +14,35 @@ import { candidateSteps, type Candidate } from './steps/candidate.js';
 import { JOB_STEPS, counted } from './steps/job.js';
 
 /**
- * Candidate Reviewer (the spec: `automations/candidate-reviewer/README.md`, its words the
- * build's source of truth). A flow with items (the platform's ADR-0046): a job is made once,
- * from its job description — the item run, which reads it into the job's reading — and each
- * candidate's run reads a resume and scores it against that reading. The runner runs the
- * manifest's `items.pipeline` on the item run and its `pipeline` on every other; each step's
- * code is in `src/steps/`.
+ * Resume Screening, v2 of `candidate-reviewer` (the spec:
+ * `automations/candidate-reviewer/README.md`, its words the build's source of truth). A flow with
+ * items (the platform's ADR-0046): a job is made once, from its job description — the item run,
+ * which reads it into the job's reading — and each candidate's run reads a resume and scores it
+ * against that reading. The runner runs the manifest's `items.pipeline` on the item run and its
+ * `pipeline` on every other; each step's code is in `src/steps/`. v2 (Round 19, build 28) is v1, Candidate Reviewer, renamed, with
+ * departments A–Z and AI among them, and a verdict on each candidate's run, which its job counts;
+ * the job's reading is v1's, so a job made on v1 serves v2's runs. v1's container keeps its pinned
+ * image until it is retired.
  */
 export const TEMPLATE_ID = 'candidate-reviewer';
 
 /** The one version this image serves; its Dockerfile copies only its manifest. */
-export const SERVED_VERSIONS: readonly number[] = [1];
+export const SERVED_VERSIONS: readonly number[] = [2];
+
+/**
+ * The manifests this image serves, of those given: `SERVED_VERSIONS` alone, as Invoice
+ * Processing's — so v2's code never answers a run pinned to v1, which declares no verdict words —
+ * and refused when none is left.
+ */
+export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
+  const served = manifests.filter((manifest) => SERVED_VERSIONS.includes(manifest.version));
+  if (served.length === 0) {
+    throw new Error(
+      `${TEMPLATE_ID} serves v${SERVED_VERSIONS.join(', v')}, and no such manifest was given`,
+    );
+  }
+  return served;
+}
 
 /**
  * The automation, on a clock — a current role's years run to `now`; `main.ts` and the
@@ -36,7 +54,7 @@ export function define(
 ): Automation {
   return defineAutomation({
     templateId: TEMPLATE_ID,
-    manifests,
+    manifests: servedManifests(manifests),
     prompts: PROMPTS,
     steps: { ...JOB_STEPS, ...candidateSteps(now) },
     // No step declares a retry. Each model step's call is a vendor call and a ledger row when
@@ -57,7 +75,10 @@ function job(state: JsonObject) {
   };
 }
 
-/** A candidate's result: what was read and scored, whole, and the candidate as people see them. */
+/**
+ * A candidate's result: what was read and scored, whole, and the candidate as people see them —
+ * with the verdict its job counts. A job's result gives none: the platform refuses one there.
+ */
 function candidate(state: JsonObject, request: InvokeRequest) {
   const saved = state.candidate as unknown as Candidate;
   return {
@@ -70,6 +91,7 @@ function candidate(state: JsonObject, request: InvokeRequest) {
     summary: saved.summary,
     title: saved.title,
     score: saved.score,
+    verdict: saved.verdict,
     sections: saved.sections as unknown as RunSection[],
   };
 }

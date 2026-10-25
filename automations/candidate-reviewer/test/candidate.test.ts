@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import type { JsonObject, RunResult } from '@autom8x/automation-sdk';
 import { declaredSteps, refusalFixture } from '@autom8x/automation-sdk/testing';
 
+import { ADVANCE_FROM_SCORE, verdictOf } from '../src/words.js';
 import {
   FILE_ID,
   WORD,
@@ -44,6 +45,7 @@ test('§9: a clear PDF resume meeting all three must-haves — Strong match, eac
   const result = sent as Success;
   assert.equal(result.title, 'Jane Doe');
   assert.equal(result.score, 88);
+  assert.equal(result.verdict, 'positive');
   assert.equal(result.summary, 'Strong match · meets 3 of 3 must-haves');
   const why = section(result, 'Why this score');
   for (const requirement of [
@@ -96,6 +98,7 @@ test('§9: a resume meeting one of three must-haves — under 60, the two missin
   const { sent } = await run({ resume: resumeAnswer(), score: scoreAnswer(45, missing) });
   const result = sent as Success;
   assert.ok(result.score! < 60);
+  assert.equal(result.verdict, 'negative');
   assert.equal(result.summary, 'Partial match · meets 1 of 3 must-haves');
   const gaps = (result.output?.scoring as { gaps: { requirement: string; kind: string }[] }).gaps;
   assert.deepEqual(
@@ -138,6 +141,24 @@ test('§9: a photo of a one-page resume with no dates — a score, "years not sh
     ),
   );
   assert.equal(platform.modelCalls[1]?.input.yearsOfExperience, null);
+});
+
+test('§7: the verdict is the score alone — positive (Advance) at 60 or above, negative (Decline) below', async () => {
+  assert.equal(ADVANCE_FROM_SCORE, 60);
+  const sent = async (score: number) =>
+    (await run({ resume: resumeAnswer(), score: scoreAnswer(score) })).sent as Success;
+  const advanced = await sent(60);
+  const declined = await sent(59);
+  assert.deepEqual([advanced.score, advanced.verdict], [60, 'positive']);
+  assert.deepEqual([declined.score, declined.verdict], [59, 'negative']);
+  for (const [score, verdict] of [
+    [0, 'negative'],
+    [59, 'negative'],
+    [60, 'positive'],
+    [100, 'positive'],
+  ] as const) {
+    assert.equal(verdictOf(score), verdict, String(score));
+  }
 });
 
 test("§9 and §8: a receipt uploaded as a resume fails in the spec's words, and is never scored", async () => {

@@ -53,12 +53,14 @@ export type { InvokeItem } from './item.js';
 export {
   RUN_RESULT_LIMITS,
   RUN_SECTION_LIMITS,
+  RUN_VERDICTS,
   boundedScore,
   boundedSections,
   boundedTitle,
+  boundedVerdict,
   isRunSectionUrl,
 } from './sections.js';
-export type { RunSection, RunSectionEntry } from './sections.js';
+export type { RunSection, RunSectionEntry, RunVerdict } from './sections.js';
 export {
   RUN_DOCUMENT_DECIMAL_PATTERN,
   RUN_DOCUMENT_LIMITS,
