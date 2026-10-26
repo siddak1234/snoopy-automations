@@ -917,7 +917,8 @@ is the steps below.
    attestation and the manifest itself, runs its own validator on the manifest before any
    container starts, then starts the version beside those it serves on both hosts,
    smoke-tests it and registers it. Read the Deploy job's summary: each automation shows
-   NEW, UPDATE, SKIP, SUPERSEDED or REFUSED, and a red Deploy changed nothing served. There
+   NEW, UPDATE, SKIP, SUPERSEDED or REFUSED. A REFUSED automation changed nothing it serves;
+   read every row, since the others in the same run may have deployed. There
    is still no registration endpoint. The rules a manifest must meet beyond the schema are
    in `contract/README.md`, in the validator's own words.
 5. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a

@@ -106,6 +106,13 @@ test('Deploy runs only on a push to main, in production, with no permission and 
   ]) {
     assert.match(token!, input);
   }
+  // The token's one permission (ci.yml's header): without a permission-* input the token
+  // would carry every permission the App's installation grants.
+  assert.deepEqual(
+    [...token!.matchAll(/^ {10}(permission-[a-z-]+): (\S+)$/gmu)].map((m) => `${m[1]}: ${m[2]}`),
+    ['permission-actions: write'],
+    'the token asks for Actions write and nothing else',
+  );
   for (const step of scripts) {
     const script = step.split(/^ {8}run: \|\s*$/mu)[1];
     assert.ok(script !== undefined, 'every other step is a run script');
