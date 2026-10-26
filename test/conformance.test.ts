@@ -29,8 +29,10 @@ import {
  * - every prompt file in the automation's `prompts/` directory is registered, so
  *   a template nobody wired in cannot sit there looking shipped;
  * - every `manifests/<id>.v<n>.json` is served by that automation's container — unless the
- *   automation exports `SERVED_VERSIONS`, when it conforms to those manifests alone and its
- *   Dockerfile copies exactly those files, so the image cannot serve a version its code dropped.
+ *   automation exports `SERVED_VERSIONS`, when it conforms to those manifests alone;
+ * - every Dockerfile copies exactly one `manifests/<id>.v<n>.json`, whether or not
+ *   `SERVED_VERSIONS` is exported, and it is the one version the code serves: one image per
+ *   version, and the one manifest the platform's Flow CD reads for that image (its ADR-0047 §4.2).
  *
  * `defineAutomation` refuses the first two at startup; this test states the rules
  * for the repository and reads each automation's definition the way its `main.ts`
@@ -154,18 +156,45 @@ test('every automation conforms to the manifests it serves', async () => {
         [...served].sort((a, b) => a - b),
         `automations/${name}: every version in SERVED_VERSIONS has its manifest`,
       );
-      assert.deepEqual(
-        imageManifests(directory),
-        served.map((version) => `manifests/${name}.v${version}.json`).sort(),
-        `automations/${name}/Dockerfile copies exactly the manifests SERVED_VERSIONS names`,
-      );
     }
+    assertCopiesOneManifest(
+      directory,
+      name,
+      manifests.map((manifest) => manifest.version),
+      `automations/${name}`,
+    );
     const automation = module.define(manifests);
     assert.equal(automation.templateId, name);
     assertConforms(automation, manifests, `automations/${name}`);
     assertPromptsRegistered(automation, directory, `automations/${name}`);
   }
 });
+
+/**
+ * The Dockerfile copies one manifest, `manifests/<name>.v<n>.json`, and `n` is the one version
+ * served. A glob, a second file or a directory would let an image carry versions the platform's
+ * Flow CD never read.
+ */
+function assertCopiesOneManifest(
+  directory: string,
+  name: string,
+  versions: readonly number[],
+  label: string,
+): void {
+  const copied = imageManifests(directory);
+  assert.equal(
+    copied.length,
+    1,
+    `${label}/Dockerfile copies exactly one manifest: ${copied.join(', ')}`,
+  );
+  const match = new RegExp(`^manifests/${name}\\.v([1-9][0-9]*)\\.json$`, 'u').exec(copied[0]!);
+  assert.ok(match, `${label}/Dockerfile copies ${copied[0]}, not manifests/${name}.v<n>.json`);
+  assert.deepEqual(
+    versions,
+    [Number(match[1])],
+    `${label} serves exactly the version its Dockerfile copies (${copied[0]})`,
+  );
+}
 
 /** The manifest files an automation's Dockerfile copies into its image, as written there. */
 function imageManifests(directory: string): string[] {
@@ -183,6 +212,12 @@ test('the template automation conforms to its example manifest, which validates 
   const manifests = readManifests(templateRoot, module.TEMPLATE_ID);
   const automation = module.define(manifests);
   assertConforms(automation, manifests, 'templates/automation');
+  assertCopiesOneManifest(
+    templateRoot,
+    module.TEMPLATE_ID,
+    manifests.map((manifest) => manifest.version),
+    'templates/automation',
+  );
   assertPromptsRegistered(automation, templateRoot, 'templates/automation');
   assert.ok(automation.prompts.length > 0, 'the template shows a prompt module');
 

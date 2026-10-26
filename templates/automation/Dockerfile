@@ -48,9 +48,10 @@ COPY --chown=node:node --from=build /workspace/automations/example/dist ./dist
 COPY --chown=node:node --from=production-dependencies /workspace/automations/example/node_modules ./node_modules
 # The prompts the steps send, loaded by src/automation.ts from beside dist/.
 COPY --chown=node:node automations/example/prompts ./prompts
-# The manifest versions this container serves: the runner runs the pipeline each
-# one declares and refuses a run pinned to any other (src/main.ts reads this dir).
-COPY --chown=node:node manifests/example.v*.json ./manifests/
+# The ONE manifest version this image serves: one image per version. The runner runs
+# the pipeline it declares and refuses a run pinned to any other (src/main.ts reads
+# this dir); test/conformance.test.ts holds every Dockerfile to exactly one file.
+COPY --chown=node:node manifests/example.v1.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 
