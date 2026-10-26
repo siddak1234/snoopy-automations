@@ -55,7 +55,7 @@ test('a planted broken path fails the audit; a struck removed file and a sibling
     rmSync(join(dir, 'src/old.ts'));
     const readme =
       '# planted\n\n`src/a.ts` and [the code](src/a.ts), ~~`src/old.ts`~~ (removed),' +
-      ' `snoopy-backend/scripts/add-automation.mjs`.\n';
+      ' `snoopy-backend/scripts/flow-cd.mjs`.\n';
     write('README.md', readme);
     git('add', '-A');
     git('commit', '-q', '-m', 'two');

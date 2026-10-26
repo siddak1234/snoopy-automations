@@ -1,8 +1,8 @@
 # snoopy-automations
 
 Autom8x automations — the logic that runs when a workspace's automation fires. Each
-one is a small service the platform calls, which calls back. **This repository holds
-no secret and never will:** an automation receives a run-scoped token at runtime and
+one is a small service the platform calls, which calls back. **This repository's files
+hold no secret and never will:** an automation receives a run-scoped token at runtime and
 nothing else, so it is public by design.
 
 ## What an automation is
@@ -802,9 +802,9 @@ Where the code does it:
 - **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
   `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
 
-The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
-manifest's pull request, the image pin and the container's alias, once CI publishes the image on
-`main`, after the platform's build 28 contract ([contract/README.md](contract/README.md)).
+The platform side needs no pull request of its own: the merge here is the deploy
+([Adding an automation](#adding-an-automation)), after the platform's build 28 contract
+([contract/README.md](contract/README.md)).
 
 ## The kit
 
@@ -905,28 +905,36 @@ is the steps below.
    valid start). `npm run verify` validates it against the vendored schema and
    `test/conformance.test.ts` checks that every step your code can report is
    declared and every capability a prompt uses is in `requiredCapabilities`.
-3. Add the automation to the `matrix` of the Image and Publish jobs in
-   `.github/workflows/ci.yml`, or its image is never built.
-4. Open a pull request here. CI runs on `GITHUB_TOKEN` alone, builds, smoke-tests
-   and scans each image, and on merge publishes each by digest to GHCR, then tags the
-   proven digest with the commit.
-5. Open a pull request adding the manifest to the platform repository's
-   `manifests/` directory, with the container's `.internal` alias and digest pin in
-   its `snoopy-backend/deploy/compose.prod.yml`. There is no registration endpoint, and the
-   platform's ADR-0020 decided there will not be one: `service.origin` is where
-   customer documents get sent, review is the authorization, and a pull request is
-   the only write path that carries one. The rules a manifest must meet beyond the
-   schema are in `contract/README.md`, in the validator's own words.
-6. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
+   A new version `v<n>` declares `SERVED_VERSIONS = [<n>]` in
+   `automations/<templateId>/src/automation.ts`, adding it if absent (the
+   `new-automation-version` skill's step 1).
+3. Open a pull request here. CI builds, smoke-tests and scans every image, one per
+   `automations/*/Dockerfile` (its List job reads them; there is no list to edit), and on
+   merge publishes each by digest to GHCR, attests that digest, then tags it with the commit.
+4. Merge it: **the merge is the deploy** (the platform's ADR-0047, superseding ADR-0020 §1).
+   One pull request here and no backend pull request: CI's last job, Deploy, starts the
+   platform's Flow CD with the merge commit. The platform checks that commit, the image's
+   attestation and the manifest itself, runs its own validator on the manifest before any
+   container starts, then starts the version beside those it serves on both hosts,
+   smoke-tests it and registers it. Read the Deploy job's summary: each automation shows
+   NEW, UPDATE, SKIP, SUPERSEDED or REFUSED. A REFUSED automation changed nothing it serves;
+   read every row, since the others in the same run may have deployed. There
+   is still no registration endpoint. The rules a manifest must meet beyond the schema are
+   in `contract/README.md`, in the validator's own words.
+5. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
    service account of its own for each version: one container per manifest version for
-   everything new (the platform's D2), and its `snoopy-backend/scripts/add-automation.mjs` refuses any
-   other origin. The platform gives that version's container the name as a network
-   alias, so it is reachable only on the compose network by construction.
+   everything new (the platform's D2), and the platform's validator
+   (`snoopy-backend/apps/catalog/src/check-manifest.ts`) refuses any other origin or
+   account. Each version runs as its own project on the platform's flow network, which
+   gives it the name as an alias, so it is reachable only there by construction.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
-called. The platform's decision of 2026-10-08 (D2) is one container and one image
-per manifest version.
+called; `test/manifest-immutable.test.ts` fails when a file under `manifests/` that is on
+`main` is edited or deleted. The platform's decision of 2026-10-08 (D2) is one container
+and one image per manifest version: `test/conformance.test.ts` holds every Dockerfile,
+the template's included, to copying exactly one `manifests/<templateId>.v<n>.json`, the
+version its code serves.
 
 ## Working here
 

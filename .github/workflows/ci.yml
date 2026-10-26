@@ -6,15 +6,55 @@ on:
   push:
     branches: [main]
 
-# The only credential this workflow ever holds is GITHUB_TOKEN, which GitHub mints
-# per job and expires when the job ends. This repository is PUBLIC and holds no
-# secret of any kind: an automation receives a run-scoped token at runtime and
-# nothing else (platform invariant 3), so there is nothing for a workflow to
-# reference and nothing for a fork's pull request to reach.
+# This repository is PUBLIC and its files hold no secret of any kind: an automation
+# receives a run-scoped token at runtime and nothing else (platform invariant 3).
+# Every job but Deploy runs on GITHUB_TOKEN alone, which GitHub mints per job and
+# expires when the job ends. The workflow's one secret is DISPATCH_APP_KEY, the
+# private key of the GitHub App autom8x-dispatch. It lives in environment
+# `production` (main only), so only Deploy, on a push to main, can read it; a
+# pull request, a fork's included, never reaches it. It mints a token whose one
+# permission is Actions read and write on snoopy-backend: it can start that
+# repository's Flow CD and read its runs. It reaches no backend credential — no
+# host key, no Doppler token, no database URL, no write to any image — and the
+# Mac that runs Flow CD believes nothing the dispatch sends but the commit, which
+# it checks itself (the platform's ADR-0047 §4). test/workflow-policy.test.ts
+# holds these rules.
 permissions:
   contents: read
 
 jobs:
+  # The automations, read from the tree: every folder under automations/ with a
+  # Dockerfile, as a JSON list. Image and Publish take their matrix from it, so a new
+  # automation is built, published and deployed with no edit here.
+  list:
+    name: List
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      automations: ${{ steps.list.outputs.automations }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: List automations/*/Dockerfile
+        id: list
+        run: |
+          shopt -s nullglob
+          names=()
+          for dockerfile in automations/*/Dockerfile; do
+            name="${dockerfile#automations/}"
+            names+=("${name%/Dockerfile}")
+          done
+          if [ "${#names[@]}" -eq 0 ]; then
+            echo "automations/ holds no Dockerfile" >&2
+            exit 1
+          fi
+          automations="$(printf '%s\n' "${names[@]}" | jq -R . | jq -cs .)"
+          echo "automations=$automations" >> "$GITHUB_OUTPUT"
+          echo "automations: $automations"
+
   verify:
     name: Verify
     runs-on: ubuntu-24.04
@@ -73,18 +113,16 @@ jobs:
   # The pull request's gate, once per automation: the Dockerfile built, smoke-tested
   # and scanned before anything may be pushed. This job never authenticates to a
   # registry and never pushes, including on pull requests from forks. The bytes
-  # the backend pins are built, pushed and proven by Publish, below, from the same
-  # Dockerfile. An automation added under `automations/` is added to the matrix
-  # here and in Publish, or it is never built.
+  # production runs are built, pushed, proven and attested by Publish, below, from
+  # the same Dockerfile. The matrix is List's: every automations/*/Dockerfile.
   image:
     name: Image
+    needs: list
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        # invoice-check and invoice-intake left with the platform's BUILD-PLAN 25.4.11 (2026-10-22),
-        # retired from production by its 25.4.5. candidate-reviewer joined in Round 19.
-        automation: [invoice-processing, candidate-reviewer]
+        automation: ${{ fromJSON(needs.list.outputs.automations) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,29 +177,32 @@ jobs:
           exit-code: '0'
           format: table
 
-  # A merge to main is the only publishing event. packages:write exists on this
-  # job alone and authenticates with its own short-lived GITHUB_TOKEN.
+  # A merge to main is the only publishing event. packages:write, id-token:write
+  # and attestations:write exist on this job alone, and it authenticates with its
+  # own short-lived GITHUB_TOKEN.
   #
-  # Build once, push by digest, prove that digest, then name it — once per
-  # automation. Until 2026-10-04 this job rebuilt the image the Image job had just
-  # smoke-tested and scanned, so the bytes that reached GHCR were never the bytes
-  # that had been checked. Now the one build is pushed with no tag; the smoke test
-  # and both Trivy passes run against `IMAGE_NAME@sha256:…`, which is exactly what
-  # was pushed; and only when they pass does `imagetools create` give that index
-  # its commit tag. A digest that fails stays untagged: nothing names it, so
-  # nothing can pin it.
+  # Build once, push by digest, prove that digest, attest it, then name it — once
+  # per automation. Until 2026-10-04 this job rebuilt the image the Image job had
+  # just smoke-tested and scanned, so the bytes that reached GHCR were never the
+  # bytes that had been checked. Now the one build is pushed with no tag; the smoke
+  # test and both Trivy passes run against `IMAGE_NAME@sha256:…`, which is exactly
+  # what was pushed; only when they pass is that digest attested, and only then
+  # does `imagetools create` give that index its commit tag. A digest that fails
+  # stays untagged and unattested: nothing names it, so nothing can deploy it.
   publish:
     name: Publish
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: [verify, image]
+    needs: [list, verify, image]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        automation: [invoice-processing, candidate-reviewer]
+        automation: ${{ fromJSON(needs.list.outputs.automations) }}
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/autom8x-${{ matrix.automation }}
     steps:
@@ -185,7 +226,7 @@ jobs:
       # bytes but nothing names them yet. The action's default provenance
       # attestation is kept, so what is pushed is an OCI image index (the amd64
       # manifest plus its attestation) and the digest returned is the INDEX
-      # digest, the shape the platform's deploy/compose.prod.yml pins.
+      # digest, the one the attestation below names and the platform's Flow CD runs.
       - name: Build and push ${{ matrix.automation }} by digest
         id: publish
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -199,8 +240,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      # Fail if Buildx did not return a digest: an unfindable digest blocks the
-      # backend session rather than becoming guesswork. Every step below is given
+      # Fail if Buildx did not return a digest: an unfindable digest stops the
+      # deploy rather than becoming guesswork. Every step below is given
       # this one reference and nothing else.
       - name: Resolve the pushed digest
         id: pushed
@@ -253,6 +294,19 @@ jobs:
           exit-code: '0'
           format: table
 
+      # The proven digest, attested: a SLSA build provenance signed for this
+      # workflow at this commit on a GitHub-hosted runner, pushed beside the image.
+      # Flow CD refuses a digest without it (`gh attestation verify
+      # --bundle-from-oci`, the platform's ADR-0047 §4.3). No storage record: those
+      # exist for organization repositories only.
+      - name: Attest the proven digest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
       # Only now is the digest named. The sole tag is the full commit SHA; no
       # latest, main, branch, or other moving tag is created. `imagetools create`
       # given one index copies that index as it is, so the tag resolves to the
@@ -278,16 +332,89 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "tagged: $TAG -> $DIGEST"
 
+  # The merge is the deploy (the platform's ADR-0047 §1). Once every image is
+  # published and attested, this job starts snoopy-backend's Flow CD for this
+  # commit, waits for it, and prints each automation's outcome (README.md, Adding
+  # an automation). It is red when Flow CD failed or its result is
+  # not ok. It holds no GITHUB_TOKEN permission, checks nothing out and runs no
+  # code of this repository: its only inputs are the commit and the App token.
+  deploy:
+    name: Deploy
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: publish
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: {}
+    timeout-minutes: 90
+    steps:
+      - name: Mint a token for snoopy-backend's Actions
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DISPATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DISPATCH_APP_KEY }}
+          owner: siddak1234
+          repositories: snoopy-backend
+          permission-actions: write
+
+      # GitHub's answer to the dispatch carries the run it started
+      # (`return_run_details`), so the run watched is the one dispatched.
+      - name: Dispatch Flow CD for this commit
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          run_id="$(gh api --method POST repos/siddak1234/snoopy-backend/actions/workflows/flow-cd.yml/dispatches \
+            -f ref=main -f "inputs[sha]=$SHA" -F return_run_details=true --jq .workflow_run_id)"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "the dispatch answered no run id" >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Flow CD: https://github.com/siddak1234/snoopy-backend/actions/runs/$run_id"
+
+      - name: Wait for Flow CD and print its result
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        run: |
+          status=0
+          gh run watch "$RUN_ID" --repo siddak1234/snoopy-backend --exit-status --interval 30 >/dev/null || status=$?
+          dir="$RUNNER_TEMP/flow-cd-result"
+          if ! gh run download "$RUN_ID" --repo siddak1234/snoopy-backend --name flow-cd-result --dir "$dir"; then
+            echo "Flow CD run $RUN_ID left no flow-cd-result artifact" >&2
+            exit 1
+          fi
+          jq . "$dir/result.json"
+          {
+            echo "### Flow CD"
+            echo
+            echo "https://github.com/siddak1234/snoopy-backend/actions/runs/$RUN_ID"
+            echo
+            echo '| Automation | Version | Outcome | Digest | Codes |'
+            echo '| --- | --- | --- | --- | --- |'
+            jq -r '.templates[] | "| \(.templateId) | v\(.version) | \(.outcome) | \(.digest) | \(.codes | join(", ")) |"' "$dir/result.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "Flow CD run $RUN_ID failed" >&2
+            exit 1
+          fi
+          if [ "$(jq -r .ok "$dir/result.json")" != true ]; then
+            echo "Flow CD's result is not ok" >&2
+            exit 1
+          fi
+
   # The one check for the ruleset to require, once it has reported on a pull
   # request and on main. Green only when every job above succeeded — for a matrix
-  # job, every one of its builds. Publish is push-only by its own `if`, so on a
-  # pull request its "skipped" is the single skip allowed; a skip anywhere else, a
-  # failure or a cancellation is red. A job added above must be named in `needs`
-  # too, or this check never sees it.
+  # job, every one of its builds. Publish and Deploy are push-only by their own
+  # `if`, so on a pull request their "skipped" is the only skip allowed; a skip
+  # anywhere else, a failure or a cancellation is red. A job added above must be
+  # named in `needs` too, or this check never sees it.
   all-green:
     name: all-green
     if: always()
-    needs: [verify, image, publish]
+    needs: [list, verify, image, publish, deploy]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -301,7 +428,7 @@ jobs:
             case "$result" in
               success) verdict=ok ;;
               skipped)
-                if [ "$job" = publish ] && [ "$EVENT_NAME" = pull_request ]; then
+                if { [ "$job" = publish ] || [ "$job" = deploy ]; } && [ "$EVENT_NAME" = pull_request ]; then
                   verdict='ok (push-only job, skipped on a pull request)'
                 else
                   verdict=RED

@@ -36,9 +36,9 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 2. **No secret of any kind, ever** — not a token, key, database URL or "local only" fixture secret. This repository is public and git history is permanent; secret-scanning push protection is the second line, not the first.
 3. **Nothing imports or depends on `@snoopy/*`, and no automation depends on another.** The boundary is the wire format in `contract/schemas`. An automation builds with the SDK and the libraries under `packages/`, each packed into its own image, and may run any engine behind the serving shell (platform ADR-0034 decision 6). `test/architecture.test.ts` and `test/isolation.test.ts` enforce it.
 4. **The SDK is the only outbound path.** `packages/automation-sdk` presents the run token and nothing else on every callback; mail goes through the platform's `mail` callback, never a customer's mailbox (platform ADR-0021).
-5. **Manifests land in the platform by pull request:** authored and validated in `manifests/`, then a PR to `snoopy-backend/manifests/` (platform ADR-0020: no registration route; review is the authorization). Steps: [README.md](README.md#adding-an-automation).
+5. **The merge is the deploy.** A manifest is authored and validated in `manifests/`; when its pull request merges, CI's Deploy job starts the platform's Flow CD, which checks the commit, the attestation and the manifest itself and starts the version (platform ADR-0047; still no registration route). No backend pull request. Steps: [README.md](README.md#adding-an-automation).
 6. **`npm run verify` green before every commit** (Gates, below). Run `/code-review` on the diff, and `/security-review` on anything touching the run token, the callbacks or mail construction.
-7. **Every change goes PR → CI → squash-merge.** `main` is protected by the `protect-main` ruleset; CI runs on GITHUB_TOKEN alone.
+7. **Every change goes PR → CI → squash-merge.** `main` is protected by the `protect-main` ruleset; CI's jobs run on GITHUB_TOKEN; its one secret, Deploy's, and what it can reach are written once, in [ci.yml](.github/workflows/ci.yml)'s header.
 8. **Standing constraints:** source files 400 lines or fewer (`test/architecture.test.ts`); no speculative abstractions; zero runtime dependencies unless a concrete automation demands one, and then audited; the automation rules in [automations/CLAUDE.md](automations/CLAUDE.md).
 9. **No new documents.** The documents of record are `CLAUDE.md`, `README.md`, the directory READMEs and `docs/records/*`. Supporting files, not documents: `docs/MAP.md` (generated), `docs/docs-map.json`, folder CLAUDE.md files and `.claude/`. Decisions belong in the platform's ADRs and discrepancies in its manifest §12, both through a backend session, as findings.
 
@@ -65,7 +65,7 @@ npm run format                                # fix formatting
 ```
 
 - Push normally, never with `--no-verify`. A PR is ready only when it is pushed, `all-green` is green on its head, and its body is final.
-- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): Verify, then Image and Publish once per automation, then `all-green`.
+- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): List (every `automations/*/Dockerfile`), Verify, then Image and Publish once per automation it lists, then Deploy on a push to main, then `all-green`.
 - `.claude/settings.json` runs the shared kit's hooks (canonical in `snoopy-backend`; the standard's section (h)): `guard.mjs` blocks `--no-verify` pushes, `rm -rf` outside the repository and the temp folders, builds under `~/Desktop` or iCloud Drive, writes into iCloud Drive and `hygiene --execute`; `session-start.mjs` prints git and hygiene facts; `stop-check.mjs` warns about processes left running.
 
 ## Docs always updated
