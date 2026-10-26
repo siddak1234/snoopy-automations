@@ -11,7 +11,7 @@ These rules apply here and nowhere else; the repository's are in [../CLAUDE.md](
 5. **One image per version.** Each new version gets its own container, image, origin and service account; a registered manifest is immutable, so a change is a new `v<n+1>` file ([../README.md](../README.md#adding-an-automation)).
 6. **The conformance test** (`test/conformance.test.ts`) holds every automation to the manifests it serves: every step the code can report is declared. Keep it green; never loosen it.
 7. **`npm run facts` after adding or removing files** (it re-emits `docs/repo-facts/snoopy-automations.json`), and `npm run map` when an automation or a manifest is added.
-8. **The platform side is a finding** for a backend session: the manifest PR to its `manifests/`, the compose pin and `snoopy-backend/scripts/add-automation.mjs`. Never edit it from here.
+8. **A new automation or version needs nothing on the platform side:** its merge here is its deploy ([../README.md](../README.md#adding-an-automation)). A change the platform needs (a schema, a callback, a capability) is a finding for a backend session; never edit it from here.
 
 ## Commands
 

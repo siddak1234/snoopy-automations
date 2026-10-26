@@ -10,4 +10,4 @@ The in-repo template is the source: [templates/automation/](../../../../template
 - [ ] Tests in `automations/<name>/test/`; `test/conformance.test.ts` green
 - [ ] `npm run facts`, `npm run map`, committed, then `npm run verify` green on the committed tree
 - [ ] README.md's section for the automation updated in the same commit
-- [ ] Backend finding written: `node scripts/add-automation.mjs --template-id <name> --version <n> …`, for a backend session
+- [ ] After the merge: the Deploy job's summary shows `<name>` v`<n>` NEW (or UPDATE)

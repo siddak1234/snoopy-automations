@@ -908,18 +908,21 @@ is the steps below.
 3. Open a pull request here. CI builds, smoke-tests and scans every image, one per
    `automations/*/Dockerfile` (its List job reads them; there is no list to edit), and on
    merge publishes each by digest to GHCR, attests that digest, then tags it with the commit.
-4. Open a pull request adding the manifest to the platform repository's
-   `manifests/` directory, with the container's `.internal` alias and digest pin in
-   its `snoopy-backend/deploy/compose.prod.yml`. There is no registration endpoint, and the
-   platform's ADR-0020 decided there will not be one: `service.origin` is where
-   customer documents get sent, review is the authorization, and a pull request is
-   the only write path that carries one. The rules a manifest must meet beyond the
-   schema are in `contract/README.md`, in the validator's own words.
+4. Merge it: **the merge is the deploy** (the platform's ADR-0047, superseding ADR-0020 §1).
+   One pull request here and no backend pull request: CI's last job, Deploy, starts the
+   platform's Flow CD with the merge commit. The platform checks that commit, the image's
+   attestation and the manifest itself, runs its own validator on the manifest before any
+   container starts, then starts the version beside those it serves on both hosts,
+   smoke-tests it and registers it. Read the Deploy job's summary: each automation shows
+   NEW, UPDATE, SKIP, SUPERSEDED or REFUSED, and a red Deploy changed nothing served. There
+   is still no registration endpoint. The rules a manifest must meet beyond the schema are
+   in `contract/README.md`, in the validator's own words.
 5. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
    service account of its own for each version: one container per manifest version for
-   everything new (the platform's D2), and its `snoopy-backend/scripts/add-automation.mjs` refuses any
-   other origin. The platform gives that version's container the name as a network
-   alias, so it is reachable only on the compose network by construction.
+   everything new (the platform's D2), and the platform's validator
+   (`snoopy-backend/apps/catalog/src/check-manifest.ts`) refuses any other origin or
+   account. Each version runs as its own project on the platform's flow network, which
+   gives it the name as an alias, so it is reachable only there by construction.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually

@@ -1,6 +1,6 @@
 ---
 name: create-flow
-description: Use when the owner brings an idea for a new flow, in any form. One command from the idea to a live flow - at most five decisions, a spec and one words list the owner approves, lanes in parallel (three agents at most), one review each, the merge and release order, and what the pilot taught.
+description: Use when the owner brings an idea for a new flow, in any form. One command from the idea to a live flow - at most five decisions, a spec and one words list the owner approves, lanes in parallel (three agents at most), one review each, the merge order (the merge is the deploy), and what the pilot taught.
 ---
 
 # create-flow
@@ -84,11 +84,11 @@ production.
    against the words list and the other client's branch, for parity — the website's review found
    the app's gaps (Round 19, the website review's list for the app). Six fixes or fewer are made by hand; more go
    back to their lane once.
-6. **The merges and the release** (the session prepares each step; the owner merges and says go):
-   in the order of [templates/order.md](templates/order.md), written out for the owner with each
-   pull request's link once its required check is green on the head. The `pin-pr` and `release`
-   skills hold their own steps.
-7. **The screens** (the session; the owner's phone): once released, the website and the app read as
+6. **The merges** (the session prepares each step; the owner merges): in the order of
+   [templates/order.md](templates/order.md), written out for the owner with each pull request's
+   link once its required check is green on the head. Each merge is the deploy: the session reads
+   its run (the backend's CD, this repository's Deploy job), and no pin or release step follows.
+7. **The screens** (the session; the owner's phone): once deployed, the website and the app read as
    the spec and the words list do — the catalog card, the questions, the steps, a run's results, the
    email. The app on one headless simulator only with the owner's OK, or the owner's own TestFlight
    test. The owner's feedback from that test goes through the `feedback-intake` skill; each design or
