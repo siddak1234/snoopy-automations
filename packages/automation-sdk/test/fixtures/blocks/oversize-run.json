@@ -1,0 +1,21 @@
+{
+  "name": "oversize-run",
+  "about": "A run still too large once its lines are dropped",
+  "blockSetVersion": 1,
+  "blocks": [
+    {
+      "type": "text",
+      "text": "Recorded 230 invoices.",
+      "tone": "success"
+    },
+    {
+      "type": "text",
+      "text": "This is too long to show here.",
+      "style": "muted"
+    }
+  ],
+  "text": [
+    "Recorded 230 invoices.",
+    "This is too long to show here."
+  ]
+}

@@ -78,6 +78,61 @@
               "maxLength": 40
             }
           }
+        },
+        "pages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "flow": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "dashboard",
+                  "steps",
+                  "items"
+                ]
+              }
+            },
+            "item": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "tiles",
+                  "file",
+                  "add",
+                  "runs"
+                ]
+              }
+            },
+            "run": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "files",
+                  "outcome",
+                  "result"
+                ]
+              }
+            },
+            "file": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "viewer",
+                  "reading"
+                ]
+              }
+            }
+          }
         }
       }
     },

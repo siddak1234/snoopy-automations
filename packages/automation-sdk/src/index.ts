@@ -36,16 +36,52 @@ export type {
   StepOutcome,
   StepReport,
 } from './contract.js';
-export { CONNECTION_NONE, isManifest, readManifest, readManifests } from './manifest.js';
+export {
+  CONNECTION_NONE,
+  PAGE_PARTS,
+  isManifest,
+  readManifest,
+  readManifests,
+} from './manifest.js';
 export type {
   Manifest,
   ManifestConnection,
   ManifestItems,
+  ManifestPages,
   ManifestSetupField,
   ManifestStep,
   ManifestStepGroup,
   SetupControl,
 } from './manifest.js';
+export {
+  BLOCK_TONES,
+  EMITTED_BLOCK_TYPES,
+  TABLE_ALIGNS,
+  TEXT_STYLES,
+  TIMELINE_STATES,
+} from './block-types.js';
+export type {
+  BadgeBlock,
+  BlockBadge,
+  BlockTone,
+  EmittedBlock,
+  EmittedFileBlock,
+  EmittedLeaf,
+  LinkBlock,
+  ListBlock,
+  ListItem,
+  MetricBlock,
+  SectionBlock,
+  TableAlign,
+  TableBlock,
+  TableColumn,
+  TableRow,
+  TextBlock,
+  TextStyle,
+  TimelineBlock,
+  TimelineState,
+} from './block-types.js';
+export { BLOCK_LIMITS, boundedBlocks, isBlockUrl } from './blocks.js';
 export { RUN_DETAIL_LIMITS, boundedDetails } from './details.js';
 export type { RunDetail } from './details.js';
 export { isInvokeItem } from './item.js';

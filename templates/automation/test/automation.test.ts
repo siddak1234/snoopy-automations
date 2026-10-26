@@ -98,7 +98,39 @@ test('reads the file, extracts with the prompt, records through the provider, an
       recorded: true,
     },
     summary: 'Recorded DOC-1 automatically, within threshold',
+    blocks: [
+      {
+        type: 'metric',
+        items: [
+          { label: 'Amount', value: '$120.50' },
+          { label: 'Recorded', value: 'Yes', tone: 'success' },
+        ],
+      },
+      {
+        type: 'table',
+        columns: [{ title: 'Field' }, { title: 'Value' }],
+        rows: [
+          { cells: ['Reference', 'DOC-1'] },
+          { cells: ['Vendor', 'Contoso'] },
+          { cells: ['Decided', 'Automatically'] },
+        ],
+      },
+    ],
   });
+});
+
+test("what a person reads is sent as blocks, bounded: the model's words cut, or left empty", async () => {
+  const cells = async (vendor: string) => {
+    const result = await automation.execute(invoke(), platformWith({ vendor, amount: 12 }));
+    assert.ok(result.outcome === 'success');
+    const table = result.blocks?.find((block) => block.type === 'table');
+    assert.ok(table?.type === 'table');
+    return table.rows.map((row) => row.cells[1]);
+  };
+  assert.deepEqual(await cells('Contoso  \n Ltd'), ['DOC-1', 'Contoso Ltd', 'Automatically']);
+  assert.equal((await cells('V'.repeat(300)))[1], 'V'.repeat(200), 'a cell is cut at 200');
+  // Sent as written, the platform would refuse the result whole, and the run be unreportable.
+  assert.deepEqual(await cells('<b>Contoso</b>'), ['DOC-1', '', 'Automatically']);
 });
 
 test('the extraction asks for MODELS, the primary first, or names none and the platform default serves', async () => {
@@ -143,6 +175,10 @@ test('an amount above the threshold ends the run held, and the approval records 
   assert.equal(resumed.modelCalls.length, 0, 'the extraction is not repeated');
   assert.ok(result.outcome === 'success');
   assert.equal(result.output?.decidedBy, 'after approval');
+  const table = result.blocks?.find((block) => block.type === 'table');
+  assert.deepEqual(table?.type === 'table' && table.rows.at(-1), {
+    cells: ['Decided', 'After approval'],
+  });
 });
 
 test('a completion that is not the fields the schema asked for fails the run without quoting it', async () => {
