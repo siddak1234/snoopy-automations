@@ -11,6 +11,7 @@ import type {
   ProviderRequest,
   RunResult,
 } from './contract.js';
+import type { EmittedBlock } from './block-types.js';
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
 import type { Manifest } from './manifest.js';
@@ -120,6 +121,8 @@ export type StepResult =
       state: JsonObject;
       /** The documents read so far, as the held result shows them (platform ADR-0039). */
       documents?: readonly RunDocument[];
+      /** What a person reads of the held run (platform ADR-0048), bounded by the client. */
+      blocks?: readonly EmittedBlock[];
     };
 
 export type Step = (context: StepContext) => Promise<StepResult>;
@@ -136,8 +139,9 @@ export interface AutomationDefinition {
    * The success result once the pipeline has run: the output, the one-line summary, the
    * `details` a person reads beside it (platform ADR-0037), the `documents` the run read
    * (platform ADR-0039), and the `title`, `score`, `verdict` and `sections` of a run of a flow with items
-   * (platform ADR-0046; on an item run, `output` is the item's reading) — each bounded by the
-   * client.
+   * (platform ADR-0046; on an item run, `output` is the item's reading) — or, in place of `sections`
+   * and `details`, the `blocks` a person reads (platform ADR-0048; `block-types.ts`) — each bounded
+   * by the client.
    */
   result: (
     state: JsonObject,
@@ -151,6 +155,7 @@ export interface AutomationDefinition {
     score?: number;
     verdict?: RunVerdict;
     sections?: readonly RunSection[];
+    blocks?: readonly EmittedBlock[];
   };
   /**
    * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):
@@ -189,6 +194,7 @@ export interface Automation {
  * an approver reads them; `reason` is the result's line for the run list and
  * defaults to `heldReason`; `state` comes back verbatim in the continuation an
  * approval mints (FR-17), and the runner resumes at the next step with it.
+ * `documents` and `blocks` are what the held run's page shows meanwhile.
  */
 export function held(input: {
   summary: string;
@@ -196,6 +202,7 @@ export function held(input: {
   reason?: string;
   state: JsonObject;
   documents?: readonly RunDocument[];
+  blocks?: readonly EmittedBlock[];
 }): StepResult {
   return {
     outcome: 'held',
@@ -204,6 +211,7 @@ export function held(input: {
     reason: input.reason ?? input.heldReason,
     state: input.state,
     ...(input.documents === undefined ? {} : { documents: input.documents }),
+    ...(input.blocks === undefined ? {} : { blocks: input.blocks }),
   };
 }
 

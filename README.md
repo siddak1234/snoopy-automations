@@ -152,6 +152,22 @@ startup an item step with no code and an id declared in both pipelines; `itemFix
 `declaredItemSteps` in `@autom8x/automation-sdk/testing` build an item for a suite and read a
 manifest's item steps.
 
+**What a person reads, as blocks** (the platform's ADR-0048, Round 21). A success's `result`, or a
+`held()` step, may return `blocks`: up to 60 of the nine types an automation may send — text,
+metric, badge, table, list, section (one level deep), file (one of the job's uploads, by its
+artifact id), link (https only) and timeline — which the platform draws in the order sent, in the
+`result` part of the run's page (on an item run, as the item's reading). The manifest's
+`display.pages` orders the page's parts (`PAGE_PARTS`); a flow that declares none is drawn in
+today's order. The types are `packages/automation-sdk/src/block-types.ts`; `boundedBlocks`
+(`packages/automation-sdk/src/blocks.ts`, at `BLOCK_LIMITS`, the platform's numbers) cuts each
+string whole at its bound and leaves out what the platform would refuse — a tag-shaped or
+control character, half a surrogate pair, a url that is not https or names a user, a file that is
+no artifact id, `questions`, `open`, a section in a section, past 60 blocks, 300 in all or 96 KiB
+— rather than the whole result being refused. `boundedResult` applies it to every result it
+sends, and refuses `blocks` beside `sections` or `details` before sending, as the platform does
+(the rules, in its words: [contract/README.md](contract/README.md)). The template sends its
+readout this way (`templates/automation/src/automation.ts`).
+
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
@@ -892,6 +908,13 @@ included, before any code: `/create-flow`
 2026-10-25, the platform's BUILD-PLAN 29.0.5; linked into the workspace), whose spec becomes
 `automations/<templateId>/README.md`. Its build
 is the steps below.
+
+**A flow is one pull request here** (the platform's BUILD-PLAN 29.3): no backend pull request and
+no change to the website or the app, which draw every flow from its manifest and its blocks.
+Only two things need the platform first: a vendor it has no provider for — one provider file in
+`snoopy-backend/providers/`, with the owner's credentials, beside this pull request — and a block,
+page part, question form or target it does not have, which is a platform change (its ADR-0048
+decision 12): `/create-flow` stops there.
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
    with your templateId everywhere (`package.json`, `Dockerfile`, `src/`). Give it a

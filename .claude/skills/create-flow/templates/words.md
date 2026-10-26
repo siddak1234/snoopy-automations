@@ -21,16 +21,20 @@ spec's top.
 
 ## 1. The flow's words — in the spec
 
-| Screen                                     | The spec's section                                 |
-| ------------------------------------------ | -------------------------------------------------- |
-| The catalog card                           | 1 (name, one line, department, icon)               |
-| Starting a run, and an item's upload       | 2 (run inputs; items: words, fields, file)         |
-| Setting it up                              | 5 (the questions)                                  |
-| The numbered steps, and the steps of a run | 6                                                  |
-| A run's results                            | 7 (title, score, summary, sections, details, held) |
-| When it fails                              | 8                                                  |
+| Screen                                     | The spec's section                         |
+| ------------------------------------------ | ------------------------------------------ |
+| The catalog card                           | 1 (name, one line, department, icon)       |
+| Starting a run, and an item's upload       | 2 (run inputs; items: words, fields, file) |
+| Setting it up                              | 5 (the questions)                          |
+| The numbered steps, and the steps of a run | 6                                          |
+| A run's results                            | 7 (title, score, summary, blocks, held)    |
+| When it fails                              | 8                                          |
 
-## 2. The clients' own words — only for what section 10 adds
+## 2. The clients' own words — none for a flow
+
+Since `/create-flow` v3 a flow adds no screen and no client words: the clients draw it from its
+manifest and its blocks. A screen or refusal of their own is a platform change (spec section 10:
+stop), and its words are written here, in that round, in the shape below.
 
 | Screen | Where on it | The words, with {placeholders} | Shown when | Who sees it |
 | ------ | ----------- | ------------------------------ | ---------- | ----------- |
@@ -48,7 +52,9 @@ Each new screen has a row for each of these, or says why it needs none:
 
 ## 3. The layout
 
-One sketch per new screen, the same for both clients: what is drawn, in which order, which parts
+A flow's layout is its manifest's `display.pages` and the order of its blocks (spec section 7);
+what follows is for a platform round's new screen. One sketch per new screen, the same for both
+clients: what is drawn, in which order, which parts
 only owners and admins see, what is open and what collapsed, and the order the platform gives that
 the clients keep (a ranking is drawn as the platform answers it, never re-sorted). Start each sketch
 from the clients' design standards (`snoopy-mobile/DESIGN-CONTRACT.md`, `snoopy/docs/ARCHITECTURE.md`), which

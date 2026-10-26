@@ -1,9 +1,11 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `d0e4201`, the platform's `main` after its #242
-squash-merged Round 19's build 28 contract, verdict words and a run's verdict (2026-10-25;
-"Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
+(`snoopy-backend`, private) at commit `1e01827`, the head of its #250, Round 21's blocks and a
+flow's pages (its ADR-0048), not yet merged; the session re-pins it to the merge commit, whose
+tree is the same ("Refreshed 2026-10-26, blocks" below). Before it, `d0e4201`, the platform's
+`main` after its #242 squash-merged Round 19's build 28 contract, verdict words and a run's
+verdict (2026-10-25; "Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
 its #239 squash-merged Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed
 2026-10-24" below). Before it,
 `d371251`, the platform's `main` after its #231 squash-merged Round 18's 27.2 (2026-10-21):
@@ -321,6 +323,31 @@ with `cmp`). Re-pinned 2026-10-25 to `d0e4201`, #242's merge: all eight byte-ide
 carries it, the live platform refuses a manifest declaring `verdictWords` and a result carrying
 `verdict`, so `candidate-reviewer` v2 is registered only by the platform's pin change after it.
 
+Refreshed 2026-10-26, blocks, from the head of the platform's #250, `1e01827` (Round 21, its
+BUILD-PLAN 29.1.1–29.1.2 and ADR-0048: ten blocks, and the pages a flow's manifest orders), not
+yet merged — as `cf17dbb` was above, this repository's half built beside the platform's. Two files
+moved, additively:
+
+- `automation-run-result.json`: the success and held branches' optional `blocks` (`$defs`), 1 to 60
+  of the nine types an automation may send — `text`, `metric`, `badge`, `table`, `list`,
+  `section` (one level deep: its 1–40 `blocks` are `$defs.emittedLeaf`, every type but a section),
+  `file` (by `fileId`, an artifact id), `link` and `timeline`; never `questions` and never `open`,
+  which are the platform's. Each string's length, and the characters it may hold, is the schema's;
+  so is a url's `https://`. The SDK's types are `packages/automation-sdk/src/block-types.ts`, and
+  its `boundedBlocks` (`packages/automation-sdk/src/blocks.ts`) holds what an automation returns to
+  the rules below, which `packages/automation-sdk/test/blocks-bounds.test.ts` bites one by one.
+- `automation-manifest.json`: `display` gains the optional `pages` — `flow`, `item`, `run` and
+  `file`, each an ordered list of distinct parts from its closed set (flow: dashboard, steps,
+  items; item: tiles, file, add, runs; run: files, outcome, result; file: viewer, reading). The SDK
+  types it (`ManifestPages`, `PAGE_PARTS` in `packages/automation-sdk/src/manifest.ts`). No manifest
+  here declares one: the platform draws today's flows in their default order (its ADR-0048 §7), so
+  Invoice Processing and Resume Screening keep their versions.
+
+The other six files are byte-identical to `d0e4201`'s, and all eight to `1e01827`'s (each checked
+with `cmp`). Until #250 merges — its merge is its deploy (ADR-0047) — the live platform refuses a
+result carrying `blocks` and a manifest declaring `pages`; this copy is re-pinned to the merge
+commit then, its bytes unchanged unless a review changed them.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -328,9 +355,11 @@ directory's example manifest the same way.
 ## What the platform refuses beyond the schema
 
 The schema says everything a JSON Schema can. The platform's `validateManifest`
-enforces these further rules at registration, quoted in its own refusal words so a
-refusal is read here before it is received. This section is vendored from the
-platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds named as "N" are its `LIMITS`.
+enforces these further rules at registration, and its result callback those for a result's
+blocks, quoted in its own refusal words so a refusal is read here before it is received. This
+section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
+named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its
+validator and its ADR-0048 decision 3 instead: its README names neither yet (filed with this pin).
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
@@ -452,6 +481,40 @@ is a display string of at most 40 characters ("Text", above); of these only a bl
 be empty", is one the schema cannot say. `test/manifest-items.ts` ports the rules here the schema
 cannot say, `test/manifest-rules.ts` the `artifact` field's two rules above, and
 `test/manifest-items.test.ts` bites each.
+
+**A flow's pages** (ADR-0048 decision 5; its `pages.ts` at `1e01827`, in its words) —
+`display.pages` "must be an object", and a key besides the four "is not a page: flow, item, run,
+file"; a page "must list at least one part", each "must be one of:" its own page's parts and none
+"is listed more than once" (the schema says these). Beyond the schema: a part of the item page, or
+the flow page's `items`, "needs items: the flow declares none"; `tiles` "needs items.verdictWords:
+no tile could be named"; the run page "must hold outcome: no flow can leave it out", and `result`
+likewise, and the item page `add` and `runs`. A page left out is drawn in today's order.
+
+**A result's blocks** (ADR-0048 decision 3; its `blocks-validation.ts` at `1e01827`, in its words;
+each a 400 naming its path, `blocks[2].items[0].url must be an https URL`) — `blocks` "must list 1
+to 60" and "must hold at most 300 blocks in all", a section's blocks counted, and "must be at most
+98304 bytes as JSON" (96 KiB of UTF-8, so blocks and 128 KiB of documents fit the 256 KiB
+callback); a section's `blocks` "must list 1 to 40", and a section in a section's `type` "must not
+be a section: sections are one level deep". A block, a row or an item "must be an object"; a `type`
+"must be one of: text, metric, badge, table, list, section, file, link, timeline"; `questions`, or
+an `open` key anywhere, "is the platform's"; any other key "is not an accepted field", and a
+required one missing "is required". Lists: metric `items` 1 to 4, table `columns` 2 to 3 and `rows`
+1 to 200, list `items` 0 to 100, timeline `items` 1 to 50, each "must list N to M"; a row's `cells`
+"must hold N cells, one per column". Strings "must be 1 to N characters": a text's 2,000 and a list
+item's `text` 600, line breaks kept; a title 120; a subtitle, note, cell or list's `empty` 200; a
+label, value, badge or lead 40 — a table's later cells may be empty, "must be at most 200
+characters". Every string: "must not contain a NUL character or half of a surrogate pair", "must
+not contain a control character" (a tab and a line break aside), "must be one line" where it is
+one, and "must not contain anything shaped like an HTML tag" (`<` then a letter, `!`, `/` or `?`).
+A url, at most 2,048, "must be an https URL" (parsed, `https:`, a host) and "must not name a user
+or a password"; a `fileId` "must be an artifact id"; a tone, style, align or state "must be one of:"
+its values; a flag "must be true or false". The schema cannot say the 300, the bytes, the cells per
+column, a half surrogate, the url's parse or its user. At the result callback (its
+`routes-callbacks.ts`): "blocks is not allowed with sections: send one or the other", and with
+`details` likewise — a run's page is drawn from one or the other — and "blocks is not allowed when
+the outcome is failed". The SDK refuses blocks beside `sections` or `details` before sending, in
+those words, and `boundedBlocks` cuts or leaves out the rest (`README.md`, "What an automation
+looks like").
 
 **Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
 scopes per connection each "must contain at most N entries".

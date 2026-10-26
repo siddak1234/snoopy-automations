@@ -248,11 +248,12 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
             outcome: 'held',
             held: { stepId, reason: outcome.reason, state: outcome.state },
             ...(outcome.documents === undefined ? {} : { documents: outcome.documents }),
+            ...(outcome.blocks === undefined ? {} : { blocks: outcome.blocks }),
           };
       }
     }
 
-    const { output, summary, details, documents, title, score, verdict, sections } = result(
+    const { output, summary, details, documents, title, score, verdict, sections, blocks } = result(
       state,
       request,
     );
@@ -266,6 +267,7 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       ...(score === undefined ? {} : { score }),
       ...(verdict === undefined ? {} : { verdict }),
       ...(sections === undefined ? {} : { sections }),
+      ...(blocks === undefined ? {} : { blocks }),
     };
   }
 
