@@ -20,8 +20,9 @@ this lane builds. Grep a file over 100 KB; never read it whole.
 `contract/README.md`): the blocks (`automation-run-result.json`, `$defs.emittedBlock`), the page
 parts (`automation-manifest.json`, `display.pages`) and, in `contract/README.md`, the rules beyond
 the schema. Never edit it but to re-vendor. A shape the flow needs that is not there — a block, a
-page part, a question form, a target, a control — is a finding in the summary and the end of the
-lane: a platform change (the platform's ADR-0048 decision 12), never a guess and never an edit.
+page part, a question form or a target (the platform's ADR-0048 decision 12), or a control (a
+platform round under v3: a flow has no platform lane, 29.3.2) — is a finding in the summary and
+the end of the lane: a platform change, never a guess and never an edit.
 The lane edits no other repository.
 
 ## Build

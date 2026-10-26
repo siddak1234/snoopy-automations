@@ -8,7 +8,7 @@ import { boundedScore, boundedSections, boundedTitle, boundedVerdict } from './s
 
 /**
  * The most bytes the result callback's body may take: the platform reads at most 256 KiB of it
- * (`snoopy-backend/apps/runs/src/routes-callbacks.ts:47`, `REQUEST_BODY_LIMIT_BYTES`). The one
+ * (`snoopy-backend/apps/runs/src/routes-callbacks.ts:61`, `REQUEST_BODY_LIMIT_BYTES`). The one
  * size guard a result has — never a count of documents (the owner's AM1 and AM7, 2026-10-15: "no
  * limits other than size").
  */

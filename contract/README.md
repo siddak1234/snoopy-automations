@@ -1,9 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `1e01827`, the head of its #250, Round 21's blocks and a
-flow's pages (its ADR-0048), not yet merged; the session re-pins it to the merge commit, whose
-tree is the same ("Refreshed 2026-10-26, blocks" below). Before it, `d0e4201`, the platform's
+(`snoopy-backend`, private) at commit `388891e`, the platform's `main` after its #250
+squash-merged Round 21's blocks and a flow's pages (its ADR-0048; 2026-10-26, "Refreshed
+2026-10-26, blocks" below). Before it, `d0e4201`, the platform's
 `main` after its #242 squash-merged Round 19's build 28 contract, verdict words and a run's
 verdict (2026-10-25; "Refreshed 2026-10-24, build 28" below). Before it, `2d93d99`, the platform's `main` after
 its #239 squash-merged Round 19's contract, a flow's items (2026-10-24; its ADR-0046; "Refreshed
@@ -323,9 +323,10 @@ with `cmp`). Re-pinned 2026-10-25 to `d0e4201`, #242's merge: all eight byte-ide
 carries it, the live platform refuses a manifest declaring `verdictWords` and a result carrying
 `verdict`, so `candidate-reviewer` v2 is registered only by the platform's pin change after it.
 
-Refreshed 2026-10-26, blocks, from the head of the platform's #250, `1e01827` (Round 21, its
-BUILD-PLAN 29.1.1–29.1.2 and ADR-0048: ten blocks, and the pages a flow's manifest orders), not
-yet merged — as `cf17dbb` was above, this repository's half built beside the platform's. Two files
+Refreshed 2026-10-26, blocks, from the platform's `main` after its #250 squash-merged, `388891e`
+(Round 21, its BUILD-PLAN 29.1.1–29.1.2 and ADR-0048: ten blocks, and the pages a flow's manifest
+orders). First copied from #250's head, `1e01827`, beside the platform's half, as `cf17dbb` was
+above; the merge commit's tree is that head's (`dd74a58`), so only the commit moved. Two files
 moved, additively:
 
 - `automation-run-result.json`: the success and held branches' optional `blocks` (`$defs`), 1 to 60
@@ -345,10 +346,9 @@ moved, additively:
   here declares one: the platform draws today's flows in their default order (its ADR-0048 §7), so
   Invoice Processing and Resume Screening keep their versions.
 
-The other six files are byte-identical to `d0e4201`'s, and all eight to `1e01827`'s (each checked
-with `cmp`). Until #250 merges — its merge is its deploy (ADR-0047) — the live platform refuses a
-result carrying `blocks` and a manifest declaring `pages`; this copy is re-pinned to the merge
-commit then, its bytes unchanged unless a review changed them.
+The other six files are byte-identical to `d0e4201`'s, and all eight to `388891e`'s (each checked
+with `cmp`). #250's merge was its deploy (ADR-0047), so the live platform takes a result carrying
+`blocks` and a manifest declaring `pages`.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
@@ -484,7 +484,7 @@ be empty", is one the schema cannot say. `test/manifest-items.ts` ports the rule
 cannot say, `test/manifest-rules.ts` the `artifact` field's two rules above, and
 `test/manifest-items.test.ts` bites each.
 
-**A flow's pages** (ADR-0048 decision 5; its `pages.ts` at `1e01827`, in its words) —
+**A flow's pages** (ADR-0048 decision 5; its `pages.ts` at `388891e`, in its words) —
 `display.pages` "must be an object", and a key besides the four "is not a page: flow, item, run,
 file"; a page "must list at least one part", each "must be one of:" its own page's parts and none
 "is listed more than once" (the schema says these). Beyond the schema: a part of the item page, or
@@ -492,7 +492,7 @@ the flow page's `items`, "needs items: the flow declares none"; `tiles` "needs i
 no tile could be named"; the run page "must hold outcome: no flow can leave it out", and `result`
 likewise, and the item page `add` and `runs`. A page left out is drawn in today's order.
 
-**A result's blocks** (ADR-0048 decision 3; its `blocks-validation.ts` at `1e01827`, in its words;
+**A result's blocks** (ADR-0048 decision 3; its `blocks-validation.ts` at `388891e`, in its words;
 each a 400 naming its path, `blocks[2].items[0].url must be an https URL`) — `blocks` "must list 1
 to 60" and "must hold at most 300 blocks in all", a section's blocks counted, and "must be at most
 98304 bytes as JSON" (96 KiB of UTF-8, so blocks and 128 KiB of documents fit the 256 KiB
