@@ -887,9 +887,10 @@ MetaData.CreateTime` on every transaction), and
 ## Adding an automation
 
 A new flow starts from the owner's idea, written down as a spec the owner approves, words
-included, before any code: `/create-flow`, the shared kit's skill
-(`snoopy-backend/.claude/skills/create-flow/`, installed to the workspace and run from there, the
-platform's BUILD-PLAN 28.2.5), whose spec becomes `automations/<templateId>/README.md`. Its build
+included, before any code: `/create-flow`
+([.claude/skills/create-flow/](.claude/skills/create-flow/SKILL.md), this repository's since
+2026-10-25, the platform's BUILD-PLAN 29.0.5; linked into the workspace), whose spec becomes
+`automations/<templateId>/README.md`. Its build
 is the steps below.
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
