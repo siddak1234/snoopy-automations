@@ -44,7 +44,28 @@ export interface Manifest {
    * schema are for the platform and the clients, and are validated by the published schema.
    */
   items?: ManifestItems;
+  /** What a flow shows, as far as an automation reads it: the order of its pages' parts. */
+  display?: { pages?: ManifestPages };
 }
+
+/**
+ * The parts of each page a manifest's `display.pages` may order (platform ADR-0048 decision 5):
+ * a closed set, the schema's `enum`s. Each part on its own page and used once; a run page holds
+ * `outcome` and `result`, an item page `add` and `runs`; item parts need `items`, and `tiles`
+ * `items.verdictWords` (the rules beyond the schema: `contract/README.md`). A page left out is
+ * drawn in today's order. Inside `result`, the blocks keep the order the automation sent them.
+ */
+export const PAGE_PARTS = {
+  flow: ['dashboard', 'steps', 'items'],
+  item: ['tiles', 'file', 'add', 'runs'],
+  run: ['files', 'outcome', 'result'],
+  file: ['viewer', 'reading'],
+} as const;
+
+/** A manifest's `display.pages`: for each page it orders, its parts in order. */
+export type ManifestPages = {
+  readonly [Page in keyof typeof PAGE_PARTS]?: readonly (typeof PAGE_PARTS)[Page][number][];
+};
 
 /**
  * A flow's items as the runner reads them: the item run's own steps — the run that reads a new

@@ -1,0 +1,148 @@
+{
+  "name": "emitted-all-nine",
+  "about": "A run that sent one of each of the nine sendable types",
+  "blockSetVersion": 1,
+  "blocks": [
+    {
+      "type": "text",
+      "text": "What this run found",
+      "style": "label"
+    },
+    {
+      "type": "text",
+      "text": "Two of three checks passed.",
+      "tone": "warning"
+    },
+    {
+      "type": "metric",
+      "items": [
+        {
+          "label": "Checked",
+          "value": "3"
+        },
+        {
+          "label": "Passed",
+          "value": "2",
+          "tone": "success"
+        }
+      ]
+    },
+    {
+      "type": "badge",
+      "text": "Needs a look",
+      "tone": "warning"
+    },
+    {
+      "type": "table",
+      "columns": [
+        {
+          "title": "Check"
+        },
+        {
+          "title": "Result",
+          "align": "end"
+        }
+      ],
+      "rows": [
+        {
+          "cells": [
+            "Totals add up",
+            "Yes"
+          ]
+        },
+        {
+          "cells": [
+            "Date present",
+            "No"
+          ],
+          "note": "Read from the header."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "title": "Seller name",
+          "subtitle": "Line 1",
+          "badge": {
+            "text": "Found",
+            "tone": "success"
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "How it was read",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Read page by page."
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "title": "The upload",
+      "open": {
+        "target": "run-file",
+        "runId": "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+        "fileId": "0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c"
+      },
+      "file": {
+        "id": "0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c",
+        "filename": "upload.pdf",
+        "contentType": "application/pdf",
+        "format": "PDF",
+        "sizeBytes": 48213,
+        "pages": 3
+      }
+    },
+    {
+      "type": "link",
+      "title": "Where the rules live",
+      "url": "https://help.example.test/rules"
+    },
+    {
+      "type": "timeline",
+      "items": [
+        {
+          "title": "Read",
+          "state": "done"
+        },
+        {
+          "title": "Check",
+          "sub": "One left",
+          "state": "working"
+        }
+      ]
+    }
+  ],
+  "text": [
+    "What this run found",
+    "Two of three checks passed.",
+    "3",
+    "Checked",
+    "2",
+    "Passed",
+    "Needs a look",
+    "Check",
+    "Result",
+    "Totals add up",
+    "Yes",
+    "Date present",
+    "No",
+    "Read from the header.",
+    "Seller name",
+    "Found",
+    "Line 1",
+    "How it was read",
+    "The upload",
+    "Where the rules live",
+    "help.example.test",
+    "Read",
+    "Check",
+    "One left"
+  ]
+}

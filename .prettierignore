@@ -6,6 +6,10 @@ dist
 # "changed" about files that did not, and the diff is the drift check.
 contract/schemas
 
+# The platform's block fixtures, copied byte for byte from its
+# `packages/contracts/fixtures/blocks/` (ADR-0048) so `cmp` is their drift check.
+packages/automation-sdk/test/fixtures/blocks
+
 # The shared kit (the engineering standard's section 0): byte-identical in all four
 # repositories, canonical in snoopy-backend, so no repository's formatter may touch it.
 .claude/hooks/

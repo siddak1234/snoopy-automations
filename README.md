@@ -152,6 +152,20 @@ startup an item step with no code and an id declared in both pipelines; `itemFix
 `declaredItemSteps` in `@autom8x/automation-sdk/testing` build an item for a suite and read a
 manifest's item steps.
 
+**What a person reads, as blocks** (the platform's ADR-0048, Round 21). A success's `result`, or a
+`held()` step, may return `blocks` of the nine types an automation may send — text, metric, badge,
+table, list, section, file (one of the job's uploads), link and timeline — which the platform draws
+in the order sent, in the `result` part of the run's page (on an item run, as the item's reading).
+The manifest's `display.pages` orders the page's parts (`PAGE_PARTS`); a flow that declares none is
+drawn in today's order. The types are `packages/automation-sdk/src/block-types.ts`; `boundedBlocks`
+(`packages/automation-sdk/src/blocks.ts`, at `BLOCK_LIMITS`, the platform's numbers) cuts each
+string whole at its bound and leaves out what the platform would refuse, rather than the whole
+result being refused. `boundedResult` applies it to every result it sends, and refuses `blocks`
+beside `sections` or `details` before sending, as the platform does. The limits and what is
+refused, in the platform's words:
+[contract/README.md](contract/README.md#what-the-platform-refuses-beyond-the-schema), "A result's
+blocks". The template sends its readout this way (`templates/automation/src/automation.ts`).
+
 ## Model calls
 
 A step sends a REGISTERED prompt module by capability — `platform.callModel(prompt,
@@ -553,7 +567,8 @@ lines a person reads beside it — no limit but the callback body's 256 KiB
 (`RESULT_BODY_LIMIT_BYTES`; AM1, AM7): past it, the SDK's `boundedResult` leaves out a success's
 `output`, and sends a held run's documents without their lines (`lineItems` empty,
 `lineItemsComplete` false), so the run page and the waiting email still show each one's seller,
-number, totals and status, leaving the documents out only when even that does not fit. It never
+number, totals and status, leaving the documents out only when even that does not fit, and then,
+still past it, its `blocks` whole (never cut to fit), documents or none. It never
 leaves out the held state, which carries every read for the continuation's result, so the reads
 themselves are the bound: measured with lines whose descriptions run to about 60 characters, a
 file of 2,000 lines is sent, and one of 2,100 is refused, held or not, and the run fails. A NUL
@@ -892,6 +907,15 @@ included, before any code: `/create-flow`
 2026-10-25, the platform's BUILD-PLAN 29.0.5; linked into the workspace), whose spec becomes
 `automations/<templateId>/README.md`. Its build
 is the steps below.
+
+**A flow is one pull request here** (the platform's BUILD-PLAN 29.3): no backend pull request and
+no change to the website or the app, which draw every flow from its manifest and its blocks once
+the clients' block renderers ship (the platform's BUILD-PLAN 29.1.3); until then a flow that sends
+blocks waits ([`/create-flow`'s order.md](.claude/skills/create-flow/templates/order.md), the hold).
+Only two things need the platform first: a vendor it has no provider for — one provider file in
+`snoopy-backend/providers/`, with the owner's credentials, beside this pull request — and a block,
+page part, question form or target it does not have, which is a platform change (its ADR-0048
+decision 12): `/create-flow` stops there.
 
 1. Copy `templates/automation` to `automations/<templateId>` and replace `example`
    with your templateId everywhere (`package.json`, `Dockerfile`, `src/`). Give it a

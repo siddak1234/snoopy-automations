@@ -14,6 +14,7 @@
  * platform refuses one it does not accept rather than ignoring it.
  */
 
+import type { EmittedBlock } from './block-types.js';
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
 import { isInvokeItem, type InvokeItem } from './item.js';
@@ -120,7 +121,8 @@ export type RunResult =
   // documents the run read from its file, one object each, kept with the run, shown on the one-run
   // read and downloadable as a JSON file — on a success and on a held run, never on a failed one.
   // `title`, `score` and `sections` (its ADR-0046) name, rank and show a run of a flow with items,
-  // and `verdict` (Round 19, build 28) is what its item counts it as (`sections.ts`).
+  // and `verdict` (Round 19, build 28) is what its item counts it as (`sections.ts`). `blocks` (its
+  // ADR-0048) are what a person reads, never beside `sections` or `details` (`block-types.ts`).
   | {
       outcome: 'success';
       output?: JsonObject;
@@ -131,11 +133,13 @@ export type RunResult =
       score?: number;
       verdict?: RunVerdict;
       sections?: readonly RunSection[];
+      blocks?: readonly EmittedBlock[];
     }
   | {
       outcome: 'held';
       held: { stepId: string; reason: string; state: JsonObject };
       documents?: readonly RunDocument[];
+      blocks?: readonly EmittedBlock[];
     }
   // `retryState` was published here and withdrawn by the platform on 2026-09-08
   // (§12.1 #84): nothing read it, and the platform now refuses it as undeclared.

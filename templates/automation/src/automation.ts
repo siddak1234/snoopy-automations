@@ -1,12 +1,14 @@
 import { fileURLToPath } from 'node:url';
 
 import {
+  boundedBlocks,
   defineAutomation,
   held,
   loadPrompts,
   readJsonCompletion,
   truncateText,
   type Automation,
+  type EmittedBlock,
   type InvokeRequest,
   type JsonObject,
   type Manifest,
@@ -22,7 +24,8 @@ import {
  * a versioned prompt, ends held above a configured threshold, acts on the provider
  * through the provider callback, and sends its outcome from the platform. The
  * models the extraction asks for are `MODELS`, beside the step (README, "Pick a
- * model").
+ * model"). What a person reads of a run is its summary and its `blocks`
+ * (`readout`, below), which the platform draws on the run's page.
  */
 export const TEMPLATE_ID = 'example';
 
@@ -178,17 +181,50 @@ export function define(manifests: readonly Manifest[]): Automation {
     // row. `notify` catches its own failure, so a policy there would never fire.
     // `receive` only reads, and is where a policy is safe:
     //   retry: { receive: { attempts: 2, backoffMs: 10_000 } },
-    result: (state, request) => ({
-      output: {
-        reference: state.reference,
-        vendor: state.vendor,
-        amount: state.amount,
-        decidedBy: decisionOf(request),
-        recorded: state.recorded === true,
-      },
-      summary: `Recorded ${String(state.reference)} ${decisionOf(request)}`,
-    }),
+    result: (state, request) => {
+      const blocks = boundedBlocks(readout(state, request));
+      return {
+        output: {
+          reference: state.reference,
+          vendor: state.vendor,
+          amount: state.amount,
+          decidedBy: decisionOf(request),
+          recorded: state.recorded === true,
+        },
+        summary: `Recorded ${String(state.reference)} ${decisionOf(request)}`,
+        ...(blocks === undefined ? {} : { blocks }),
+      };
+    },
   });
+}
+
+/**
+ * What a person reads of the run (platform ADR-0048): a figure and the fields it was recorded
+ * with, in the order the page draws them. The vendor is a model's words, so `boundedBlocks` cuts
+ * or leaves out what the platform would refuse — a long name cut whole, a tag-shaped one left
+ * empty — rather than the whole result being refused.
+ */
+function readout(state: JsonObject, request: InvokeRequest): EmittedBlock[] {
+  return [
+    {
+      type: 'metric',
+      items: [
+        { label: 'Amount', value: format(Number(state.amount)) },
+        state.recorded === true
+          ? { label: 'Recorded', value: 'Yes', tone: 'success' }
+          : { label: 'Recorded', value: 'No', tone: 'warning' },
+      ],
+    },
+    {
+      type: 'table',
+      columns: [{ title: 'Field' }, { title: 'Value' }],
+      rows: [
+        { cells: ['Reference', String(state.reference)] },
+        { cells: ['Vendor', String(state.vendor)] },
+        { cells: ['Decided', request.continuation ? 'After approval' : 'Automatically'] },
+      ],
+    },
+  ];
 }
 
 function decisionOf(request: InvokeRequest): string {
