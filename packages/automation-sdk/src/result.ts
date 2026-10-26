@@ -43,8 +43,9 @@ function refuseBeside(result: { sections?: unknown; details?: unknown }): void {
  * approval and carries every read the continuation's result sends: it first sends each document
  * without its lines (`lineItems` empty, `lineItemsComplete` false), so the run page and the
  * waiting email still show each one's seller, number, totals and status, and only when even that
- * does not fit leaves out its `documents` (its blocks, within 96 KiB, stay). A state that alone
- * passes the limit cannot be sent.
+ * does not fit leaves out its `documents`. If the body is still past the limit — with documents or
+ * none — it then leaves out its `blocks` whole, as a success leaves out its `output`: never cut to
+ * fit. A state that alone passes the limit cannot be sent.
  */
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
@@ -85,20 +86,24 @@ export function boundedResult(result: RunResult): RunResult {
         ...(kept === undefined ? {} : { documents: kept }),
         ...(drawn === undefined ? {} : { blocks: drawn }),
       };
-      if (bounded.documents === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
-        return bounded;
+      if (bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) return bounded;
+      let fitted = bounded;
+      if (bounded.documents !== undefined) {
+        const withoutLines: Extract<RunResult, { outcome: 'held' }> = {
+          ...bounded,
+          documents: bounded.documents.map((document) => ({
+            ...document,
+            lineItems: [],
+            lineItemsComplete: false,
+          })),
+        };
+        if (bodyBytes(withoutLines) <= RESULT_BODY_LIMIT_BYTES) return withoutLines;
+        const { documents: _documents, ...withoutDocuments } = bounded;
+        fitted = withoutDocuments;
+        if (bodyBytes(fitted) <= RESULT_BODY_LIMIT_BYTES) return fitted;
       }
-      const withoutLines: Extract<RunResult, { outcome: 'held' }> = {
-        ...bounded,
-        documents: bounded.documents.map((document) => ({
-          ...document,
-          lineItems: [],
-          lineItemsComplete: false,
-        })),
-      };
-      if (bodyBytes(withoutLines) <= RESULT_BODY_LIMIT_BYTES) return withoutLines;
-      const { documents: _documents, ...withoutDocuments } = bounded;
-      return withoutDocuments;
+      const { blocks: _blocks, ...withoutBlocks } = fitted;
+      return withoutBlocks;
     }
     case 'failed':
       return { ...result, failureReason: oneLine(result.failureReason, 'failureReason') };

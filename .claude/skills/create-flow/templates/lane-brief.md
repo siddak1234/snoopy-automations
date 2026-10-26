@@ -1,8 +1,9 @@
 # Brief — snoopy-automations lane: <the flow> (Round <n>)
 
 The fixed parts of the flow's brief (`/create-flow` v3: one builder, one review, one pull request);
-the session fills the angle brackets and writes the Build section. The `build-round` workflow hands
-the brief to its lane by path, at `<runDir>/brief-snoopy-automations.md`. A new vendor's provider
+the `build-round` workflow's design stage fills the angle brackets and writes the Build section, and
+the workflow hands the brief to its lane and its reviewer by path, at
+`<runDir>/brief-snoopy-automations.md`. A new vendor's provider
 file is the session's own `snoopy-backend` lane before it (order.md, step 1): one
 `providers/<id>.json`, its test and the records, no schema and no client change.
 
@@ -46,6 +47,11 @@ sha equal), see it green; each bite listed in the summary. Fixtures are made up.
   hyperlinks), not only what is printed (Round 19, build 28, F8);
 - what the spec's privacy rows leave out of a model call, one test each (Round 19, the flow's
   review, finding 1).
+
+## The review
+
+The review: `.claude/skills/create-flow/templates/review.md`, its checklist. The reviewer reads this
+brief and the diff, nothing else, so this line is how the checklist reaches it.
 
 ## Docs and records — in the same commit
 

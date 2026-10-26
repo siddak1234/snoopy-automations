@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
@@ -15,9 +16,10 @@ import { BLOCK_LIMITS as L, boundedBlocks } from '../src/blocks.js';
 import type { RunResult } from '../src/contract.js';
 import { PAGE_PARTS } from '../src/manifest.js';
 import { ARTIFACT_ID_PATTERN } from '../src/model-request.js';
-import { boundedResult } from '../src/platform.js';
+import { RESULT_BODY_LIMIT_BYTES, boundedResult } from '../src/platform.js';
 import { held } from '../src/steps.js';
 import { RecordingPlatform } from '../src/testing.js';
+import { EXAMPLE } from './document-fixture.js';
 import { assertValid, schemas, validator } from './published-schemas.js';
 import { define, invoke } from './runner-fixtures.js';
 
@@ -156,6 +158,37 @@ test('a success or a held result carries its blocks bounded, and a failed one no
     { outcome: 'success', summary: 'Checked' },
     'none left, none sent: the schema takes 1 to 60',
   );
+});
+
+test("a held result past the platform's 256 KiB leaves out its blocks after its documents, never its state", () => {
+  const validate = validator('automation-run-result');
+  const bytes = (result: RunResult) =>
+    Buffer.byteLength(JSON.stringify({ runId: '00000000-0000-4000-8000-000000000000', ...result }));
+  // Two tables at their 200 rows, within the 96 KiB blocks may take, beside a 200 KiB state.
+  const table: EmittedBlock = {
+    type: 'table',
+    columns: [{ title: 'Item' }, { title: 'Amount' }],
+    rows: Array.from({ length: L.tableRows }, (_, at) => ({
+      cells: [`Item ${at + 1}: ${'2X4-8 STUD, KILN DRIED, '.repeat(6)}AISLE 14`, '1.25'],
+    })),
+  };
+  const drawn = [table, table];
+  assert.deepEqual(boundedBlocks(drawn), drawn, 'both tables within the blocks own bound');
+  const state = { blob: 'z'.repeat(200 * 1024) };
+  const kept = { ...HELD, held: { ...HELD.held, state } };
+  const waiting = { ...kept, blocks: drawn };
+  assert.ok(bytes(waiting) > RESULT_BODY_LIMIT_BYTES, `past the limit: ${bytes(waiting)} bytes`);
+  for (const [given, name] of [
+    [waiting, 'no documents'],
+    [{ ...waiting, documents: [EXAMPLE] }, 'documents left out first'],
+  ] as const) {
+    const sent = boundedResult(given);
+    assert.ok(bytes(sent) <= RESULT_BODY_LIMIT_BYTES, `${name}: within it, ${bytes(sent)} bytes`);
+    assert.deepEqual(sent, kept, `${name}: the state kept whole, the blocks left out`);
+    assertValid(validate, { runId: 'r', ...sent }, `${name}: what is sent validates`);
+  }
+  // Within the limit, the blocks stay.
+  assert.deepEqual(boundedResult({ ...HELD, blocks: drawn }), { ...HELD, blocks: drawn });
 });
 
 test('blocks beside sections or details are refused before sending, in the platform words', () => {

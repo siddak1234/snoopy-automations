@@ -44,9 +44,9 @@ says go for each step that publishes or touches production.
      provider for each integration with its operations): one `snoopy-automations` pull request;
    - **a new vendor**, which no provider file declares: that pull request and one provider file in
      `snoopy-backend`, with the owner's credentials (every console step listed at once);
-   - **a new block, page part, question form or target**, or a control, capability, trigger,
-     department or icon the schema lacks: **stop** — a platform change, in a round of its own (the
-     platform's ADR-0048 decision 12). Nothing of the flow is built.
+   - **a new block, page part, question form or target** (the platform's ADR-0048 decision 12), or a
+     control, capability, trigger, department or icon the schema lacks (a platform round under v3: a
+     flow has no platform lane, 29.3.2): **stop** — a platform change. Nothing of the flow is built.
 
    Then list at most five decisions, each with a recommended default — only what the idea leaves
    open and changes the build (a field's choices, file types, who may act, what a result shows).
@@ -68,9 +68,12 @@ says go for each step that publishes or touches production.
    the owner's word). Section 10's one line: `snoopy-backend/providers/<id>.json` with the operations
    the spec names, built and reviewed once, with the owner's credentials set by the owner in the
    vendor's console. No schema, contract or client change rides with it. No new vendor: no stage 3.
-4. **The build** (one lane agent). The session writes one brief from
-   [templates/lane-brief.md](templates/lane-brief.md), whose fixed parts it carries, and runs the
-   `build-round` workflow with one lane, this repository's clone. The lane uses
+4. **The build** (one lane agent). The session runs the `build-round` workflow with
+   `{ runDir, backend, task, lanes: [{ repo: 'snoopy-automations', clone }] }`, `backend` a
+   `snoopy-backend` scratch clone (required: the workflow runs hygiene there). The task names the
+   spec, the words list, [templates/lane-brief.md](templates/lane-brief.md) and [templates/review.md](templates/review.md);
+   the design stage writes the one brief with lane-brief.md's fixed parts, and the reviewer reads
+   only it and the diff. The lane uses
    `/new-automation-version`: the manifest from sections 1–3, 5–7 (`display.pages` when section 7
    orders the pages), the prompts from section 4, the code from the steps, the result in blocks
    through the SDK's `boundedBlocks` (section 7), the tests from section 9. It never edits `snoopy-backend`, `snoopy` or

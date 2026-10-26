@@ -332,10 +332,12 @@ moved, additively:
   of the nine types an automation may send — `text`, `metric`, `badge`, `table`, `list`,
   `section` (one level deep: its 1–40 `blocks` are `$defs.emittedLeaf`, every type but a section),
   `file` (by `fileId`, an artifact id), `link` and `timeline`; never `questions` and never `open`,
-  which are the platform's. Each string's length, and the characters it may hold, is the schema's;
-  so is a url's `https://`. The SDK's types are `packages/automation-sdk/src/block-types.ts`, and
-  its `boundedBlocks` (`packages/automation-sdk/src/blocks.ts`) holds what an automation returns to
-  the rules below, which `packages/automation-sdk/test/blocks-bounds.test.ts` bites one by one.
+  which are the platform's. Each string's length, and the characters it may hold, is the schema's,
+  but a url's: the schema gives a url only its length and a pattern (`https://`, no whitespace), so
+  the characters it may hold beyond that pattern are checked by the validator only. The SDK's types
+  are `packages/automation-sdk/src/block-types.ts`, and its `boundedBlocks`
+  (`packages/automation-sdk/src/blocks.ts`) holds what an automation returns to the rules below,
+  which `packages/automation-sdk/test/blocks-bounds.test.ts` bites one by one.
 - `automation-manifest.json`: `display` gains the optional `pages` — `flow`, `item`, `run` and
   `file`, each an ordered list of distinct parts from its closed set (flow: dashboard, steps,
   items; item: tiles, file, add, runs; run: files, outcome, result; file: viewer, reading). The SDK
@@ -502,14 +504,15 @@ required one missing "is required". Lists: metric `items` 1 to 4, table `columns
 1 to 200, list `items` 0 to 100, timeline `items` 1 to 50, each "must list N to M"; a row's `cells`
 "must hold N cells, one per column". Strings "must be 1 to N characters": a text's 2,000 and a list
 item's `text` 600, line breaks kept; a title 120; a subtitle, note, cell or list's `empty` 200; a
-label, value, badge or lead 40 — a table's later cells may be empty, "must be at most 200
-characters". Every string: "must not contain a NUL character or half of a surrogate pair", "must
+label, value, `valueLabel`, badge or lead 40 — a table's later cells may be empty, "must be at most
+200 characters". Every string: "must not contain a NUL character or half of a surrogate pair", "must
 not contain a control character" (a tab and a line break aside), "must be one line" where it is
 one, and "must not contain anything shaped like an HTML tag" (`<` then a letter, `!`, `/` or `?`).
 A url, at most 2,048, "must be an https URL" (parsed, `https:`, a host) and "must not name a user
 or a password"; a `fileId` "must be an artifact id"; a tone, style, align or state "must be one of:"
 its values; a flag "must be true or false". The schema cannot say the 300, the bytes, the cells per
-column, a half surrogate, the url's parse or its user. At the result callback (its
+column, that only the first cell must be non-empty, a half surrogate, a tag, a NUL or a control
+character in a url, the url's parse or its user. At the result callback (its
 `routes-callbacks.ts`): "blocks is not allowed with sections: send one or the other", and with
 `details` likewise — a run's page is drawn from one or the other — and "blocks is not allowed when
 the outcome is failed". The SDK refuses blocks beside `sections` or `details` before sending, in

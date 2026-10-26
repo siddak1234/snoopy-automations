@@ -11,9 +11,10 @@ rule). Two clients built from one plan without it wrote different refusals, conf
   drifted at once, Round 19, the flow's review, finding 9). The clients draw them as the platform
   sends them and never write them, not even as an example in a comment
   (Round 19, the app's review, finding 4).
-- **This list**, for the clients' own words on a screen or a refusal that section 10 adds: written
-  once here, copied word for word into both clients, with `{placeholders}` for what the manifest
-  gives ("Upload {one}", "No {many} yet.", "{n} {runs} · Top {score}").
+- **This list**, for the clients' own words on a screen or a refusal that a platform round adds
+  (spec section 10: stop): written once here, copied word for word into both clients, with
+  `{placeholders}` for what the manifest gives ("Upload {one}", "No {many} yet.", "{n} {runs} · Top
+  {score}").
 
 Plain words: the fewest, titles only, no jargon; "flow" and "department", never "automation", "team"
 or "project". A word changed after the approval goes back to the owner with a dated note at the
