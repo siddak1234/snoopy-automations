@@ -923,8 +923,11 @@ is the steps below.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
 file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
-called. The platform's decision of 2026-10-08 (D2) is one container and one image
-per manifest version.
+called; `test/manifest-immutable.test.ts` fails when a file under `manifests/` that is on
+`main` is edited or deleted. The platform's decision of 2026-10-08 (D2) is one container
+and one image per manifest version: `test/conformance.test.ts` holds every Dockerfile,
+the template's included, to copying exactly one `manifests/<templateId>.v<n>.json`, the
+version its code serves.
 
 ## Working here
 
