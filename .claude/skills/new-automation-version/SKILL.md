@@ -20,8 +20,7 @@ Copy [templates/checklist.md](templates/checklist.md) into your working notes an
    - New automation: `mkdir -p automations/<name> && cp -R templates/automation/. automations/<name>/` (beside `/create-flow`'s spec, when there is one), then replace `example` with `<name>` everywhere (`package.json`, `Dockerfile`, `src/`), and give it a lockfile as README's step 1 says.
    - New version: work in `automations/<name>/`. Point the Dockerfile's manifest `COPY` at `manifests/<name>.v<n>.json` alone (the container serves the manifests its image carries), and where `automations/<name>/src/automation.ts` declares `SERVED_VERSIONS` (invoice-processing's does), set it to `[<n>]`; the image serving `v<n-1>` stays pinned by digest in the platform.
 2. **Write `manifests/<name>.v<n>.json`** (a registered version is immutable: never edit an earlier file). Declare every step id the code can report, every capability its prompts use in `requiredCapabilities`, and the origin `http://<name>-v<n>.autom8x.internal:8080`. Prompts go in `automations/<name>/prompts/`, each naming a capability, never a model; tests in `automations/<name>/test/`.
-3. **A new automation joins the CI matrices:** add `<name>` to the Image and Publish `matrix` in `.github/workflows/ci.yml`.
-4. **Run the gate, from the repository root, holding the gate lock:**
+3. **Run the gate, from the repository root, holding the gate lock:**
 
    ```bash
    npm install --package-lock-only --ignore-scripts   # a new automation only: the root lock learns the workspace
@@ -31,7 +30,7 @@ Copy [templates/checklist.md](templates/checklist.md) into your working notes an
    npm run verify                                     # on the committed tree
    ```
 
-5. **Write the backend finding** for the platform's next session (rule 1 of [CLAUDE.md](../../../CLAUDE.md)): after CI publishes the image on `main`, that session runs, in its own checkout,
+4. **Write the backend finding** for the platform's next session (rule 1 of [CLAUDE.md](../../../CLAUDE.md)): after CI publishes the image on `main`, that session runs, in its own checkout,
 
    ```bash
    node scripts/add-automation.mjs --template-id <name> --version <n> \
@@ -42,7 +41,7 @@ Copy [templates/checklist.md](templates/checklist.md) into your working notes an
 
 ## Stop when
 
-- `npm run verify` fails and the fix is outside `automations/<name>/`, `manifests/` or the CI matrix: report it, do not widen the change.
+- `npm run verify` fails and the fix is outside `automations/<name>/` or `manifests/`: report it, do not widen the change.
 - The change needs the platform (a schema, a callback, a capability it does not offer): that is a finding, not an edit here.
 
 ## Output

@@ -17,4 +17,4 @@ These rules apply here and nowhere else; the repository's are in [../CLAUDE.md](
 
 - `/new-automation-version`: the skill for a new automation or a new version.
 - `npm run verify`, from the repository root: the whole gate.
-- A new automation joins the Image and Publish matrices in [../.github/workflows/ci.yml](../.github/workflows/ci.yml), or its image is never built.
+- A new automation is built, published and deployed by its `Dockerfile` alone: [../.github/workflows/ci.yml](../.github/workflows/ci.yml)'s List job reads every `automations/*/Dockerfile` into the Image and Publish matrices.

@@ -38,7 +38,7 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 4. **The SDK is the only outbound path.** `packages/automation-sdk` presents the run token and nothing else on every callback; mail goes through the platform's `mail` callback, never a customer's mailbox (platform ADR-0021).
 5. **Manifests land in the platform by pull request:** authored and validated in `manifests/`, then a PR to `snoopy-backend/manifests/` (platform ADR-0020: no registration route; review is the authorization). Steps: [README.md](README.md#adding-an-automation).
 6. **`npm run verify` green before every commit** (Gates, below). Run `/code-review` on the diff, and `/security-review` on anything touching the run token, the callbacks or mail construction.
-7. **Every change goes PR → CI → squash-merge.** `main` is protected by the `protect-main` ruleset; CI runs on GITHUB_TOKEN alone.
+7. **Every change goes PR → CI → squash-merge.** `main` is protected by the `protect-main` ruleset; CI's jobs run on GITHUB_TOKEN; its one secret, Deploy's, and what it can reach are written once, in [ci.yml](.github/workflows/ci.yml)'s header.
 8. **Standing constraints:** source files 400 lines or fewer (`test/architecture.test.ts`); no speculative abstractions; zero runtime dependencies unless a concrete automation demands one, and then audited; the automation rules in [automations/CLAUDE.md](automations/CLAUDE.md).
 9. **No new documents.** The documents of record are `CLAUDE.md`, `README.md`, the directory READMEs and `docs/records/*`. Supporting files, not documents: `docs/MAP.md` (generated), `docs/docs-map.json`, folder CLAUDE.md files and `.claude/`. Decisions belong in the platform's ADRs and discrepancies in its manifest §12, both through a backend session, as findings.
 
@@ -65,7 +65,7 @@ npm run format                                # fix formatting
 ```
 
 - Push normally, never with `--no-verify`. A PR is ready only when it is pushed, `all-green` is green on its head, and its body is final.
-- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): Verify, then Image and Publish once per automation, then `all-green`.
+- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): List (every `automations/*/Dockerfile`), Verify, then Image and Publish once per automation it lists, then Deploy on a push to main, then `all-green`.
 - `.claude/settings.json` runs the shared kit's hooks (canonical in `snoopy-backend`; the standard's section (h)): `guard.mjs` blocks `--no-verify` pushes, `rm -rf` outside the repository and the temp folders, builds under `~/Desktop` or iCloud Drive, writes into iCloud Drive and `hygiene --execute`; `session-start.mjs` prints git and hygiene facts; `stop-check.mjs` warns about processes left running.
 
 ## Docs always updated

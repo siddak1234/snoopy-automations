@@ -1,8 +1,8 @@
 # snoopy-automations
 
 Autom8x automations — the logic that runs when a workspace's automation fires. Each
-one is a small service the platform calls, which calls back. **This repository holds
-no secret and never will:** an automation receives a run-scoped token at runtime and
+one is a small service the platform calls, which calls back. **This repository's files
+hold no secret and never will:** an automation receives a run-scoped token at runtime and
 nothing else, so it is public by design.
 
 ## What an automation is
@@ -905,19 +905,17 @@ is the steps below.
    valid start). `npm run verify` validates it against the vendored schema and
    `test/conformance.test.ts` checks that every step your code can report is
    declared and every capability a prompt uses is in `requiredCapabilities`.
-3. Add the automation to the `matrix` of the Image and Publish jobs in
-   `.github/workflows/ci.yml`, or its image is never built.
-4. Open a pull request here. CI runs on `GITHUB_TOKEN` alone, builds, smoke-tests
-   and scans each image, and on merge publishes each by digest to GHCR, then tags the
-   proven digest with the commit.
-5. Open a pull request adding the manifest to the platform repository's
+3. Open a pull request here. CI builds, smoke-tests and scans every image, one per
+   `automations/*/Dockerfile` (its List job reads them; there is no list to edit), and on
+   merge publishes each by digest to GHCR, attests that digest, then tags it with the commit.
+4. Open a pull request adding the manifest to the platform repository's
    `manifests/` directory, with the container's `.internal` alias and digest pin in
    its `snoopy-backend/deploy/compose.prod.yml`. There is no registration endpoint, and the
    platform's ADR-0020 decided there will not be one: `service.origin` is where
    customer documents get sent, review is the authorization, and a pull request is
    the only write path that carries one. The rules a manifest must meet beyond the
    schema are in `contract/README.md`, in the validator's own words.
-6. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
+5. Declare the origin as `http://<templateId>-v<n>.autom8x.internal:8080`, and a
    service account of its own for each version: one container per manifest version for
    everything new (the platform's D2), and its `snoopy-backend/scripts/add-automation.mjs` refuses any
    other origin. The platform gives that version's container the name as a network
