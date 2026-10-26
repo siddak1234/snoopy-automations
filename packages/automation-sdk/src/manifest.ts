@@ -8,9 +8,9 @@ import { isObject } from './contract.js';
  *
  * Only the fields the runner needs — which steps a version declares, in order, and
  * which capabilities — and, typed for the automation that reads them, the step groups,
- * the connections and the setup fields (platform ADR-0037). The reviewed file is the platform's (its ADR-0020: a
- * manifest registers by pull request there and nowhere else); the copy in this
- * repository's `manifests/` is validated here first and rides in the image so the
+ * the connections and the setup fields (platform ADR-0037). The reviewed file is the copy in this
+ * repository's `manifests/`, merged here: the platform's Flow CD validates and registers it
+ * from the merge commit (its ADR-0047). It is validated here first and rides in the image so the
  * runner can refuse BEFORE the wire what the platform would refuse after it. A
  * copy that drifts from the registered one is told, not humoured: the platform
  * refuses a step or a capability the registered version does not declare.

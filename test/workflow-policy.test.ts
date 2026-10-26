@@ -150,6 +150,11 @@ test('id-token, attestations and packages write are Publish’s alone', () => {
     'the workflow default is contents: read',
   );
   for (const file of workflowFiles) {
+    assert.doesNotMatch(
+      code(read(file)),
+      /^\s*permissions:\s*(write-all|read-all)\b/mu,
+      `${file} grants write-all or read-all`,
+    );
     for (const [id, block] of jobs(read(file))) {
       for (const permission of ['id-token', 'attestations', 'packages']) {
         const writes = new RegExp(`^\\s+${permission}: write$`, 'mu').test(block);

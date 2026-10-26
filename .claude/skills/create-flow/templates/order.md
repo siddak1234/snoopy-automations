@@ -18,8 +18,8 @@ Section 10 empty: no step 1; the platform is unchanged.
 2. **The automations pull request.** First re-vendor its `contract/` from the backend's
    squash-merge commit, byte for byte, and cite that commit in
    `snoopy-automations/contract/README.md`: the lanes' contract commit is not on `main` after a
-   squash (Round 19's `7a4baa6` merged as `2d93d99`). Then its gate. Merge; read the Deploy job:
-   the flow's version NEW, every other automation SKIP (or UPDATE where its image changed). A red
+   squash (Round 19's `7a4baa6` merged as `2d93d99`). Then its gate. Merge; read the Deploy job's
+   summary, each automation's outcome as README.md's 'Adding an automation' step 4 lists them. A red
    Deploy changed nothing served, and its summary names the refusal.
 3. **The clients' pull requests.** Each client's `Deployed contract` check is red by design until
    production serves the contract its types came from (Round 19, the app's lane): after step 1's CD

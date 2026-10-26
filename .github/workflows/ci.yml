@@ -334,8 +334,8 @@ jobs:
 
   # The merge is the deploy (the platform's ADR-0047 §1). Once every image is
   # published and attested, this job starts snoopy-backend's Flow CD for this
-  # commit, waits for it, and prints what it did to each automation: NEW, UPDATE,
-  # SKIP, SUPERSEDED or REFUSED. It is red when Flow CD failed or its result is
+  # commit, waits for it, and prints each automation's outcome (README.md, Adding
+  # an automation). It is red when Flow CD failed or its result is
   # not ok. It holds no GITHUB_TOKEN permission, checks nothing out and runs no
   # code of this repository: its only inputs are the commit and the App token.
   deploy:

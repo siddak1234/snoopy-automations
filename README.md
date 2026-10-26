@@ -802,9 +802,9 @@ Where the code does it:
 - **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
   `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
 
-The platform side is a finding for its session (the `new-automation-version` skill's step 5): the
-manifest's pull request, the image pin and the container's alias, once CI publishes the image on
-`main`, after the platform's build 28 contract ([contract/README.md](contract/README.md)).
+The platform side needs no pull request of its own: the merge here is the deploy
+([Adding an automation](#adding-an-automation)), after the platform's build 28 contract
+([contract/README.md](contract/README.md)).
 
 ## The kit
 
@@ -905,6 +905,9 @@ is the steps below.
    valid start). `npm run verify` validates it against the vendored schema and
    `test/conformance.test.ts` checks that every step your code can report is
    declared and every capability a prompt uses is in `requiredCapabilities`.
+   A new version `v<n>` declares `SERVED_VERSIONS = [<n>]` in
+   `automations/<templateId>/src/automation.ts`, adding it if absent (the
+   `new-automation-version` skill's step 1).
 3. Open a pull request here. CI builds, smoke-tests and scans every image, one per
    `automations/*/Dockerfile` (its List job reads them; there is no list to edit), and on
    merge publishes each by digest to GHCR, attests that digest, then tags it with the commit.
