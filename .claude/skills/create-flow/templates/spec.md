@@ -100,18 +100,18 @@ can repeat — a model, an integration whose call is safe twice; a step of code 
 
 ## 7. What a run gives
 
-| Part           | Value | Limit                                                                                                                                                               |
-| -------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Title          |       | 80 characters: what names the run on a list (a person's name); or none                                                                                              |
-| Score          |       | 0–100, when runs are ranked; or none                                                                                                                                |
-| Summary        |       | one line, 200 characters                                                                                                                                            |
-| Blocks         |       | what a person reads of a run, in order: the nine types, at their bounds: `contract/README.md`, "A result's blocks"; a held run's too; never `sections` or `details` |
-| Pages          |       | the order of the parts of the flow's, an item's, a run's and a file's page, from the manifest's closed set (`display.pages`); or none, today's order                |
-| Documents      |       | only for financial documents: the run-result schema's document (type, seller, number, lines, totals, payment, where it was recorded); else none                     |
-| Document words |       | with documents only: one and many ("Invoice", "Invoices"), the manifest's `display.documentWords`; none reads "Document"                                            |
-| Output         |       | the JSON schema of what the run keeps; never shown to a person (platform SYSTEM-MANIFEST §12.1 #67)                                                                 |
-| Held           |       | when it waits for an approval, and the reason a person reads (200)                                                                                                  |
-| Email          |       | the platform's own: a run's end and an approval, in its one standard; the flow sends none of its own unless this says why                                           |
+| Part           | Value | Limit                                                                                                                                                                 |
+| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title          |       | 80 characters: what names the run on a list (a person's name); or none                                                                                                |
+| Score          |       | 0–100, when runs are ranked; or none                                                                                                                                  |
+| Summary        |       | one line, 200 characters                                                                                                                                              |
+| Blocks         |       | what a person reads of a run, in order: the twelve types, at their bounds: `contract/README.md`, "A result's blocks"; a held run's too; never `sections` or `details` |
+| Pages          |       | the order of the parts of the flow's, an item's, a run's and a file's page, from the manifest's closed set (`display.pages`); or none, today's order                  |
+| Documents      |       | only for financial documents: the run-result schema's document (type, seller, number, lines, totals, payment, where it was recorded); else none                       |
+| Document words |       | with documents only: one and many ("Invoice", "Invoices"), the manifest's `display.documentWords`; none reads "Document"                                              |
+| Output         |       | the JSON schema of what the run keeps; never shown to a person (platform SYSTEM-MANIFEST §12.1 #67)                                                                   |
+| Held           |       | when it waits for an approval, and the reason a person reads (200)                                                                                                    |
+| Email          |       | the platform's own: a run's end and an approval, in its one standard; the flow sends none of its own unless this says why                                             |
 
 ## 8. When it fails
 

@@ -40,7 +40,7 @@ says go for each step that publishes or touches production.
    `snoopy/AGENTS.md`, `snoopy/app/CLAUDE.md`); the newest filled spec
    (`snoopy-automations/automations/*/README.md`) and its manifest; MASTER-PLAN §0.1. **Check the
    idea against the blocks and the providers** (29.3.1) and tell the owner which it is, in one line:
-   - **everything there** (the nine blocks, the closed set of page parts, the manifest's controls, a
+   - **everything there** (the twelve blocks, the closed set of page parts, the manifest's controls, a
      provider for each integration with its operations): one `snoopy-automations` pull request;
    - **a new vendor**, which no provider file declares: that pull request and one provider file in
      `snoopy-backend`, with the owner's credentials (every console step listed at once);

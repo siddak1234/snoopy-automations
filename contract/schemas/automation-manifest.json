@@ -105,7 +105,8 @@
                   "tiles",
                   "file",
                   "add",
-                  "runs"
+                  "runs",
+                  "scores"
                 ]
               }
             },

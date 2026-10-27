@@ -1,13 +1,14 @@
 /**
- * What a person reads of a run, as blocks (platform ADR-0048, Round 21; the run result's
- * `blocks` in `automation-run-result.json`, its `$defs.emittedBlock`): a success or a held result
- * may send up to 60 of the nine types an automation may send — text, metric, badge, table, list,
- * section, file, link, timeline. Never `questions` and never `open`, which are the platform's;
- * a file by its artifact id. The platform keeps them with the run, draws them in the `result`
- * part of the run's page in the order sent (on an item run, as the item's reading), and refuses
- * the result whole when one breaks its rule — so `boundedBlocks` (`blocks.ts`, with the limits)
- * holds them to it first. A run's page is drawn from its blocks or from its `sections` and
- * `details`, never both. The shapes are the schema's, exactly; the platform's own are its
+ * What a person reads of a run, as blocks (platform ADR-0048, Round 21, and its amendment 1, block
+ * set v2; the run result's `blocks` in `automation-run-result.json`, its `$defs.emittedBlock`): a
+ * success or a held result may send up to 60 of the twelve types an automation may send — text,
+ * metric, badge, table, list, section, file, link, timeline, image, chart, group. Never
+ * `questions` and never `open`, which are the platform's; a file and an image by its artifact id.
+ * The platform keeps them with the run, draws them in the `result` part of the run's page in the
+ * order sent (on an item run, as the item's reading), and refuses the result whole when one breaks
+ * its rule — so `boundedBlocks` (`blocks.ts`, with the limits of `blocks-limits.ts`) holds them to
+ * it first. A run's page is drawn from its blocks or from its `sections` and `details`, never both.
+ * The shapes are the schema's, exactly; the platform's own are its
  * `snoopy-backend/packages/contracts/src/blocks.ts`.
  */
 
@@ -21,7 +22,12 @@ export const EMITTED_BLOCK_TYPES = [
   'file',
   'link',
   'timeline',
+  'image',
+  'chart',
+  'group',
 ] as const;
+/** A chart's two kinds (amendment 1, point 3). */
+export const CHART_KINDS = ['bar', 'line'] as const;
 export const BLOCK_TONES = ['neutral', 'success', 'warning', 'error'] as const;
 export const TEXT_STYLES = ['body', 'strong', 'muted', 'label'] as const;
 export const TABLE_ALIGNS = ['start', 'end'] as const;
@@ -36,6 +42,7 @@ export const TIMELINE_STATES = [
   'unknown',
 ] as const;
 
+export type ChartKind = (typeof CHART_KINDS)[number];
 export type BlockTone = (typeof BLOCK_TONES)[number];
 export type TextStyle = (typeof TEXT_STYLES)[number];
 export type TableAlign = (typeof TABLE_ALIGNS)[number];
@@ -130,6 +137,32 @@ export interface TimelineBlock {
   }[];
 }
 
+/**
+ * A picture: one of the job's own files, by its artifact id, and its `alt`, read aloud only (1–200
+ * characters, one line). No url: a block never names an outside image. The platform draws it
+ * inline when the file is measured as the type it declares and at most 5 MiB, else as a file row.
+ */
+export interface EmittedImageBlock {
+  readonly type: 'image';
+  readonly fileId: string;
+  readonly alt: string;
+}
+
+/** A chart's point: a finite `value` of at most 1e15 in size; `text`, when given, is shown for it. */
+export interface ChartPoint {
+  readonly label: string;
+  readonly value: number;
+  readonly text?: string;
+}
+
+/** A bar chart (1–24 points, none below 0) or a line (2–60 points), in the order sent. */
+export interface EmittedChartBlock {
+  readonly type: 'chart';
+  readonly kind: ChartKind;
+  readonly title: string;
+  readonly points: readonly ChartPoint[];
+}
+
 export type EmittedLeaf =
   | TextBlock
   | MetricBlock
@@ -138,9 +171,11 @@ export type EmittedLeaf =
   | ListBlock
   | EmittedFileBlock
   | LinkBlock
-  | TimelineBlock;
+  | TimelineBlock
+  | EmittedImageBlock
+  | EmittedChartBlock;
 
-/** One level deep: never another section. */
+/** One level deep: never another section, and never a group. */
 export interface SectionBlock {
   readonly type: 'section';
   readonly title: string;
@@ -149,5 +184,15 @@ export interface SectionBlock {
   readonly blocks: readonly EmittedLeaf[];
 }
 
-/** What an automation may send: no questions, no `open`, files by artifact id. */
-export type EmittedBlock = EmittedLeaf | SectionBlock;
+/**
+ * A title over one card of drop-down sections (amendment 1, point 12): 1–12 sections, each held
+ * as a top-level section is. Top level only: never inside a section, and never holding a group.
+ */
+export interface EmittedGroupBlock {
+  readonly type: 'group';
+  readonly title: string;
+  readonly sections: readonly SectionBlock[];
+}
+
+/** What an automation may send: no questions, no `open`, files and images by artifact id. */
+export type EmittedBlock = EmittedLeaf | SectionBlock | EmittedGroupBlock;
