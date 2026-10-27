@@ -1,7 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `388891e`, the platform's `main` after its #250
+(`snoopy-backend`, private) at commit `71d8e1b`, the platform's `main` after its #252
+squash-merged Round 21's switch, block set v2 (its ADR-0048 amendment 1; 2026-10-27, "Refreshed
+2026-10-27, block set v2" below). Before it, `388891e`, the platform's `main` after its #250
 squash-merged Round 21's blocks and a flow's pages (its ADR-0048; 2026-10-26, "Refreshed
 2026-10-26, blocks" below). Before it, `d0e4201`, the platform's
 `main` after its #242 squash-merged Round 19's build 28 contract, verdict words and a run's
@@ -350,6 +352,31 @@ The other six files are byte-identical to `d0e4201`'s, and all eight to `388891e
 with `cmp`). #250's merge was its deploy (ADR-0047), so the live platform takes a result carrying
 `blocks` and a manifest declaring `pages`.
 
+Refreshed 2026-10-27, block set v2, from the platform's `main` after its #252 squash-merged,
+`71d8e1b` (Round 21, its BUILD-PLAN 29.1.15, the switch, and ADR-0048 amendment 1, point 9; this
+copy and the SDK's are 29.1.16). Its #251 (`1746f4c`, block set v2's platform half) left all eight
+files byte-identical; #252 moved two, additively:
+
+- `automation-run-result.json`: the blocks an automation may send are twelve — the nine above and
+  `image` (`{type, fileId, alt}`: one of the job's own files by its artifact id, and an `alt` of 1
+  to 200 characters on one line; no url), `chart` (`{type, kind, title, points}`: a `bar` of 1 to
+  24 points, none below 0, or a `line` of 2 to 60, each `{label, value, text?}`, a value at most
+  1e15 in size) and `group` (`{type, title, sections}`: 1 to 12 sections, top level only, each a
+  section of 1 to 40 leaves). `$defs.emittedLeaf` gains `image` and `chart`, so a section, and a
+  group's section, may hold them. The SDK's types, `BLOCK_LIMITS` and `boundedBlocks` follow
+  (`packages/automation-sdk/src/block-types.ts`, `packages/automation-sdk/src/blocks-limits.ts`,
+  `packages/automation-sdk/src/blocks.ts`), bitten one by one in
+  `packages/automation-sdk/test/blocks-bounds-v2.test.ts`, and the platform's emitted example of
+  all twelve (`snoopy-backend/test/fixtures/emitted-all-twelve.json`, copied byte for byte into
+  `packages/automation-sdk/test/fixtures/blocks/`) passes through `boundedBlocks` unchanged.
+- `automation-manifest.json`: the item page's parts gain `scores`, the item's runs by score as a
+  bar chart, which is opt-in (`PAGE_PARTS` in `packages/automation-sdk/src/manifest.ts`).
+
+The other six files are byte-identical to `388891e`'s, and all eight to `71d8e1b`'s (each checked
+with `cmp`). #252's merge was its deploy (ADR-0047), so the live platform takes all twelve types
+and `scores`. No manifest here declares a page, and no flow sends a new type yet, so every
+automation keeps its version.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -360,8 +387,8 @@ The schema says everything a JSON Schema can. The platform's `validateManifest`
 enforces these further rules at registration, and its result callback those for a result's
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
-named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its
-validator and its ADR-0048 decision 3 instead: its README names neither yet (filed with this pin).
+named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
+at `71d8e1b`, its file paths written from `snoopy-backend/`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
@@ -484,38 +511,62 @@ be empty", is one the schema cannot say. `test/manifest-items.ts` ports the rule
 cannot say, `test/manifest-rules.ts` the `artifact` field's two rules above, and
 `test/manifest-items.test.ts` bites each.
 
-**A flow's pages** (ADR-0048 decision 5; its `pages.ts` at `388891e`, in its words) —
-`display.pages` "must be an object", and a key besides the four "is not a page: flow, item, run,
-file"; a page "must list at least one part", each "must be one of:" its own page's parts and none
-"is listed more than once" (the schema says these). Beyond the schema: a part of the item page, or
-the flow page's `items`, "needs items: the flow declares none"; `tiles` "needs items.verdictWords:
-no tile could be named"; the run page "must hold outcome: no flow can leave it out", and `result`
-likewise, and the item page `add` and `runs`. A page left out is drawn in today's order.
+**A flow's pages** (ADR-0048 decision 5; `pagesProblem` in `snoopy-backend/packages/contracts/src/pages.ts`) —
+optional; each refusal names its path under `display.pages`. `display.pages` "must be an object";
+a key besides `flow`, `item`, `run` and `file`, at `display.pages.<key>`, "is not a page: flow,
+item, run, file". A page sent, at `display.pages.<page>`, "must list at least one part"; each part,
+at `display.pages.<page>[n]`, "must be one of:" that page's parts (`PAGE_PARTS`) and none "is listed
+more than once" — the schema says these as well (`PAGES_SCHEMA`). The item page's parts are
+`tiles`, `file`, `add`, `runs` and, since the switch (ADR-0048 amendment 1, point 3b; BUILD-PLAN
+29.1.15), `scores`, a bar chart of its runs by score, which is opt-in: a page left out never gets it.
+Beyond the schema, at the part: any part of the item page, `scores` among them, and the flow page's
+`items`, "needs items: the flow declares none"; `tiles` "needs items.verdictWords: no tile could be
+named". At the page: the run page "must
+hold outcome: no flow can leave it out" and `result` likewise; the item page `add` and `runs`
+likewise. A page left out is given today's order (`resolvePages`), which the Catalog publishes as
+`Subscription.pages`.
 
-**A result's blocks** (ADR-0048 decision 3; its `blocks-validation.ts` at `388891e`, in its words;
-each a 400 naming its path, `blocks[2].items[0].url must be an https URL`) — `blocks` "must list 1
-to 60" and "must hold at most 300 blocks in all", a section's blocks counted, and "must be at most
-98304 bytes as JSON" (96 KiB of UTF-8, so blocks and 128 KiB of documents fit the 256 KiB
-callback); a section's `blocks` "must list 1 to 40", and a section in a section's `type` "must not
-be a section: sections are one level deep". A block, a row or an item "must be an object"; a `type`
-"must be one of: text, metric, badge, table, list, section, file, link, timeline"; `questions`, or
-an `open` key anywhere, "is the platform's"; any other key "is not an accepted field", and a
-required one missing "is required". Lists: metric `items` 1 to 4, table `columns` 2 to 3 and `rows`
-1 to 200, list `items` 0 to 100, timeline `items` 1 to 50, each "must list N to M"; a row's `cells`
-"must hold N cells, one per column". Strings "must be 1 to N characters": a text's 2,000 and a list
-item's `text` 600, line breaks kept; a title 120; a subtitle, note, cell or list's `empty` 200; a
-label, value, `valueLabel`, badge or lead 40 — a table's later cells may be empty, "must be at most
-200 characters". Every string: "must not contain a NUL character or half of a surrogate pair", "must
-not contain a control character" (a tab and a line break aside), "must be one line" where it is
-one, and "must not contain anything shaped like an HTML tag" (`<` then a letter, `!`, `/` or `?`).
-A url, at most 2,048, "must be an https URL" (parsed, `https:`, a host) and "must not name a user
-or a password"; a `fileId` "must be an artifact id"; a tone, style, align or state "must be one of:"
-its values; a flag "must be true or false". The schema cannot say the 300, the bytes, the cells per
-column, that only the first cell must be non-empty, a half surrogate, a tag, a NUL or a control
-character in a url, the url's parse or its user. At the result callback (its
-`routes-callbacks.ts`): "blocks is not allowed with sections: send one or the other", and with
-`details` likewise — a run's page is drawn from one or the other — and "blocks is not allowed when
-the outcome is failed". The SDK refuses blocks beside `sections` or `details` before sending, in
+**A result's blocks** (ADR-0048 decision 3; `emittedBlocksProblem` in
+`snoopy-backend/packages/contracts/src/blocks-validation.ts`, the bounds its `BLOCK_LIMITS`) — refused by the
+result callback with a 400 whose `field` is the path and whose sentence starts with it,
+`blocks[2].items[0].url must be an https URL`; a refused result stores nothing. At `blocks`: "must
+list 1 to 60", "must hold at most 300 blocks in all" (a section's blocks counted, and a group, each
+of its sections and their blocks), "must hold at most 20 images in all" (those in a section and in
+a group's section counted) and "must be at most 98304 bytes as JSON" (96 KiB of UTF-8). A block, a
+section's block, a group's section, a row, an item, a point, a column or a badge "must be an
+object"; a `type` "must be one of: text, metric, badge, table, list, section, file, link, timeline,
+image, chart, group" (image, chart and group since the switch, ADR-0048 amendment 1, point 9); a
+`type` of `questions`, at any depth, and a key `questions` or `open` on any object "is the
+platform's"; a section's block whose `type` is a section "must not be a section: sections are one
+level deep", and one whose `type` is a group "must not be a group: groups are top level only"; any
+other key "is not an accepted field" (an image's `url`, and a list's `searchable` or a row's
+`valueTone`, which only the platform sets, among them), and a required one missing "is required".
+**An image** is `{type, fileId, alt}`: `fileId` "must be an artifact id", one of the run's own
+files (a file the run does not hold is drawn as "This file isn't available."), and `alt` 1 to 200
+characters on one line. **A chart** is `{type, kind, title, points}`: `kind` "must be one of: bar,
+line"; `points` "must list 1 to 24" on a bar and "must list 2 to 60" on a line, each `{label, value,
+text?}` with a `label` and a `text` of 1 to 40; a `value` "must be a finite number", "must be at
+most 1e15 in size" and, on a bar, "must not be below 0 on a bar chart". **A group** is `{type, title,
+sections}`, top level only: `sections` "must list 1 to 12", each one "must be a section" and is held
+as a top-level section is (1 to 40 leaves, an image or a chart among them). Lists, each "must list N to M": a section's `blocks` 1 to 40, a
+metric's `items` 1 to 4, a table's `columns` 2 to 3 and `rows` 1 to 200, a list's `items` 0 to 100
+and a timeline's `items` 1 to 50; a row's `cells` "must hold N cells, one per column". Strings
+"must be 1 to N characters": a text's `text` 2,000 and a list item's `text` 600, line breaks kept;
+a title 120; a subtitle, a note, the first cell, a list's `empty` and a timeline item's `sub` 200;
+a label, a value, a `valueLabel`, a badge's `text` and a lead 40. A row's later cells may be empty,
+"must be at most 200 characters". Every string: "must not contain a NUL character or half of a
+surrogate pair", "must not contain a control character" (a tab and a line break aside), "must be
+one line" except a text's and a list item's `text`, and "must not contain anything shaped like an
+HTML tag" (`<` then a letter, `!`, `/` or `?`). A `url`, 1 to 2,048 characters: "must be an https
+URL" (parsed, `https:`, a host, and written `https://` in any case), "must not contain white
+space" — both as the schema's pattern refuses them, where the parser would trim, strip or encode
+white space and add a missing "//" (its SYSTEM-MANIFEST §12.1 #312) — and "must not name a user or a password". A `fileId` "must be an artifact id"; a `tone`, `style`, `align` or `state` "must be one
+of:" its values; a `muted`, `strong` or `divided` "must be true or false". The schema
+(`automation-run-result.json`, from its `blocks-schema.ts`) cannot say the 300, the 20 images, the bytes, the cells
+per column, that only the first cell must be non-empty, a half surrogate, a tag, a NUL or a control
+character in a url, the url's parse or its user. The route itself (`snoopy-backend/apps/runs/src/routes-callbacks.ts`,
+at `blocks`): "blocks is not allowed with sections: send one or the other", the same with
+`details`, and "blocks is not allowed when the outcome is failed". The SDK refuses blocks beside `sections` or `details` before sending, in
 those words, and `boundedBlocks` cuts or leaves out the rest (`README.md`, "What an automation
 looks like").
 

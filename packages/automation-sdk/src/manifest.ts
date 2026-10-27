@@ -52,12 +52,13 @@ export interface Manifest {
  * The parts of each page a manifest's `display.pages` may order (platform ADR-0048 decision 5):
  * a closed set, the schema's `enum`s. Each part on its own page and used once; a run page holds
  * `outcome` and `result`, an item page `add` and `runs`; item parts need `items`, and `tiles`
- * `items.verdictWords` (the rules beyond the schema: `contract/README.md`). A page left out is
- * drawn in today's order. Inside `result`, the blocks keep the order the automation sent them.
+ * `items.verdictWords` (the rules beyond the schema: `contract/README.md`). `scores`, the item's
+ * runs by score as a bar chart (amendment 1, point 3b), is opt-in: a page left out, drawn in
+ * today's order, never gets it. Inside `result`, the blocks keep the order the automation sent them.
  */
 export const PAGE_PARTS = {
   flow: ['dashboard', 'steps', 'items'],
-  item: ['tiles', 'file', 'add', 'runs'],
+  item: ['tiles', 'file', 'add', 'runs', 'scores'],
   run: ['files', 'outcome', 'result'],
   file: ['viewer', 'reading'],
 } as const;

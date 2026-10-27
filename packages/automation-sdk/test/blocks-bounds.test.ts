@@ -2,41 +2,19 @@ import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { test } from 'node:test';
 
-import type { EmittedBlock, EmittedLeaf, TableBlock } from '../src/block-types.js';
+import type { EmittedLeaf, TableBlock } from '../src/block-types.js';
 import { BLOCK_LIMITS as L, boundedBlocks, isBlockUrl } from '../src/blocks.js';
-import { assertValid, validator } from './published-schemas.js';
+import { FILE, bound, sendable, text, type Json } from './blocks-fixtures.js';
 
 /**
  * `boundedBlocks` against the platform's one rule for a result's blocks (its ADR-0048 decision 3,
  * `snoopy-backend/packages/contracts/src/blocks-validation.ts`): each string cut whole at its
  * bound, and what the platform would refuse left off or left out — never sent, since one refused
  * block refuses the whole result. Everything bounded here also validates against the published
- * `automation-run-result.json`, and stays within the two bounds no schema can say.
+ * `automation-run-result.json`, and stays within the bounds no schema can say. Amendment 1's
+ * image, chart and group are `blocks-bounds-v2.test.ts`.
  */
 
-const FILE = '0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c';
-
-/** A bounded block, read by path: the test reads what it names. */
-type Json = Record<string, any>;
-
-/** What a test hands in: anything, as a model's words or a careless cast could make it. */
-const bound = (blocks: unknown[]): EmittedBlock[] | undefined =>
-  boundedBlocks(blocks as EmittedBlock[]);
-
-/** Sent as a success's blocks: valid by the schema, 300 in all at most, 96 KiB at most. */
-function sendable(blocks: EmittedBlock[] | undefined): EmittedBlock[] {
-  assert.ok(blocks !== undefined, 'something is left to send');
-  assertValid(validator('automation-run-result'), { outcome: 'success', blocks }, 'the blocks');
-  const total = blocks.reduce(
-    (sum, b) => sum + 1 + (b.type === 'section' ? b.blocks.length : 0),
-    0,
-  );
-  assert.ok(total <= L.total, `${total} blocks in all`);
-  assert.ok(Buffer.byteLength(JSON.stringify(blocks)) <= L.bytes, 'within 96 KiB');
-  return blocks;
-}
-
-const text = (value: string): unknown => ({ type: 'text', text: value });
 const item = (fields: Record<string, unknown>): unknown => ({ type: 'list', items: [fields] });
 
 test('each string is cut whole at its bound, a one-line field made one line, an empty one left off', () => {
@@ -169,6 +147,7 @@ test("the platform's own and the unknown are left out: questions, open, a sectio
     bound([
       { type: 'questions', form: { kind: 'run' } },
       { type: 'chart', points: [1, 2] },
+      { type: 'group', title: 'No sections', sections: [] },
       { type: 'toString' },
       'text',
       null,
@@ -282,12 +261,39 @@ test('whatever an automation gives, what is sent validates', () => {
     },
     { type: 'link', title: 'Docs', url: 'https://example.com/docs' },
     { type: 'timeline', items: [{ title: 'Read', state: 'done', sub: 7 }] },
+    { type: 'image', fileId: FILE, alt: ' Page\none ', url: 'https://example.com/x.png' },
+    { type: 'image', fileId: 'doc-1', alt: 'No artifact' },
+    {
+      type: 'chart',
+      kind: 'bar',
+      title: ' Totals ',
+      colour: 'red',
+      points: [{ label: 'A', value: -1 }, { label: 'B', value: 2, text: 7 }, { value: 3 }],
+    },
+    { type: 'chart', kind: 'pie', title: 'Pie', points: [{ label: 'A', value: 1 }] },
+    {
+      type: 'group',
+      title: 'Details',
+      open: true,
+      sections: [
+        { type: 'section', title: 'One', blocks: [{ type: 'group', title: 'Deeper' }, text('x')] },
+        text('not a section'),
+        { type: 'section', title: '', blocks: [text('untitled')] },
+      ],
+    },
   ];
   assert.deepEqual(sendable(bound(messy)), [
     { type: 'metric', items: [{ label: 'Amount', value: '$120.50', tone: 'success' }] },
     { type: 'list', items: [{ title: 'A' }] },
     { type: 'link', title: 'Docs', url: 'https://example.com/docs' },
     { type: 'timeline', items: [{ title: 'Read', state: 'done' }] },
+    { type: 'image', fileId: FILE, alt: 'Page one' },
+    { type: 'chart', kind: 'bar', title: 'Totals', points: [{ label: 'B', value: 2 }] },
+    {
+      type: 'group',
+      title: 'Details',
+      sections: [{ type: 'section', title: 'One', blocks: [{ type: 'text', text: 'x' }] }],
+    },
   ]);
   assert.equal(boundedBlocks(undefined), undefined);
   assert.equal(boundedBlocks([]), undefined);

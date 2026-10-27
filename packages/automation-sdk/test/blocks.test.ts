@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 import {
   BLOCK_TONES,
+  CHART_KINDS,
   EMITTED_BLOCK_TYPES,
   TABLE_ALIGNS,
   TEXT_STYLES,
@@ -36,35 +37,48 @@ type Json = Record<string, any>;
 const published = (name: string): Json =>
   JSON.parse(readFileSync(resolve(schemas, `${name}.json`), 'utf8')) as Json;
 
-/** The platform's parity fixtures, copied byte for byte from its `packages/contracts/fixtures/blocks/`. */
-const fixture = (name: string): Json[] =>
-  (
-    JSON.parse(
-      readFileSync(resolve(import.meta.dirname, 'fixtures/blocks', `${name}.json`), 'utf8'),
-    ) as { blocks: Json[] }
-  ).blocks;
+/**
+ * The platform's fixtures, copied byte for byte: its parity fixtures from its
+ * `packages/contracts/fixtures/blocks/`, each `{blocks}`, and its emitted example of all twelve
+ * sendable types from its `test/fixtures/`, a bare list.
+ */
+const fixture = (name: string): Json[] => {
+  const read = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, 'fixtures/blocks', `${name}.json`), 'utf8'),
+  ) as Json[] | { blocks: Json[] };
+  return Array.isArray(read) ? read : read.blocks;
+};
 
-/** A drawn page as its automation sent it: a file by its artifact id, as the platform's test reads it. */
+/**
+ * A drawn page as its automation sent it: a drawn file by its artifact id, as the platform's test
+ * reads it. An emitted list (a file already by its `fileId`) is unchanged.
+ */
 const asSent = (blocks: readonly Json[]): EmittedBlock[] =>
   blocks.map((block) =>
-    block.type === 'file' ? { type: 'file', fileId: block.file.id, title: block.title } : block,
+    block.type === 'file' && block.file
+      ? { type: 'file', fileId: block.file.id, title: block.title }
+      : block,
   ) as EmittedBlock[];
 
 test("the types, their values and the limits are the published schema's", () => {
   const defs = published('automation-run-result').$defs;
+  // A chart is a `oneOf` of its two kinds; every other type one object.
+  const branches = (of: Json): Json[] =>
+    (of.oneOf as Json[]).flatMap((one) => (one.oneOf ? (one.oneOf as Json[]) : [one]));
   const byType = Object.fromEntries(
-    (defs.emittedBlock.oneOf as Json[]).map((one) => [one.properties.type.const, one.properties]),
+    branches(defs.emittedBlock).map((one) => [one.properties.type.const, one.properties]),
   ) as Record<string, Json>;
   assert.deepEqual(Object.keys(byType).sort(), [...EMITTED_BLOCK_TYPES].sort());
   assert.deepEqual(
-    (defs.emittedLeaf.oneOf as Json[]).map((one) => one.properties.type.const).sort(),
-    EMITTED_BLOCK_TYPES.filter((type) => type !== 'section').sort(),
-    'a section holds every type but a section',
+    [...new Set(branches(defs.emittedLeaf).map((one) => one.properties.type.const))].sort(),
+    EMITTED_BLOCK_TYPES.filter((type) => type !== 'section' && type !== 'group').sort(),
+    'a section holds every type but a section and a group',
   );
-  const { text, metric, badge, table, list, section, file, link, timeline } = byType as Record<
-    string,
-    Json
-  >;
+  const { text, metric, badge, table, list, section, file, link, timeline, image, group } =
+    byType as Record<string, Json>;
+  const [bar, line] = (defs.emittedBlock.oneOf as Json[]).find((one) => one.oneOf)!.oneOf as Json[];
+  assert.deepEqual([bar!.properties.kind.const, line!.properties.kind.const], [...CHART_KINDS]);
+  const [barPoints, linePoints] = [bar!.properties.points, line!.properties.points] as Json[];
   const item = list!.items.items.properties;
   const row = table!.rows.items.properties;
   assert.deepEqual(
@@ -84,6 +98,19 @@ test("the types, their values and the limits are the published schema's", () => 
         (x) => x.maxLength,
       ),
       urlLength: [link!.url.maxLength, item.url.maxLength],
+      chartBars: [barPoints!.minItems, barPoints!.maxItems],
+      chartPoints: [linePoints!.minItems, linePoints!.maxItems],
+      chartValue: [
+        barPoints!.items.properties.value.minimum,
+        barPoints!.items.properties.value.maximum,
+        linePoints!.items.properties.value.minimum,
+        linePoints!.items.properties.value.maximum,
+      ],
+      chartWords: [barPoints!.items.properties.label, linePoints!.items.properties.text].map(
+        (x) => x.maxLength,
+      ),
+      altLength: image!.alt.maxLength,
+      groupSections: [group!.sections.minItems, group!.sections.maxItems],
     },
     {
       topLevel: [1, L.topLevel],
@@ -99,6 +126,12 @@ test("the types, their values and the limits are the published schema's", () => 
       listTextLength: L.listTextLength,
       wordLength: Array(4).fill(L.wordLength),
       urlLength: [L.urlLength, L.urlLength],
+      chartBars: [1, L.chartBars],
+      chartPoints: [L.chartPointsMinimum, L.chartPoints],
+      chartValue: [0, L.chartValue, -L.chartValue, L.chartValue],
+      chartWords: [L.wordLength, L.wordLength],
+      altLength: L.altLength,
+      groupSections: [1, L.groupSections],
     },
   );
   assert.deepEqual(text!.style.enum, [...TEXT_STYLES]);
@@ -106,6 +139,7 @@ test("the types, their values and the limits are the published schema's", () => 
   assert.deepEqual(table!.columns.items.properties.align.enum, [...TABLE_ALIGNS]);
   assert.deepEqual(timeline!.items.items.properties.state.enum, [...TIMELINE_STATES]);
   assert.equal(file!.fileId.pattern, ARTIFACT_ID_PATTERN.source, "the SDK's artifact-id rule");
+  assert.equal(image!.fileId.pattern, ARTIFACT_ID_PATTERN.source, "an image's, the same rule");
 });
 
 test("a manifest's page parts are the published schema's closed set", () => {
@@ -115,17 +149,39 @@ test("a manifest's page parts are the published schema's closed set", () => {
   for (const [page, parts] of Object.entries(PAGE_PARTS)) {
     assert.deepEqual(pages.properties[page].items.enum, [...parts], page);
   }
+  // `scores`, since the switch (amendment 1, point 3b): a flow with items may list it.
+  const reviewer = JSON.parse(
+    readFileSync(
+      resolve(import.meta.dirname, '../../../manifests/candidate-reviewer.v2.json'),
+      'utf8',
+    ),
+  ) as Json;
+  const display = { ...reviewer.display, pages: { item: ['tiles', 'add', 'runs', 'scores'] } };
+  assertValid(validator('automation-manifest'), { ...reviewer, display }, 'scores on an item page');
 });
 
 test("the platform's fixtures pass through unchanged; its drawn file is bounded to what may be sent", () => {
   const validate = validator('automation-run-result');
-  for (const name of ['emitted-all-nine', 'oversize-run']) {
+  for (const name of ['emitted-all-nine', 'emitted-all-twelve', 'oversize-run']) {
     const sent = asSent(fixture(name));
     assertValid(validate, { outcome: 'success', blocks: sent }, name);
     assert.deepEqual(boundedBlocks(sent), sent, name);
   }
+  const counts = new Map<string, number>();
+  for (const block of fixture('emitted-all-twelve')) {
+    counts.set(block.type, (counts.get(block.type) ?? 0) + 1);
+  }
+  assert.deepEqual(
+    Object.fromEntries(counts),
+    Object.fromEntries(EMITTED_BLOCK_TYPES.map((type) => [type, type === 'text' ? 2 : 1])),
+    'all twelve: text twice, each other type once',
+  );
   const drawn = fixture('emitted-all-nine');
-  assert.deepEqual(new Set(drawn.map((block) => block.type)), new Set(EMITTED_BLOCK_TYPES));
+  assert.deepEqual(
+    new Set(drawn.map((block) => block.type)),
+    new Set(EMITTED_BLOCK_TYPES.slice(0, 9)),
+    'the nine of block set 1',
+  );
   // As drawn, its file is the platform's row — `open` and the file, no fileId — never sendable.
   assert.equal(validate({ outcome: 'success', blocks: drawn }), false);
   const bounded = boundedBlocks(drawn as unknown as EmittedBlock[]);

@@ -1,0 +1,92 @@
+[
+  { "type": "text", "text": "What this run found", "style": "label" },
+  { "type": "text", "text": "Two of three checks passed.", "tone": "warning" },
+  {
+    "type": "metric",
+    "items": [
+      { "label": "Checked", "value": "3" },
+      { "label": "Passed", "value": "2", "tone": "success" }
+    ]
+  },
+  { "type": "badge", "text": "Needs a look", "tone": "warning" },
+  {
+    "type": "table",
+    "columns": [{ "title": "Check" }, { "title": "Result", "align": "end" }],
+    "rows": [
+      { "cells": ["Totals add up", "Yes"] },
+      { "cells": ["Date present", "No"], "note": "Read from the header." }
+    ]
+  },
+  {
+    "type": "list",
+    "items": [
+      {
+        "title": "Seller name",
+        "subtitle": "Line 1",
+        "badge": { "text": "Found", "tone": "success" }
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "title": "How it was read",
+    "blocks": [{ "type": "text", "text": "Read page by page." }]
+  },
+  {
+    "type": "file",
+    "fileId": "0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c",
+    "title": "The upload"
+  },
+  {
+    "type": "link",
+    "title": "Where the rules live",
+    "url": "https://help.example.test/rules"
+  },
+  {
+    "type": "timeline",
+    "items": [
+      { "title": "Read", "state": "done" },
+      { "title": "Check", "sub": "One left", "state": "working" }
+    ]
+  },
+  {
+    "type": "image",
+    "fileId": "0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c",
+    "alt": "The upload, page one"
+  },
+  {
+    "type": "chart",
+    "kind": "bar",
+    "title": "Checks by result",
+    "points": [
+      { "label": "Passed", "value": 2 },
+      { "label": "Failed", "value": 1, "text": "One" }
+    ]
+  },
+  {
+    "type": "group",
+    "title": "How it was checked",
+    "sections": [
+      {
+        "type": "section",
+        "title": "By week",
+        "blocks": [
+          {
+            "type": "chart",
+            "kind": "line",
+            "title": "Checks by week",
+            "points": [
+              { "label": "Week 1", "value": 4 },
+              { "label": "Week 2", "value": -1.5, "text": "Down 1.5" }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "title": "Notes",
+        "blocks": [{ "type": "text", "text": "Read twice." }]
+      }
+    ]
+  }
+]

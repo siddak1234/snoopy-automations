@@ -55,6 +55,7 @@ export type {
 } from './manifest.js';
 export {
   BLOCK_TONES,
+  CHART_KINDS,
   EMITTED_BLOCK_TYPES,
   TABLE_ALIGNS,
   TEXT_STYLES,
@@ -64,8 +65,13 @@ export type {
   BadgeBlock,
   BlockBadge,
   BlockTone,
+  ChartKind,
+  ChartPoint,
   EmittedBlock,
+  EmittedChartBlock,
   EmittedFileBlock,
+  EmittedGroupBlock,
+  EmittedImageBlock,
   EmittedLeaf,
   LinkBlock,
   ListBlock,
