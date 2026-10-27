@@ -116,7 +116,7 @@ test('an image: its alt cut whole at 200 on one line; no alt or no artifact id, 
   );
 });
 
-test('21 images send 20, those in a section and a group counted, and a section left empty left out', () => {
+test('21 images send 20, those in a section and a group counted, and a section or group left empty left out', () => {
   const kept = sendable(
     bound([
       ...many(10, (at) => image(`Top ${at}`)),
@@ -134,6 +134,7 @@ test('21 images send 20, those in a section and a group counted, and a section l
       image('The 20th'),
       image('The 21st'),
       section('Only images', [image('Over')]),
+      { type: 'group', title: 'Only images', sections: [section('S', [image('Over')])] },
       text('After'),
     ]),
   ) as Json[];
@@ -141,7 +142,30 @@ test('21 images send 20, those in a section and a group counted, and a section l
   assert.equal(alts.length, L.images);
   assert.equal(alts.at(-1), '"alt":"The 20th"', 'the first 20 kept');
   assert.deepEqual(kept.at(-1), { type: 'text', text: 'After' }, 'what follows still sent');
-  assert.equal(kept.length, 14, 'the 21st and the section of only it left out');
+  assert.equal(kept.length, 14, 'the 21st, and the section and the group of only images, left out');
+  assert.ok(
+    kept.every((one) => one.type !== 'group' || one.title !== 'Only images'),
+    'a group whose sections hold only images past the 20th is left out',
+  );
+});
+
+test('with room for one block left of the 300, a group that fits no section is the last: none after it', () => {
+  const kept = sendable(
+    bound([
+      ...many(7, (at) =>
+        section(
+          `S${at}`,
+          many(40, () => text('x')),
+        ),
+      ),
+      ...many(12, () => text('y')),
+      { type: 'group', title: 'No room', sections: [section('S', [text('x')])] },
+      text('After'),
+    ]),
+  ) as Json[];
+  // Seven sections of 40 are 287, twelve texts 12 more: 299, and the group needs 3.
+  assert.equal(kept.length, 19, 'the group and what follows left out');
+  assert.deepEqual(kept.at(-1), { type: 'text', text: 'y' }, 'nothing after the 299 is sent');
 });
 
 test('a group: 13 sections send 12; a group inside a section, a section in its section, none, left out', () => {

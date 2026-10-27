@@ -167,9 +167,15 @@ test("the platform's fixtures pass through unchanged; its drawn file is bounded 
     assertValid(validate, { outcome: 'success', blocks: sent }, name);
     assert.deepEqual(boundedBlocks(sent), sent, name);
   }
-  const all = fixture('emitted-all-twelve').map((block) => block.type);
-  assert.deepEqual(new Set(all), new Set(EMITTED_BLOCK_TYPES), 'all twelve, each once');
-  assert.equal(all.length, EMITTED_BLOCK_TYPES.length + 1, 'and a second text');
+  const counts = new Map<string, number>();
+  for (const block of fixture('emitted-all-twelve')) {
+    counts.set(block.type, (counts.get(block.type) ?? 0) + 1);
+  }
+  assert.deepEqual(
+    Object.fromEntries(counts),
+    Object.fromEntries(EMITTED_BLOCK_TYPES.map((type) => [type, type === 'text' ? 2 : 1])),
+    'all twelve: text twice, each other type once',
+  );
   const drawn = fixture('emitted-all-nine');
   assert.deepEqual(
     new Set(drawn.map((block) => block.type)),
