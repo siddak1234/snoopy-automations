@@ -71,7 +71,7 @@
 
 ### Tests
 
-- `test/`: architecture, conformance, doc, isolation, kit, manifest, repo, workflow
+- `test/`: architecture, conformance, doc, flow, isolation, kit, manifest, repo, research, workflow
 
 ## Skills, agents and hooks
 
