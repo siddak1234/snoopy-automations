@@ -1,8 +1,9 @@
 # <Flow name>: the merge order
 
-A flow is one `snoopy-automations` pull request, and a merge to `main` is the deploy (the
-platform's ADR-0047): no pin, registration or release pull request follows one, and no backend or
-client pull request comes with it (`/create-flow` v3, the platform's BUILD-PLAN 29.3). The session
+A flow is one `snoopy-automations` pull request, or two when the menu lacks a provider or an
+operation it calls (the backend's provider file first, step 1: `provider-pr.md`), and a merge to
+`main` is the deploy (the platform's ADR-0047): no pin, registration or release pull request
+follows one, and no client pull request comes with it (`/create-flow` v4, Round 21). The session
 writes this list out for the owner at stage 6 and fills it in as it goes — each pull request's link
 once its required check is green on the head, each run's summary as read. The owner merges every
 pull request, and says go, in manual permission mode, for any step that touches production outside
@@ -14,16 +15,19 @@ Run details, but not its body. So until the TestFlight build that draws blocks (
 live, the session prepares step 2 and the owner does not merge it; the session says so with the
 link.
 
-1. **The provider file** (a new vendor only): the `snoopy-backend` pull request with its one
-   `providers/<id>.json`, the owner's credentials set in the vendor's console first. The session
+1. **The provider file** (two pull requests only): the `snoopy-backend` pull request
+   [provider-pr.md](provider-pr.md) specifies, its one `providers/<id>.json` and the menu re-emitted,
+   the owner's console steps done first. The session
    pushes and opens it; while Actions is out of minutes, `node scripts/local-ci.mjs --pr <n>` posts
    the required check, `local/all-green`. Merge; read its CD run
    (`snoopy-backend/.github/workflows/cd.yml`): its summary, then the public entrance.
 2. **The automations pull request.** Its `contract/` is the platform's `main`'s `schemas/`, byte for
    byte (`cmp` each file, the commit cited in `snoopy-automations/contract/README.md`); re-vendored
-   first if the platform's `schemas/` moved since. Then its gate. Merge; read the Deploy job's
-   summary, each automation's outcome as README.md's 'Adding an automation' step 4 lists them, and
-   the platform's Flow CD run it dispatched.
+   first if the platform's `schemas/` moved since — after step 1, to its merge, so the menu lists the
+   provider. Then its gate. Merge; read the Deploy job's
+   summary, each automation's outcome as README.md's 'Build a flow' step 5 lists them, and
+   the platform's Flow CD run it dispatched. The live flows' rows are there too: the root lock is
+   an input of every image, so they redeploy at their versions (README.md, 'Build a flow').
 3. **The screens**: the website and the app read the flow from the platform — no client pull
    request, no TestFlight build for a flow; then the owner's test on the phone, and stage 7's
    screens.

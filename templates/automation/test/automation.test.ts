@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { test } from 'node:test';
 
 import {
+  FLOW_WORDS,
   idempotencyKeyFor,
   loadPrompts,
   readManifests,
@@ -15,7 +16,7 @@ import {
   refusalFixture,
 } from '@autom8x/automation-sdk/testing';
 
-import { MODELS, TEMPLATE_ID, define } from '../src/automation.js';
+import { MODELS, TEMPLATE_ID, WORDS, define } from '../src/automation.js';
 
 /**
  * The template's own suite — what a new automation starts from. The example
@@ -39,7 +40,10 @@ function invoke(overrides: Partial<InvokeRequest> = {}): InvokeRequest {
 function platformWith(fields: unknown): RecordingPlatform {
   const platform = new RecordingPlatform();
   platform.artifacts = [artifactFixture({ artifactId: 'doc-1', filename: 'doc.txt' })];
-  platform.bytes = () => new TextEncoder().encode('Invoice from Contoso, total 120.50');
+  // The document prints the vendor the model reads, so the exact-quote check (Q1) passes.
+  const vendor = (fields as { vendor?: unknown }).vendor;
+  platform.bytes = () =>
+    new TextEncoder().encode(`Invoice from ${String(vendor ?? 'Contoso')}, total 120.50`);
   platform.model = () =>
     Promise.resolve({
       text: JSON.stringify(fields),
@@ -181,32 +185,35 @@ test('an amount above the threshold ends the run held, and the approval records 
   });
 });
 
-test('a completion that is not the fields the schema asked for fails the run without quoting it', async () => {
+test('a completion off its schema is asked once more, then held for a person, never quoted', async () => {
   const secret = 'ACCOUNT-9911-ROUTING-2200';
-  // Off the declared schema: the platform refuses it before the step sees it, typed,
-  // and the recording platform answers as the platform does (SDK 25.3.10).
+  // Off the declared schema: the platform refuses it before the step sees it, typed, and the
+  // recording platform answers as the platform does (SDK 25.3.10). `defineFlow` asks once more
+  // with one fixed line (Q2), and holds the run when the answer misses again.
   const offSchema = platformWith({ vendor: 'Contoso', note: secret });
-  await assert.rejects(
-    automation.execute(invoke(), offSchema),
-    (error: unknown) =>
-      error instanceof Error &&
-      /output_schema_mismatch at \$ \(required:amount\)/u.test(error.message) &&
-      !error.message.includes(secret),
-  );
-  assert.equal(
-    offSchema.steps.at(-1)?.summary,
-    'The extract step failed: the model call was refused (output_schema_mismatch)',
-  );
-  assert.ok(!JSON.stringify(offSchema.steps).includes(secret));
+  const result = await automation.execute(invoke(), offSchema);
+  assert.ok(result.outcome === 'held');
+  assert.equal(result.held.reason, FLOW_WORDS.ai_unmatched);
+  assert.equal(offSchema.modelCalls.length, 2, 'one more paid call, never a third');
+  assert.ok(!JSON.stringify([result, offSchema.steps]).includes(secret));
   assert.equal(offSchema.providerCalls.length, 0);
 
   // In the schema's shape but empty where the step needs a value: the step's own check.
   const empty = platformWith({ vendor: ' ', amount: 120 });
   assert.deepEqual(await automation.execute(invoke(), empty), {
     outcome: 'failed',
-    failureReason: 'the extraction did not yield a vendor and an amount',
+    failureReason: WORDS.noFields,
   });
   assert.equal(empty.providerCalls.length, 0);
+});
+
+test('a vendor the document does not print is held for a person (Q1)', async () => {
+  const platform = platformWith({ vendor: 'Contoso', amount: 12 });
+  platform.bytes = () => new TextEncoder().encode('Invoice from Fabrikam, total 12.00');
+  const result = await automation.execute(invoke(), platform);
+  assert.ok(result.outcome === 'held');
+  assert.equal(result.held.reason, WORDS.checkVendor);
+  assert.ok(!('document' in result.held.state), 'the document is not kept in the held state');
 });
 
 test('a provider refusal fails the run at act, and a refused mail does not', async () => {
@@ -214,7 +221,7 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
   refusing.provider = () => Promise.resolve({ status: 403, body: {} });
   assert.deepEqual(await automation.execute(invoke(), refusing), {
     outcome: 'failed',
-    failureReason: 'the provider refused the record with 403',
+    failureReason: FLOW_WORDS.vendor_refused,
   });
   assert.equal(refusing.providerCalls.length, 1, "the provider's own answer is never retried");
 
@@ -228,7 +235,7 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
   assert.equal(unmailed.steps.at(-1)?.outcome, 'failed');
 });
 
-test('act, a provider write, declares no retry: a failure the platform did not decide fails the run, and the provider is called once', async () => {
+test('act, a provider write, declares no retry: a failure the platform did not decide ends the run in plain words, and the provider is called once', async () => {
   assert.deepEqual(automation.retry, {});
   const platform = platformWith({ vendor: 'Contoso', amount: 120.5 });
   // The Edge could not reach Runs: a 502 that names no reason. The first call may
@@ -240,14 +247,17 @@ test('act, a provider write, declares no retry: a failure the platform did not d
   });
   platform.provider = () => Promise.reject(refusal);
   const request = invoke();
-  await assert.rejects(automation.execute(request, platform), (thrown) => thrown === refusal);
+  assert.deepEqual(await automation.execute(request, platform), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.vendor_down,
+  });
   assert.deepEqual(
     platform.providerCalls.map((call) => call.idempotencyKey),
     [idempotencyKeyFor(request.runId, 'act')],
   );
   assert.deepEqual(
     platform.steps.filter((step) => step.stepId === 'act').map((step) => step.summary),
-    ['The act step failed'],
+    [FLOW_WORDS.vendor_down],
   );
   assert.equal(platform.modelCalls.length, 1, 'the extraction before it is not repeated');
 });

@@ -2,10 +2,14 @@ import { fileURLToPath } from 'node:url';
 
 import {
   boundedBlocks,
-  defineAutomation,
+  FLOW_WORDS,
+  defineFlow,
+  failed,
   held,
   loadPrompts,
+  quotesIn,
   readJsonCompletion,
+  settle,
   truncateText,
   type Automation,
   type EmittedBlock,
@@ -16,8 +20,11 @@ import {
 } from '@autom8x/automation-sdk';
 
 /**
- * The template automation. Copy `templates/automation` to `automations/<id>`,
- * replace `example` with your templateId everywhere, and change the steps.
+ * The template automation, on `defineFlow` (Round 21): the SDK's standards are on — a throw ends
+ * the run in plain words, an answer off its schema is asked once more and then held for a person,
+ * the step retry's waits are spread — and each risky call goes through `settle`. A new flow is not
+ * copied from here by hand: `npm run scaffold -- <id>` writes its frame from its manifest (README,
+ * "Build a flow"); this file is the worked example of the steps a developer then writes.
  *
  * It has the shape the platform's first real automation needs (its BUILD-PLAN
  * 25.4.1): it reads the file its run was given, extracts with a model call through
@@ -39,16 +46,18 @@ if (!extractFields) throw new Error('prompts/extract-fields.v1.json is missing')
 /** The most of a document the model is handed, in characters. */
 const MAXIMUM_DOCUMENT_LENGTH = 20_000;
 
+/** The template's own sentences — a flow's are its spec's §8, in its `words.md` too. */
+export const WORDS = {
+  noReference: 'The run named no document.',
+  noFields: "The vendor and the amount can't be read. Try a clearer file.",
+  checkVendor: "The vendor's name isn't on the document. Someone should check it.",
+  bigAmount: 'Someone should approve this before it is recorded.',
+} as const;
+
 const receive: Step = async ({ request, platform }) => {
   const reference =
     typeof request.input.reference === 'string' ? request.input.reference.trim() : '';
-  if (reference === '') {
-    return {
-      outcome: 'failed',
-      summary: 'The run named no document',
-      failureReason: 'input must carry a reference',
-    };
-  }
+  if (reference === '') return failed(WORDS.noReference, 'no_reference');
   const artifactId = request.input.artifactId;
   if (typeof artifactId !== 'string' || artifactId.trim() === '') {
     return { outcome: 'ok', summary: `Received ${reference}`, state: { reference, document: '' } };
@@ -70,50 +79,63 @@ const receive: Step = async ({ request, platform }) => {
 // 'google/gemini-3.1-flash-lite'], both qualifying on 2026-10-10.
 export const MODELS: readonly string[] | undefined = undefined; // the platform's default
 
-const extract: Step = async ({ state, platform }) => {
-  // The document travels as the model's INPUT; the prompt is rendered from the
-  // reference alone. The completion is parsed without ever quoting it.
-  const completion = await platform.callModel(
-    extractFields,
-    { reference: String(state.reference ?? ''), document: String(state.document ?? '') },
-    MODELS,
+const extract: Step = async (context) => {
+  const { state, platform } = context;
+  // The document travels as the model's INPUT; the prompt is rendered from the reference alone.
+  // `defineFlow` asks once more when the answer misses its schema, and holds the run for a person
+  // when it misses again (Q2) — one to three more paid AI calls; `settle` words the rest.
+  const asked = await settle(context, () =>
+    platform.callModel(
+      extractFields,
+      { reference: String(state.reference ?? ''), document: String(state.document ?? '') },
+      MODELS,
+    ),
   );
-  const fields = readJsonCompletion(completion);
+  if (!asked.ok) return failed(asked.sentence, asked.kind);
+  const fields = readJsonCompletion(asked.value);
   const vendor = typeof fields.vendor === 'string' ? fields.vendor.trim() : '';
   const amount = fields.amount;
   if (vendor === '' || typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
-    return {
-      outcome: 'failed',
-      summary: 'The model did not return the fields the schema asked for',
-      failureReason: 'the extraction did not yield a vendor and an amount',
-    };
+    return failed(WORDS.noFields, 'no_fields');
   }
   return {
     outcome: 'ok',
     summary: `Extracted ${vendor}, ${format(amount)}`,
-    state: { reference: state.reference, vendor, amount },
+    state: { reference: state.reference, document: state.document, vendor, amount },
   };
 };
 
 const review: Step = async ({ request, state }) => {
   const amount = typeof state.amount === 'number' ? state.amount : NaN;
   if (!Number.isFinite(amount)) return malformedState();
+  const { document, ...kept } = state;
+  // Q1: a vendor the document does not print, word for word, is one a person checks.
+  const text = typeof document === 'string' ? document : '';
+  if (text !== '' && quotesIn(text, { vendor: state.vendor }).length > 0) {
+    return held({
+      summary: WORDS.checkVendor,
+      heldReason: WORDS.checkVendor,
+      state: kept,
+    });
+  }
   const threshold = readThreshold(request.config);
   if (amount > threshold) {
     return held({
       summary: `Amount ${format(amount)} is above the ${format(threshold)} threshold`,
-      heldReason: 'Someone should approve this before it is recorded',
+      heldReason: WORDS.bigAmount,
       reason: `${String(state.vendor)} — ${format(amount)}, above the ${format(threshold)} threshold`,
-      state: { ...state, threshold },
+      state: { ...kept, threshold },
     });
   }
   return {
     outcome: 'ok',
     summary: `Amount ${format(amount)} is within the ${format(threshold)} threshold`,
+    state: kept,
   };
 };
 
-const act: Step = async ({ request, state, platform }) => {
+const act: Step = async (context) => {
+  const { request, state, platform } = context;
   if (typeof state.reference !== 'string' || typeof state.amount !== 'number')
     return malformedState();
   // The platform attaches the workspace's grant and this step's idempotency key.
@@ -121,18 +143,15 @@ const act: Step = async ({ request, state, platform }) => {
   // record of it; a re-run after NO answer calls the provider again, which records
   // the document twice unless the vendor deduplicates on `Idempotency-Key` — so
   // this step declares no retry (README, "Retrying a step").
-  const answer = await platform.callProvider({
-    providerId: 'example-provider',
-    operation: 'records.create',
-    input: { reference: state.reference, vendor: state.vendor, amount: state.amount },
-  });
-  if (answer.status < 200 || answer.status >= 300) {
-    return {
-      outcome: 'failed',
-      summary: `The provider refused the record with ${answer.status}`,
-      failureReason: `the provider refused the record with ${answer.status}`,
-    };
-  }
+  // `settle` answers a refusal, a vendor's own non-2xx and a missing connection in the SDK's words.
+  const sent = await settle(context, () =>
+    platform.callProvider({
+      providerId: 'example-provider',
+      operation: 'records.create',
+      input: { reference: state.reference, vendor: state.vendor, amount: state.amount },
+    }),
+  );
+  if (!sent.ok) return failed(sent.sentence, sent.kind);
   return {
     outcome: 'ok',
     summary: `Recorded ${state.reference} ${decisionOf(request)}`,
@@ -168,7 +187,7 @@ const notify: Step = async ({ request, state, platform }) => {
 };
 
 export function define(manifests: readonly Manifest[]): Automation {
-  return defineAutomation({
+  return defineFlow({
     templateId: TEMPLATE_ID,
     manifests,
     prompts,
@@ -231,12 +250,8 @@ function decisionOf(request: InvokeRequest): string {
   return request.continuation ? 'after approval' : 'automatically, within threshold';
 }
 
-function malformedState(): { outcome: 'failed'; summary: string; failureReason: string } {
-  return {
-    outcome: 'failed',
-    summary: 'The run state did not carry the extracted fields',
-    failureReason: 'the run state did not carry the extracted fields',
-  };
+function malformedState() {
+  return failed(FLOW_WORDS.other, 'malformed_state');
 }
 
 function readThreshold(config: JsonObject): number {

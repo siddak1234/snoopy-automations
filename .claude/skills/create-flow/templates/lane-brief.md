@@ -1,6 +1,6 @@
 # Brief — snoopy-automations lane: <the flow> (Round <n>)
 
-The fixed parts of the flow's brief (`/create-flow` v3: one builder, one review, one pull request);
+The fixed parts of the flow's brief (`/create-flow` v4: one builder, one review, one pull request);
 the `build-round` workflow's design stage fills the angle brackets and writes the Build section, and
 the workflow hands the brief to its lane and its reviewer by path, at
 `<runDir>/brief-snoopy-automations.md`. A new vendor's provider
@@ -17,15 +17,21 @@ Read first: CLAUDE.md, docs/MAP.md, the `new-automation-version` skill; then the
 ## The contract
 
 `contract/schemas/` is the platform's `main`'s `schemas/`, byte for byte (the commit is named in
-`contract/README.md`): the blocks (`automation-run-result.json`, `$defs.emittedBlock`), the page
-parts (`automation-manifest.json`, `display.pages`) and, in `contract/README.md`, the rules beyond
-the schema. Never edit it but to re-vendor. A shape the flow needs that is not there — a block, a
+`contract/README.md`): the menu (`platform-menu.json`: the blocks, page parts, controls, triggers,
+capabilities, each integration's operations and the limits), the blocks' shapes
+(`automation-run-result.json`, `$defs.emittedBlock`), the page parts (`automation-manifest.json`,
+`display.pages`) and, in `contract/README.md`, the rules beyond the schema. Never edit it but to re-vendor. A shape the flow needs that is not there — a block, a
 page part, a question form or a target (the platform's ADR-0048 decision 12), or a control (a
 platform round under v3: a flow has no platform lane, 29.3.2) — is a finding in the summary and
 the end of the lane: a platform change, never a guess and never an edit.
 The lane edits no other repository.
 
 ## Build
+
+Write `manifests/<name>.v1.json` from the spec's sections 1–3 and 5–7, then `npm run scaffold --
+<name>`: the frame (README.md, "Build a flow", step 2). The lane writes the steps on `defineFlow`
+(each risky call through `settle`, each failure through `failed` in section 8's words), the prompts
+and the tests; `automations/<id>/test/drill.test.ts` gets what a good run reads (README.md, "A new flow's standards").
 
 <What to build, from the spec, the words list and the plan; the files it may open; anything the
 plan leaves open is chosen by the nearest precedent in this repository and named in the summary —

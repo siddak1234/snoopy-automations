@@ -152,6 +152,12 @@ export {
 export type { PromptModule } from './prompt.js';
 export type { RetryPolicy } from './retry.js';
 export { defineAutomation } from './runner.js';
+export { defineFlow, quotesIn } from './flow.js';
+export type { FlowDefinition } from './flow.js';
+export { failed, optionalConnection, settle } from './settle.js';
+export type { SettleKind, Settled } from './settle.js';
+export { FLOW_WORDS, notSentLine } from './words.js';
+export type { FlowWord } from './words.js';
 export { PART_PATTERN, held, idempotencyKeyFor, partKey } from './steps.js';
 export type {
   Automation,

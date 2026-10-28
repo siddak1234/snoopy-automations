@@ -230,3 +230,12 @@ test('a bill whose number an expense already carries, whoever its payee, holds a
     'Possible duplicate',
   );
 });
+
+test('5c: a read that writes its type "Bill" ends on the bill route, the platform converting it to the schema’s spelling', async () => {
+  // The platform hands on "Bill" as `bill` (its Round 21, 5c); the recording platform does too,
+  // so an exact `case 'bill'` takes the bill branch and never the wrong one.
+  const { world, steps } = await route({ answer: bill({ documentType: 'Bill' }) });
+  assert.ok(steps.includes('create-records'), steps.join(', '));
+  const output = planned(world.result);
+  assert.deepEqual([output.outcome, output.route], ['recorded', 'bill']);
+});

@@ -16,7 +16,9 @@ to the spec's section 11 with its default, never a new round of questions.
 ## The run
 
 The Workflow tool, with `scriptPath` set to the clone's `.claude/workflows/flow-research.js` and
-`args` set to `{ runDir, automations, backend, name, idea, answers, platform }`. Inside: the
+`args` set to `{ runDir, automations, name, idea, answers, platform }` — no backend clone: the
+vendors lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
+is read-only and its files a source too). Inside: the
 owner's words quoted, never researched; four lenses — practice and expert judgement; rules,
 standards and data; vendors and integrations; the streamlining of the process — at most three
 agents at once; one synthesis from the gated findings only; one skeptic that re-opens every cited

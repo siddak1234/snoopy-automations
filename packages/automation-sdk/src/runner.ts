@@ -1,4 +1,10 @@
-import type { InvokeRequest, JsonObject, RunResult } from './contract.js';
+import type {
+  InvokeRequest,
+  JsonObject,
+  ModelCompletion,
+  ModelRequest,
+  RunResult,
+} from './contract.js';
 import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import { renderPrompt, type PromptModule } from './prompt.js';
@@ -12,11 +18,14 @@ import {
   withAttempts,
 } from './retry.js';
 import {
+  type AttemptOf,
   type Automation,
   type AutomationDefinition,
+  type RunnerStandards,
   type ModelCallOptions,
   type StepContext,
   type StepPlatform,
+  type StepResult,
   idempotencyKeyFor,
   partKey,
 } from './steps.js';
@@ -59,6 +68,14 @@ import {
  * returned it (platform ADR-0037: a flow may run without an optional connection).
  */
 export function defineAutomation(definition: AutomationDefinition): Automation {
+  return buildRunner(definition);
+}
+
+/** The runner, with `standards` when `defineFlow` builds it. */
+export function buildRunner(
+  definition: AutomationDefinition,
+  standards?: RunnerStandards,
+): Automation {
   const { templateId, manifests, steps, result } = definition;
   const prompts = definition.prompts ?? [];
   if (manifests.length === 0) throw new Error(`${templateId} serves no manifest version`);
@@ -179,19 +196,36 @@ export function defineAutomation(definition: AutomationDefinition): Automation {
       // the platform's record for the key rather than a fresh one. Reported ONCE,
       // after the last attempt, with the count when it took more than one.
       const policy = retries.get(stepId);
+      const waits = policy ? (standards?.waits ?? backoffWaits)(policy) : [];
+      let current: AttemptOf = { context, retryable: retryableUnder(policy) };
       const attempted = await attempt(
-        () => step(context),
-        policy ? backoffWaits(policy) : [],
+        (number) => {
+          if (standards) {
+            current = standards.attemptOf(number, {
+              context,
+              policy,
+              waits,
+              platform,
+              platformWith: (send) =>
+                stepPlatform(platform, manifest, registered, idempotencyKey, send),
+            });
+          }
+          return step(current.context);
+        },
+        waits,
         request.deadline,
         undefined,
-        retryableUnder(policy),
+        (error) => current.retryable(error),
       );
       const { attempts } = attempted;
       // A step that threw until its attempts were spent: the automation's own result for it, if
-      // it gives one (`recover`); otherwise the throw ends the run.
+      // it gives one (`recover`); otherwise the throw ends the run — or, under `defineFlow`, its
+      // standard result (`standards.thrown`).
       const outcome = attempted.threw
-        ? definition.recover?.(stepId, attempted.error, context)
+        ? (definition.recover?.(stepId, attempted.error, current.context) ??
+          standards?.thrown(stepId, attempted.error, current.context))
         : attempted.result;
+      if (outcome !== undefined) standards?.returned(stepId, outcome, current.context);
       if (outcome === undefined) {
         const error = attempted.threw ? attempted.error : undefined;
         // The timeline names the step the run died in. The summary is fixed text:
@@ -295,6 +329,8 @@ function stepPlatform(
   manifest: Manifest,
   registered: ReadonlyMap<string, PromptModule>,
   idempotencyKey: string,
+  send: (request: ModelRequest) => Promise<ModelCompletion> = (request) =>
+    platform.callModel(request),
 ): StepPlatform {
   return {
     callModel(prompt, input, options) {
@@ -313,14 +349,16 @@ function stepPlatform(
           `prompt ${module.id} v${module.version} uses ${module.capability}, which ${manifest.templateId} v${manifest.version} does not declare`,
         );
       }
-      const { models, excludeModelAuthors, artifactId }: ModelCallOptions = Array.isArray(options)
-        ? { models: options as readonly string[] }
-        : ((options ?? {}) as ModelCallOptions);
-      return platform.callModel({
+      const { models, excludeModelAuthors, artifactId, maxOutputTokens }: ModelCallOptions =
+        Array.isArray(options)
+          ? { models: options as readonly string[] }
+          : ((options ?? {}) as ModelCallOptions);
+      return send({
         ...renderPrompt(module, input),
         ...(models === undefined ? {} : { models }),
         ...(excludeModelAuthors === undefined ? {} : { excludeModelAuthors }),
         ...(artifactId === undefined ? {} : { artifactId }),
+        ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
       });
     },
     // A part names one of several side effects of the step: its own key, the same on every attempt.

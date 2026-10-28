@@ -15,25 +15,28 @@ import { oneLine, toArtifactListing } from './contract.js';
 import type { InvokeItem } from './item.js';
 import { readManifest } from './manifest.js';
 import { modelAuthor, modelRequestProblem } from './model-request.js';
-import { outputSchemaProblem, schemaMismatch, type SchemaMismatch } from './output-schema.js';
+import {
+  outputSchemaProblem,
+  respellEnums,
+  schemaMismatch,
+  type SchemaMismatch,
+} from './output-schema.js';
 import { type AutomationPlatform, boundedResult } from './platform.js';
 import { type CallbackRefusedError, refusalFrom } from './refusals.js';
 
 /**
  * Test doubles for an automation's own suite.
  *
- * An automation is tested against a recording platform rather than a live one:
- * what matters in its suite is which steps it claims and what it hands back, and
- * both are decisions its code makes on its own. Whether the platform accepts them
- * is proven by the SDK's own tests against the wire, and end to end under Compose.
+ * An automation is tested against a recording platform rather than a live one: what matters in
+ * its suite is which steps it claims and what it hands back, and both are decisions its code
+ * makes on its own. Whether the platform accepts them is proven by the SDK's own tests against
+ * the wire, and end to end under Compose.
  *
- * The double behaves as the client does on the two things an author's code can
- * branch on: one-line fields are bounded and refused when empty, and a file this
- * run was not given is a `CallbackRefusedError` with status 404. It also refuses
- * the one mistake no branch answers, as the client does: a model request whose
- * `models`, `excludeModelAuthors` or `artifactId` the platform would answer 400 is
- * refused in the client's words before it is recorded, so an author's own suite is
- * where the mistake shows.
+ * The double behaves as the client does on the two things an author's code can branch on:
+ * one-line fields are bounded and refused when empty, and a file this run was not given is a
+ * `CallbackRefusedError` with status 404. It also refuses the one mistake no branch answers, as
+ * the client does: a model request the platform would answer 400 is refused in the client's
+ * words before it is recorded, so an author's own suite is where the mistake shows.
  *
  * **A model call is answered as the platform's callback answers it** (platform
  * BUILD-PLAN 25.2.3, 25.2.20, 25.2.22, 25.2.29; SDK 25.3.10), in its order: a schema
@@ -44,12 +47,14 @@ import { type CallbackRefusedError, refusalFrom } from './refusals.js';
  * could not use (filtered, truncated, empty, not the declared schema) and an attempt
  * that got no answer (`NO_ANSWER`) fall to the next model, in the platform's order;
  * and when none answers usably the call is the last refusal, typed as the platform
- * types it. An error `model` throws ends the call as thrown.
+ * types it. An error `model` throws ends the call as thrown. A usable answer is handed on
+ * as the platform hands it: an enum value in another case in the schema's spelling (5c).
  *
  * Exported from `@autom8x/automation-sdk/testing` so no automation re-implements
  * the double — the one in the original template went stale the moment the wire
- * grew a message it did not know about.
+ * grew a message it did not know about. `failureDrill` (`drill.ts`) is exported from here too.
  */
+export { failureDrill, type DrillFixture } from './drill.js';
 
 /** Records every call and answers from what the test configured. */
 export class RecordingPlatform implements AutomationPlatform {
@@ -160,7 +165,7 @@ export class RecordingPlatform implements AutomationPlatform {
       const answer = await this.model(request, model);
       const refusal = unusable(answer, request.outputSchema);
       this.modelAttempts.push({ model, outcome: refusal ? refusal.outcome : 'ok' });
-      if (!refusal) return answer as ModelCompletion;
+      if (!refusal) return respelled(answer as ModelCompletion, request.outputSchema);
       last = refusal.error;
     }
     throw last ?? new Error('the call named no model');
@@ -258,10 +263,17 @@ function unusable(
       error: refusal(detail, 'output_schema_mismatch', { path: '$', rule: 'json' }),
     };
   }
-  const mismatch = schemaMismatch(parsed, outputSchema);
+  const mismatch = schemaMismatch(respellEnums(parsed, outputSchema).value, outputSchema);
   if (!mismatch) return undefined;
   const detail = 'The model completion does not match the request outputSchema';
   return { outcome: 'refused', error: refusal(detail, 'output_schema_mismatch', mismatch) };
+}
+
+/** A usable answer as the platform hands it on: an enum in another case in the schema's spelling (5c). */
+function respelled(answer: ModelCompletion, outputSchema: JsonObject): ModelCompletion {
+  if (Object.keys(outputSchema).length === 0) return answer;
+  const { value, respelled } = respellEnums(JSON.parse(answer.text), outputSchema);
+  return respelled ? { ...answer, text: JSON.stringify(value) } : answer;
 }
 
 /** A valid invoke, with fixture values an automation's tests can override. */

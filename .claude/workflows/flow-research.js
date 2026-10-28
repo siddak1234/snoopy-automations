@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Research one flow idea before its spec: the owner's words, four lenses (at most three at once), one synthesis, one skeptic, research.json (/create-flow stage 1b).",
   whenToUse:
-    'After /create-flow stage 1 (the platform check and the decisions); pass args { runDir, automations, backend, name, idea, answers, platform, writeAttempt? }.',
+    'After /create-flow stage 1 (the platform check and the decisions); pass args { runDir, automations, name, idea, answers, platform, backend?, writeAttempt? }; no backend clone is needed: the vendors lens reads the menu in contract/schemas.',
   phases: [
     { title: 'Frame', detail: "the owner's words, quoted; the lens questions; no research" },
     { title: 'Lenses', detail: 'practice, rules, vendors at once; streamlining after practice' },
@@ -26,8 +26,8 @@ export const meta = {
 // test/flow-research.ts compiles this file as the harness runs it, an async function body.
 const { runDir, automations, backend, name, idea, answers, platform } = args ?? {};
 const writeAttempt = args?.writeAttempt ?? 1;
-const needs = 'flow-research needs args { runDir, automations, backend, name, idea, answers }';
-if (!runDir || !automations || !backend || !name || !idea) throw new Error(needs);
+const needs = 'flow-research needs args { runDir, automations, name, idea, answers }';
+if (!runDir || !automations || !name || !idea) throw new Error(needs);
 const LENSES = ['practice', 'rules', 'vendors', 'streamlining'];
 const CAP = { simple: 10, broad: 15 }; // tool calls a lens: A1 "2-4 subagents with 10-15 calls each"
 const MAX_FINDINGS = 12;
@@ -58,8 +58,8 @@ const LENS = {
     'how people judge (practice); vendors (vendors); the process (streamlining)',
   ],
   vendors: [
-    `the vendors and tools that serve this job: for each, its API, its auth, its limits (rate, size, quota), its cost from its own pricing page, and its errors; whether ${backend}/providers/*.json already declares it (id, auth, api, scopes, operations) or it must be added; the model vendors' rules that bind our calls`,
-    "each vendor's own docs and pricing pages (T1); our provider files by path:line (T1)",
+    `the vendors and tools that serve this job: for each, its API, its auth, its limits (rate, size, quota), its cost from its own pricing page, and its errors; whether the menu, ${automations}/contract/schemas/platform-menu.json, already lists it (id, auth, scopes, operations) or it must be added; the model vendors' rules that bind our calls`,
+    "each vendor's own docs and pricing pages (T1); the menu by path:line (T1)",
     'expert criteria (practice); laws (rules); the process (streamlining)',
   ],
   streamlining: [
@@ -156,8 +156,8 @@ let skeptic = 'it was not reached';
 function dropWhy(f, flagged) {
   if (flagged.has(f.url)) return 'its page tried to direct a researcher';
   if (f.tier === 'T4') return 'a tier 4 page, a lead only';
-  const source =
-    /^https:\/\//u.test(f.url) || f.url.startsWith(automations) || f.url.startsWith(backend);
+  const roots = [automations, backend].filter(Boolean); // no backend clone: this repository alone
+  const source = /^https:\/\//u.test(f.url) || roots.some((root) => f.url.startsWith(root));
   return !source || f.quote.trim().length < 12 ? 'no usable source or quote' : '';
 }
 const capped = (r) => r.findings.slice(0, MAX_FINDINGS);
@@ -219,7 +219,7 @@ try {
         ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
         : '') +
       `At most ${cap} tool calls and ${MAX_FINDINGS} findings. Search short and broad, then narrow; prefer T1 (regulator, statute, standards body, the vendor's own docs, our repos by path:line) and T2 (professional bodies, practitioner standards, named experts); T3 only reporting on those; T4 (SEO pages, forums, AI-written pages) never cited. ` +
-      `Each finding: one claim, the URL you fetched, the exact words from that page, its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${automations} and ${backend} are read-only. ${DATA}`;
+      `Each finding: one claim, the URL you fetched, the exact words from that page, its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${backend === undefined ? `${automations} is` : `${automations} and ${backend} are`} read-only. ${DATA}`;
     const lensOpts = (lens) => opts('Lenses', `${lens} lens`, 'researcher', FINDINGS);
     const runLens = (lens, leads = null) =>
       once(

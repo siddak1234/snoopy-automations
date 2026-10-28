@@ -14,3 +14,7 @@ packages/automation-sdk/test/fixtures/blocks
 # repositories, canonical in snoopy-backend, so no repository's formatter may touch it.
 .claude/hooks/
 scripts/kit/
+
+# Carried byte for byte from snoopy-backend (its claude-install's CARRIED list, Round 21):
+# canonical there, so no formatter here may touch it.
+.claude/workflows/build-round.js

@@ -7,6 +7,7 @@ import type {
   JsonObject,
   MailContent,
   ModelCompletion,
+  ModelRequest,
   ProviderAnswer,
   ProviderRequest,
   RunResult,
@@ -36,6 +37,12 @@ export interface ModelCallOptions {
   models?: readonly string[];
   excludeModelAuthors?: readonly string[];
   artifactId?: string;
+  /**
+   * A first cap on the answer below the owner's (`ModelRequest.maxOutputTokens`), only where the
+   * flow's spec sets one. Under `defineFlow`, an answer cut off at it is asked once more at the
+   * owner's cap (`flow.ts`); left out, the first ask is at the cap and is never asked again.
+   */
+  maxOutputTokens?: number;
 }
 
 /**
@@ -101,6 +108,13 @@ export interface StepContext {
   /** `idempotencyKeyFor(runId, stepId)`: the one key this step's side effect carries. */
   readonly idempotencyKey: string;
   readonly platform: StepPlatform;
+  /**
+   * Under `defineFlow` only: whether the runner would run this step again after `error` — its
+   * policy repeats it, a wait remains, the next attempt starts before the deadline, and this
+   * attempt has had no model answer (a repeat would make a billed call again). `settle` rethrows
+   * while it is true. `defineAutomation` sets none.
+   */
+  readonly retryLeft?: (error: unknown) => boolean;
 }
 
 /**
@@ -226,4 +240,36 @@ export function held(input: {
 export function idempotencyKeyFor(runId: string, stepId: string): string {
   const digest = createHash('sha256').update(`${runId}\n${stepId}`, 'utf8').digest('hex');
   return `${stepId}-${digest.slice(0, 48)}`;
+}
+
+/**
+ * What `defineFlow` (`flow.ts`) changes in the runner's loop (`runner.ts`). `defineAutomation` passes none, so it
+ * runs exactly as before: the same context on every attempt, `backoffWaits`, a throw rethrown.
+ */
+export interface RunnerStandards {
+  /** The waits before each repeat of a step under this policy. */
+  waits(policy: RetryPolicy): number[];
+  /** Attempt `attempt` (1, 2, …): its context, and the test its throw must pass to be repeated. */
+  attemptOf(attempt: number, step: AttemptInputs): AttemptOf;
+  /** A step that threw until its attempts were spent, and that `recover` did not end. */
+  thrown(stepId: string, error: unknown, context: StepContext): StepResult;
+  /** A step's result, before it is reported. */
+  returned(stepId: string, result: StepResult, context: StepContext): void;
+}
+
+/** What one attempt of a step is built from. */
+export interface AttemptInputs {
+  readonly context: StepContext;
+  readonly policy: RetryPolicy | undefined;
+  readonly waits: readonly number[];
+  readonly platform: AutomationPlatform;
+  /** The step's platform with its model calls sent through `send` in place of the platform's. */
+  readonly platformWith: (
+    send: (request: ModelRequest) => Promise<ModelCompletion>,
+  ) => StepPlatform;
+}
+
+export interface AttemptOf {
+  readonly context: StepContext;
+  readonly retryable: (error: unknown) => boolean;
 }

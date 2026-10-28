@@ -2,7 +2,7 @@
   "name": "snoopy-automations",
   "version": "0.1.0",
   "private": true,
-  "description": "Autom8x automations — automation logic that calls the platform API; holds no secrets, receives only run-scoped tokens at runtime.",
+  "description": "Autom8x automations \u2014 automation logic that calls the platform API; holds no secrets, receives only run-scoped tokens at runtime.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -21,6 +21,8 @@
     "facts": "tsx scripts/repo-facts.ts",
     "check:docs": "node scripts/kit/check-docs.mjs",
     "map": "node scripts/kit/map.mjs",
+    "scaffold": "node scripts/scaffold.mjs",
+    "review-rows": "tsx scripts/review-rows.ts",
     "verify": "npm run format:check && npm run check:docs && npm run map -- --check && node scripts/audit-doc-references.mjs && npm run build && npm run typecheck && npm test && tsx scripts/repo-facts.ts --gate verify"
   },
   "devDependencies": {

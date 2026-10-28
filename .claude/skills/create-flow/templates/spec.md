@@ -15,14 +15,14 @@ Unnumbered, so sections 1–11 keep their numbers. Each line carries the ids of 
 on, lines the skeptic called supported on sources it confirmed (`/create-flow` stage 1b); a fact the
 brief does not carry is not written here.
 
-| Part                   | From the brief, with its ids                                     |
-| ---------------------- | ---------------------------------------------------------------- |
-| Today's process        | five lines or fewer: who does what, what goes in, what comes out |
-| The simplest pipeline  | five lines or fewer, on the twelve blocks                        |
-| What an expert checks  | the criteria, in order                                           |
-| The rubric             | the criteria as this flow scores or decides them                 |
-| Vendors                | each vendor, and whether `snoopy-backend/providers/` declares it |
-| Left to a person in v1 | what the first version does not decide                           |
+| Part                   | From the brief, with its ids                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| Today's process        | five lines or fewer: who does what, what goes in, what comes out                   |
+| The simplest pipeline  | five lines or fewer, on the twelve blocks                                          |
+| What an expert checks  | the criteria, in order                                                             |
+| The rubric             | the criteria as this flow scores or decides them                                   |
+| Vendors                | each vendor, and whether the menu (`contract/schemas/platform-menu.json`) lists it |
+| Left to a person in v1 | what the first version does not decide                                             |
 
 ## 1. What it is
 
@@ -64,8 +64,8 @@ Made once, from a file, by owners and admins; every run names one; its runs are 
 
 ## 3. Integrations
 
-Only providers in `snoopy-backend/providers/`, and only the operations each declares; anything else
-is section 10.
+Only providers in the menu (`snoopy-automations/contract/schemas/platform-menu.json`), and only the
+operations it lists for each; anything else is section 10.
 
 | Provider | Why, as the person reads it (200) | Operations it calls | Required, or optional with None |
 | -------- | --------------------------------- | ------------------- | ------------------------------- |
@@ -143,9 +143,9 @@ Made-up inputs only. The research brief's golden cases first, then the rest.
 
 ## 10. Needs the platform first
 
-Only a provider, or an operation, `snoopy-backend/providers/` does not declare: one provider file,
-built with the owner's credentials and merged before this flow
-(`.claude/skills/create-flow/templates/order.md`, step 1). Anything else sections 1–8 need that the
+Only a provider, or an operation, the menu does not list: one provider file in `snoopy-backend`,
+built from `.claude/skills/create-flow/templates/provider-pr.md` with the owner's console steps and
+merged before this flow (`.claude/skills/create-flow/templates/order.md`, step 1). Anything else sections 1–8 need that the
 platform does not offer is a platform change — a block, a page part, a question form or a target
 (the platform's ADR-0048 decision 12), and a control, a capability, a trigger, a department or an
 icon (a platform round under v3: a flow has no platform lane, 29.3.2): `/create-flow` stops, and

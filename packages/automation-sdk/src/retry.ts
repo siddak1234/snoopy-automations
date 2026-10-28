@@ -38,8 +38,8 @@ import type { StepResult } from './steps.js';
  *
  * The two ceilings are integrator figures, not measurements: three attempts and
  * 30 seconds of waiting in all. Callbacks reach the Edge through the platform's
- * proxy, which re-admits a restarted Edge on a 10-second health check (its
- * `deploy/Caddyfile`, `health_interval 10s`) — the transient a platform deploy
+ * proxy, which re-admits a restarted Edge on a 10-second health check (
+ * `snoopy-backend/deploy/Caddyfile`, `health_interval 10s`) — the transient a platform deploy
  * causes — so 30 seconds spans three checks, and stays a small part of a run's
  * deadline (900 s for every manifest here). Replace them when a real automation's
  * failures say otherwise.
@@ -76,8 +76,8 @@ export const MAX_STEP_BACKOFF_MS = 30_000;
  * Read at snoopy-backend `886eff5`: nothing in Runs or Connections stops when its
  * caller goes. Runs checks the run token and asks Catalog, Connections makes three
  * reads, and only then starts the provider call, bounds it at 10 seconds
- * (`apps/connections/src/operations.ts:315`) and records a final answer AFTER it
- * returns (`apps/connections/src/routes-operations.ts:227-252`), with no
+ * (`snoopy-backend/apps/connections/src/operations.ts:315`) and records a final answer AFTER it
+ * returns (`snoopy-backend/apps/connections/src/routes-operations.ts:227-252`), with no
  * reservation while it runs. A repeat that reaches Connections inside that window
  * finds no record and calls the provider a second time. Waiting at least the
  * call's own bound, 10 seconds, covers the common case — a slow provider behind a
@@ -144,6 +144,23 @@ export function backoffWaits(policy: RetryPolicy): number[] {
 }
 
 /**
+ * `backoffWaits`, each spread upward by a random part of up to half of itself, so the repeats of
+ * many runs that failed together do not arrive together (the after-pilot plan's 5a; `defineFlow`
+ * only). Never subtracted, so no wait is under its unspread value or under `MIN_STEP_BACKOFF_MS`;
+ * each addition is cut so the waits still sum to at most `MAX_STEP_BACKOFF_MS`. At three attempts
+ * 10 s + 20 s is already the cap, so there is no room and the waits are as unspread.
+ */
+export function spreadWaits(policy: RetryPolicy, random: () => number = Math.random): number[] {
+  const waits = backoffWaits(policy);
+  let room = MAX_STEP_BACKOFF_MS - waits.reduce((sum, wait) => sum + wait, 0);
+  return waits.map((wait) => {
+    const addition = Math.max(0, Math.min(Math.floor(random() * (wait / 2)), room));
+    room -= addition;
+    return wait + addition;
+  });
+}
+
+/**
  * Whether a failure may clear on its own, so that running the step again is a
  * fair question to ask.
  *
@@ -184,11 +201,11 @@ export type Attempted =
  * wait remains, and the next attempt would start before the deadline. A result
  * the step RETURNS ends it on the spot — `ok`, `failed`, `skipped` and `held`
  * alike, so a held step is never run twice; only a THROWN retryable failure is
- * re-attempted. `sleep` is the wait itself — `retryClock`'s unless a test passes one;
+ * re-attempted; `run` is told which attempt it is (1, 2, …). `sleep` is the wait itself — `retryClock`'s unless a test passes one;
  * `retryable` is the policy's test (`retryableUnder`), `isTransient` unless given.
  */
 export async function attempt(
-  run: () => Promise<StepResult>,
+  run: (attempt: number) => Promise<StepResult>,
   waits: readonly number[],
   deadline: string,
   sleep: (milliseconds: number) => Promise<unknown> = (milliseconds) =>
@@ -198,7 +215,7 @@ export async function attempt(
   const deadlineAt = Date.parse(deadline);
   for (let attempts = 1; ; attempts += 1) {
     try {
-      return { threw: false, result: await run(), attempts };
+      return { threw: false, result: await run(attempts), attempts };
     } catch (error) {
       const wait = waits[attempts - 1];
       // `<` against NaN is false: a deadline the runner cannot read allows no retry.

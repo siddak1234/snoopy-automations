@@ -6,7 +6,9 @@
 //   2 range: --base, else $DOCS_BASE, else `git merge-base origin/main HEAD`;
 //   3 a commit with `Docs-Unchanged: <reason, 12+ chars>` triggers no rule;
 //   4 each rule whose code changed needs its docs changed in the range (generated
-//     files never count);
+//     files never count); a `*` in a rule's docs path is filled with what the code
+//     glob's first `*` matched, so `automations/*/src/**` → `automations/*/README.md`
+//     asks each changed flow for its own README;
 //   5 backticked paths and relative links in changed docs (and in changed code's
 //     comments) resolve; a struck ~~`x`~~ only if git once added x; a built
 //     entrypoint (`<p>/dist/<f>.js`) through its source, and a path git ignores
@@ -25,23 +27,40 @@ const FILE =
   /\.(?:ts|tsx|mts|cts|mjs|cjs|js|jsx|json|ya?ml|md|sql|css|sh|toml|txt|html|pem|png|svg|hcl|crt|prisma|example)$|(?:^|\/)(?:Caddyfile|Dockerfile|Makefile|Procfile)$/u;
 
 const cache = new Map();
-/** A glob as a RegExp: `**` any folders (or none), `*` within one segment, `?` one character. */
-export function globToRegExp(glob) {
-  if (cache.has(glob)) return cache.get(glob);
+/**
+ * A glob as a RegExp: `**` any folders (or none), `*` within one segment, `?` one character.
+ * With `capture`, the first single `*` is a group: what a docs path's `*` is bound to.
+ */
+export function globToRegExp(glob, capture = false) {
+  const key = `${capture}\0${glob}`;
+  if (cache.has(key)) return cache.get(key);
   let re = '';
+  let captured = !capture;
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];
     if (c === '*' && glob[i + 1] === '*') {
       const atStart = i === 0 || glob[i - 1] === '/';
       if (atStart && glob[i + 2] === '/') (re += '(?:.*/)?'), (i += 2);
       else (re += '.*'), (i += 1);
-    } else if (c === '*') re += '[^/]*';
+    } else if (c === '*') (re += captured ? '[^/]*' : '([^/]*)'), (captured = true);
     else if (c === '?') re += '[^/]';
     else re += c.replace(/[.+^${}()|[\]\\]/gu, '\\$&');
   }
   const compiled = new RegExp(`^${re}$`, 'u');
-  cache.set(glob, compiled);
+  cache.set(key, compiled);
   return compiled;
+}
+/** Whether a glob has a single-segment `*` (not part of `**`) to bind a docs path to. */
+const hasStar = (glob) => /(?:^|[^*])\*(?:[^*]|$)/u.test(glob);
+/** A rule's docs for one changed file: each `*` filled with what the file's glob's first `*` matched. */
+export function boundDocs(rule, file) {
+  const docs = rule.docs ?? [];
+  if (!docs.some((d) => d.includes('*'))) return docs;
+  for (const glob of rule.code ?? []) {
+    const bound = globToRegExp(glob, true).exec(file)?.[1];
+    if (bound !== undefined) return docs.map((d) => d.replaceAll('*', bound));
+  }
+  return docs;
 }
 export const matches = (glob, path) => globToRegExp(glob).test(path);
 const any = (globs, path) => (globs ?? []).some((g) => matches(g, path));
@@ -81,7 +100,11 @@ export function checkMap(root, map, files) {
     if (!foreign(path, map, topLevel) && !has.has(path) && !reported.has(path) && reported.add(path)) add('docs/docs-map.json', `${where} names ${path}, which does not exist`, 'fix the path or create the file');
   };
   for (const rule of map.rules ?? []) {
-    for (const doc of rule.docs ?? []) need(doc, `rule ${rule.id}`);
+    for (const doc of rule.docs ?? []) {
+      if (!doc.includes('*')) need(doc, `rule ${rule.id}`);
+      else if (!files.some((f) => matches(doc, f))) add('docs/docs-map.json', `rule ${rule.id} names ${doc}, which matches no file`, 'fix the path or create the file');
+      else if (!(rule.code ?? []).every(hasStar)) add('docs/docs-map.json', `rule ${rule.id}: ${doc} needs a * in every code glob to bind to`, 'give each code glob a *, or split the rule');
+    }
     for (const glob of rule.code ?? []) {
       if (!files.some((f) => matches(glob, f))) add('docs/docs-map.json', `rule ${rule.id}: ${glob} matches no file`, 'fix the glob or remove it');
     }
@@ -240,13 +263,20 @@ export function checkRange(root, map, commits) {
     files.filter((f) => !generated.has(f) && !any(map.ignore, f)).forEach((f) => triggering.add(f));
   }
   for (const rule of map.rules ?? []) {
-    const hits = [...triggering].filter((f) => any(rule.code, f)).sort();
-    if (hits.length === 0) continue;
-    const docs = (rule.docs ?? []).filter((d) => !generated.has(d));
-    const done = docs.filter((d) => changed.has(d));
-    const ok = (rule.need ?? 'any') === 'all' ? done.length === docs.length : done.length > 0;
-    if (!ok) {
-      problems.push({ check: 'docs', file: hits[0], message: `rule ${rule.id}: ${hits.length > 1 ? `${hits[0]} and ${hits.length - 1} more` : hits[0]} changed without ${docs.join(rule.need === 'all' ? ' and ' : ' or ')}`, fix: 'update the doc that describes it, or add a "Docs-Unchanged: <reason>" trailer' });
+    // One group per set of bound docs: each flow's change asks for that flow's own doc.
+    const groups = new Map();
+    for (const f of [...triggering].filter((x) => any(rule.code, x)).sort()) {
+      const docs = boundDocs(rule, f).filter((d) => !generated.has(d));
+      const key = docs.join('\0');
+      if (!groups.has(key)) groups.set(key, { docs, hits: [] });
+      groups.get(key).hits.push(f);
+    }
+    for (const { docs, hits } of groups.values()) {
+      const done = docs.filter((d) => changed.has(d));
+      const ok = (rule.need ?? 'any') === 'all' ? done.length === docs.length : done.length > 0;
+      if (!ok) {
+        problems.push({ check: 'docs', file: hits[0], message: `rule ${rule.id}: ${hits.length > 1 ? `${hits[0]} and ${hits.length - 1} more` : hits[0]} changed without ${docs.join(rule.need === 'all' ? ' and ' : ' or ')}`, fix: 'update the doc that describes it, or add a "Docs-Unchanged: <reason>" trailer' });
+      }
     }
   }
   return { problems, changed };

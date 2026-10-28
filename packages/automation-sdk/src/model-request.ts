@@ -3,10 +3,10 @@ import type { ModelRequest } from './contract.js';
 /**
  * The models a model request may name, and the one rule each model id is held to —
  * copied from the platform, which answers a request outside them with a 400 before
- * anything is spent (its `apps/runs/src/routes-model.ts`, `requestedModels`; the rule is
- * `modelIdProblem` in its `packages/contracts/src/model-request.ts` — ADR-0033 decision 1
+ * anything is spent (`snoopy-backend/apps/runs/src/routes-model.ts`, `requestedModels`; the rule is
+ * `modelIdProblem` in `snoopy-backend/packages/contracts/src/model-request.ts` — ADR-0033 decision 1
  * as amended 2026-10-09, BUILD-PLAN 25.2.16). Copied, not imported: the boundary is the
- * wire format. `test/contract-model-request.test.ts` holds this copy to the vendored
+ * wire format. `packages/automation-sdk/test/contract-model-request.test.ts` holds this copy to the vendored
  * `automation-model-request.json` — the same pattern, the same bounds, the same answer
  * for every sample — and the words are the platform's own, so a mistake reads the same
  * in the container as in the platform's 400, only sooner and before anything left.
@@ -43,6 +43,12 @@ export const MODEL_REQUEST_LIMITS = {
   modelIdLength: 128,
   /** The makers one call may leave out (25.2.29): as many as a list holds models. */
   excludeModelAuthors: 3,
+  /**
+   * The owner's cap on one answer, in tokens (the platform's `MODEL_ANSWER_TOKEN_CAP`, sent on
+   * every call): `maxOutputTokens` may ask for less, 1 to this, never more (the platform's Round
+   * 21; the published schema's `maximum`). Without it the platform sends the cap.
+   */
+  maxOutputTokens: 8_000,
 } as const;
 
 /** Every rule at once: the published schema's `pattern`, character for character. */
@@ -99,7 +105,7 @@ export function modelsProblem(models: unknown): string | undefined {
  * An uploaded file's id, as the platform's rule has it (`ARTIFACT_ID_PATTERN` in its
  * `@snoopy/contracts`, the emitted schema's `artifactId.pattern`) — copied, as the
  * model-id rule above is, and held to the vendored schema by
- * `test/contract-model-request.test.ts`.
+ * `packages/automation-sdk/test/contract-model-request.test.ts`.
  */
 export const ARTIFACT_ID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u;
@@ -121,9 +127,9 @@ export function artifactIdProblem(artifactId: unknown): string | undefined {
  * charge if no other maker is left". Invoice Processing reads each invoice twice, and its second
  * read must be by another maker than the model that served the first, whatever the owner's
  * setting names. Copied, as the model-id rule above is, from the platform's
- * `packages/contracts/src/model-request.ts` (`MODEL_AUTHOR_PATTERN`, `modelAuthor`,
+ * `snoopy-backend/packages/contracts/src/model-request.ts` (`MODEL_AUTHOR_PATTERN`, `modelAuthor`,
  * `excludeModelAuthorsProblem`) on its branch `round-17/model-author-exclusion` at `e25fd74`,
- * not yet merged, and held to the vendored schema by `test/contract-model-request.test.ts`.
+ * not yet merged, and held to the vendored schema by `packages/automation-sdk/test/contract-model-request.test.ts`.
  *
  * The maker is OpenRouter's "author": the part of a model id before its `/`. Held to the model-id
  * rule's own characters less its three markers — `/` ends an author, `:` begins a variant and
@@ -171,9 +177,18 @@ export function excludeModelAuthorsProblem(value: unknown): string | undefined {
   return undefined;
 }
 
+/** Why `value` is not a cap the platform takes for one answer: a whole number from 1 to the owner's cap. */
+export function maxOutputTokensProblem(value: unknown): string | undefined {
+  const most = MODEL_REQUEST_LIMITS.maxOutputTokens;
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= most
+    ? undefined
+    : `maxOutputTokens must be a whole number from 1 to ${most}`;
+}
+
 /**
  * Why the platform would answer this request's own lists with a 400, in its words, or undefined:
- * its `models`, then its `excludeModelAuthors`, then its `artifactId`, each only when present.
+ * its `models`, then its `excludeModelAuthors`, then its `artifactId`, then its
+ * `maxOutputTokens`, each only when present.
  * What the client (`platform.ts`) and the recording double (`testing.ts`) refuse before anything
  * is sent or recorded, so the two cannot disagree.
  */
@@ -183,6 +198,9 @@ export function modelRequestProblem(request: ModelRequest): string | undefined {
     (request.excludeModelAuthors === undefined
       ? undefined
       : excludeModelAuthorsProblem(request.excludeModelAuthors)) ??
-    (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId))
+    (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId)) ??
+    (request.maxOutputTokens === undefined
+      ? undefined
+      : maxOutputTokensProblem(request.maxOutputTokens))
   );
 }
