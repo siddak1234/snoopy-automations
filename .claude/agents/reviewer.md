@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS/FAIL verdict with 10 findings or fewer to a path. Never edits.
+description: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS, FAIL or UNKNOWN verdict with 10 findings or fewer to a path. Never edits.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -31,4 +31,4 @@ One pass over `git diff <base>..HEAD`, where the base is the one you were given,
 
 **Verdict**
 
-- Write `PASS` or `FAIL` on line 1, then 10 findings or fewer, each `file:line — problem — fix`, to the path you were given. Return only that path.
+- Write `PASS`, `FAIL` or `UNKNOWN — <why>` on line 1 (UNKNOWN when a check could not be made: never PASS for a check you did not make), then 10 findings or fewer, each `file:line — problem — fix`, to the path you were given. Return only that path.

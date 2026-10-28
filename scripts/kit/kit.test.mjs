@@ -30,6 +30,7 @@ export const KIT_FILES = [
   '.claude/agents/explorer.md',
   '.claude/agents/reviewer.md',
   '.claude/agents/builder.md',
+  '.claude/agents/researcher.md',
   'scripts/kit/check-docs.mjs',
   'scripts/kit/map.mjs',
   'scripts/kit/kit.test.mjs',
@@ -309,7 +310,14 @@ describe('the kit itself', () => {
   });
 
   test('the agents carry the roles of STANDARD (g)', () => {
-    const want = { explorer: ['Read, Grep, Glob', 'sonnet'], reviewer: ['Read, Grep, Glob, Bash', 'inherit'], builder: [undefined, 'inherit'] };
+    // Least privilege: only the researcher searches and fetches the web, and it writes nothing;
+    // the builder writes and never searches or fetches (BUILD-PLAN 29.3.3).
+    const want = {
+      explorer: ['Read, Grep, Glob', 'sonnet'],
+      reviewer: ['Read, Grep, Glob, Bash', 'inherit'],
+      builder: ['Bash, Read, Write, Edit, Grep, Glob, Skill', 'inherit'],
+      researcher: ['WebSearch, WebFetch, Read, Grep, Glob', 'inherit'],
+    };
     for (const [name, [tools, model]] of Object.entries(want)) {
       const text = readFileSync(at(`.claude/agents/${name}.md`), 'utf8');
       const [, fm, body] = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u.exec(text);
