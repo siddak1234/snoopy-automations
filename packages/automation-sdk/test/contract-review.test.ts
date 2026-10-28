@@ -5,7 +5,7 @@ import { assertValid, validator } from './published-schemas.js';
 
 /**
  * The review of each change and the several-choice dropdown against the platform's PUBLISHED
- * schemas (`contract/schemas`, vendored at the platform's `3fd5cea`, its PR #255's head, which
+ * schemas (`contract/schemas`, vendored at snoopy-backend 27c3051 (#255), PR #255's squash merge, which
  * carries `held.decisions`, `continuation.decisions` and the `select` setup control).
  */
 

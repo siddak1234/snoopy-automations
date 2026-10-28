@@ -173,8 +173,8 @@ refused, in the platform's words:
 blocks". The template sends its readout this way (`templates/automation/src/automation.ts`).
 
 **A review of each change, and a dropdown of several** (the platform round for ICD-10 Code Check,
-2026-10-28, the platform's PR #255; `contract/` carries them at its head `3fd5cea`, re-cited to its
-merge commit at land). A held step may offer `decisions`,
+2026-10-28, the platform's PR #255; `contract/` carries them at its merge commit, snoopy-backend
+27c3051 (#255)). A held step may offer `decisions`,
 changes a person accepts or denies one by one — `held({ …, decisions })`, each an `id` (a step id's
 shape), a `label` and an optional `detail`, bounded by `boundedDecisions`
 (`packages/automation-sdk/src/review.ts`, its `DECISION_LIMITS`: a label and a detail cut to one

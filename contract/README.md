@@ -1,9 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `3fd5cea` (PR #255's head; re-cited to its merge commit at
-land), Round 21's select control and review of each change (ADR-0048 amendment 2; 2026-10-28,
-"Refreshed 2026-10-28, the review" below; all nine files `cmp`-equal to `3fd5cea`). Before it,
+(`snoopy-backend`, private) at commit `27c3051` (snoopy-backend 27c3051 (#255), the platform's
+`main` after its #255 squash-merged; first copied at its branch head `3fd5cea`, tree-identical),
+Round 21's select control and review of each change (ADR-0048 amendment 2; 2026-10-28,
+"Refreshed 2026-10-28, the review" below; all nine files `cmp`-equal to `27c3051`). Before it,
 `130e513`, the platform's `main` after its #254
 squash-merged Round 21's self-contained flows PR 1 (2026-10-28, "Refreshed 2026-10-28, the menu"
 below; first copied at its branch head `38a2a80`, all nine files `cmp`-equal to `130e513`). Before it,
@@ -409,8 +410,9 @@ The other seven files are byte-identical to `71d8e1b`'s (each checked with `cmp`
 request makes the platform convert an enum value written in another case to the schema's spelling
 for every flow (README, "Model calls"), which the SDK's `RecordingPlatform` copies.
 
-Refreshed 2026-10-28, the review, from the platform's `3fd5cea` (PR #255's head; re-cited to its
-merge commit at land; ADR-0048 amendment 2, its BUILD-PLAN 29.4.2). Four files moved:
+Refreshed 2026-10-28, the review, from the platform's `3fd5cea` (PR #255's head), re-pinned to
+snoopy-backend 27c3051 (#255), its squash merge, tree-identical, all nine files `cmp`-equal (ADR-0048
+amendment 2, its BUILD-PLAN 29.4.2). Four files moved:
 
 - `automation-manifest.json`: `select` joins the setup controls, with `options` (1 to 32, each 1 to
   80 characters, none twice) and `multiple`, a boolean; never a run input control.
@@ -424,9 +426,9 @@ merge commit at land; ADR-0048 amendment 2, its BUILD-PLAN 29.4.2). Four files m
 The other five files are byte-identical to `130e513`'s (each checked with `cmp`). The SDK's
 `held({ decisions })`, `boundedDecisions`, `DECISION_LIMITS`, `answersOf` and the `select` control
 (`packages/automation-sdk/src/review.ts`, `manifest.ts`) follow, held to these schemas by
-`packages/automation-sdk/test/contract-review.test.ts`. Until PR #255 merges and a promotion
-carries it, the live platform refuses a manifest declaring a `select` and a held result carrying
-`decisions`.
+`packages/automation-sdk/test/contract-review.test.ts`. PR #255 merged as `27c3051` and was
+deployed 2026-10-28 23:26Z, so the live platform accepts a manifest declaring a `select` and a held
+result carrying `decisions`.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
@@ -439,7 +441,7 @@ enforces these further rules at registration, and its result callback those for 
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
-at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `3fd5cea`, its
+at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, its
 file paths written from `snoopy-backend/`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
