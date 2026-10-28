@@ -1,204 +1,41 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { after, test } from 'node:test';
-import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import {
+  type Any,
+  compile,
+  finding,
+  lensOut,
+  BRIEF,
+  skepticInput,
+  skepticSays,
+  normalWith,
+  normal,
+  run,
+  render,
+  has,
+} from './flow-research.js';
 
 /**
- * `.claude/workflows/flow-research.js` (/create-flow stage 1b) under stand-in agents: the
- * harness's `agent`, `parallel`, `log`, `phase`, `args` and `budget` replaced, the file compiled
- * as the harness runs it (an async function body, its result the return value). Each case is one
- * outcome the research-stage design and its re-check name.
+ * `.claude/workflows/flow-research.js` under stand-in agents (`test/flow-research.ts`): its parse
+ * and result, and its gates — the frame, the code gate, the skeptic's verdicts, the defaults. Each
+ * case is one outcome the research-stage design, its re-check or its review names.
  */
 
-const root = resolve(import.meta.dirname, '..');
-const source = readFileSync(join(root, '.claude/workflows/flow-research.js'), 'utf8');
-const renderUrl = pathToFileURL(join(root, '.claude/skills/create-flow/research-render.mjs')).href;
-const { main: renderMain } = (await import(renderUrl)) as {
-  main: (argv: string[], write: (text: string) => void) => number;
-};
-// The stand-ins answer whatever shape each step asks for.
-type Any = any;
-type Behave = (label: string, attempt: number, prompt: string, runDir: string) => Any;
-type Body = (...values: unknown[]) => Promise<Any>;
-const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget'];
-// The harness's reading: an async function body, `meta` a plain constant, the result returned.
-const body: Body = new AsyncFunction(...GLOBALS, source.replace('export const meta', 'const meta'));
-const dirs: string[] = [];
-after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
-
-const IDEA = 'Check each supplier invoice against its purchase order before we pay it.';
-const ANSWERS = ['Only PDF invoices.', 'A good result is a clear match or mismatch per line.'];
-const finding = (lens: string, n: number, extra: object = {}) => ({
-  id: `${lens}-${n}`,
-  claim: `${lens} claim ${n}`,
-  url: `https://example.org/${lens}/${n}`,
-  quote: `the exact words for ${lens} ${n}`,
-  tier: 'T1',
-  publisher: 'A body',
-  ...extra,
+test('the file parses as the Workflow tool runs it: an async function body, its return the result', async () => {
+  assert.doesNotThrow(compile);
+  const { result } = await run(normal);
+  assert.deepEqual(Object.keys(result), [
+    'research',
+    'djb2',
+    'length',
+    'stopped',
+    'gaps',
+    'notResearched',
+    'sources',
+  ]);
 });
-function lensOut(lens: string) {
-  const findings = [finding(lens, 1), finding(lens, 2)];
-  const injectionSeen: string[] = [];
-  if (lens === 'rules') findings.push(finding(lens, 3, { tier: 'T4' }));
-  if (lens === 'vendors') {
-    findings.push(finding(lens, 3, { url: 'https://evil.example.org/p' }));
-    injectionSeen.push('https://evil.example.org/p');
-  }
-  return {
-    findings,
-    notFound: [`${lens}: no figure for time per invoice`],
-    injectionSeen,
-    toolCalls: 9,
-  };
-}
-const BRIEF = () => ({
-  process: [
-    { text: 'step one', cites: ['streamlining-1'] },
-    { text: 'invented step', cites: ['nope-9'] },
-  ],
-  waste: [{ text: 'matching takes long', cites: ['streamlining-2'] }],
-  criteria: [
-    { text: 'three-way match', cites: ['practice-1'] },
-    { text: 'unverifiable', cites: ['practice-2'] },
-  ],
-  rubric: [{ text: 'line by line', cites: ['practice-1', 'rules-1'] }],
-  rules: [
-    { text: 'keep records', cites: ['rules-1'] },
-    { text: 'from a T4 page', cites: ['rules-3'] },
-  ],
-  vendors: [{ text: 'QuickBooks bill API, OAuth 2, provider exists', cites: ['vendors-1'] }],
-  v1: [{ text: 'match, a person approves', cites: ['streamlining-1', 'practice-1'] }],
-  failures: [{ text: 'scanned PDF with no text', cites: ['vendors-2'] }],
-  goldenCases: [{ input: 'invented invoice', expected: 'mismatch on line 2', cites: ['rules-1'] }],
-  openQuestions: [
-    {
-      question: 'Tolerance on price?',
-      kind: 'domain_fact',
-      proposedDefault: '2 percent',
-      cites: [],
-    },
-    {
-      question: 'Tax rule?',
-      kind: 'domain_fact',
-      proposedDefault: 'as the statute says',
-      cites: ['rules-1'],
-    },
-    { question: 'Which department?', kind: 'our_choice', proposedDefault: 'Finance', cites: [] },
-  ],
-});
-/** The skeptic's two lists from its prompt: the findings it checks and the lines it judges. */
-const skepticInput = (prompt: string) => {
-  const [findings = '', lines = ''] = prompt.split(' Findings: ')[1]!.split(' Lines: ');
-  return { findings: JSON.parse(findings) as Any[], lines: JSON.parse(lines) as Any[] };
-};
-const skepticSays =
-  (
-    lineVerdict: (text: string) => string | null = () => 'supported',
-    injectionSeen: string[] = [],
-  ) =>
-  (prompt: string) => {
-    const { findings, lines } = skepticInput(prompt);
-    const verdict = (id: string) => (id === 'practice-2' ? 'not_on_page' : 'confirmed');
-    return {
-      verdicts: findings.map((f) => ({ id: f.id, verdict: verdict(f.id), why: 'checked' })),
-      lines: lines.flatMap((l) => {
-        const v = lineVerdict(l.text);
-        return v ? [{ ref: l.ref, verdict: v, why: 'read' }] : [];
-      }),
-      injectionSeen,
-    };
-  };
-const normalWith =
-  (skeptic: (prompt: string) => Any = skepticSays()): Behave =>
-  (label, _attempt, prompt, runDir) => {
-    if (label === 'frame')
-      return {
-        ownerWords: {
-          job: 'Check each supplier invoice against its purchase order',
-          decision: 'whether we pay it',
-          goodResult: 'A good result is a clear match or mismatch per line.',
-        },
-        size: 'simple',
-        questions: { practice: ['q'], rules: ['q'], vendors: ['q'], streamlining: ['q'] },
-      };
-    if (label.endsWith(' lens')) return lensOut(label.split(' ')[0]!);
-    if (label === 'synthesis') return BRIEF();
-    if (label === 'skeptic') return skeptic(prompt);
-    if (label === 'write') {
-      const text = prompt.split('<<<JSON\n')[1]!.split('\nJSON>>>')[0]!;
-      writeFileSync(join(runDir, 'research.json'), text);
-      return join(runDir, 'research.json');
-    }
-    throw new Error(`unexpected ${label}`);
-  };
-const normal = normalWith();
-
-async function run(
-  behave: Behave,
-  options: { total?: number; writeAttempt?: number; dir?: string } = {},
-) {
-  const runDir = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
-  if (!options.dir) dirs.push(runDir);
-  const total = options.total ?? null;
-  const logs: string[] = [];
-  const calls: { label: string; prompt: string; startedAt: number }[] = [];
-  const finishedAt: Record<string, number> = {};
-  let [active, peak, spent, tick] = [0, 0, 0, 0];
-  const budget = {
-    total,
-    spent: () => spent,
-    remaining: () => (total ? Math.max(0, total - spent) : Infinity),
-  };
-  const agent = async (prompt: string, opts: { label: string }) => {
-    calls.push({ label: opts.label, prompt, startedAt: tick++ });
-    if (total && spent >= total) throw new Error('token target reached');
-    active += 1;
-    peak = Math.max(peak, active);
-    try {
-      await new Promise((done) => setTimeout(done, opts.label === 'practice lens' ? 5 : 15));
-      spent += 10_000;
-      const attempt = calls.filter((c) => c.label === opts.label).length;
-      const out = await behave(opts.label, attempt, prompt, runDir);
-      finishedAt[opts.label] = tick++;
-      return out;
-    } finally {
-      active -= 1;
-    }
-  };
-  const parallel = async (thunks: (() => Promise<unknown>)[]) =>
-    Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
-  const args = {
-    runDir,
-    automations: '/clones/snoopy-automations',
-    backend: '/clones/snoopy-backend',
-    name: 'invoice-check',
-    idea: IDEA,
-    answers: ANSWERS,
-    platform: 'everything there',
-    writeAttempt: options.writeAttempt,
-  };
-  const result = await body(
-    agent,
-    parallel,
-    (m: string) => logs.push(m),
-    () => {},
-    args,
-    budget,
-  );
-  const file = join(runDir, 'research.json');
-  const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-  return { runDir, logs, calls, peak, finishedAt, result, data };
-}
-const render = (runDir: string, result: Any) => {
-  let out = '';
-  const argv = [join(runDir, 'research.json'), result.djb2, String(result.length)];
-  return { code: renderMain(argv, (text) => (out += text)), out };
-};
-const has = (list: string[], start: string) => list.some((line) => line.startsWith(start));
 
 test('a normal run: three agents at most, the gates drop and name, the checksum is returned', async () => {
   const r = await run(normal);
@@ -287,109 +124,72 @@ test('a page that tries to direct the skeptic: its verdicts become gaps, its lin
   assert.ok(data.gaps.includes('practice-1: its page tried to direct the skeptic'));
   assert.ok(!data.sources.some((s: Any) => s.id === 'practice-1'));
   assert.deepEqual(data.brief.criteria, [], 'three-way match cited only practice-1');
-  assert.deepEqual(data.brief.rubric[0].cites, ['rules-1']);
+  assert.deepEqual(data.brief.rubric, [], 'line by line cited practice-1 beside rules-1');
+  assert.ok(
+    data.gaps.includes('rubric: "line by line" — a cite was not confirmed (practice-1); dropped'),
+  );
   assert.ok(logs.some((l) => l.includes('direct the skeptic: https://example.org/practice/1')));
 });
 
-test('two failed lenses and a failed write: both stops logged and joined, every gap logged', async () => {
-  const r = await run((label, attempt, prompt, dir) =>
-    ['rules lens', 'vendors lens', 'write'].includes(label)
-      ? null
-      : normal(label, attempt, prompt, dir),
-  );
-  assert.equal(
-    r.result.stopped,
-    '2 of 4 lenses failed (rules, vendors); then research.json was not written',
-  );
-  assert.ok(r.logs.includes('stopped: 2 of 4 lenses failed (rules, vendors)'));
-  assert.ok(!r.calls.some((c) => c.label === 'synthesis'));
-  assert.equal(r.calls.filter((c) => c.label === 'rules lens').length, 2, 'one retry each');
-  assert.equal(r.result.research, null);
-  assert.ok(has(r.result.gaps, 'write: failed twice'));
-  assert.ok(has(r.logs, 'gap: write: failed twice'), 'a gap after the gap log is logged too');
-  assert.equal(r.logs.filter((l) => l.startsWith('gap: ')).length, r.result.gaps.length);
-  assert.ok(r.logs.includes('the skeptic did not run: none of the 4 gated findings is verified'));
-});
-
-test('two failed lenses with a working write: the gaps are written, no source is', async () => {
-  const r = await run((label, attempt, prompt, dir) =>
-    label === 'rules lens' || label === 'vendors lens' ? null : normal(label, attempt, prompt, dir),
-  );
-  assert.equal(r.data.stopped, '2 of 4 lenses failed (rules, vendors)');
-  assert.equal(r.data.brief, null);
-  assert.equal(r.data.sources.length, 0, 'nothing unverified is written as a source');
-  assert.ok(has(r.data.gaps, 'rules lens: failed twice'));
-  assert.equal(render(r.runDir, r.result).code, 0);
-});
-
-test('findings past the cap of twelve are gaps, never dropped silently', async () => {
-  const many = (lens: string) => ({
-    ...lensOut(lens),
-    findings: Array.from({ length: 14 }, (_, i) => finding(lens, i + 1)),
+test('a line stays only when every cite is confirmed: one not_on_page cite drops it', async () => {
+  const both = ['practice-1', 'practice-2'];
+  const { data } = await run((label, attempt, prompt, dir) => {
+    if (label !== 'synthesis') return normal(label, attempt, prompt, dir);
+    const brief = BRIEF();
+    brief.criteria.push({ text: 'weight 70% on price, per the standard', cites: both });
+    brief.openQuestions.push({
+      question: 'Weight?',
+      kind: 'domain_fact',
+      proposedDefault: '70 percent',
+      cites: both,
+    });
+    return brief;
   });
-  const { data } = await run((label, attempt, prompt, dir) =>
-    label === 'practice lens' ? many('practice') : normal(label, attempt, prompt, dir),
+  assert.deepEqual(
+    data.brief.criteria.map((l: Any) => l.text),
+    ['three-way match'],
   );
-  assert.ok(data.gaps.includes('practice-13: past the cap of 12 a lens; dropped'));
-  assert.ok(data.gaps.includes('practice-14: past the cap of 12 a lens; dropped'));
+  const why = 'a cite was not confirmed (practice-2); dropped';
+  assert.ok(data.gaps.includes(`criteria: "weight 70% on price, per the standard" — ${why}`));
+  const weight = data.brief.openQuestions.find((q: Any) => q.question === 'Weight?');
+  assert.deepEqual(
+    [weight.proposedDefault, weight.proposal, weight.researched],
+    ['a person decides', '70 percent', false],
+  );
 });
 
-test('a throwing agent is retried once; a skeptic that throws twice stops the run', async () => {
+test("ids are the code's: a lens that reuses another lens's id cannot make it a source", async () => {
+  const unchecked = 'https://unchecked.example/r';
+  const { data, calls } = await run((label, attempt, prompt, dir) => {
+    if (label !== 'rules lens') return normal(label, attempt, prompt, dir);
+    const out = lensOut('rules');
+    out.findings.push(finding('rules', 4, { id: 'practice-1', url: unchecked }));
+    return out;
+  });
+  const { findings } = skepticInput(calls.find((c) => c.label === 'skeptic')!.prompt);
+  const ids = findings.map((f) => f.id);
+  assert.equal(new Set(ids).size, ids.length, `ids repeat: ${ids.join(' ')}`);
+  assert.ok(!data.sources.some((s: Any) => s.url === unchecked), 'an unchecked page is no source');
+  assert.equal(data.sources.filter((s: Any) => s.id === 'practice-1').length, 1);
+  const lens = calls.find((c) => c.label === 'rules lens')!.prompt;
+  assert.ok(!lens.includes('an id "rules-<n>"'), 'the model is not asked for an id');
+});
+
+test('a throw after the synthesis writes no unverified line: the lines are gaps', async () => {
   const r = await run((label, attempt, prompt, dir) => {
-    if (label === 'vendors lens' && attempt === 1) throw new Error('terminal API error');
-    if (label === 'skeptic') throw new Error('terminal API error');
-    return normal(label, attempt, prompt, dir);
+    if (label !== 'synthesis') return normal(label, attempt, prompt, dir);
+    const { openQuestions: _left, ...brief } = BRIEF();
+    return brief;
   });
-  assert.ok(r.logs.includes('vendors lens: it threw (terminal API error); one retry'));
-  assert.ok(has(r.data.gaps, 'skeptic: failed twice (it threw'));
-  assert.equal(r.data.sources.length, 0);
-  assert.equal(
-    r.data.stopped,
-    'the skeptic did not finish (it failed twice); no claim is verified',
-  );
-  assert.ok(r.data.brief.openQuestions.every((q: Any) => q.proposedDefault === 'a person decides'));
-  assert.ok(has(r.logs, 'the skeptic did not finish (it failed twice): none of the'));
-});
-
-test('a throw outside an agent call stops the run, and the write still runs', async () => {
-  const r = await run((label, attempt, prompt, dir) =>
-    label === 'rules lens'
-      ? { ...lensOut('rules'), findings: [{ id: 'rules-1', url: 'https://example.org/r' }] }
-      : normal(label, attempt, prompt, dir),
-  );
   assert.match(r.data.stopped, /^a step threw \(/u);
-  assert.ok(has(r.logs, 'stopped: a step threw ('));
+  assert.equal(r.data.brief, null);
   assert.equal(r.data.sources.length, 0);
-});
-
-test('a spent token target: every stop joined, the gaps logged, nothing hangs, no file', async () => {
-  const r = await run(normal, { total: 15_000 });
-  assert.equal(
-    r.result.stopped,
-    'the token target is spent before the lenses; then the token target is spent; research.json was not written',
+  assert.ok(r.data.gaps.includes('process: "step one" — not verified; the run stopped'));
+  assert.ok(
+    r.data.gaps.includes(
+      'goldenCases: "invented invoice → mismatch on line 2" — not verified; the run stopped',
+    ),
   );
-  assert.ok(has(r.logs, 'gap: framing: the decision'));
-  assert.equal(r.data, null);
-});
-
-test('a null write is retried once, then the run stops; the gaps were logged before it', async () => {
-  const r = await run((label, attempt, prompt, dir) =>
-    label === 'write' ? null : normal(label, attempt, prompt, dir),
-  );
-  assert.equal(r.calls.filter((c) => c.label === 'write').length, 2);
-  assert.equal(r.result.stopped, 'research.json was not written');
-  assert.ok(r.logs.at(-1)!.startsWith('research: stopped (research.json was not written)'));
-  const firstGap = r.logs.findIndex((l) => l.startsWith('gap: '));
-  assert.ok(firstGap >= 0 && firstGap < r.logs.findIndex((l) => l.startsWith('write: ')));
-});
-
-test('writeAttempt 2 changes only the write prompt, so a resume re-runs only the write', async () => {
-  const one = await run(normal);
-  const two = await run(normal, { writeAttempt: 2, dir: one.runDir });
-  const prompt = (r: typeof one, label: string) => r.calls.find((c) => c.label === label)!.prompt;
-  const changed = [...new Set(one.calls.map((c) => c.label))].filter(
-    (l) => prompt(one, l) !== prompt(two, l),
-  );
-  assert.deepEqual(changed, ['write']);
-  assert.deepEqual([one.result.djb2, one.result.length], [two.result.djb2, two.result.length]);
+  assert.ok(!r.calls.some((c) => c.label === 'skeptic'));
+  assert.equal(render(r.runDir, r.result).code, 0);
 });

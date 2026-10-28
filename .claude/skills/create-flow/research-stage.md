@@ -21,14 +21,18 @@ owner's words quoted, never researched; four lenses — practice and expert judg
 standards and data; vendors and integrations; the streamlining of the process — at most three
 agents at once; one synthesis from the gated findings only; one skeptic that re-opens every cited
 page and judges every line, golden case and cited default against the quotes it cites; a code
-gate after each (A2: "programmatic checks"). Its `researcher` agent is the backend kit's
-(`snoopy-backend/.claude/agents/researcher.md`, installed by `claude-install`): without it every
-lens fails.
+gate after each (A2: "programmatic checks"). The script numbers each finding `<lens>-<n>`, never
+the model; a line stays only when every id it cites is confirmed and the skeptic calls it
+supported; a throw before the skeptic's gate finishes writes no line of the brief, each one a gap.
+Its `researcher` agent is the kit's ([.claude/agents/researcher.md](../../agents/researcher.md),
+byte for byte `snoopy-backend/.claude/agents/researcher.md`, installed by `claude-install`):
+without it every lens fails.
 
 ## The steps
 
-1. Read the Workflow **result**, the script's return value — `research`, `djb2`, `length`,
-   `stopped`, `gaps`, `notResearched` — never the progress log alone.
+1. Read the Workflow **result**, the script's top-level return value — `research`, `djb2`,
+   `length`, `stopped`, `gaps`, `notResearched`. The Workflow tool hands the session that value;
+   `log()` lines do not reach the session.
 2. Run `node .claude/skills/create-flow/research-render.mjs <runDir>/research.json <djb2> <length>`.
    Exit 0: the file is the one the script computed, and research.md is written beside it. Exit 1 (a
    mismatch, or no file): re-run the workflow with `resumeFromRunId` and `args.writeAttempt = 2`,

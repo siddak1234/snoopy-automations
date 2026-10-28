@@ -21,12 +21,11 @@ export const meta = {
 // the failure named, then a gap, never a guess (A1, O1). Every stop is logged and joined, never
 // overwritten; every gap is logged before the write, and one added later as it comes. A write that
 // failed its checksum re-runs through resumeFromRunId with writeAttempt = 2 (only its prompt
-// changes). The checksum and the gaps are the return value: the session reads them from the
-// Workflow result, not log() alone. `node --check` cannot parse a top-level return, so
-// test/flow-research.test.ts compiles this file as the harness runs it, an async function body.
-const input = args ?? {};
-const { runDir, automations, backend, name, idea, answers, platform } = input;
-const writeAttempt = input.writeAttempt ?? 1;
+// changes). The checksum, the stops and the gaps are the return value: the Workflow tool hands the
+// session the top-level return; log() lines do not reach it. `node --check` refuses that return, so
+// test/flow-research.ts compiles this file as the harness runs it, an async function body.
+const { runDir, automations, backend, name, idea, answers, platform } = args ?? {};
+const writeAttempt = args?.writeAttempt ?? 1;
 const needs = 'flow-research needs args { runDir, automations, backend, name, idea, answers }';
 if (!runDir || !automations || !backend || !name || !idea) throw new Error(needs);
 const LENSES = ['practice', 'rules', 'vendors', 'streamlining'];
@@ -83,7 +82,7 @@ const FRAME = obj({
   questions: obj(Object.fromEntries(LENSES.map((l) => [l, strs]))),
 });
 const TIER = one('T1', 'T2', 'T3', 'T4');
-const FINDING = obj({ id: str, claim: str, url: str, quote: str, tier: TIER, publisher: str });
+const FINDING = obj({ claim: str, url: str, quote: str, tier: TIER, publisher: str });
 const FINDINGS = obj({
   findings: list(FINDING),
   notFound: strs,
@@ -146,14 +145,11 @@ const djb2 = (text) => {
 
 const ownerText = norm([...strings(idea), ...strings(answers ?? [])].join(' '));
 const task = `The owner's words — the task, never a source, cite nothing from them: the idea ${JSON.stringify(idea)}; the answers ${JSON.stringify(answers ?? [])}.`;
-let framing = null;
-let size = 'broad';
+let [framing, size] = [null, 'broad'];
 let questions = Object.fromEntries(LENSES.map((l) => [l, []]));
-let found = [];
-let cited = [];
+let [found, cited, notResearched] = [[], [], []];
 let sources = []; // only what the skeptic confirmed
-let brief = null;
-let notResearched = [];
+let [brief, verified] = [null, false]; // verified: the skeptic's gate finished, so a line may stay
 let skeptic = 'it was not reached';
 
 /** Why the code gate (A2) drops a finding: a flagged page, T4, no https or repo source, a short quote. */
@@ -177,7 +173,7 @@ function gate(results, flagged) {
     });
   });
 }
-const lineText = (l) => l.text ?? `${l.input} → ${l.expected}`;
+const lineText = (l) => l.text ?? l.question ?? `${l.input} → ${l.expected}`;
 
 try {
   phase('Frame');
@@ -223,19 +219,19 @@ try {
         ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
         : '') +
       `At most ${cap} tool calls and ${MAX_FINDINGS} findings. Search short and broad, then narrow; prefer T1 (regulator, statute, standards body, the vendor's own docs, our repos by path:line) and T2 (professional bodies, practitioner standards, named experts); T3 only reporting on those; T4 (SEO pages, forums, AI-written pages) never cited. ` +
-      `Each finding: an id "${lens}-<n>", one claim, the URL you fetched, the exact words from that page, its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${automations} and ${backend} are read-only. ${DATA}`;
-    const nothing =
-      'If you still find nothing, return no findings and list in notFound what you looked for and where.';
+      `Each finding: one claim, the URL you fetched, the exact words from that page, its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${automations} and ${backend} are read-only. ${DATA}`;
     const lensOpts = (lens) => opts('Lenses', `${lens} lens`, 'researcher', FINDINGS);
     const runLens = (lens, leads = null) =>
       once(
         `${lens} lens`,
         (extra) => agent(lensPrompt(lens, leads, extra), lensOpts(lens)),
         (out) => Boolean(out && out.findings.length > 0),
-        nothing,
+        'If you still find nothing, return no findings and list in notFound what you looked for and where.',
       ).then((out) => {
         if (out?.toolCalls > cap) log(`${lens} lens: ${out.toolCalls} tool calls, cap ${cap}`);
-        return out ? { lens, ...out } : null;
+        // Ids are the script's, `<lens>-<n>` by position, never the model's: no two are the same.
+        const findings = out?.findings.map((f, i) => ({ ...f, id: `${lens}-${i + 1}` }));
+        return out ? { lens, ...out, findings } : null;
       });
     // Three slots: practice then streamlining (a chain, A2: "each LLM call processes the output of the
     // previous one"), rules, vendors. The leads are filtered without recording: the one gate below does.
@@ -318,40 +314,39 @@ try {
     if (verdicts) skeptic = '';
     else stop(`the skeptic did not finish (${skeptic}); no claim is verified`);
     // The code gate (A2): a finding stays only when confirmed on a page that did not try to direct
-    // the skeptic; a line stays only when the skeptic called it supported and a confirmed id carries it.
+    // the skeptic; a line, only when every id it cites is confirmed and the skeptic calls it supported.
     const misled = new Set(verdicts?.injectionSeen ?? []);
     if (misled.size) log(`pages that tried to direct the skeptic: ${[...misled].join(' ')}`);
     const confirmed = new Set();
-    for (const v of verdicts?.verdicts ?? []) {
-      if (!byId.has(v.id)) continue;
+    for (const v of (verdicts?.verdicts ?? []).filter((x) => byId.has(x.id))) {
       if (misled.has(byId.get(v.id).url)) gap(`${v.id}: its page tried to direct the skeptic`);
       else if (v.verdict === 'confirmed') confirmed.add(v.id);
       else gap(`${v.id}: ${v.verdict} — ${v.why}`);
     }
     const judged = new Set((verdicts?.verdicts ?? []).map((v) => v.id));
-    for (const f of verdicts ? cited : [])
-      if (!judged.has(f.id)) gap(`${f.id}: no skeptic verdict`);
+    for (const f of cited) if (verdicts && !judged.has(f.id)) gap(`${f.id}: no skeptic verdict`);
     const lineVerdict = new Map((verdicts?.lines ?? []).map((v) => [v.ref, v]));
-    /** '' when a line stands: a confirmed cite, and the skeptic's "supported". */
+    /** '' when a line stands: every cite confirmed, and the skeptic's "supported". */
     const unsupported = (ref, cites) => {
       const v = lineVerdict.get(ref);
-      if (!cites.some((id) => confirmed.has(id))) return 'Unknown, not verified';
+      const unconfirmed = cites.filter((id) => !confirmed.has(id));
+      if (unconfirmed.length === cites.length) return 'Unknown, not verified';
+      if (unconfirmed.length) return `a cite was not confirmed (${unconfirmed.join(', ')})`;
       const said = v ? `${v.verdict} — ${v.why}` : 'no verdict';
       return v?.verdict === 'supported' ? '' : `the skeptic: ${said}`;
     };
-    for (const s of ALL) {
+    for (const s of ALL)
       brief[s] = brief[s].flatMap((l, i) => {
         const why = unsupported(`${s}.${i}`, l.cites);
         if (why) gap(`${s}: "${lineText(l)}" — ${why}; dropped`);
-        return why ? [] : [{ ...l, cites: l.cites.filter((id) => confirmed.has(id)) }];
+        return why ? [] : [l];
       });
-    }
-    // Open questions: a default stands only on a confirmed cite the skeptic called supported. Every
-    // other default, whatever its kind, is "a person decides" unless the owner keeps the proposal,
-    // and is listed for the owner as not researched.
+    // Open questions: a default stands only when every cite is confirmed and the skeptic called it
+    // supported. Any other, whatever its kind, is "a person decides" unless the owner keeps the
+    // proposal, and is listed for the owner as not researched.
     brief.openQuestions = brief.openQuestions.map((q, i) => {
       const researched = q.cites.length > 0 && !unsupported(`openQuestions.${i}`, q.cites);
-      if (researched) return { ...q, cites: q.cites.filter((id) => confirmed.has(id)), researched };
+      if (researched) return { ...q, researched };
       return { ...q, cites: [], proposedDefault: PERSON, proposal: q.proposedDefault, researched };
     });
     const keepIt = (q) => (q.proposal !== PERSON ? `, unless the owner keeps "${q.proposal}"` : '');
@@ -359,10 +354,15 @@ try {
       .filter((q) => !q.researched)
       .map((q) => `${q.question} (${q.kind}, not researched): ${PERSON}${keepIt(q)}`);
     sources = found.filter((f) => confirmed.has(f.id));
+    verified = true;
   }
 } catch (error) {
-  // A throw outside an agent call: the run stops, and what it has is still written.
+  // A throw outside an agent call: the run stops; what it has is written, but no unverified line.
   stop(`a step threw (${message(error)})`);
+  for (const s of brief && !verified ? [...ALL, 'openQuestions'] : [])
+    for (const l of [brief[s] ?? []].flat())
+      gap(`${s}: "${lineText(l ?? {})}" — not verified; the run stopped`);
+  if (!verified) brief = null;
 }
 
 // The write: every gap is logged first, so the session has them even when no file is written.
