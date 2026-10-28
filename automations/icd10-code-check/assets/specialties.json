@@ -1,0 +1,40 @@
+{
+  "specialties": [
+    {
+      "name": "Nephrology",
+      "families": [
+        "N00-N29",
+        "I12-I13",
+        "E08.22",
+        "E09.22",
+        "E10.22",
+        "E11.22",
+        "E13.22",
+        "D63.1",
+        "Z49",
+        "Z94.0",
+        "Z99.2"
+      ]
+    },
+    {
+      "name": "Internal medicine",
+      "families": ["I10-I16", "E08-E13"]
+    },
+    {
+      "name": "Cardiology",
+      "families": ["I00-I99"]
+    },
+    {
+      "name": "Endocrinology",
+      "families": ["E00-E89"]
+    },
+    {
+      "name": "Family practice",
+      "families": ["I10-I16", "E08-E13"]
+    },
+    {
+      "name": "Geriatric medicine",
+      "families": ["I10-I16", "E08-E13"]
+    }
+  ]
+}
