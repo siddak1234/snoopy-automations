@@ -71,7 +71,7 @@
 
 ### Tests
 
-- `test/`: architecture, conformance, doc, isolation, kit, manifest, repo, workflow
+- `test/`: architecture, conformance, doc, flow, isolation, kit, manifest, repo, research, workflow
 
 ## Skills, agents and hooks
 
@@ -79,7 +79,8 @@
 - skill `new-automation-version`: Use when adding a new automation, or a new manifest version of an existing one, in snoopy-automations. Walks the template or the existing folder, the manifest,… ([.claude/skills/new-automation-version/SKILL.md](../.claude/skills/new-automation-version/SKILL.md))
 - agent `builder`: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns a leftovers list and the path of a summary… ([.claude/agents/builder.md](../.claude/agents/builder.md))
 - agent `explorer`: Read-only search. Use to find where something lives or is described before reading or editing; returns path:line findings and what was not found. Never edits. ([.claude/agents/explorer.md](../.claude/agents/explorer.md))
-- agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS/FAIL verdict with 10 findings or fewer … ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))
+- agent `researcher`: Researches one lens of a flow idea on the web and in the given clones, read-only. Every finding is a URL, an exact quote and a source tier; "not found" is a va… ([.claude/agents/researcher.md](../.claude/agents/researcher.md))
+- agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS, FAIL or UNKNOWN verdict with 10 findin… ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))
 - hook `PreToolUse` (`Bash|Write|Edit|NotebookEdit`): `guard.mjs`
 - hook `SessionStart`: `session-start.mjs`
 - hook `Stop`: `stop-check.mjs`

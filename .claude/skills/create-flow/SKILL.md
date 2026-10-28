@@ -52,9 +52,11 @@ says go for each step that publishes or touches production.
    open and changes the build (a field's choices, file types, who may act, what a result shows).
    Record the owner's answers verbatim, with the time, in the session's memory.
 
+   **1b. Research** (the session; the owner says yes or corrects), in [research-stage.md](research-stage.md): the `flow-research` workflow (four `researcher` lenses, one synthesis, one skeptic), its result's checksum checked by `research-render.mjs`, the brief shown to the owner. No spec is written from a stopped run or a brief the owner has not approved.
+
 2. **The spec and the words list** (the session; the owner approves). Copy the spec template to
    `snoopy-automations/automations/<name>/README.md` and [templates/words.md](templates/words.md)
-   beside it as `words.md`; fill both from the idea and the answers. Nothing the idea does not say:
+   beside it as `words.md`; fill both from the idea, the answers and the approved brief (`research.md`: the Domain section, a source id on every domain fact). Nothing the idea does not say:
    each gap is a section 11 question with its default; a provider the platform has not goes in
    section 10, never written as if it existed. The words list is every word either client shows,
    one set for both (two clients built from one plan wrote different refusals for the same screen:
@@ -94,22 +96,20 @@ says go for each step that publishes or touches production.
    request, so every later flow reads it at stage 1 and its reviews check it.
 8. **What the pilot taught** (the session; kept for every flow): every place this skill or its
    templates were unclear or wrong, fixed in them in the round's own `snoopy-automations` pull request,
-   each fix citing its evidence in one clause, and listed in the round's records.
+   each fix citing its evidence in one clause, and listed in the round's records; each pilot failure added to [evals/research.md](evals/research.md).
 
 ## Stop when
 
+- The owner has not approved the research brief, or research.json failed its checksum twice: no spec is written.
 - The owner has not approved the words: nothing is registered.
-- The idea needs a new block, page part, question form or target, or anything else the platform
-  does not offer: a platform change, never built inside a flow.
-- A new vendor needs its provider file, and the owner has not given its credentials or said to
-  build it.
+- The idea needs a new block, page part, question form or target, or anything else the platform does not offer: a platform change, never built inside a flow.
+- A new vendor needs its provider file, and the owner has not given its credentials or said to build it.
 - A step needs an edit outside the flow's lane: that is a finding, not an edit.
-- A merge, a publish or a production step without the owner's go: give the owner the link or the
-  line, and wait.
+- A merge, a publish or a production step without the owner's go: give the owner the link or the line, and wait.
 
 ## Output
 
-- The approved spec and its words list at `snoopy-automations/automations/<name>/`; the flow's pull
+- The approved spec, its words list and its research brief (`research.md`) at `snoopy-automations/automations/<name>/`; the flow's pull
   request, and the provider file's when there is one; the order written out (stage 6); the round's
   records; this skill corrected (stage 8).
 

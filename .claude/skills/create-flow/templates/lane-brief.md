@@ -11,8 +11,8 @@ Clone: `<scratch>/clones/snoopy-automations`, branch `round-<n>/<topic>` from `o
 `<sha>`. Node 22 in every shell: `export PATH=$HOME/.nvm/versions/node/v22.23.2/bin:$PATH`.
 
 Read first: CLAUDE.md, docs/MAP.md, the `new-automation-version` skill; then the spec,
-`automations/<name>/README.md`, the words list beside it, and the sections of `<runDir>/plan.md`
-this lane builds. Grep a file over 100 KB; never read it whole.
+`automations/<name>/README.md`, the words list and the research brief beside it
+(`automations/<name>/research.md`), and the sections of `<runDir>/plan.md` this lane builds. Grep a file over 100 KB; never read it whole.
 
 ## The contract
 
@@ -28,7 +28,12 @@ The lane edits no other repository.
 ## Build
 
 <What to build, from the spec, the words list and the plan; the files it may open; anything the
-plan leaves open is chosen by the nearest precedent in this repository and named in the summary.>
+plan leaves open is chosen by the nearest precedent in this repository and named in the summary —
+a precedent of code, never a domain fact: a domain fact not in the spec or research.md is a
+finding, never chosen.>
+
+The lane does no web search or fetch: what the flow knows of its domain is the spec and
+research.md, and nothing else (Anthropic, "Mitigate jailbreaks and prompt injections", in the skill's `research-stage.md` sources: "Apply the principle of least privilege so that a successful injection can do minimal damage").
 
 What a person reads of a run is `blocks`, built from spec section 7 through the SDK's
 `boundedBlocks` (README.md, "What an automation looks like"), never with `sections` or `details`;

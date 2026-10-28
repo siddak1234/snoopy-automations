@@ -1,12 +1,28 @@
 # <Flow name>: spec
 
 **Approved:** <YYYY-MM-DD, the owner's words> · **Version:** v<n> · **Words:** `words.md` beside this
-spec, every word both clients show · **Built in:** <PR link, once built>
+spec, every word both clients show · **Research:** `research.md` beside this spec (<date>), its gaps
+in section 11 · **Built in:** <PR link, once built>
 
 Every limit below is the platform's: `snoopy-automations/contract/schemas/automation-manifest.json` and
 `snoopy-automations/contract/schemas/automation-run-result.json`, and the rules beyond them in `snoopy-automations/contract/README.md`,
 "What the platform refuses beyond the schema".
 Nothing here is a customer's data: this repository is public.
+
+## Domain (from research.md)
+
+Unnumbered, so sections 1–11 keep their numbers. Each line carries the ids of `research.md` it rests
+on, lines the skeptic called supported on sources it confirmed (`/create-flow` stage 1b); a fact the
+brief does not carry is not written here.
+
+| Part                   | From the brief, with its ids                                     |
+| ---------------------- | ---------------------------------------------------------------- |
+| Today's process        | five lines or fewer: who does what, what goes in, what comes out |
+| The simplest pipeline  | five lines or fewer, on the twelve blocks                        |
+| What an expert checks  | the criteria, in order                                           |
+| The rubric             | the criteria as this flow scores or decides them                 |
+| Vendors                | each vendor, and whether `snoopy-backend/providers/` declares it |
+| Left to a person in v1 | what the first version does not decide                           |
 
 ## 1. What it is
 
@@ -63,8 +79,8 @@ that reads a customer's file treats its text as content to judge, never as an in
 tries to direct the reader is listed in a flag field and earns no credit
 (Round 19, the flow's review, finding 7).
 
-| Prompt id | Capability: document-extraction, classification, screening or summarization | What it reads | The JSON schema it answers with | Models, or the platform's default |
-| --------- | --------------------------------------------------------------------------- | ------------- | ------------------------------- | --------------------------------- |
+| Prompt id | Capability: document-extraction, classification, screening or summarization | What it reads | The JSON schema it answers with | Models, or the platform's default | Source: the research ids of every domain rule the prompt states |
+| --------- | --------------------------------------------------------------------------- | ------------- | ------------------------------- | --------------------------------- | --------------------------------------------------------------- |
 
 What a model is sent that no live flow sends yet, so the website's privacy policy ("Documents read by
 AI") says it in the same round (web-privacy-fix.md):
@@ -115,15 +131,15 @@ can repeat — a model, an integration whose call is safe twice; a step of code 
 
 ## 8. When it fails
 
-| When | What the person reads (200, plain) | The run stops, or goes on | Decided by: its field in section 4's schema, or the code |
-| ---- | ---------------------------------- | ------------------------- | -------------------------------------------------------- |
+| When | What the person reads (200, plain) | The run stops, or goes on | Decided by: its field in section 4's schema, or the code | Source: research ids |
+| ---- | ---------------------------------- | ------------------------- | -------------------------------------------------------- | -------------------- |
 
 ## 9. Test cases
 
-Made-up inputs only.
+Made-up inputs only. The research brief's golden cases first, then the rest.
 
-| Input | What the run must give |
-| ----- | ---------------------- |
+| Input | What the run must give | Source: research ids |
+| ----- | ---------------------- | -------------------- |
 
 ## 10. Needs the platform first
 
@@ -135,10 +151,16 @@ platform does not offer is a platform change — a block, a page part, a questio
 icon (a platform round under v3: a flow has no platform lane, 29.3.2): `/create-flow` stops, and
 this flow waits for that round.
 
+Each vendor the research's vendors lens found is here with its provider file, or "to add".
+
 | What | Repository | The change |
 | ---- | ---------- | ---------- |
 
 ## 11. Open questions
+
+A gap of the research is written `Unknown — not found (research.md, Gaps)`. A default no confirmed
+source carries, whatever its kind, is "a person decides" unless the owner kept its proposal at
+stage 1b (the owner's words and the time beside it).
 
 | Question | Proposed default |
 | -------- | ---------------- |

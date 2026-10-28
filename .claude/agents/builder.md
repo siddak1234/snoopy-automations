@@ -1,6 +1,7 @@
 ---
 name: builder
 description: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns a leftovers list and the path of a summary of 2 KB or less.
+tools: Bash, Read, Write, Edit, Grep, Glob, Skill
 model: inherit
 ---
 
