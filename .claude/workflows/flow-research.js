@@ -313,27 +313,28 @@ try {
     }
     if (verdicts) skeptic = '';
     else stop(`the skeptic did not finish (${skeptic}); no claim is verified`);
-    // The code gate (A2): a finding stays only when confirmed on a page that did not try to direct
-    // the skeptic; a line, only when every id it cites is confirmed and the skeptic calls it supported.
+    // The code gate (A2), each verdict counted: a finding stays when all its verdicts say confirmed
+    // on a page that did not direct the skeptic; a line, when its cites stand and all say supported.
     const misled = new Set(verdicts?.injectionSeen ?? []);
     if (misled.size) log(`pages that tried to direct the skeptic: ${[...misled].join(' ')}`);
+    const against = (all, key, at, good, single = '') => {
+      const vs = all.filter((v) => v[key] === at);
+      const bad = vs.filter((v) => v.verdict !== good).map((v) => `${v.verdict} — ${v.why}`);
+      const many = vs.length > 1 ? `the skeptic gave ${vs.length} verdicts, ` : single;
+      return vs.length ? (bad.length ? many + bad.join('; ') : '') : `${single}no verdict`;
+    };
     const confirmed = new Set();
-    for (const v of (verdicts?.verdicts ?? []).filter((x) => byId.has(x.id))) {
-      if (misled.has(byId.get(v.id).url)) gap(`${v.id}: its page tried to direct the skeptic`);
-      else if (v.verdict === 'confirmed') confirmed.add(v.id);
-      else gap(`${v.id}: ${v.verdict} — ${v.why}`);
+    for (const { id, url } of verdicts ? cited : []) {
+      const why = against(verdicts.verdicts, 'id', id, 'confirmed');
+      if (misled.has(url)) gap(`${id}: its page tried to direct the skeptic`);
+      else if (why) gap(`${id}: ${why}`);
+      else confirmed.add(id);
     }
-    const judged = new Set((verdicts?.verdicts ?? []).map((v) => v.id));
-    for (const f of cited) if (verdicts && !judged.has(f.id)) gap(`${f.id}: no skeptic verdict`);
-    const lineVerdict = new Map((verdicts?.lines ?? []).map((v) => [v.ref, v]));
-    /** '' when a line stands: every cite confirmed, and the skeptic's "supported". */
     const unsupported = (ref, cites) => {
-      const v = lineVerdict.get(ref);
       const unconfirmed = cites.filter((id) => !confirmed.has(id));
       if (unconfirmed.length === cites.length) return 'Unknown, not verified';
       if (unconfirmed.length) return `a cite was not confirmed (${unconfirmed.join(', ')})`;
-      const said = v ? `${v.verdict} — ${v.why}` : 'no verdict';
-      return v?.verdict === 'supported' ? '' : `the skeptic: ${said}`;
+      return against(verdicts.lines, 'ref', ref, 'supported', 'the skeptic: ');
     };
     for (const s of ALL)
       brief[s] = brief[s].flatMap((l, i) => {
@@ -341,9 +342,8 @@ try {
         if (why) gap(`${s}: "${lineText(l)}" — ${why}; dropped`);
         return why ? [] : [l];
       });
-    // Open questions: a default stands only when every cite is confirmed and the skeptic called it
-    // supported. Any other, whatever its kind, is "a person decides" unless the owner keeps the
-    // proposal, and is listed for the owner as not researched.
+    // Open questions: a default stands as a line does; any other, of either kind, is "a person
+    // decides" unless the owner keeps the proposal, and is listed for the owner as not researched.
     brief.openQuestions = brief.openQuestions.map((q, i) => {
       const researched = q.cites.length > 0 && !unsupported(`openQuestions.${i}`, q.cites);
       if (researched) return { ...q, researched };

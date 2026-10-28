@@ -158,6 +158,36 @@ test('a line stays only when every cite is confirmed: one not_on_page cite drops
   );
 });
 
+test('two verdicts for one finding id: confirmed beside not_on_page is not confirmed, a gap', async () => {
+  const { data } = await run(
+    normalWith((prompt) => {
+      const out = skepticSays()(prompt);
+      out.verdicts.push({ id: 'practice-1', verdict: 'not_on_page', why: 'absent' });
+      return out;
+    }),
+  );
+  assert.ok(!data.sources.some((s: Any) => s.id === 'practice-1'), 'practice-1 is no source');
+  assert.ok(
+    data.gaps.includes('practice-1: the skeptic gave 2 verdicts, not_on_page — absent'),
+    data.gaps.join('\n'),
+  );
+  assert.deepEqual(data.brief.criteria, [], 'three-way match cited only practice-1');
+});
+
+test('two verdicts for one line ref: not_supported then supported drops the line, a gap', async () => {
+  const { data } = await run(
+    normalWith((prompt) => {
+      const out = skepticSays()(prompt);
+      const at = out.lines.findIndex((l: Any) => l.ref === 'criteria.0');
+      out.lines.splice(at, 0, { ref: 'criteria.0', verdict: 'not_supported', why: 'says more' });
+      return out;
+    }),
+  );
+  assert.deepEqual(data.brief.criteria, [], 'the later "supported" does not hide the first');
+  const why = 'the skeptic gave 2 verdicts, not_supported — says more; dropped';
+  assert.ok(data.gaps.includes(`criteria: "three-way match" — ${why}`), data.gaps.join('\n'));
+});
+
 test("ids are the code's: a lens that reuses another lens's id cannot make it a source", async () => {
   const unchecked = 'https://unchecked.example/r';
   const { data, calls } = await run((label, attempt, prompt, dir) => {

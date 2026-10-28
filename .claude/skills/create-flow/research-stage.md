@@ -22,8 +22,9 @@ standards and data; vendors and integrations; the streamlining of the process â€
 agents at once; one synthesis from the gated findings only; one skeptic that re-opens every cited
 page and judges every line, golden case and cited default against the quotes it cites; a code
 gate after each (A2: "programmatic checks"). The script numbers each finding `<lens>-<n>`, never
-the model; a line stays only when every id it cites is confirmed and the skeptic calls it
-supported; a throw before the skeptic's gate finishes writes no line of the brief, each one a gap.
+the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
+and a line stays only when every id it cites is confirmed and every verdict for the line says
+supported (any other verdict beside them is a gap); a throw before the skeptic's gate finishes writes no line of the brief, each one a gap.
 Its `researcher` agent is the kit's ([.claude/agents/researcher.md](../../agents/researcher.md),
 byte for byte `snoopy-backend/.claude/agents/researcher.md`, installed by `claude-install`):
 without it every lens fails.
