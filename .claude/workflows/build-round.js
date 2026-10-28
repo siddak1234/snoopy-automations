@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Build one round across up to three repository clones: design, lanes, one review pass, land, and hygiene always last (ENGINEERING-STANDARD (i)).',
   whenToUse:
-    "A round of work with a task and one to three lanes, each a repository clone; pass args { runDir, task, lanes: [{ repo, clone, mechanical }], backend?, gateLock? }. Without backend (a flow developer with only snoopy-automations) hygiene reports the run's own facts.",
+    "A round of work with a task and one to three lanes, each a repository clone; pass args { runDir, task, lanes: [{ repo, clone, mechanical }], backend?, gateLock? }. Without backend (a flow developer with only snoopy-automations) hygiene reports the kit's quick-hygiene facts.",
   phases: [
     { title: 'Design', detail: 'the plan and one brief per lane' },
     { title: 'Lanes', detail: 'at most three builders; one heavy gate at a time' },
