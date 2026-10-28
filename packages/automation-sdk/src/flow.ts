@@ -42,7 +42,9 @@ import { FLOW_WORDS } from './words.js';
  *   again"). A re-run is a new run's key, so it would do the write again. Once noted — each
  *   attempt's context carries it as `wrote()` — a throw ends the run with `FLOW_WORDS.after_write`,
  *   ahead of the flow's own `sentences`, and `settle` words every failure but `unconfirmed` the same
- *   way, at any later step (Invoice Processing's `RunNotes`).
+ *   way, at any later step (Invoice Processing's `RunNotes`). A run that holds once noted keeps the
+ *   note in its held state (`providerWrote`), and the approval's continuation starts noted, so a
+ *   failure after the approval says the same; the steps never see the key.
  * - **The log, per attempt** (`context.log`): `settled`, `model_reasked` (the reason, the schema's
  *   path and rule) and `not_connected`, each with the run's and the step's ids.
  * - **`retryLeft` on every attempt** (`settle`): true while the runner would run the step again,
@@ -85,6 +87,25 @@ const SPENT = new Set(['output_schema_mismatch', 'content_filtered', 'truncated'
 /** What a run's provider calls have done that its end must not deny: an app may hold a write. */
 interface RunNotes {
   wrote: boolean;
+}
+
+/**
+ * The held state's reserved key for the note: an approval's continuation is a new `execute`, so a
+ * run that wrote and then held carries it here, and its continuation starts noted.
+ */
+const WROTE = 'providerWrote';
+
+/** A continuation's note, read and taken out of the state the steps see. */
+function resumed(request: InvokeRequest): { request: InvokeRequest; wrote: boolean } {
+  const continuation = request.continuation;
+  if (continuation === undefined || !(WROTE in continuation.state)) {
+    return { request, wrote: false };
+  }
+  const { [WROTE]: noted, ...state } = continuation.state;
+  return {
+    request: { ...request, continuation: { ...continuation, state } },
+    wrote: noted === true,
+  };
 }
 
 /** Per run, keyed by its request — the one object every step's context carries. */
@@ -159,11 +180,17 @@ export function defineFlow(definition: FlowDefinition): Automation {
   const automation = buildRunner(definition, standards);
   return {
     ...automation,
-    async execute(request, platform) {
-      const notes: RunNotes = { wrote: false };
+    async execute(outer, platform) {
+      const { request, wrote } = resumed(outer);
+      const notes: RunNotes = { wrote };
       runs.set(request, notes);
       try {
-        return await automation.execute(request, platform);
+        const result = await automation.execute(request, platform);
+        if (result.outcome !== 'held' || !notes.wrote) return result;
+        return {
+          ...result,
+          held: { ...result.held, state: { ...result.held.state, [WROTE]: true } },
+        };
       } catch (error) {
         const { wrote } = notes;
         log('error', 'run_failed_on_a_throw', { runId: request.runId, wrote, ...shapeOf(error) });

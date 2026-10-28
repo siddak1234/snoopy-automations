@@ -6,7 +6,7 @@ import { CallbackRefusedError } from '../src/refusals.js';
 import { MIN_STEP_BACKOFF_MS } from '../src/retry.js';
 import { defineAutomation } from '../src/runner.js';
 import { failed, settle, type Settled } from '../src/settle.js';
-import type { Step } from '../src/steps.js';
+import { held, type Step } from '../src/steps.js';
 import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { FLOW_WORDS } from '../src/words.js';
 import { classify, completion, flow, reading } from './flow-fixtures.js';
@@ -181,4 +181,51 @@ test('once a provider call wrote, a later failure never says to run it again: se
     outcome: 'failed',
     failureReason: FLOW_WORDS.not_connected,
   });
+});
+
+test('the note that a provider call wrote survives an approval: a settled failure after it never says to run it again', async () => {
+  const post: Step = async (context) => {
+    const sent = await settle(context, () =>
+      context.platform.callProvider({ providerId: 'p', operation: 'records.create', input: {} }),
+    );
+    return sent.ok ? { outcome: 'ok', summary: 'Posted' } : failed(sent.sentence, sent.kind);
+  };
+  const seen: unknown[] = [];
+  const automation = defineFlow({
+    templateId: TEMPLATE,
+    manifests: [manifest(1, ['post', 'check', 'again'])],
+    steps: {
+      post,
+      check: async ({ state }) =>
+        held({ summary: 'A person checks it', heldReason: 'Check it', state }),
+      again: async (context) => {
+        seen.push(Object.keys(context.state));
+        return post(context);
+      },
+    },
+    result: () => ({ summary: 'Done' }),
+    log: () => undefined,
+  });
+  const writes = new RecordingPlatform();
+  writes.provider = () => Promise.resolve({ status: 201, body: {} });
+  const first = await automation.execute(invoke(), writes);
+  assert.ok(first.outcome === 'held');
+  const after = new RecordingPlatform();
+  after.provider = () =>
+    Promise.reject(refusalFixture('provider', { status: 404, code: 'NOT_FOUND', detail: 'x' }));
+  const result = await automation.execute(
+    invoke({
+      input: {},
+      continuation: {
+        ofRunId: invoke().runId,
+        kind: 'approval',
+        stepId: first.held.stepId,
+        decision: 'approved',
+        state: first.held.state,
+      },
+    }),
+    after,
+  );
+  assert.deepEqual(result, { outcome: 'failed', failureReason: FLOW_WORDS.after_write });
+  assert.deepEqual(seen, [[]], 'the steps never see the reserved key');
 });

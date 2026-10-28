@@ -211,7 +211,9 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   a later step but `unconfirmed` (each attempt's context carries the note as `wrote()`), and a
   report the platform refuses end the run "Something went wrong after a connected app was used.
   Check it before you run this again." — never "Connect it, then run it again" after a write.
-  (Invoice Processing's `RunNotes`, generalised.)
+  A run that holds once noted keeps the note in its held state (`providerWrote`), and the approval's
+  continuation starts noted, so a failure after the approval says the same; steps never see the
+  key. (Invoice Processing's `RunNotes`, generalised.)
 - **The log says what each standard did.** Each attempt's context carries `log`, with the run's and
   the step's ids on every line: `settled` (the kind and the error's name, status, code and reason),
   `model_reasked` (Q2's or 5d's reason, the schema's `path` and `rule`) and `not_connected` (the
