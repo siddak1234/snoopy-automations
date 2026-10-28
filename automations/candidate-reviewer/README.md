@@ -231,3 +231,66 @@ Everything here is built and live before this flow (Round 19, decision B: all fo
 | A job typed instead of uploaded                      | not offered: a job description file is required                                                                                                     |
 | Old Word files (.doc, before 2007)                   | not accepted: only .docx; a .doc is saved again as .docx or PDF                                                                                     |
 | The run email for each candidate                     | as every flow today: the platform's email at each run's end (a toggle to turn it off is a later change)                                             |
+
+## How the code does it
+
+`candidate-reviewer` — **Resume Screening** from v2 (**Candidate Reviewer** at v1), in HR — reads a
+job description once into the job's reading, then reads each candidate's resume and scores it
+against that reading (the platform's BUILD-PLAN Phase 28, Round 19). It is the first flow with
+items (the repository README, "A flow's items"): a job is its item, a candidate its run. What it
+does, in the words a person reads, is this spec, above, the build's source of truth word for word.
+This section moved here from the repository README in Round 21, so a change to the flow asks for
+this file in the same change (`docs/docs-map.json`). It is one of the two live flows on
+`defineAutomation`, exempt from the new flows' standards until its after-pilot version, v3.
+Where the code does it:
+
+- **v2, the version this code serves**: `SERVED_VERSIONS` in
+  `automations/candidate-reviewer/src/automation.ts`, whose `servedManifests` keeps it alone of the
+  manifests `define` is given and refuses when none is left, as Invoice Processing's does; its
+  Dockerfile copies only `manifests/candidate-reviewer.v2.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  holds to the spec and the code's constants to (the file types and size in
+  `automations/candidate-reviewer/src/file.ts`, the two file keys), and to v1's
+  `manifests/candidate-reviewer.v1.json` but for what v2 changed — its job's reading v1's. v1's
+  container keeps its pinned image until it is retired.
+- **A job** — the item run, `items.pipeline` (`job-received`, `read-job`, `save-job`):
+  `automations/candidate-reviewer/src/steps/job.ts`. The reading is `extract-posting`'s answer,
+  cleaned (`automations/candidate-reviewer/src/reading.ts`), the item run's output held to the
+  manifest's `items.outputSchema`; its sections are `postingSections` in
+  `automations/candidate-reviewer/src/sections.ts`.
+- **A candidate** — `pipeline` (`receive`, `read-resume`, `check-resume`, `score`, `save`):
+  `automations/candidate-reviewer/src/steps/candidate.ts`. `scored` there is what the scoring call
+  reads: the resume without the fields §4 leaves out, and without any line quoting a direction the
+  resume printed to its reader, which is sent apart. The years are worked out in
+  `automations/candidate-reviewer/src/years.ts` (overlapping roles once, a current role to today);
+  the score, its flags — "years not shown", and each direction — and the requirements a direction
+  was quoted for, moved from met to missing, in `automations/candidate-reviewer/src/scoring.ts`;
+  the sections in `candidateSections`; the verdict, from the score alone at one constant
+  (`ADVANCE_FROM_SCORE`, `verdictOf` in `automations/candidate-reviewer/src/words.ts`), on a
+  candidate's run and never on a job's. A model's refusal of the file (its type, size, bytes or
+  password) is "could not be read" (`readDocument` in
+  `automations/candidate-reviewer/src/prompts.ts`); any other refusal ends the run in the
+  platform's words.
+- **Directions planted in a document**: each of the three prompts reads its document as content,
+  never as instructions to it; `extract-resume` copies what tries to direct its reader into
+  `directions`, which the code keeps out of what the score judges and flags
+  (`automations/candidate-reviewer/test/candidate.test.ts` plants one).
+- **Word files** (`automations/candidate-reviewer/src/docx.ts`): Node's `zlib` alone, no
+  dependency. `word/document.xml` and the page headers and footers (`word/header<n>.xml`,
+  `word/footer<n>.xml`, read first) are found through the ZIP's central directory; their text
+  comes from `w:t`, their lines from `w:p`, with tabs and breaks. Entries that together claim more
+  than 5 MB inflated, any with a ratio over 100, an encrypted one or one not stored with deflate
+  are refused before anything is inflated, and each inflation stops at the size its entry claims;
+  a refused file could not be read, and nothing is spent on it.
+- **The file's own links** ([§4](#4-ai-steps); build 28's
+  F8): `readResumeFile` in `automations/candidate-reviewer/src/file.ts`, for a candidate's file
+  only, reads them — a PDF's with `pdfLinks` (`automations/candidate-reviewer/src/pdf.ts`, held to
+  its `PDF_LIMITS`), a Word file's with `docxLinks` (`automations/candidate-reviewer/src/docx.ts`,
+  through the same directory and `DOCX_LIMITS` as its text). `fileLinks` and `withFileLinks` in
+  `automations/candidate-reviewer/src/reading.ts` keep and add them as §4 says, a link only the
+  file gave named by `linkLabel` (`automations/candidate-reviewer/src/words.ts`).
+- **Models and retries**: Invoice Processing's two models ("Pick a model"), `MODELS` in
+  `automations/candidate-reviewer/src/prompts.ts`; no step declares a retry (§6).
+
+The platform side needs no pull request of its own: the merge here is the deploy
+([Build a flow](../../README.md#build-a-flow)), after the platform's build 28 contract
+([contract/README.md](../../contract/README.md)).

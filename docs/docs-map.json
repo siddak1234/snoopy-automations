@@ -12,9 +12,9 @@
     {
       "id": "automations",
       "code": ["automations/*/src/**", "automations/*/prompts/**"],
-      "docs": ["README.md"]
+      "docs": ["automations/*/README.md"]
     },
-    { "id": "manifests", "code": ["manifests/**"], "docs": ["README.md"] },
+    { "id": "manifests", "code": ["manifests/*.v*.json"], "docs": ["automations/*/README.md"] },
     { "id": "contract", "code": ["contract/**"], "docs": ["contract/README.md"] },
     {
       "id": "tooling",

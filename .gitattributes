@@ -1,0 +1,6 @@
+# Generated files a flow's pull request carries beside its folder and manifest (Round 21, R1):
+# GitHub folds them in the diff. Each is held by the gate: `npm ci` the lock, `npm run map --
+# --check` the map, `npm run facts` and test/repo-facts.test.ts the facts.
+package-lock.json linguist-generated=true
+docs/MAP.md linguist-generated=true
+docs/repo-facts/*.json linguist-generated=true

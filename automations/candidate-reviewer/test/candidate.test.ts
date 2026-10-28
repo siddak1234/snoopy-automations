@@ -171,6 +171,19 @@ test("§9 and §8: a receipt uploaded as a resume fails in the spec's words, and
   assert.equal(platform.steps.at(-1)?.stepId, 'check-resume');
 });
 
+test('5c: a read that writes "Not_a_resume" ends on the not-a-resume stop, converted to the schema’s spelling', async () => {
+  // The platform hands on "Not_a_resume" as `not_a_resume` (its Round 21, 5c); the recording
+  // platform does too, so the exact comparison in check-resume stops the run as the spec says.
+  const { platform, sent } = await run({
+    resume: { ...receiptAnswer(), document: 'Not_a_resume' },
+  });
+  assert.deepEqual(sent, {
+    outcome: 'failed',
+    failureReason: 'This file does not look like a resume.',
+  });
+  assert.equal(platform.steps.at(-1)?.stepId, 'check-resume');
+});
+
 test("§9 and §8: a blank page fails in the spec's words", async () => {
   for (const resume of [blankAnswer(), { ...blankAnswer(), document: 'resume' }]) {
     const { sent } = await run({ resume });
