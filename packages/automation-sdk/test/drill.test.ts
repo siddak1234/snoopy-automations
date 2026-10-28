@@ -6,7 +6,7 @@ import { defineFlow } from '../src/flow.js';
 import { definePrompt } from '../src/prompt.js';
 import { defineAutomation } from '../src/runner.js';
 import { failed, settle } from '../src/settle.js';
-import type { AutomationDefinition, Step } from '../src/steps.js';
+import type { Automation, AutomationDefinition, Step } from '../src/steps.js';
 import { RecordingPlatform } from '../src/testing.js';
 import { FLOW_WORDS } from '../src/words.js';
 import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
@@ -71,8 +71,10 @@ test('drill: a defineFlow flow passes every case, and a malformed answer twice e
       ['a: provider_not_declared (403)', true, 'failed'],
       ['b: vendor down (502)', true, 'failed'],
       ['b: no answer', true, 'failed'],
+      ['b: no answer from the app', true, 'failed'],
       ['c: malformed AI answer, twice', true, 'held'],
       ['d: timeout', true, 'failed'],
+      ['e: a refused report after the app answered', true, 'failed'],
     ],
   );
   const reasons = cases.map((entry) =>
@@ -83,9 +85,49 @@ test('drill: a defineFlow flow passes every case, and a malformed answer twice e
     FLOW_WORDS.not_declared,
     FLOW_WORDS.ai_busy,
     FLOW_WORDS.unanswered,
+    FLOW_WORDS.unconfirmed,
     undefined,
     FLOW_WORDS.timeout,
+    FLOW_WORDS.after_write,
   ]);
+});
+
+test('drill: "Try again" once an app may have done it fails it, naming the case', async () => {
+  const retrySaying = defineFlow({
+    ...definition,
+    steps: {
+      read,
+      record: async (context) => {
+        const sent = await settle(context, () =>
+          context.platform.callProvider({
+            providerId: 'p',
+            operation: 'records.create',
+            input: {},
+          }),
+        );
+        return sent.ok ? { outcome: 'ok', summary: 'Recorded' } : failed(FLOW_WORDS.vendor_down);
+      },
+    },
+    log: () => undefined,
+  });
+  await assert.rejects(
+    failureDrill(retrySaying, fixture),
+    /b: no answer from the app says "Try again" after an app may have done it/u,
+  );
+  const inner = defineFlow({ ...definition, log: () => undefined });
+  const reportSaying: Automation = {
+    ...inner,
+    async execute(request, platform) {
+      const result = await inner.execute(request, platform);
+      return result.outcome === 'failed' && result.failureReason === FLOW_WORDS.after_write
+        ? { ...result, failureReason: FLOW_WORDS.other }
+        : result;
+    },
+  };
+  await assert.rejects(
+    failureDrill(reportSaying, fixture),
+    /e: a refused report after the app answered says "Try again"/u,
+  );
 });
 
 test('drill: a flow that throws raw text fails it, naming the case', async () => {

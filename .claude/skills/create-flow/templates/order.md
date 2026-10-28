@@ -26,8 +26,8 @@ link.
    first if the platform's `schemas/` moved since — after step 1, to its merge, so the menu lists the
    provider. Then its gate. Merge; read the Deploy job's
    summary, each automation's outcome as README.md's 'Build a flow' step 5 lists them, and
-   the platform's Flow CD run it dispatched. The live flows' rows are there too: the root lock is
-   an input of every image, so they redeploy at their versions (README.md, 'Build a flow').
+   the platform's Flow CD run it dispatched. The live flows' rows are there too (README.md,
+   'Build a flow', says why).
 3. **The screens**: the website and the app read the flow from the platform — no client pull
    request, no TestFlight build for a flow; then the owner's test on the phone, and stage 7's
    screens.

@@ -14,7 +14,8 @@ import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
 /**
  * `settle` (Round 21, D2.2): one way for every risky call, a kind from a closed list and the
  * SDK's sentence — and, under `defineFlow`, the step retry first: a retryable error is rethrown
- * while an attempt remains, so a 502 is retried before it is `vendor_down`.
+ * while an attempt remains, so a 502 is retried before it is `unconfirmed`: a provider call nothing
+ * answered never says "Try again".
  */
 
 const waited = recordedWaits();
@@ -30,6 +31,7 @@ const providerError = (status: number, code: string, reason?: string) =>
 /** A flow whose one step posts through `settle` and keeps what it settled to, under `policy`. */
 function posting(attempts?: number) {
   const seen: Settled<unknown>[] = [];
+  const logged: unknown[][] = [];
   const post: Step = async (context) => {
     const sent = await settle(context, () =>
       context.platform.callProvider({ providerId: 'p', operation: 'records.create', input: {} }),
@@ -45,9 +47,9 @@ function posting(attempts?: number) {
       ? {}
       : { retry: { post: { attempts, backoffMs: MIN_STEP_BACKOFF_MS } } }),
     result: () => ({ summary: 'Done' }),
-    log: () => undefined,
+    log: (...line) => void logged.push(line),
   });
-  return { automation, seen };
+  return { automation, seen, logged };
 }
 
 test('settle: with { attempts: 2 }, a 502 then a 200 ends ok after two calls', async () => {
@@ -68,7 +70,7 @@ test('settle: with { attempts: 2 }, a 502 then a 200 ends ok after two calls', a
   );
 });
 
-test('settle: a 502 twice ends vendor_down after two calls, never after the first', async () => {
+test('settle: a 502 twice ends unconfirmed after two calls, never after the first', async () => {
   const { automation, seen } = posting(2);
   const platform = new RecordingPlatform();
   platform.provider = () => Promise.reject(providerError(502, 'DEPENDENCY_FAILURE'));
@@ -76,10 +78,72 @@ test('settle: a 502 twice ends vendor_down after two calls, never after the firs
   assert.equal(platform.providerCalls.length, 2);
   assert.deepEqual(
     seen.map((entry) => !entry.ok && entry.kind),
-    ['vendor_down'],
+    ['unconfirmed'],
     'the first attempt rethrew',
   );
-  assert.deepEqual(result, { outcome: 'failed', failureReason: FLOW_WORDS.vendor_down });
+  assert.deepEqual(result, { outcome: 'failed', failureReason: FLOW_WORDS.unconfirmed });
+});
+
+test('settle: a provider call nothing answered is unconfirmed, never "Try again"; one provably unsent is vendor_down', async () => {
+  const cases: [string, () => Promise<unknown>, string][] = [
+    ['no answer', async () => Promise.reject(await noAnswer('the raw text')), 'unconfirmed'],
+    [
+      'a timeout',
+      () => Promise.reject(Object.assign(new Error('the raw text'), { name: 'TimeoutError' })),
+      'unconfirmed',
+    ],
+    ['a 504', () => Promise.reject(providerError(504, 'DEPENDENCY_FAILURE')), 'unconfirmed'],
+    [
+      'a codeless 503, provably unsent',
+      () => Promise.reject(new CallbackRefusedError('provider', 503, '')),
+      'vendor_down',
+    ],
+    ['a 429', () => Promise.reject(providerError(429, 'RATE_LIMITED')), 'vendor_down'],
+  ];
+  for (const [name, call, kind] of cases) {
+    const { automation, seen } = posting();
+    const platform = new RecordingPlatform();
+    platform.provider = () => call() as never;
+    const result = await automation.execute(invoke(), platform);
+    assert.deepEqual(
+      seen.map((entry) => !entry.ok && entry.kind),
+      [kind],
+      name,
+    );
+    assert.ok(result.outcome === 'failed', name);
+    assert.equal(result.failureReason, FLOW_WORDS[kind as 'unconfirmed' | 'vendor_down'], name);
+    if (kind === 'unconfirmed') assert.doesNotMatch(result.failureReason, /try again/iu, name);
+  }
+});
+
+test('settle logs settled with the kind and the error shape, never its text', async () => {
+  const { automation, logged } = posting();
+  const platform = new RecordingPlatform();
+  platform.provider = () => Promise.reject(providerError(404, 'NOT_FOUND'));
+  await automation.execute(invoke(), platform);
+  assert.deepEqual(logged[0], [
+    'info',
+    'settled',
+    {
+      runId: invoke().runId,
+      stepId: 'post',
+      kind: 'not_connected',
+      error: 'CallbackRefusedError',
+      status: 404,
+      code: 'NOT_FOUND',
+      reason: null,
+    },
+  ]);
+  assert.ok(!JSON.stringify(logged).includes('raw text'));
+  // A vendor's own non-2xx inside a 200: the kind and the status.
+  const inside = posting();
+  const answering = new RecordingPlatform();
+  answering.provider = () => Promise.resolve({ status: 409, body: { said: 'the raw text' } });
+  await inside.automation.execute(invoke(), answering);
+  assert.deepEqual(inside.logged[0]?.slice(1), [
+    'settled',
+    { runId: invoke().runId, stepId: 'post', kind: 'vendor_refused', status: 409 },
+  ]);
 });
 
 test('settle: a 404 ends not_connected after one call', async () => {
@@ -132,6 +196,12 @@ test('settle: each kind, with the SDK’s sentence and never the raw text', asyn
     [
       'a 502',
       () => Promise.reject(providerError(502, 'DEPENDENCY_FAILURE')),
+      'unconfirmed',
+      'unconfirmed',
+    ],
+    [
+      'a codeless 503, provably unsent',
+      () => Promise.reject(new CallbackRefusedError('provider', 503, '')),
       'vendor_down',
       'vendor_down',
     ],
@@ -170,6 +240,29 @@ test('settle: each kind, with the SDK’s sentence and never the raw text', asyn
       'ai_too_long',
     ],
     ['a timeout', () => Promise.reject(timeout), 'timeout', 'timeout'],
+    // Each typed model refusal by what a person can do: the allowance, the setup, the file.
+    ...(
+      [
+        ['over_plan_limit', 403, 'ai_allowance'],
+        ['capability_not_in_plan', 403, 'ai_setup'],
+        ['entitlements_not_configured', 403, 'ai_setup'],
+        ['no_model_left', 422, 'ai_setup'],
+        ['file_too_large', 422, 'ai_refused'],
+      ] as const
+    ).map(([reason, status, word]): [string, () => Promise<unknown>, string, string] => [
+      reason,
+      () =>
+        Promise.reject(
+          refusalFixture('model', {
+            status,
+            code: status === 403 ? 'FORBIDDEN' : 'BAD_REQUEST',
+            detail: 'the raw text',
+            details: { reason },
+          }),
+        ),
+      'ai_refused',
+      word,
+    ]),
   ];
   for (const [name, call, kind, word] of cases) {
     const sent = await settle(context, call);
@@ -199,22 +292,29 @@ test('settle: each kind, with the SDK’s sentence and never the raw text', asyn
   );
 });
 
-test('optionalConnection: not chosen is skipped by the step; chosen and not connected goes on with its line', () => {
+test('optionalConnection: not chosen is skipped by the step; chosen and not connected goes on with its line, logged', () => {
+  const logged: unknown[][] = [];
   const chosen = optionalConnection(
-    invoke({ config: { vendor: 'quickbooks' } }),
+    {
+      request: invoke({ config: { vendor: 'quickbooks' } }),
+      log: (...line) => void logged.push(line),
+    },
     'vendor',
     'quickbooks',
   );
   assert.equal(chosen.chosen, true);
+  assert.deepEqual(logged, [], 'nothing logged until it is not connected');
   assert.deepEqual(chosen.notConnected('QuickBooks', { a: 1 }), {
     outcome: 'failed',
     summary: "Not sent to QuickBooks: QuickBooks isn't connected",
     state: { a: 1 },
   });
+  assert.deepEqual(logged, [['info', 'not_connected', { providerId: 'quickbooks' }]]);
   assert.equal(notSentLine('QuickBooks'), "Not sent to QuickBooks: QuickBooks isn't connected");
   assert.equal(
-    optionalConnection(invoke({ config: { vendor: 'none' } }), 'vendor', 'quickbooks').chosen,
+    optionalConnection({ request: invoke({ config: { vendor: 'none' } }) }, 'vendor', 'quickbooks')
+      .chosen,
     false,
   );
-  assert.equal(optionalConnection(invoke(), 'vendor', 'quickbooks').chosen, false);
+  assert.equal(optionalConnection({ request: invoke() }, 'vendor', 'quickbooks').chosen, false);
 });

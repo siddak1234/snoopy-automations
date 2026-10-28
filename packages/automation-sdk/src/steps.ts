@@ -115,6 +115,12 @@ export interface StepContext {
    * while it is true. `defineAutomation` sets none.
    */
   readonly retryLeft?: (error: unknown) => boolean;
+  /**
+   * Under `defineFlow` only: the flow's log, with the run's and the step's ids on every line —
+   * where `settle` (`settled`), the re-ask (`model_reasked`) and `optionalConnection`
+   * (`not_connected`) say what they did. Codes and shapes only, never a document's words.
+   */
+  readonly log?: (level: 'info' | 'error', event: string, fields?: Record<string, unknown>) => void;
 }
 
 /**

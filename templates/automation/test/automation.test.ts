@@ -235,7 +235,7 @@ test('a provider refusal fails the run at act, and a refused mail does not', asy
   assert.equal(unmailed.steps.at(-1)?.outcome, 'failed');
 });
 
-test('act, a provider write, declares no retry: a failure the platform did not decide ends the run in plain words, and the provider is called once', async () => {
+test('act, a provider write, declares no retry: a failure the platform did not decide ends the run saying to check the app, never "Try again", and the provider is called once', async () => {
   assert.deepEqual(automation.retry, {});
   const platform = platformWith({ vendor: 'Contoso', amount: 120.5 });
   // The Edge could not reach Runs: a 502 that names no reason. The first call may
@@ -249,7 +249,7 @@ test('act, a provider write, declares no retry: a failure the platform did not d
   const request = invoke();
   assert.deepEqual(await automation.execute(request, platform), {
     outcome: 'failed',
-    failureReason: FLOW_WORDS.vendor_down,
+    failureReason: FLOW_WORDS.unconfirmed,
   });
   assert.deepEqual(
     platform.providerCalls.map((call) => call.idempotencyKey),
@@ -257,7 +257,7 @@ test('act, a provider write, declares no retry: a failure the platform did not d
   );
   assert.deepEqual(
     platform.steps.filter((step) => step.stepId === 'act').map((step) => step.summary),
-    [FLOW_WORDS.vendor_down],
+    [FLOW_WORDS.unconfirmed],
   );
   assert.equal(platform.modelCalls.length, 1, 'the extraction before it is not repeated');
 });

@@ -189,16 +189,32 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
 - **`settle(context, () => call)`** (`packages/automation-sdk/src/settle.ts`) is the one way for a
   risky call: `{ ok: true, value }` or `{ ok: false, kind, sentence }`, the kind one of
   `not_connected` (Connections' 404), `not_declared` (403 `provider_not_declared`),
-  `vendor_refused`, `vendor_down`, `unanswered`, `ai_refused` and `timeout`, a provider's own
-  non-2xx inside a 200 included. It works with the step retry, not around it: `defineFlow` gives
+  `vendor_refused`, `vendor_down`, `unconfirmed`, `unanswered`, `ai_refused` and `timeout`, a
+  provider's own non-2xx inside a 200 included. A typed model refusal's sentence says what a person
+  can do: the month's allowance used up (`over_plan_limit`), AI not set up for the flow
+  (`capability_not_in_plan`, `entitlements_not_configured`, `no_model_left`), an answer too long
+  (`truncated`), else a clearer file. It works with the step retry, not around it: `defineFlow` gives
   each attempt's context `retryLeft(error)`, true while the runner would run the step again (its
   policy repeats the error, a wait remains, the next attempt starts before the deadline), and
-  `settle` rethrows while it is true, so a 502 is retried before it is `vendor_down`. **Once an
+  `settle` rethrows while it is true, so a 502 is retried before it is `unconfirmed`. **Once an
   attempt has had a model answer, `retryLeft` is false**: a re-ask that then gets no answer ends as
   `unanswered`, and the billed first call is never made again.
-- **An optional connection**: `optionalConnection(request, key, providerId)` reads the setup
-  field's choice. Not chosen, the step returns `skipped`; chosen and `not_connected`, its
-  `notConnected(displayName)` goes on with "Not sent to X: X isn't connected" and no failure reason.
+- **Never "Try again" once an app may have done something.** A provider call nothing answered — no
+  answer, a timeout, a 502/503/504 that decided nothing — that did not provably never leave
+  (`isUnsent`) is `unconfirmed`: "The connected app didn't confirm this. Check it before you run this
+  again." A re-run carries a new run's key, so it would do the write again (the template's `act`
+  says why). `defineFlow` notes per run when a provider call has answered 2xx or was unconfirmed;
+  once noted, a step's throw or a report the platform refuses ends the run "Something went wrong
+  after a connected app was used. Check it before you run this again." (Invoice Processing's
+  `RunNotes`, generalised.)
+- **The log says what each standard did.** Each attempt's context carries `log`, with the run's and
+  the step's ids on every line: `settled` (the kind and the error's name, status, code and reason),
+  `model_reasked` (Q2's or 5d's reason, the schema's `path` and `rule`) and `not_connected` (the
+  provider's id) — so a flow re-asked every run, or going on without a connection, shows it.
+- **An optional connection**: `optionalConnection(context, key, providerId)` reads the setup
+  field's choice from the step's context. Not chosen, the step returns `skipped`; chosen and
+  `not_connected`, its `notConnected(displayName)` goes on with "Not sent to X: X isn't connected" and
+  no failure reason.
   A required connection needs nothing here: the platform refuses going live (422) and a run (409)
   without it, and the clients say "Connect X first."
 - **Q1, the exact-quote check**: `quotesIn(documentText, values)` names each value whose exact
@@ -208,7 +224,7 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   run for a person ("The AI's answer needs a person to check it.", the state's `unmatchedAnswer` the
   step's id). **One to three more paid AI calls**: the platform tries the request's next model on a
   miss too, each a `runs.model_calls` row against the plan's allowance.
-- **5d**: a call asks at the owner's cap (8,000 tokens) unless the step names a lower
+- **5d**: a call asks at the owner's cap (the menu's `limits.modelAnswerTokens`) unless the step names a lower
   `maxOutputTokens`, which only a flow's spec sets; one cut off (`truncated`) below the cap is asked
   once more at the cap — **one to three more paid AI calls** — and one cut off at the cap is not
   asked again: it ends "The AI's answer was too long to finish. Try a shorter file." One re-ask per
@@ -219,8 +235,10 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
 - **The shared failure drill**: `failureDrill(automation, fixture)` from
   `@autom8x/automation-sdk/testing` (`packages/automation-sdk/src/drill.ts`) runs the flow once per
   case — a missing connection (404, then `provider_not_declared`), the vendor down (502, then no
-  answer), a malformed AI answer twice (which must end held) and a timeout — and fails on a throw, a
-  raw message or words in neither `FLOW_WORDS` nor the flow's spec and `words.md`. Every new flow's
+  answer, then no answer from the app alone), a malformed AI answer twice (which must end held), a
+  timeout, and a report the platform refuses once the app answered — and fails on a throw, a raw
+  message, words in neither `FLOW_WORDS` nor the flow's spec and `words.md`, or "Try again" in the
+  two cases where the app may have done it. Every new flow's
   `automations/<id>/test/drill.test.ts` runs it, and `test/conformance.test.ts` fails a flow without one, the two live
   flows exempt by name.
 
@@ -276,7 +294,8 @@ with the schema's own spelling, so an exact `case 'bill'` takes its branch; an e
 values equal ignoring case keeps exact matching. `RecordingPlatform` converts the same way, with a
 copy of the platform's rule (`respellEnums`, `packages/automation-sdk/src/output-schema.ts`). And a
 request may ask for a smaller answer than the owner's cap: `maxOutputTokens`, a whole number from 1
-to 8,000 (`ModelCallOptions.maxOutputTokens`); left out, the platform sends its cap.
+to the cap (the menu's `limits.modelAnswerTokens`; `ModelCallOptions.maxOutputTokens`); left out,
+the platform sends its cap.
 
 Every refusal the platform answers is an RFC 7807 problem — `{ type, title, status,
 detail, instance, code, requestId, details }`, relayed verbatim by the Edge — and

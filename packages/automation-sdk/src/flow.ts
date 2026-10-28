@@ -1,16 +1,26 @@
-import type { ModelCompletion, ModelRequest } from './contract.js';
+import type { InvokeRequest, ModelCompletion, ModelRequest } from './contract.js';
 import { MODEL_REQUEST_LIMITS } from './model-request.js';
 import type { AutomationPlatform } from './platform.js';
-import { CallbackRefusedError, ModelRefusedError } from './refusals.js';
+import { ModelRefusedError } from './refusals.js';
 import { retryableUnder, spreadWaits } from './retry.js';
 import { buildRunner } from './runner.js';
 import { jsonLogger, type Logger } from './serve.js';
-import { codeOf, isUnmatched, kindOf, markUnmatched } from './settle.js';
+import {
+  codeOf,
+  isUnmatched,
+  kindOf,
+  leavesUnconfirmed,
+  markUnconfirmed,
+  markUnmatched,
+  shapeOf,
+} from './settle.js';
 import {
   held,
   type Automation,
   type AutomationDefinition,
   type RunnerStandards,
+  type StepContext,
+  type StepPlatform,
   type StepResult,
 } from './steps.js';
 import { FLOW_WORDS } from './words.js';
@@ -26,6 +36,13 @@ import { FLOW_WORDS } from './words.js';
  *   carry the document. The log keeps the error's shape: its name, status, code and reason (as
  *   Invoice Processing's `noteThrows` does). A throw outside a step (a refused report) ends it
  *   with `FLOW_WORDS.other`. A `failed(sentence, code)` result's code is logged with its step.
+ * - **Never "Try again" once an app may have done something.** Per run, `defineFlow` notes when a
+ *   provider call has answered 2xx, or got no answer and was not provably unsent — that error
+ *   marked so `settle` and `kindOf` read it as `unconfirmed` ("Check it before you run this
+ *   again"). A re-run is a new run's key, so it would do the write again. Once noted, a throw ends
+ *   the run with `FLOW_WORDS.after_write`, not "Try again" (Invoice Processing's `RunNotes`).
+ * - **The log, per attempt** (`context.log`): `settled`, `model_reasked` (the reason, the schema's
+ *   path and rule) and `not_connected`, each with the run's and the step's ids.
  * - **`retryLeft` on every attempt** (`settle`): true while the runner would run the step again,
  *   and false once the attempt has had a model answer — so a re-ask that then gets no answer ends
  *   as `unanswered`, and the billed first call is never made again (the re-check's finding 1).
@@ -54,6 +71,20 @@ const CAP = MODEL_REQUEST_LIMITS.maxOutputTokens;
 /** Refusals the model had already answered for: billed (`runs.model_calls`). */
 const SPENT = new Set(['output_schema_mismatch', 'content_filtered', 'truncated']);
 
+/** What a run's provider calls have done that its end must not deny: an app may hold a write. */
+interface RunNotes {
+  wrote: boolean;
+}
+
+/** Per run, keyed by its request — the one object every step's context carries. */
+const runs = new WeakMap<InvokeRequest, RunNotes>();
+
+const notesOf = (request: InvokeRequest): RunNotes => {
+  const notes = runs.get(request) ?? { wrote: false };
+  runs.set(request, notes);
+  return notes;
+};
+
 export function defineFlow(definition: FlowDefinition): Automation {
   const log = definition.log ?? jsonLogger(definition.templateId);
   const sentences = definition.sentences ?? {};
@@ -61,6 +92,9 @@ export function defineFlow(definition: FlowDefinition): Automation {
     waits: (policy) => spreadWaits(policy),
     attemptOf(attempt, { context, policy, waits, platform, platformWith }) {
       const answered = { value: false };
+      const { runId } = context.request;
+      const stepLog: NonNullable<StepContext['log']> = (level, event, fields = {}) =>
+        log(level, event, { runId, stepId: context.stepId, ...fields });
       const repeats = retryableUnder(policy);
       const deadlineAt = Date.parse(context.request.deadline);
       const wait = waits[attempt - 1];
@@ -70,8 +104,12 @@ export function defineFlow(definition: FlowDefinition): Automation {
         repeats(error) &&
         wait !== undefined &&
         Date.now() + wait < deadlineAt;
+      const stepPlatform = watching(
+        platformWith(reasking(platform, answered, stepLog)),
+        notesOf(context.request),
+      );
       return {
-        context: { ...context, platform: platformWith(reasking(platform, answered)), retryLeft },
+        context: { ...context, platform: stepPlatform, retryLeft, log: stepLog },
         retryable: retryLeft,
       };
     },
@@ -84,7 +122,11 @@ export function defineFlow(definition: FlowDefinition): Automation {
           state: { ...context.state, unmatchedAnswer: stepId },
         });
       }
-      const sentence = sentences[stepId] ?? kindOf(error)?.sentence ?? FLOW_WORDS.other;
+      const kind = kindOf(error);
+      const wrote = notesOf(context.request).wrote && kind?.kind !== 'unconfirmed';
+      const sentence =
+        sentences[stepId] ??
+        (wrote ? FLOW_WORDS.after_write : (kind?.sentence ?? FLOW_WORDS.other));
       return { outcome: 'failed', summary: sentence, failureReason: sentence };
     },
     returned(stepId, result, context) {
@@ -98,18 +140,57 @@ export function defineFlow(definition: FlowDefinition): Automation {
   return {
     ...automation,
     async execute(request, platform) {
+      const notes: RunNotes = { wrote: false };
+      runs.set(request, notes);
       try {
         return await automation.execute(request, platform);
       } catch (error) {
-        log('error', 'run_failed_on_a_throw', { runId: request.runId, ...shapeOf(error) });
-        return { outcome: 'failed', failureReason: FLOW_WORDS.other };
+        const { wrote } = notes;
+        log('error', 'run_failed_on_a_throw', { runId: request.runId, wrote, ...shapeOf(error) });
+        return {
+          outcome: 'failed',
+          failureReason: wrote ? FLOW_WORDS.after_write : FLOW_WORDS.other,
+        };
+      }
+    },
+  };
+}
+
+/**
+ * The step's platform with its provider calls noted against the run: a 2xx answer, or no answer
+ * that was not provably unsent — that error marked `unconfirmed` for `settle` and `kindOf`.
+ */
+function watching(platform: StepPlatform, notes: RunNotes): StepPlatform {
+  return {
+    ...platform,
+    async callProvider(request, options) {
+      try {
+        const answer = await platform.callProvider(request, options);
+        if (answer.status >= 200 && answer.status < 300) notes.wrote = true;
+        return answer;
+      } catch (error) {
+        if (leavesUnconfirmed(error)) {
+          markUnconfirmed(error);
+          notes.wrote = true;
+        }
+        throw error;
       }
     },
   };
 }
 
 /** The platform's model call, with Q2's and 5d's one re-ask, noting when a model has answered. */
-function reasking(platform: AutomationPlatform, answered: { value: boolean }) {
+function reasking(
+  platform: AutomationPlatform,
+  answered: { value: boolean },
+  log: NonNullable<StepContext['log']>,
+) {
+  const reasked = (error: ModelRefusedError) =>
+    log('info', 'model_reasked', {
+      reason: error.reason,
+      path: error.path ?? null,
+      rule: error.rule ?? null,
+    });
   const ask = async (request: ModelRequest): Promise<ModelCompletion> => {
     try {
       const completion = await platform.callModel(request);
@@ -126,6 +207,7 @@ function reasking(platform: AutomationPlatform, answered: { value: boolean }) {
     } catch (error) {
       if (!(error instanceof ModelRefusedError)) throw error;
       if (error.reason === 'output_schema_mismatch') {
+        reasked(error);
         try {
           return await ask({ ...request, prompt: `${request.prompt}\n\n${missLine(error)}` });
         } catch (again) {
@@ -137,6 +219,7 @@ function reasking(platform: AutomationPlatform, answered: { value: boolean }) {
       }
       const cap = request.maxOutputTokens;
       if (error.reason === 'truncated' && cap !== undefined && cap < CAP) {
+        reasked(error);
         return await ask({ ...request, maxOutputTokens: CAP });
       }
       throw error;
@@ -149,19 +232,6 @@ export function missLine(error: ModelRefusedError): string {
   const where = error.path === undefined ? '' : ` at ${error.path}`;
   const rule = error.rule === undefined ? '' : ` (${error.rule})`;
   return `Your last answer did not match the schema${where}${rule}. Answer again with only the JSON object the schema describes.`;
-}
-
-/** What the log keeps of an error: its name, and a refusal's status, code and reason. */
-function shapeOf(error: unknown): Record<string, unknown> {
-  if (error instanceof CallbackRefusedError) {
-    return {
-      error: error.name,
-      status: error.status,
-      code: error.code ?? null,
-      reason: error.reason ?? null,
-    };
-  }
-  return { error: error instanceof Error ? error.name : typeof error };
 }
 
 /**

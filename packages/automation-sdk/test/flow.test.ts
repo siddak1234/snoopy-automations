@@ -7,7 +7,7 @@ import { CallbackRefusedError } from '../src/refusals.js';
 import { MIN_STEP_BACKOFF_MS } from '../src/retry.js';
 import { failed, settle, type Settled } from '../src/settle.js';
 import type { Step } from '../src/steps.js';
-import { RecordingPlatform } from '../src/testing.js';
+import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { FLOW_WORDS } from '../src/words.js';
 import { recordedWaits } from './retry-fixtures.js';
 import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
@@ -87,8 +87,62 @@ test('defineFlow: failed(sentence, code) ends with the sentence; the code reache
   ]);
 });
 
+test('a refused report ends without "Try again" once a provider call answered, and with it before', async () => {
+  const refusing = () => {
+    const platform = new RecordingPlatform();
+    platform.reportStep = () =>
+      Promise.reject(refusalFixture('step', { status: 429, code: 'RATE_LIMITED', detail: 'x' }));
+    return platform;
+  };
+  const nothingSent = flow(() => Promise.resolve({ outcome: 'ok', summary: 'Read' }));
+  assert.deepEqual(await nothingSent.automation.execute(invoke(), refusing()), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.other,
+  });
+  const posted: Step = async ({ platform }) => {
+    await platform.callProvider({ providerId: 'p', operation: 'records.create', input: {} });
+    return { outcome: 'ok', summary: 'Posted' };
+  };
+  const { automation, logged } = flow(posted);
+  const request = invoke();
+  assert.deepEqual(await automation.execute(request, refusing()), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.after_write,
+  });
+  assert.doesNotMatch(FLOW_WORDS.after_write, /try again/iu);
+  assert.deepEqual(logged.at(-1)?.slice(0, 2), ['error', 'run_failed_on_a_throw']);
+  // Noted per run: the same request run again, with nothing sent, says "Try again" again.
+  assert.deepEqual(await nothingSent.automation.execute(request, refusing()), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.other,
+  });
+  // A step that throws once a provider call has answered ends the same way.
+  const thenThrows: Step = async (context) => {
+    await posted(context);
+    throw new Error('the raw text');
+  };
+  assert.deepEqual(await flow(thenThrows).automation.execute(invoke(), new RecordingPlatform()), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.after_write,
+  });
+});
+
+test('a provider call nothing answered, thrown through, ends unconfirmed: never "Try again"', async () => {
+  const posted: Step = async ({ platform }) => {
+    await platform.callProvider({ providerId: 'p', operation: 'records.create', input: {} });
+    return { outcome: 'ok', summary: 'Posted' };
+  };
+  const platform = new RecordingPlatform();
+  platform.provider = () =>
+    Promise.reject(Object.assign(new Error('the raw text'), { name: 'TimeoutError' }));
+  assert.deepEqual(await flow(posted).automation.execute(invoke(), platform), {
+    outcome: 'failed',
+    failureReason: FLOW_WORDS.unconfirmed,
+  });
+});
+
 test('Q2: an answer off its schema is asked once more with one fixed line, and a good answer ends ok', async () => {
-  const { automation } = flow(reading);
+  const { automation, logged } = flow(reading);
   const platform = new RecordingPlatform();
   platform.model = () =>
     Promise.resolve(
@@ -101,6 +155,19 @@ test('Q2: an answer off its schema is asked once more with one fixed line, and a
     platform.modelCalls[1]?.prompt,
     `${platform.modelCalls[0]?.prompt}\n\nYour last answer did not match the schema at $.kind (enum). Answer again with only the JSON object the schema describes.`,
   );
+  assert.deepEqual(logged, [
+    [
+      'info',
+      'model_reasked',
+      {
+        runId: invoke().runId,
+        stepId: 'read',
+        reason: 'output_schema_mismatch',
+        path: '$.kind',
+        rule: 'enum',
+      },
+    ],
+  ]);
 });
 
 test('Q2: a second miss holds the run for a person, never "unreadable"', async () => {
@@ -115,7 +182,7 @@ test('Q2: a second miss holds the run for a person, never "unreadable"', async (
 });
 
 test('5d: cut off at a lower first cap, asked once more at the owner’s cap; two calls', async () => {
-  const { automation } = flow(reading);
+  const { automation, logged } = flow(reading);
   const platform = new RecordingPlatform();
   platform.model = (call) =>
     Promise.resolve(
@@ -129,6 +196,13 @@ test('5d: cut off at a lower first cap, asked once more at the owner’s cap; tw
     platform.modelCalls.map((call) => call.maxOutputTokens),
     [4_000, 8_000],
   );
+  assert.deepEqual(logged, [
+    [
+      'info',
+      'model_reasked',
+      { runId: invoke().runId, stepId: 'read', reason: 'truncated', path: null, rule: null },
+    ],
+  ]);
 });
 
 test('5d: cut off at the cap is not asked again, and fails with a plain reason', async () => {

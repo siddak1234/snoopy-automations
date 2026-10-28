@@ -11,10 +11,14 @@ import { FLOW_WORDS } from './words.js';
  * It runs the flow on `RecordingPlatform` once per case, each failing what the flow reaches:
  *
  * - (a) a missing connection: the provider callback's 404, then its 403 `provider_not_declared`;
- * - (b) the vendor is down: a 502 that names no reason, then no answer at all;
+ * - (b) the vendor is down: a 502 that names no reason, then no answer at all, then no answer
+ *   from the app alone — which must not end saying "Try again": the app may have done it, and a
+ *   re-run would do it again (`FLOW_WORDS.unconfirmed`);
  * - (c) a malformed AI answer: every answer off its schema, so the re-ask misses too — which must
  *   end `held`;
- * - (d) a timeout, on every provider and model call.
+ * - (d) a timeout, on every provider and model call;
+ * - (e) a report the platform refuses once an app has answered — which must not end saying
+ *   "Try again" either (`FLOW_WORDS.after_write`).
  *
  * Every case must end in a result, never a throw; a failure's reason and a hold's reason must be
  * one of the SDK's sentences (`FLOW_WORDS`) or in the flow's own words (its spec's §8 and
@@ -57,6 +61,12 @@ const noAnswer = (name = 'TypeError'): Promise<never> =>
 
 type Fail = (platform: RecordingPlatform) => void;
 
+/** The cases whose run may have left a write at an app: never "Try again" once it reached one. */
+const NO_TRY_AGAIN = new Set([
+  'b: no answer from the app',
+  'e: a refused report after the app answered',
+]);
+
 const CASES: readonly (readonly [string, Fail])[] = [
   ['a: not connected (404)', (p) => (p.provider = () => Promise.reject(refused(404, 'NOT_FOUND')))],
   [
@@ -77,6 +87,7 @@ const CASES: readonly (readonly [string, Fail])[] = [
       p.model = (): Promise<ModelCompletion> => noAnswer();
     },
   ],
+  ['b: no answer from the app', (p) => (p.provider = (): Promise<ProviderAnswer> => noAnswer())],
   [
     'c: malformed AI answer, twice',
     (p) =>
@@ -93,6 +104,18 @@ const CASES: readonly (readonly [string, Fail])[] = [
     (p) => {
       p.provider = (): Promise<ProviderAnswer> => noAnswer('TimeoutError');
       p.model = (): Promise<ModelCompletion> => noAnswer('TimeoutError');
+    },
+  ],
+  [
+    'e: a refused report after the app answered',
+    (p) => {
+      const report = p.reportStep.bind(p);
+      p.reportStep = (step) =>
+        p.providerCalls.length > 0
+          ? Promise.reject(
+              refusalFixture('step', { status: 429, code: 'RATE_LIMITED', detail: DRILL_MARKER }),
+            )
+          : report(step);
     },
   ],
 ];
@@ -120,13 +143,24 @@ export async function failureDrill(
       const typed = platform.modelCalls.some((c) => Object.keys(c.outputSchema).length > 0);
       const reached = name.startsWith('c')
         ? typed
-        : platform.providerCalls.length + platform.modelCalls.length > 0;
+        : NO_TRY_AGAIN.has(name)
+          ? platform.providerCalls.length > 0
+          : platform.providerCalls.length + platform.modelCalls.length > 0;
       if (problem === undefined && kept.includes(DRILL_MARKER)) problem = 'shows a raw message';
       if (problem === undefined && result?.outcome === 'failed' && !allowed(result.failureReason)) {
         problem = `ends with words in neither the SDK's nor the flow's: "${result.failureReason}"`;
       }
       if (problem === undefined && result?.outcome === 'held' && !allowed(result.held.reason)) {
         problem = `holds with words in neither the SDK's nor the flow's: "${result.held.reason}"`;
+      }
+      if (
+        problem === undefined &&
+        NO_TRY_AGAIN.has(name) &&
+        reached &&
+        result?.outcome === 'failed' &&
+        /try again/iu.test(result.failureReason)
+      ) {
+        problem = `says "Try again" after an app may have done it: "${result.failureReason}"`;
       }
       if (problem === undefined && name.startsWith('c') && reached && result?.outcome !== 'held') {
         problem = `ends ${result?.outcome ?? 'nowhere'}, not held for a person`;
