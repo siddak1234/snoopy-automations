@@ -1,9 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `38a2a80`, the head of its branch `round-21/readiness`,
-Round 21's self-contained flows PR 1, not yet merged when this copy was taken: re-pin it to that
-pull request's merge before this lands ("Refreshed 2026-10-28, the menu" below). Before it,
+(`snoopy-backend`, private) at commit `130e513`, the platform's `main` after its #254
+squash-merged Round 21's self-contained flows PR 1 (2026-10-28, "Refreshed 2026-10-28, the menu"
+below; first copied at its branch head `38a2a80`, all nine files `cmp`-equal to `130e513`). Before it,
 `71d8e1b`, the platform's `main` after its #252
 squash-merged Round 21's switch, block set v2 (its ADR-0048 amendment 1; 2026-10-27, "Refreshed
 2026-10-27, block set v2" below). Before it, `388891e`, the platform's `main` after its #250
@@ -380,8 +380,8 @@ with `cmp`). #252's merge was its deploy (ADR-0047), so the live platform takes 
 and `scores`. No manifest here declares a page, and no flow sends a new type yet, so every
 automation keeps its version.
 
-Refreshed 2026-10-28, the menu, from the platform's `38a2a80` (its branch `round-21/readiness`,
-Round 21's self-contained flows PR 1). Nine files now, two moved:
+Refreshed 2026-10-28, the menu, from the platform's `130e513` (its `main` after #254, Round 21's
+self-contained flows PR 1; first copied at that branch's `38a2a80`). Nine files now, two moved:
 
 - `platform-menu.json`, new, and not a JSON Schema: **the menu**, what a flow may use, emitted by
   the platform's `schemas:emit` from each part's one home there — the twelve `blocks`, the page
