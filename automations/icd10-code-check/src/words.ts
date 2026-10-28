@@ -8,6 +8,7 @@ export const FAILURES = {
   unreadable: 'The note could not be read. Try a clearer PDF or photo.',
   patients: "This file has more than one patient's notes. Add one visit at a time.",
   tooMany: 'This note has more than 40 diagnoses. Add one visit at a time.',
+  tooManyChanges: 'This note has more than 40 changes to review. Add one visit at a time.',
   tooEarly: 'This visit is before Oct 1, 2025. This flow checks 2026 and 2027 codes only.',
   tooLate: 'This flow has no code table for this visit date yet.',
 } as const;

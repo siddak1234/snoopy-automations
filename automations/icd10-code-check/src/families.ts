@@ -1,7 +1,7 @@
 /**
- * The setup dropdown's specialties and each one's code families, listed first when a code is
- * picked (the spec, section 4, "The specialties"; the owner, ~21:24Z, "Families first, then
- * clinic"). Nephrology's diabetic CKD codes are the five the tabular list names
+ * The setup dropdown's specialties and each one's code families, always among a diagnosis's
+ * candidates (the spec, section 4, "The specialties"; the owner, ~21:24Z, "Families first, then
+ * clinic", and ~23:17Z, "Rank by matching words"). Nephrology's diabetic CKD codes are the five the tabular list names
  * (`p3-rules-12`: "E08.22, E09.22, E10.22, E11.22, E13.22"). `automations/icd10-code-check/scripts/build-assets.ts` writes
  * them to `automations/icd10-code-check/assets/specialties.json`, and the code-table notes it keeps are these families'.
  */

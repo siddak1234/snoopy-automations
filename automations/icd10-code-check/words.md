@@ -53,7 +53,7 @@ from the run.
 | Section title, a change         | {code} → {suggested}                                                                                                                                                                                               |
 | Section title, the asks         | Ask the doctor                                                                                                                                                                                                     |
 | Patient (block 1)               | Patient; columns Detail · Value; rows Name · Date of birth · Sex · Record number · Visit date · Provider                                                                                                           |
-| A decision's label (the review) | {code} → {suggested}; Add {code}; Remove {code}; Move {code} up                                                                                                                                                    |
+| A decision's label (the review) | {code} → {suggested}, the suggested being {code} · {title}, Remove or Move up; Add {code}                                                                                                                          |
 | Table titles                    | Code · Verdict · Suggested; Codes to enter: Code · Description                                                                                                                                                     |
 | Setup                           | Specialties: "The specialties your clinic treats. Their codes are listed first when a code is picked."; choices Nephrology · Internal medicine · Cardiology · Endocrinology · Family practice · Geriatric medicine |
 | Badges                          | All codes supported · {a} accepted · {d} denied                                                                                                                                                                    |
@@ -63,6 +63,7 @@ from the run.
 | Held reason                     | {c} changes need your review.; the April 2026 hold: This visit is between Apr 1 and Sep 30, 2026. Check which 2026 code table applies.                                                                             |
 | Run title                       | {patient name} · {date}; Visit · {date}; Visit note                                                                                                                                                                |
 | Summary                         | {n} codes · all supported; {n} codes · {c} to review; {n} codes · {a} accepted · {d} denied                                                                                                                        |
+| More than 40 changes            | This note has more than 40 changes to review. Add one visit at a time. (also more than 40 codes on the note)                                                                                                       |
 | Failures                        | the spec's section 8, word for word                                                                                                                                                                                |
 
 ## 3. The clients' own words — the platform round's (section 10)

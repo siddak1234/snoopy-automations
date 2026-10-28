@@ -6,13 +6,24 @@ import { normalCode, type CodeTable } from './tables.js';
 export const MAX_CANDIDATES = 60;
 
 /**
+ * The words of a text as the ranking compares them: lowercased, punctuation left out, and only
+ * words of 3 or more letters or digits ("CKD stage 4" is `ckd`, `stage`).
+ */
+export function wordsIn(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => word.length >= 3),
+  );
+}
+
+/**
  * `find-codes`, code alone: for each diagnosis, every flag-1 code of the visit's table under its
  * categories — the note's own codes there are in the table or not offered at all, since no code
- * of another table is ever offered — at most 60, the chosen specialties' families first (the
- * owner, ~21:24Z, "Families first, then clinic"), then within each the shorter codes, then the
- * table's order (review finding 1, 2026-10-28: E11 holds 87 codes, so in the table's order alone
- * E11.65, E11.8 and E11.9 were always cut), the note's own codes kept inside the 60. A category the table does not hold adds nothing; a diagnosis with none is
- * an ask (`checks.ts`).
+ * of another table is ever offered — ranked by the number of words its title shares with the
+ * diagnosis's statement (`wordsIn`), then the shorter codes, then the table's order (the owner,
+ * 2026-10-28 ~23:17Z, "Rank by matching words"). At most 60; the chosen specialties' family codes
+ * and the note's own codes in the categories are always among them — the note's first, then the
+ * families' in rank order, then the rest — listed in rank order. A category the table does not
+ * hold adds nothing; a diagnosis with none is an ask (`checks.ts`).
  */
 export function candidatesFor(
   diagnosis: Diagnosis,
@@ -21,22 +32,19 @@ export function candidatesFor(
   codesOnNote: readonly string[],
 ): string[] {
   const categories = new Set(diagnosis.categories);
-  const under = Object.keys(codes).filter((code) => categories.has(code.slice(0, 3)));
-  // Ranked by the first family that holds it, in the specialties' order and each one's own order
-  // (Nephrology's N00-N29 before its I12-I13); the rest after. Within a rank the shorter, less
-  // specific codes first, so a category's subcategories survive the cap; then the table's order.
-  const rank = (code: string) => {
-    const at = families.findIndex((family) => inFamily(code, [family]));
-    return at < 0 ? families.length : at;
-  };
-  const ranked = under
-    .map((code, order) => ({ code, order, rank: rank(code) }))
-    .sort((a, b) => a.rank - b.rank || a.code.length - b.code.length || a.order - b.order)
+  const said = wordsIn(diagnosis.statement);
+  const shared = (code: string) =>
+    [...wordsIn(codes[code] ?? '')].filter((word) => said.has(word)).length;
+  const ranked = Object.keys(codes)
+    .filter((code) => categories.has(code.slice(0, 3)))
+    .map((code, order) => ({ code, order, shared: shared(code) }))
+    .sort((a, b) => b.shared - a.shared || a.code.length - b.code.length || a.order - b.order)
     .map((entry) => entry.code);
   if (ranked.length <= MAX_CANDIDATES) return ranked;
   const own = new Set(codesOnNote.map(normalCode).filter((code) => ranked.includes(code)));
-  const room = MAX_CANDIDATES - own.size;
-  const kept = new Set([...ranked.filter((code) => !own.has(code)).slice(0, room), ...own]);
+  const family = ranked.filter((code) => !own.has(code) && inFamily(code, families));
+  const rest = ranked.filter((code) => !own.has(code) && !inFamily(code, families));
+  const kept = new Set([...own, ...family, ...rest].slice(0, MAX_CANDIDATES));
   return ranked.filter((code) => kept.has(code));
 }
 

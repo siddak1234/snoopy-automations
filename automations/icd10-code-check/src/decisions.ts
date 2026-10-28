@@ -10,13 +10,29 @@ import { WORDS } from './words.js';
  */
 export const DECIDED = new Set<Row['verdict']>(['change', 'add', 'remove', 'moveUp']);
 
-/** A row's suggestion as the table and the labels show it: a code, "Remove" or "Move up". */
+/** A row's suggestion: a code, "Remove" or "Move up". */
 export const suggestionOf = (r: Row): string =>
   r.verdict === 'remove' ? 'Remove' : r.verdict === 'moveUp' ? 'Move up' : (r.suggested ?? '');
 
-/** "N18.4 → Remove", "I10 → I12.9", "Add N17.9": the label of a row's change. */
-export const labelOf = (r: Row): string =>
-  r.verdict === 'add' ? WORDS.label.add(r.code) : WORDS.label.change(r.code, suggestionOf(r));
+/** "N18.4 · Chronic kidney disease, stage 4 (severe)", or the code alone when no title is kept. */
+export const withTitle = (code: string, titles: Readonly<Record<string, string>>): string =>
+  titles[code] === undefined ? code : `${code} · ${titles[code]}`;
+
+/** A row's suggestion as the table and the labels show it: "{code} · {title}", "Remove" or "Move up". */
+export const suggestedOf = (r: Row, titles: Readonly<Record<string, string>>): string =>
+  r.verdict === 'change' || r.verdict === 'add'
+    ? withTitle(suggestionOf(r), titles)
+    : suggestionOf(r);
+
+/**
+ * The label of a row's change (the owner, 2026-10-28 ~23:17Z, "Keep 'N18.4 → Remove'"): "{code} →
+ * {suggested}" — "N18.4 → Remove", "I12.9 → Move up", "I10 → I12.9 · Hypertensive chronic kidney
+ * disease with …" — and "Add {code}" for a code to add.
+ */
+export const labelOf = (r: Row, titles: Readonly<Record<string, string>>): string =>
+  r.verdict === 'add'
+    ? WORDS.label.add(r.code)
+    : WORDS.label.change(r.code, suggestedOf(r, titles));
 
 /** A quote as a person reads it: anything shaped like a tag cleaned out first (`p1-streamlining-9`). */
 export const cleanQuote = (quote: string): string =>
@@ -26,7 +42,10 @@ export const cleanQuote = (quote: string): string =>
     .trim();
 
 /** Each change of the run, as the held result offers it. */
-export function decisionsOf(rows: readonly Row[]): HeldDecision[] {
+export function decisionsOf(
+  rows: readonly Row[],
+  titles: Readonly<Record<string, string>>,
+): HeldDecision[] {
   return rows
     .filter((r) => DECIDED.has(r.verdict))
     .map((r) => {
@@ -35,7 +54,7 @@ export function decisionsOf(rows: readonly Row[]): HeldDecision[] {
         quote === '' ? (r.reason ?? '') : `${r.reason ?? ''} ${WORDS.fromNote}: “${quote}”`;
       return {
         id: r.id,
-        label: labelOf(r),
+        label: labelOf(r, titles),
         ...(detail.trim() === '' ? {} : { detail: detail.trim() }),
       };
     });

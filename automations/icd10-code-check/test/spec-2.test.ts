@@ -15,7 +15,7 @@ test('§9 a header code (N18.3) on the note, "CKD stage 3b": Change to N18.32 (G
   assert.deepEqual(rowsOf(result), [['N18.3', 'change', 'N18.32', 'G1']]);
 });
 
-test('§9 Nephrology and Cardiology, a CKD diagnosis: N18 candidates first, I candidates next; the pick still needs its quote', async () => {
+test('§9 Nephrology and Cardiology, "Hypertensive CKD stage 4": ranked by matching words, the I12 codes (2 shared) before the N18 stage codes (1), N18.9 (none) last; the pick still needs its quote', async () => {
   const note = reading([], [{ statement: 'Hypertensive CKD stage 4', categories: ['I12', 'N18'] }]);
   const ran = await run(
     note,
@@ -25,12 +25,12 @@ test('§9 Nephrology and Cardiology, a CKD diagnosis: N18 candidates first, I ca
   const listed = (
     ran.platform.modelCalls[1]?.input.diagnoses as { candidates: { code: string }[] }[]
   )[0]!.candidates.map((c) => c.code);
-  const firstI = listed.findIndex((code) => code.startsWith('I'));
+  assert.deepEqual(listed.slice(0, 2).sort(), ['I12.0', 'I12.9'], listed.join(' '));
   assert.ok(
-    firstI > 0 && listed.slice(0, firstI).every((code) => code.startsWith('N18')),
+    listed.slice(2, -1).every((code) => code.startsWith('N18')),
     listed.join(' '),
   );
-  assert.ok(listed.slice(firstI).every((code) => code.startsWith('I12')));
+  assert.equal(listed.at(-1), 'N18.9');
   assert.deepEqual(rowsOf(ran.result), [], 'a pick without its quote is withdrawn');
 });
 
@@ -66,12 +66,16 @@ test('§9 N18.6, "ESRD.": Ask (K2)', async () => {
   assert.deepEqual(rowsOf(result), [['N18.6', 'keep', null, 'G2']]);
 });
 
-test('K2 (review finding 2): ESRD with dialysis declined, not on it, or only planned: Ask, never Add Z99.2', async () => {
+test("§9 K2 (review findings 2, and the second review's 1): ESRD with dialysis declined, not on it, only planned, in the past or in the future: Ask, never Add Z99.2", async () => {
   for (const statement of [
     'ESRD; declines dialysis, conservative care',
     'ESRD, not on dialysis',
     'ESRD, dialysis access planned',
     'ESRD, will start on hemodialysis next month',
+    'ESRD previously on hemodialysis now s/p kidney transplant',
+    'ESRD, was on dialysis until transplant in 2023',
+    'ESRD. History of being on peritoneal dialysis; now transplant',
+    'ESRD, starting on dialysis next week',
   ]) {
     const note = reading(['N18.6'], [{ statement, categories: ['N18'] }]);
     const { result } = await run(note, { ESRD: { code: 'N18.6', quote: 'ESRD' } });

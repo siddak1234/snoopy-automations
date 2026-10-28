@@ -6,7 +6,7 @@ import type {
 } from '@autom8x/automation-sdk';
 
 import type { Ask, Row } from './checks.js';
-import { DECIDED, cleanQuote, labelOf, suggestionOf } from './decisions.js';
+import { DECIDED, cleanQuote, labelOf, suggestedOf, withTitle } from './decisions.js';
 import { PATIENT_KEYS, type Patient } from './reading.js';
 import { VERDICTS, WORDS } from './words.js';
 
@@ -44,8 +44,7 @@ export function titleOf(view: Pick<View, 'patient' | 'visitDate'>): string {
     : WORDS.titleNamed(view.patient.name, date);
 }
 
-const titled = (view: View, code: string): string =>
-  view.titles[code] === undefined ? code : `${code} · ${view.titles[code]}`;
+const titled = (view: View, code: string): string => withTitle(code, view.titles);
 
 /** (1) The patient, as read from the note: a row left out when not printed. */
 function patientSection(view: View): SectionBlock {
@@ -75,10 +74,7 @@ function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): E
         answers !== undefined && DECIDED.has(r.verdict) && answer !== undefined
           ? VERDICTS[answer]
           : VERDICTS[r.verdict];
-      const suggestion = suggestionOf(r);
-      const shown =
-        r.verdict === 'change' || r.verdict === 'add' ? titled(view, suggestion) : suggestion;
-      return { cells: [titled(view, r.code), verdict, shown] };
+      return { cells: [titled(view, r.code), verdict, suggestedOf(r, view.titles)] };
     }),
   };
 }
@@ -91,11 +87,11 @@ function changeSections(view: View): SectionBlock[] {
       const quote = r.quote === null ? '' : cleanQuote(r.quote);
       return {
         type: 'section',
-        title: labelOf(r),
+        title: labelOf(r, view.titles),
         ...(r.reason === null ? {} : { subtitle: r.reason }),
         blocks:
           quote === ''
-            ? [{ type: 'text', text: r.reason ?? labelOf(r) }]
+            ? [{ type: 'text', text: r.reason ?? labelOf(r, view.titles) }]
             : [{ type: 'list', items: [{ title: WORDS.fromNote, subtitle: quote }] }],
       };
     });

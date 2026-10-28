@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { define } from '../src/automation.js';
+import { loadTable } from '../src/tables.js';
 import { FAILURES, WORDS } from '../src/words.js';
 import { NOTE_ID, manifests, platformFor, reading, request, rowsOf, run } from './fixtures.js';
 
@@ -45,6 +46,48 @@ test('more than 40 diagnoses stop; 40 go on', async () => {
     failureReason: FAILURES.tooMany,
   });
   assert.equal((await run(many(40))).result.outcome, 'success');
+});
+
+test('§9 more than 40 changes to review stop: "This note has more than 40 changes to review. …"; 40 are held', async () => {
+  const { codes } = loadTable('2027-oct');
+  const short = (category: string) =>
+    Object.keys(codes).filter((code) => code.startsWith(category) && code.length <= 7);
+  const pool = [...short('E11').slice(0, 20), ...short('E10').slice(0, 19)];
+  const visit = (adds: number) => {
+    const diabetes = pool.slice(0, adds).map((code, i) => ({
+      statement: `Type ${code.startsWith('E10') ? 1 : 2} diabetes finding ${i}.`,
+      categories: [code.slice(0, 3)],
+      code,
+    }));
+    const dx = [
+      ...diabetes,
+      { statement: 'ESRD on hemodialysis', categories: ['N18'], code: 'N18.6' },
+    ];
+    return run(
+      reading(
+        [],
+        dx.map(({ statement, categories }) => ({ statement, categories })),
+      ),
+      Object.fromEntries(dx.map(({ statement, code }) => [statement, { code }])),
+    );
+  };
+  // 39 adds, N18.6 and K2's Z99.2: 41 changes.
+  const over = await visit(39);
+  assert.deepEqual(over.result, { outcome: 'failed', failureReason: FAILURES.tooManyChanges });
+  const last = over.platform.steps.at(-1);
+  assert.deepEqual([last?.stepId, last?.outcome], ['decide', 'failed']);
+  const at = await visit(38);
+  assert.equal(at.result.outcome, 'held');
+  assert.equal(at.result.outcome === 'held' && at.result.held.decisions?.length, 40);
+});
+
+test('§9 gate A: a note printing more than 40 codes stops in the same words; 40 go on', async () => {
+  const printed = (n: number) => reading(Object.keys(loadTable('2027-oct').codes).slice(0, n), []);
+  assert.deepEqual((await run(printed(41))).result, {
+    outcome: 'failed',
+    failureReason: FAILURES.tooManyChanges,
+  });
+  assert.notEqual((await run(printed(40))).result.outcome, 'failed');
 });
 
 test('a visit after 2027-09-30 stops: "This flow has no code table for this visit date yet."', async () => {

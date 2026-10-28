@@ -29,13 +29,16 @@ export const BEFORE_STAGE = (code: string): boolean =>
 
 /**
  * K2's support for dialysis (review finding 2, 2026-10-28): the patient is on it now — "on
- * hemodialysis", "dialysis-dependent" — in a clause with no word of refusal, negation or plan, so
- * "declines dialysis", "not on dialysis" and "dialysis access planned" are asks, never an Add.
+ * hemodialysis", "dialysis-dependent" — in a clause with no word of refusal, negation or plan, nor
+ * of the past or the future (the second review's finding 1), so "declines dialysis", "not on
+ * dialysis", "dialysis access planned", "previously on hemodialysis", "was on dialysis until
+ * transplant", "history of being on peritoneal dialysis" and "starting on dialysis next week" are
+ * asks, never an Add.
  */
 const ON_DIALYSIS =
   /\bon (?:chronic |maintenance |home )?(?:hemo|peritoneal )?dialysis\b|\b(?:hemo)?dialysis[- ]dependent\b/iu;
 const NOT_NOW =
-  /\b(?:declin|refus|not\b|no\b|never|without|plan|will\b|future|consider|discuss|access|prepar|evaluat|candidate|stop|withdr|held\b|off\b)/iu;
+  /\b(?:declin|refus|not\b|no\b|never|without|plan|will\b|future|consider|discuss|access|prepar|evaluat|candidate|stop|withdr|held\b|off\b|previous|former|prior\b|was\b|were\b|history|hx\b|past\b|until\b|s\/p\b|status post|transplant|start(?:s|ing)?\b|begin|next\b|soon\b|upcoming)/iu;
 
 /** The words that show the patient is on dialysis now, or null. */
 export function onDialysis(text: string): string | null {

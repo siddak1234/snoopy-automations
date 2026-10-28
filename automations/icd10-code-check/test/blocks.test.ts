@@ -85,6 +85,27 @@ test('held: (1) Patient, (2) metric, (3) codes, (4) a section per change, (5) th
   assert.equal(result.outcome === 'held' && result.held.decisions?.[0]?.label, 'N18.4 → Remove');
 });
 
+test('§9 a decision\'s label (the owner, "Keep \'N18.4 → Remove\'"): "{code} → {code} · {title}" for a Change, cut to 120; "Add {code}"', async () => {
+  const ran = await run(
+    reading(
+      ['I10'],
+      [
+        { statement: 'Hypertension', categories: ['I10'] },
+        { statement: 'CKD stage 3a', categories: ['N18'] },
+      ],
+    ),
+    { Hypertension: { code: 'I10' }, 'CKD stage 3a': { code: 'N18.31' } },
+  );
+  const labels =
+    ran.result.outcome === 'held' ? ran.result.held.decisions?.map((d) => d.label) : [];
+  assert.match(
+    labels?.[0] ?? '',
+    /^I10 → I12\.9 · Hypertensive chronic kidney disease with stage 1/u,
+  );
+  assert.ok((labels?.[0] ?? '').length <= 120);
+  assert.equal(labels?.[1], 'Add N18.31');
+});
+
 test('not held: the badge, then (1), (3), (6), (7); after the review: the answers and the codes to enter first', async () => {
   const kept = await run(
     reading(['N18.4'], [{ statement: 'CKD stage 4', categories: ['N18'] }]),
