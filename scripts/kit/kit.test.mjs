@@ -310,8 +310,9 @@ describe('the kit itself', () => {
   });
 
   test('the agents carry the roles of STANDARD (g)', () => {
-    // Least privilege: only the researcher searches and fetches the web, and it writes nothing;
-    // the builder writes and never searches or fetches (BUILD-PLAN 29.3.3).
+    // Least privilege: only the researcher has the WebSearch and WebFetch tools, and it writes
+    // nothing; the builder writes and has no WebSearch or WebFetch tool (its Bash still reaches
+    // the network) (BUILD-PLAN 29.3.3).
     const want = {
       explorer: ['Read, Grep, Glob', 'sonnet'],
       reviewer: ['Read, Grep, Glob, Bash', 'inherit'],
