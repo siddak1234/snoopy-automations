@@ -14,6 +14,8 @@ import {
   type Manifest,
 } from '@autom8x/automation-sdk';
 
+import { LIVE_FLOWS } from '../scripts/review-rows.js';
+
 /**
  * The conformance test (platform BUILD-PLAN 25.3.5): every automation here is
  * built on the step runner, and what its code can do agrees with what its
@@ -32,7 +34,10 @@ import {
  *   automation exports `SERVED_VERSIONS`, when it conforms to those manifests alone;
  * - every Dockerfile copies exactly one `manifests/<id>.v<n>.json`, whether or not
  *   `SERVED_VERSIONS` is exported, and it is the one version the code serves: one image per
- *   version, and the one manifest the platform's Flow CD reads for that image (its ADR-0047 §4.2).
+ *   version, and the one manifest the platform's Flow CD reads for that image (its ADR-0047 §4.2);
+ * - every automation, and the template, runs the SDK's shared failure drill in its
+ *   `automations/<id>/test/drill.test.ts` (Round 21, D2.5) — but the two live flows (`LIVE_FLOWS`), built before
+ *   `defineFlow`, until their after-pilot versions remove the exemption.
  *
  * `defineAutomation` refuses the first two at startup; this test states the rules
  * for the repository and reads each automation's definition the way its `main.ts`
@@ -167,8 +172,23 @@ test('every automation conforms to the manifests it serves', async () => {
     assert.equal(automation.templateId, name);
     assertConforms(automation, manifests, `automations/${name}`);
     assertPromptsRegistered(automation, directory, `automations/${name}`);
+    if (!LIVE_FLOWS.has(name)) assertRunsTheDrill(directory, `automations/${name}`);
   }
 });
+
+/** The flow's `automations/<id>/test/drill.test.ts` exists and runs the SDK's `failureDrill`. */
+function assertRunsTheDrill(directory: string, label: string): void {
+  const drill = join(directory, 'test', 'drill.test.ts');
+  assert.ok(
+    existsSync(drill),
+    `${label} has no test/drill.test.ts: every new flow runs the failure drill`,
+  );
+  assert.match(
+    readFileSync(drill, 'utf8'),
+    /\bfailureDrill\(/u,
+    `${label}/test/drill.test.ts runs no failureDrill`,
+  );
+}
 
 /**
  * The Dockerfile copies one manifest, `manifests/<name>.v<n>.json`, and `n` is the one version
@@ -219,6 +239,7 @@ test('the template automation conforms to its example manifest, which validates 
     'templates/automation',
   );
   assertPromptsRegistered(automation, templateRoot, 'templates/automation');
+  assertRunsTheDrill(templateRoot, 'templates/automation');
   assert.ok(automation.prompts.length > 0, 'the template shows a prompt module');
 
   // Validated here because test/architecture.test.ts validates `manifests/` only,

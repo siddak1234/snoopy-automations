@@ -5,7 +5,7 @@ description: Use when adding a new automation, or a new manifest version of an e
 
 # New automation, or a new version
 
-Builds an automation (from `templates/automation/`) or a new version of one (in `automations/<name>/`), with its manifest, prompts and tests, green on the gate, and ends with the pull request whose merge deploys it. The rules it follows: [automations/CLAUDE.md](../../../automations/CLAUDE.md). The full procedure it shortens: [README.md](../../../README.md#adding-an-automation).
+Builds an automation (from `templates/automation/`) or a new version of one (in `automations/<name>/`), with its manifest, prompts and tests, green on the gate, and ends with the pull request whose merge deploys it. The rules it follows: [automations/CLAUDE.md](../../../automations/CLAUDE.md). The full procedure it shortens: [README.md](../../../README.md#build-a-flow).
 
 ## Inputs
 
@@ -17,13 +17,12 @@ Builds an automation (from `templates/automation/`) or a new version of one (in 
 Copy [templates/checklist.md](templates/checklist.md) into your working notes and tick it as you go.
 
 1. **Start from the right files.**
-   - New automation: `mkdir -p automations/<name> && cp -R templates/automation/. automations/<name>/` (beside `/create-flow`'s spec, when there is one), then replace `example` with `<name>` everywhere (`package.json`, `Dockerfile`, `src/`), and give it a lockfile as README's step 1 says.
+   - New automation: write `manifests/<name>.v1.json` first (step 2), then `npm run scaffold -- <name>` (`scripts/scaffold.mjs`): the folder from `templates/automation/` with `example` replaced, its lockfile and the root lock's entry, `automations/<name>/src/automation.ts` on `defineFlow`, one stub per step, one prompt stub per capability, a `test.todo` per spec §9 row and `automations/<id>/test/drill.test.ts`, beside `/create-flow`'s spec. It never overwrites a file. Then write the steps, the prompts and the tests.
    - New version: work in `automations/<name>/`. Point the Dockerfile's manifest `COPY` at `manifests/<name>.v<n>.json` alone (the container serves the manifests its image carries), and declare `SERVED_VERSIONS = [<n>]` in `automations/<name>/src/automation.ts`, adding it if absent (candidate-reviewer's shows the filter); the container serving `v<n-1>` keeps running until the owner retires it.
 2. **Write `manifests/<name>.v<n>.json`** (a registered version is immutable: never edit an earlier file). Declare every step id the code can report, every capability its prompts use in `requiredCapabilities`, and the origin `http://<name>-v<n>.autom8x.internal:8080`. Prompts go in `automations/<name>/prompts/`, each naming a capability, never a model; tests in `automations/<name>/test/`.
 3. **Run the gate, from the repository root, holding the gate lock:**
 
    ```bash
-   npm install --package-lock-only --ignore-scripts   # a new automation only: the root lock learns the workspace
    npm run facts                                      # re-emits docs/repo-facts/snoopy-automations.json
    npm run map                                        # docs/MAP.md lists the new automation or version
    git add -A && git commit                           # docs in the same commit; ends with the Co-Authored-By line
@@ -41,5 +40,5 @@ Copy [templates/checklist.md](templates/checklist.md) into your working notes an
 
 ## Docs to update (`docs/docs-map.json`)
 
-- `automations/*/src/**` and `automations/*/prompts/**` map to [README.md](../../../README.md): update the automation's section there (for example "Invoice processing").
-- `manifests/**` maps to README.md as well; `.github/**` too.
+- `automations/*/src/**`, `automations/*/prompts/**` and `manifests/*.v*.json` map to the flow's own `automations/<name>/README.md` (its spec): the `*` is the flow's id, so a change to one flow asks for its own README and no other.
+- `.github/**`, `templates/**` and `scripts/**` map to [README.md](../../../README.md).

@@ -175,6 +175,9 @@ test('no matrix is written by hand: List reads automations/*/Dockerfile', () => 
   const list = job('list');
   assert.match(list, /for dockerfile in automations\/\*\/Dockerfile; do/u);
   assert.match(list, /automations: \$\{\{ steps\.list\.outputs\.automations \}\}/u);
+  assert.match(list, /images: \$\{\{ steps\.images\.outputs\.images \}\}/u);
+  assert.match(list, /images="\$\(node scripts\/changed-images\.mjs --base "\$BASE"\)"/u);
+  assert.match(list, /images="\$AUTOMATIONS"/u, 'a push builds every flow');
   let matrices = 0;
   for (const file of workflowFiles) {
     for (const [id, block] of jobs(read(file))) {
@@ -184,9 +187,12 @@ test('no matrix is written by hand: List reads automations/*/Dockerfile', () => 
       const lines = matrix.split('\n').filter((line) => line.trim() !== '');
       const end = lines.findIndex((line) => !/^ {8}/u.test(line));
       const entries = lines.slice(0, end === -1 ? lines.length : end);
+      // Image builds List's `images` (the flows whose image inputs changed, on a pull request),
+      // Publish every automation List read.
+      const output = file === 'ci.yml' && id === 'image' ? 'images' : 'automations';
       assert.deepEqual(
         entries,
-        ['        automation: ${{ fromJSON(needs.list.outputs.automations) }}'],
+        [`        automation: \${{ fromJSON(needs.list.outputs.${output}) }}`],
         `${file}:${id}`,
       );
       assert.match(block, /^ {4}needs: (list|\[list(, [a-z-]+)*\])$/mu, `${file}:${id} needs list`);
@@ -212,7 +218,7 @@ test('every action is pinned by a full commit SHA', () => {
   assert.ok(count > 0);
 });
 
-test('all-green needs every job, and lets only Publish and Deploy skip on a pull request', () => {
+test('all-green needs every job, and lets only Publish, Deploy and an empty Image skip on a pull request', () => {
   const allGreen = job('all-green');
   const needs = /^ {4}needs: \[([^\]]*)\]$/mu.exec(allGreen)?.[1]?.split(/,\s*/u);
   assert.deepEqual(
@@ -225,4 +231,10 @@ test('all-green needs every job, and lets only Publish and Deploy skip on a pull
     allGreen,
     /if \{ \[ "\$job" = publish \] \|\| \[ "\$job" = deploy \]; \} && \[ "\$EVENT_NAME" = pull_request \]; then/u,
   );
+  // Image may skip only on a pull request whose List found no flow to build.
+  assert.match(
+    allGreen,
+    /elif \[ "\$job" = image \] && \[ "\$IMAGES" = '\[\]' \] && \[ "\$EVENT_NAME" = pull_request \]; then/u,
+  );
+  assert.match(job('image'), /^ {4}if: \$\{\{ needs\.list\.outputs\.images != '\[\]' \}\}$/mu);
 });

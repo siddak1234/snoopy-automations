@@ -14,7 +14,7 @@ import { isObject, type JsonObject } from './contract.js';
  *
  * A copy, not an import: nothing here may depend on `@snoopy/*` (CLAUDE.md rule 3).
  * The messages and the order of the checks are the platform's, word for word, and
- * `test/output-schema.test.ts` holds the copy to the platform's verdicts sample by
+ * `packages/automation-sdk/test/output-schema.test.ts` holds the copy to the platform's verdicts sample by
  * sample. `pattern` is refused there on purpose — a regular expression from a
  * container is a denial-of-service vector against the platform's event loop — and so
  * it is refused here.
@@ -167,6 +167,65 @@ function keywordProblem(
  */
 export function schemaMismatch(value: unknown, schema: JsonObject): SchemaMismatch | undefined {
   return check(value, schema, '$');
+}
+
+/**
+ * The value with every enum string the model wrote in another case rewritten to the schema's own
+ * spelling, and whether any was — the platform's `respellEnums` (Round 21, 5c), copied: "Bill" for
+ * an enum of `bill` is `bill`, and the platform hands the automation the converted answer. An enum
+ * holding two strings equal ignoring case keeps exact matching. Under `anyOf` and `oneOf` the
+ * first branch the converted value then matches decides. Call `outputSchemaProblem` first.
+ */
+export function respellEnums(
+  value: unknown,
+  schema: JsonObject,
+): { value: unknown; respelled: boolean } {
+  let respelled = false;
+  const walk = (current: unknown, sub: unknown): unknown => {
+    if (!isObject(sub)) return current;
+    let out = current;
+    if (typeof out === 'string' && Array.isArray(sub.enum)) {
+      const spelled = enumSpelling(out, sub.enum);
+      if (spelled !== out) ((respelled = true), (out = spelled));
+    }
+    if (Array.isArray(sub.allOf)) for (const each of sub.allOf) out = walk(out, each);
+    for (const keyword of ['anyOf', 'oneOf'] as const) {
+      if (!Array.isArray(sub[keyword])) continue;
+      for (const branch of sub[keyword] as Schema[]) {
+        const trial = respellEnums(out, branch as JsonObject);
+        if (check(trial.value, branch, '$') !== undefined) continue;
+        if (trial.respelled) ((respelled = true), (out = trial.value));
+        break;
+      }
+    }
+    if (Array.isArray(out) && isObject(sub.items)) {
+      const items = sub.items;
+      out = out.map((item) => walk(item, items));
+    }
+    if (isObject(out)) {
+      const properties: Schema = isObject(sub.properties) ? sub.properties : {};
+      const extra = isObject(sub.additionalProperties) ? sub.additionalProperties : undefined;
+      out = Object.fromEntries(
+        Object.entries(out).map(([name, entry]) => {
+          const at = Object.hasOwn(properties, name) ? properties[name] : extra;
+          return [name, at === undefined ? entry : walk(entry, at)];
+        }),
+      );
+    }
+    return out;
+  };
+  const converted = walk(value, schema);
+  return { value: respelled ? converted : value, respelled };
+}
+
+/** The enum's own spelling of `value` when exactly one option equals it ignoring case. */
+function enumSpelling(value: string, options: readonly unknown[]): string {
+  if (options.includes(value)) return value;
+  const strings = options.filter((option): option is string => typeof option === 'string');
+  const lowered = strings.map((option) => option.toLowerCase());
+  if (new Set(lowered).size !== lowered.length) return value;
+  const at = lowered.indexOf(value.toLowerCase());
+  return at < 0 ? value : strings[at]!;
 }
 
 function check(value: unknown, schema: Schema, path: string): SchemaMismatch | undefined {

@@ -24,19 +24,25 @@ permissions:
 
 jobs:
   # The automations, read from the tree: every folder under automations/ with a
-  # Dockerfile, as a JSON list. Image and Publish take their matrix from it, so a new
-  # automation is built, published and deployed with no edit here.
+  # Dockerfile, as a JSON list. Publish takes its matrix from it, so a new automation is
+  # built, published and deployed with no edit here. Image takes `images`: on a pull
+  # request only the flows whose image inputs changed (scripts/changed-images.mjs, the rule
+  # the platform's Flow CD uses; a change under packages/, the root lock or this file builds
+  # them all), and on a push to main every one.
   list:
     name: List
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       automations: ${{ steps.list.outputs.automations }}
+      images: ${{ steps.images.outputs.images }}
     steps:
+      # The whole history, so a pull request's changes can be read against its base.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: List automations/*/Dockerfile
         id: list
@@ -54,6 +60,21 @@ jobs:
           automations="$(printf '%s\n' "${names[@]}" | jq -R . | jq -cs .)"
           echo "automations=$automations" >> "$GITHUB_OUTPUT"
           echo "automations: $automations"
+
+      - name: List the images this run builds
+        id: images
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE: origin/${{ github.base_ref }}
+          AUTOMATIONS: ${{ steps.list.outputs.automations }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            images="$(node scripts/changed-images.mjs --base "$BASE")"
+          else
+            images="$AUTOMATIONS"
+          fi
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "images: $images"
 
   verify:
     name: Verify
@@ -95,6 +116,14 @@ jobs:
           DOCS_BASE: origin/${{ github.base_ref || 'main' }}
         run: npm run verify
 
+      # The review checklist's machine-checkable rows (scripts/review-rows.ts; /create-flow's
+      # templates/review.md marks them (CI)) for every flow this range touches, written to the
+      # run's summary for the reviewer. A FAIL row fails Verify.
+      - name: Review rows
+        env:
+          DOCS_BASE: origin/${{ github.base_ref || 'main' }}
+        run: npx tsx scripts/review-rows.ts --base "$DOCS_BASE" --summary "$GITHUB_STEP_SUMMARY"
+
       # Split deliberately into a blocking check and a reporting one, as the
       # platform does. What ships is what must be clean, so the runtime tree is the
       # gate; dev tooling is reported but does not fail the build, because a gate
@@ -114,15 +143,17 @@ jobs:
   # and scanned before anything may be pushed. This job never authenticates to a
   # registry and never pushes, including on pull requests from forks. The bytes
   # production runs are built, pushed, proven and attested by Publish, below, from
-  # the same Dockerfile. The matrix is List's: every automations/*/Dockerfile.
+  # the same Dockerfile. The matrix is List's `images`: on a pull request the flows whose
+  # image inputs changed, skipped when none did; on a push every automations/*/Dockerfile.
   image:
     name: Image
     needs: list
+    if: ${{ needs.list.outputs.images != '[]' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        automation: ${{ fromJSON(needs.list.outputs.automations) }}
+        automation: ${{ fromJSON(needs.list.outputs.images) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,8 +365,8 @@ jobs:
 
   # The merge is the deploy (the platform's ADR-0047 §1). Once every image is
   # published and attested, this job starts snoopy-backend's Flow CD for this
-  # commit, waits for it, and prints each automation's outcome (README.md, Adding
-  # an automation). It is red when Flow CD failed or its result is
+  # commit, waits for it, and prints each automation's outcome (README.md, Build
+  # a flow). It is red when Flow CD failed or its result is
   # not ok. It holds no GITHUB_TOKEN permission, checks nothing out and runs no
   # code of this repository: its only inputs are the commit and the App token.
   deploy:
@@ -408,9 +439,10 @@ jobs:
   # The one check for the ruleset to require, once it has reported on a pull
   # request and on main. Green only when every job above succeeded — for a matrix
   # job, every one of its builds. Publish and Deploy are push-only by their own
-  # `if`, so on a pull request their "skipped" is the only skip allowed; a skip
-  # anywhere else, a failure or a cancellation is red. A job added above must be
-  # named in `needs` too, or this check never sees it.
+  # `if`, so on a pull request their "skipped" is allowed, and so is Image's when List
+  # found no flow whose image inputs changed; a skip anywhere else, a failure or a
+  # cancellation is red. A job added above must be named in `needs` too, or this check
+  # never sees it.
   all-green:
     name: all-green
     if: always()
@@ -422,6 +454,7 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           EVENT_NAME: ${{ github.event_name }}
+          IMAGES: ${{ needs.list.outputs.images }}
         run: |
           red=0
           while IFS=$'\t' read -r job result; do
@@ -430,6 +463,8 @@ jobs:
               skipped)
                 if { [ "$job" = publish ] || [ "$job" = deploy ]; } && [ "$EVENT_NAME" = pull_request ]; then
                   verdict='ok (push-only job, skipped on a pull request)'
+                elif [ "$job" = image ] && [ "$IMAGES" = '[]' ] && [ "$EVENT_NAME" = pull_request ]; then
+                  verdict='ok (no flow whose image inputs changed)'
                 else
                   verdict=RED
                   red=1

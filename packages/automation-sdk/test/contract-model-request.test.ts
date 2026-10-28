@@ -12,7 +12,9 @@ import {
   artifactIdProblem,
   excludeModelAuthorsProblem,
   modelAuthor,
+  maxOutputTokensProblem,
   modelIdProblem,
+  modelRequestProblem,
   modelsProblem,
 } from '../src/model-request.js';
 import { assertValid, schemas, validator } from './published-schemas.js';
@@ -46,7 +48,7 @@ test('a model request naming its models validates, and one naming the singular m
 
 /**
  * The samples the platform judges its model-id rule and migration 0018's CHECK on
- * (snoopy-backend `test/helpers/model-ids.ts` at `49c9fac`), copied as data.
+ * (`snoopy-backend/test/helpers/model-ids.ts` at `49c9fac`), copied as data.
  */
 const ACCEPTED_MODEL_IDS = [
   'google/gemini-2.5-flash',
@@ -127,8 +129,8 @@ test('the SDK’s model rule is the published schema’s: its pattern, its bound
 });
 
 test("a model request may name the run's file, by the published schema's rule, which is the SDK's", () => {
-  // The platform's BUILD-PLAN 25.2.18; its samples (snoopy-backend
-  // `test/wire-schema.test.ts` at `4875579`), copied as data.
+  // The platform's BUILD-PLAN 25.2.18; its samples
+  // (`snoopy-backend/test/wire-schema.test.ts` at `4875579`), copied as data.
   const validate = validator('automation-model-request');
   const schema = JSON.parse(
     readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
@@ -160,8 +162,8 @@ test("a model request may name the run's file, by the published schema's rule, w
 });
 
 test("a model request may leave out up to three makers, by the published schema's rule, which is the SDK's", () => {
-  // The platform's BUILD-PLAN 25.2.29; its samples (snoopy-backend
-  // `test/model-request.test.ts` at `e25fd74`), copied as data.
+  // The platform's BUILD-PLAN 25.2.29; its samples
+  // (`snoopy-backend/test/model-request.test.ts` at `e25fd74`), copied as data.
   const validate = validator('automation-model-request');
   const schema = JSON.parse(
     readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
@@ -225,7 +227,7 @@ test("a model request may leave out up to three makers, by the published schema'
 });
 
 test("a model's maker is the part of its id before the '/', an alias's after its '~', and none without a '/'", () => {
-  // The platform's samples (snoopy-backend `test/model-request.test.ts` at `e25fd74`).
+  // The platform's samples (`snoopy-backend/test/model-request.test.ts` at `e25fd74`).
   for (const [id, author] of [
     ['anthropic/claude-sonnet-4.5', 'anthropic'],
     ['~anthropic/claude-sonnet-latest', 'anthropic'],
@@ -245,4 +247,33 @@ test("a model's maker is the part of its id before the '/', an alias's after its
     const author = modelAuthor(id);
     if (author !== undefined) assert.ok(MODEL_AUTHOR_PATTERN.test(author), id);
   }
+});
+
+test('maxOutputTokens: 1 to the owner’s cap, as the published schema holds it', () => {
+  // The platform's Round 21 field: it sends the smaller of it and its cap, and refuses more.
+  const validate = validator('automation-model-request');
+  const schema = JSON.parse(
+    readFileSync(join(schemas, 'automation-model-request.json'), 'utf8'),
+  ) as { properties: { maxOutputTokens: { minimum: number; maximum: number } } };
+  assert.equal(schema.properties.maxOutputTokens.maximum, MODEL_REQUEST_LIMITS.maxOutputTokens);
+  assert.equal(schema.properties.maxOutputTokens.minimum, 1);
+  const request: ModelRequest = {
+    capability: 'classification',
+    prompt: 'Which kind?',
+    input: {},
+    outputSchema: {},
+  };
+  for (const [value, valid] of [
+    [4_000, true],
+    [1, true],
+    [8_000, true],
+    [9_000, false],
+    [0, false],
+    [1.5, false],
+  ] as const) {
+    assert.equal(validate({ ...request, maxOutputTokens: value }), valid, String(value));
+    assert.equal(maxOutputTokensProblem(value) === undefined, valid, String(value));
+    assert.equal(modelRequestProblem({ ...request, maxOutputTokens: value }) === undefined, valid);
+  }
+  assert.equal(modelRequestProblem(request), undefined, 'absent, the cap');
 });

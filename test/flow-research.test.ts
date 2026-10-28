@@ -37,6 +37,19 @@ test('the file parses as the Workflow tool runs it: an async function body, its 
   ]);
 });
 
+test('a developer with this repository alone: no backend clone, the vendors lens reads the menu', async () => {
+  const r = await run(normal, { noBackend: true });
+  assert.equal(r.data.stopped, '');
+  const vendors = r.calls.find((c) => c.label === 'vendors lens')!;
+  assert.ok(
+    vendors.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
+  );
+  assert.ok(
+    !r.calls.some((c) => c.prompt.includes('snoopy-backend')),
+    'no prompt names the backend',
+  );
+});
+
 test('a normal run: three agents at most, the gates drop and name, the checksum is returned', async () => {
   const r = await run(normal);
   assert.ok(r.peak <= 3, `peak ${r.peak}`);

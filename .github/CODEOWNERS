@@ -1,0 +1,4 @@
+# Every change here is the owner's to review (Round 21, B2.6): GitHub asks him on every pull
+# request. "Require review from Code Owners" stays off in the ruleset: the owner opens and merges
+# these pull requests from his own account, and GitHub does not let an author approve his own.
+* @siddak1234

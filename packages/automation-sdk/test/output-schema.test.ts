@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { JsonObject } from '../src/contract.js';
-import { outputSchemaProblem, schemaMismatch } from '../src/output-schema.js';
+import { outputSchemaProblem, respellEnums, schemaMismatch } from '../src/output-schema.js';
+import { RecordingPlatform } from '../src/testing.js';
 
 /**
  * The copy of the platform's `outputSchema` rules (25.3.11, 25.3.10), held to the
@@ -192,4 +193,82 @@ test('annotations are ignored, and a schema nested past the bound is refused', (
     deep = { type: 'object', properties: { inner: deep } };
   }
   assert.match(outputSchemaProblem(deep) ?? '', /nests deeper than 32 levels/u);
+});
+
+/**
+ * 5c (Round 21): an enum value in another case is accepted and converted to the schema's
+ * spelling — the platform's `RESPELL_SAMPLES` (`snoopy-backend/test/runs-output-schema.test.ts`),
+ * copied as data with the same answers: [schema, value, handed on, respelled].
+ */
+const RESPELL_SAMPLES: [JsonObject, unknown, unknown, boolean][] = [
+  [{ enum: ['bill', 'invoice'] }, 'Bill', 'bill', true],
+  [{ enum: ['bill', 'invoice'] }, 'BILL', 'bill', true],
+  [{ enum: ['bill', 'invoice'] }, 'bill', 'bill', false],
+  [{ enum: ['bill', 'invoice'] }, 'bills', 'bills', false],
+  [{ enum: ['not_a_resume', 'resume'] }, 'Not_a_resume', 'not_a_resume', true],
+  [{ enum: ['kind', 'Kind'] }, 'KIND', 'KIND', false],
+  [{ enum: [1, 2] }, 1, 1, false],
+  [
+    {
+      type: 'object',
+      properties: {
+        documents: {
+          type: 'array',
+          items: { type: 'object', properties: { documentType: { enum: ['bill'] } } },
+        },
+      },
+    },
+    { documents: [{ documentType: 'Bill' }, { documentType: 'bill' }] },
+    { documents: [{ documentType: 'bill' }, { documentType: 'bill' }] },
+    true,
+  ],
+  [{ anyOf: [{ enum: ['open'] }, { type: 'number' }] }, 'OPEN', 'open', true],
+  [{ type: 'object', additionalProperties: { enum: ['a'] } }, { x: 'A' }, { x: 'a' }, true],
+  [{ type: 'string', nullable: true, enum: ['card'] }, null, null, false],
+];
+
+test('5c: an enum value in another case is converted to the schema’s spelling, then held', () => {
+  for (const [schema, value, handed, respelled] of RESPELL_SAMPLES) {
+    assert.equal(outputSchemaProblem(schema), undefined);
+    const result = respellEnums(value, schema);
+    assert.deepEqual(result, { value: handed, respelled }, JSON.stringify([schema, value]));
+  }
+  assert.equal(
+    schemaMismatch(respellEnums('Bill', { enum: ['bill'] }).value, { enum: ['bill'] }),
+    undefined,
+  );
+  assert.deepEqual(
+    schemaMismatch(respellEnums('bills', { enum: ['bill'] }).value, { enum: ['bill'] }),
+    {
+      path: '$',
+      rule: 'enum',
+    },
+  );
+});
+
+test('5c: the recording platform hands on the converted answer, as the platform does', async () => {
+  const platform = new RecordingPlatform();
+  const answer = (text: string) => () =>
+    Promise.resolve({
+      text,
+      model: 'test-model',
+      finishReason: 'stop' as const,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+  const request = {
+    capability: 'classification' as const,
+    prompt: 'Which kind?',
+    input: {},
+    outputSchema: { type: 'object', properties: { kind: { enum: ['bill'] } } },
+  };
+  platform.model = answer('{"kind":"Bill"}');
+  assert.equal((await platform.callModel(request)).text, '{"kind":"bill"}');
+  platform.model = answer('{"kind": "bill"}');
+  assert.equal(
+    (await platform.callModel(request)).text,
+    '{"kind": "bill"}',
+    'unchanged when exact',
+  );
+  platform.model = answer('{"kind":"bills"}');
+  await assert.rejects(platform.callModel(request), /output_schema_mismatch/u);
 });

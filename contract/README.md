@@ -1,7 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `71d8e1b`, the platform's `main` after its #252
+(`snoopy-backend`, private) at commit `130e513`, the platform's `main` after its #254
+squash-merged Round 21's self-contained flows PR 1 (2026-10-28, "Refreshed 2026-10-28, the menu"
+below; first copied at its branch head `38a2a80`, all nine files `cmp`-equal to `130e513`). Before it,
+`71d8e1b`, the platform's `main` after its #252
 squash-merged Round 21's switch, block set v2 (its ADR-0048 amendment 1; 2026-10-27, "Refreshed
 2026-10-27, block set v2" below). Before it, `388891e`, the platform's `main` after its #250
 squash-merged Round 21's blocks and a flow's pages (its ADR-0048; 2026-10-26, "Refreshed
@@ -376,6 +379,32 @@ The other six files are byte-identical to `388891e`'s, and all eight to `71d8e1b
 with `cmp`). #252's merge was its deploy (ADR-0047), so the live platform takes all twelve types
 and `scores`. No manifest here declares a page, and no flow sends a new type yet, so every
 automation keeps its version.
+
+Refreshed 2026-10-28, the menu, from the platform's `130e513` (its `main` after #254, Round 21's
+self-contained flows PR 1; first copied at that branch's `38a2a80`). Nine files now, two moved:
+
+- `platform-menu.json`, new, and not a JSON Schema: **the menu**, what a flow may use, emitted by
+  the platform's `schemas:emit` from each part's one home there — the twelve `blocks`, the page
+  parts (`pageParts`), the question forms, the setup, run-input and item-field controls, the
+  triggers, the capabilities, the connection kinds (required or optional) and the providers' auth
+  types; every provider the platform has a file for, with its id, display name, auth type, scopes
+  and each operation's name, method and scopes (no URL and no secret); and its `limits` — the
+  manifest's (`limits.manifest`), a model answer's token cap (`limits.modelAnswerTokens`), the
+  models a call may name (`limits.models`), a version's slot (`limits.slot`) and the versions served
+  (`limits.servedVersions`) — read there, never restated here.
+  `/create-flow` reads it in place of the platform's files, `test/menu.test.ts` holds every flow's
+  integrations and operation literals to it, and CI's review rows read it (README, "Build a flow").
+  A flow that needs a provider or an operation it lacks is two pull requests: the platform's
+  provider file first, then this copy re-pinned to its merge with the flow.
+- `automation-model-request.json`: `maxOutputTokens`, optional, a whole number from 1 to the
+  menu's `limits.modelAnswerTokens` — the most an answer may be; the platform sends the smaller of it and the owner's cap, and without
+  it the cap. The SDK's `ModelRequest`, `MODEL_REQUEST_LIMITS.maxOutputTokens` and
+  `maxOutputTokensProblem` follow (`packages/automation-sdk/src/model-request.ts`), held to the
+  schema by `packages/automation-sdk/test/contract-model-request.test.ts`.
+
+The other seven files are byte-identical to `71d8e1b`'s (each checked with `cmp`). The same pull
+request makes the platform convert an enum value written in another case to the schema's spelling
+for every flow (README, "Model calls"), which the SDK's `RecordingPlatform` copies.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

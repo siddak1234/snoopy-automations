@@ -194,6 +194,8 @@ export interface ModelRequest {
    * holds no link for it. This run's file or its chain's first run's, and no other.
    */
   artifactId?: string;
+  /** The most this answer may be, in tokens: 1 to the owner's cap (`MODEL_REQUEST_LIMITS`); left out, the cap. */
+  maxOutputTokens?: number;
 }
 
 export interface ModelUsage {

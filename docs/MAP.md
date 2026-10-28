@@ -12,8 +12,8 @@
 
 - **sdk**: `packages/automation-sdk/src/**` → [README.md](../README.md)
 - **kit**: `packages/automation-kit/src/**` → [README.md](../README.md)
-- **automations**: `automations/*/src/**`, `automations/*/prompts/**` → [README.md](../README.md)
-- **manifests**: `manifests/**` → [README.md](../README.md)
+- **automations**: `automations/*/src/**`, `automations/*/prompts/**` → `automations/*/README.md`
+- **manifests**: `manifests/*.v*.json` → `automations/*/README.md`
 - **contract**: `contract/**` → [contract/README.md](../contract/README.md)
 - **tooling**: `templates/**`, `scripts/**`, `.github/**` → [README.md](../README.md)
 - **claude**: `.claude/**` → [CLAUDE.md](../CLAUDE.md)
@@ -30,6 +30,8 @@
 - `npm run format`: `prettier --write .`
 - `npm run format:check`: `prettier --check .`
 - `npm run map`: `node scripts/kit/map.mjs`
+- `npm run review-rows`: `tsx scripts/review-rows.ts`
+- `npm run scaffold`: `node scripts/scaffold.mjs`
 - `npm run test`: `tsx --test "test/**/*.test.ts" "templates/automation/test/**/*.test.ts" && npm …`
 - `npm run typecheck`: `tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.…`
 - `npm run verify`: `npm run format:check && npm run check:docs && npm run map -- --check && node sc…`
@@ -60,22 +62,26 @@
 - [contract/schemas/automation-provider-request.json](../contract/schemas/automation-provider-request.json): AutomationProviderRequest
 - [contract/schemas/automation-run-result.json](../contract/schemas/automation-run-result.json): AutomationRunResult
 - [contract/schemas/automation-step-report.json](../contract/schemas/automation-step-report.json): AutomationStepReport
+- [contract/schemas/platform-menu.json](../contract/schemas/platform-menu.json): PlatformMenu
 
 ### Scripts
 
 - [scripts/audit-doc-references.mjs](../scripts/audit-doc-references.mjs): Every file path this repository's documents name, and whether it exists: no
+- [scripts/changed-images.mjs](../scripts/changed-images.mjs): The flows whose image a pull request builds (Round 21, R5): CI's List job runs
 - [scripts/kit/check-docs.mjs](../scripts/kit/check-docs.mjs): D, docs always updated (STANDARD (e)): `npm run check:docs` reads
 - [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
 - [scripts/repo-facts.ts](../scripts/repo-facts.ts): What this repository reports about itself, in the shape the platform
+- [scripts/review-rows.ts](../scripts/review-rows.ts): The review checklist's machine-checkable rows (Round 21, R3; `/create-flow`'s
+- [scripts/scaffold.mjs](../scripts/scaffold.mjs): `npm run scaffold -- templateId [--root dir]` (Round 21, R2): everything structural about a
 
 ### Tests
 
-- `test/`: architecture, conformance, doc, flow, isolation, kit, manifest, repo, research, workflow
+- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 
-- skill `create-flow`: Use when the owner brings an idea for a new flow, in any form. One command from the idea to a live flow - the idea checked against the blocks and the providers… ([.claude/skills/create-flow/SKILL.md](../.claude/skills/create-flow/SKILL.md))
+- skill `create-flow`: Use when the owner or a developer brings an idea for a new flow, in any form. One command from the idea to a live flow, reading only this repository - the idea… ([.claude/skills/create-flow/SKILL.md](../.claude/skills/create-flow/SKILL.md))
 - skill `new-automation-version`: Use when adding a new automation, or a new manifest version of an existing one, in snoopy-automations. Walks the template or the existing folder, the manifest,… ([.claude/skills/new-automation-version/SKILL.md](../.claude/skills/new-automation-version/SKILL.md))
 - agent `builder`: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns a leftovers list and the path of a summary… ([.claude/agents/builder.md](../.claude/agents/builder.md))
 - agent `explorer`: Read-only search. Use to find where something lives or is described before reading or editing; returns path:line findings and what was not found. Never edits. ([.claude/agents/explorer.md](../.claude/agents/explorer.md))

@@ -8,13 +8,14 @@ These rules apply here and nowhere else; the repository's are in [../CLAUDE.md](
 2. **One idempotency key per run and step** on every side effect, so a retried step never acts twice ([../README.md](../README.md#retrying-a-step)).
 3. **A prompt names a capability, never a model** ([../README.md](../README.md#model-calls)); every capability a prompt uses is in the manifest's `requiredCapabilities`.
 4. **No imports across automations.** Build with the SDK and the libraries under `packages/` only; `test/isolation.test.ts` fails the build otherwise.
-5. **One image per version.** Each new version gets its own container, image, origin and service account; a registered manifest is immutable, so a change is a new `v<n+1>` file ([../README.md](../README.md#adding-an-automation)).
+5. **One image per version.** Each new version gets its own container, image, origin and service account; a registered manifest is immutable, so a change is a new `v<n+1>` file ([../README.md](../README.md#build-a-flow)).
 6. **The conformance test** (`test/conformance.test.ts`) holds every automation to the manifests it serves: every step the code can report is declared. Keep it green; never loosen it.
 7. **`npm run facts` after adding or removing files** (it re-emits `docs/repo-facts/snoopy-automations.json`), and `npm run map` when an automation or a manifest is added.
-8. **A new automation or version needs nothing on the platform side:** its merge here is its deploy ([../README.md](../README.md#adding-an-automation)). A change the platform needs (a schema, a callback, a capability) is a finding for a backend session; never edit it from here.
+8. **A new automation or version needs nothing on the platform side:** its merge here is its deploy ([../README.md](../README.md#build-a-flow)), unless the menu (`contract/schemas/platform-menu.json`) lacks a provider or an operation it calls: then the backend's provider file comes first. A change the platform needs (a schema, a callback, a capability) is a finding for a backend session; never edit it from here.
+9. **A new flow is built on `defineFlow`** ([../README.md](../README.md#a-new-flows-standards-defineflow)): its frame from `npm run scaffold -- <id>`, each risky call through `settle`, each failure through `failed`, and its `automations/<id>/test/drill.test.ts` running the failure drill. Its code calls no network itself (`test/network.test.ts`) and only the integrations and operations the menu offers (`test/menu.test.ts`). The two live flows keep `defineAutomation` until their after-pilot versions.
 
 ## Commands
 
 - `/new-automation-version`: the skill for a new automation or a new version.
 - `npm run verify`, from the repository root: the whole gate.
-- A new automation is built, published and deployed by its `Dockerfile` alone: [../.github/workflows/ci.yml](../.github/workflows/ci.yml)'s List job reads every `automations/*/Dockerfile` into the Image and Publish matrices.
+- A new automation is built, published and deployed by its `Dockerfile` alone: [../.github/workflows/ci.yml](../.github/workflows/ci.yml)'s List job reads every `automations/*/Dockerfile` into the Publish matrix, and on a pull request into Image's only those whose image inputs changed.

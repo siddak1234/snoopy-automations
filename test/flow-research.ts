@@ -141,7 +141,7 @@ export const normal = normalWith();
 
 export async function run(
   behave: Behave,
-  options: { total?: number; writeAttempt?: number; dir?: string } = {},
+  options: { total?: number; writeAttempt?: number; dir?: string; noBackend?: boolean } = {},
 ) {
   const runDir = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
   if (!options.dir) dirs.push(runDir);
@@ -176,7 +176,7 @@ export async function run(
   const args = {
     runDir,
     automations: '/clones/snoopy-automations',
-    backend: '/clones/snoopy-backend',
+    ...(options.noBackend ? {} : { backend: '/clones/snoopy-backend' }),
     name: 'invoice-check',
     idea: IDEA,
     answers: ANSWERS,
