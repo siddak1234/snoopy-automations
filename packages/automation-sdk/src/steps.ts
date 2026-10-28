@@ -19,6 +19,7 @@ import type { Manifest } from './manifest.js';
 import type { AutomationPlatform } from './platform.js';
 import type { PromptModule } from './prompt.js';
 import type { RetryPolicy } from './retry.js';
+import type { HeldDecision } from './review.js';
 import type { RunSection, RunVerdict } from './sections.js';
 
 /**
@@ -149,6 +150,8 @@ export type StepResult =
       documents?: readonly RunDocument[];
       /** What a person reads of the held run (platform ADR-0048), bounded by the client. */
       blocks?: readonly EmittedBlock[];
+      /** The changes a person accepts or denies one by one (`review.ts`), bounded by the client. */
+      decisions?: readonly HeldDecision[];
     };
 
 export type Step = (context: StepContext) => Promise<StepResult>;
@@ -220,7 +223,8 @@ export interface Automation {
  * an approver reads them; `reason` is the result's line for the run list and
  * defaults to `heldReason`; `state` comes back verbatim in the continuation an
  * approval mints (FR-17), and the runner resumes at the next step with it.
- * `documents` and `blocks` are what the held run's page shows meanwhile.
+ * `documents` and `blocks` are what the held run's page shows meanwhile; `decisions`, the changes
+ * a person accepts or denies one by one, whose answers the continuation carries (`review.ts`).
  */
 export function held(input: {
   summary: string;
@@ -229,6 +233,7 @@ export function held(input: {
   state: JsonObject;
   documents?: readonly RunDocument[];
   blocks?: readonly EmittedBlock[];
+  decisions?: readonly HeldDecision[];
 }): StepResult {
   return {
     outcome: 'held',
@@ -238,6 +243,7 @@ export function held(input: {
     state: input.state,
     ...(input.documents === undefined ? {} : { documents: input.documents }),
     ...(input.blocks === undefined ? {} : { blocks: input.blocks }),
+    ...(input.decisions === undefined ? {} : { decisions: input.decisions }),
   };
 }
 

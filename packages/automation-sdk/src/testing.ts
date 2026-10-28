@@ -50,11 +50,11 @@ import { type CallbackRefusedError, refusalFrom } from './refusals.js';
  * types it. An error `model` throws ends the call as thrown. A usable answer is handed on
  * as the platform hands it: an enum value in another case in the schema's spelling (5c).
  *
- * Exported from `@autom8x/automation-sdk/testing` so no automation re-implements
- * the double — the one in the original template went stale the moment the wire
- * grew a message it did not know about. `failureDrill` (`drill.ts`) is exported from here too.
+ * Exported from `@autom8x/automation-sdk/testing` so no automation re-implements the double; with
+ * it `failureDrill` (`drill.ts`) and `answerReview` (`review-testing.ts`).
  */
 export { failureDrill, type DrillFixture } from './drill.js';
+export { answerReview } from './review-testing.js';
 
 /** Records every call and answers from what the test configured. */
 export class RecordingPlatform implements AutomationPlatform {
