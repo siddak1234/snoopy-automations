@@ -173,7 +173,8 @@ refused, in the platform's words:
 blocks". The template sends its readout this way (`templates/automation/src/automation.ts`).
 
 **A review of each change, and a dropdown of several** (the platform round for ICD-10 Code Check,
-2026-10-28; `contract/` carries them once re-pinned after it). A held step may offer `decisions`,
+2026-10-28, the platform's PR #255; `contract/` carries them at its head `3fd5cea`, re-cited to its
+merge commit at land). A held step may offer `decisions`,
 changes a person accepts or denies one by one — `held({ …, decisions })`, each an `id` (a step id's
 shape), a `label` and an optional `detail`, bounded by `boundedDecisions`
 (`packages/automation-sdk/src/review.ts`, its `DECISION_LIMITS`: a label and a detail cut to one
@@ -601,7 +602,7 @@ after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; on `defineFlow`): its own pull request,
   after the SDK's review of each change and dropdown of several, brings its folder, whose README is
   its spec and how the code does it. It waits for the platform round that adds the two (section 10
-  of its spec) and for `contract/` re-pinned after it.
+  of its spec, PR #255) to merge; `contract/` carries them at that pull request's head.
 
 ## The kit
 

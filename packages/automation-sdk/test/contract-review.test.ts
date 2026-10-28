@@ -5,9 +5,8 @@ import { assertValid, validator } from './published-schemas.js';
 
 /**
  * The review of each change and the several-choice dropdown against the platform's PUBLISHED
- * schemas (`contract/schemas`). These fail until `contract/` is re-pinned to the platform's `main`
- * after its round for ICD-10 Code Check merges (the land step): the schemas vendored today carry
- * neither `held.decisions`, `continuation.decisions` nor the `select` setup control.
+ * schemas (`contract/schemas`, vendored at the platform's `3fd5cea`, its PR #255's head, which
+ * carries `held.decisions`, `continuation.decisions` and the `select` setup control).
  */
 
 test('a held result with decisions is one the platform accepts', () => {

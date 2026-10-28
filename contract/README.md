@@ -1,7 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `130e513`, the platform's `main` after its #254
+(`snoopy-backend`, private) at commit `3fd5cea` (PR #255's head; re-cited to its merge commit at
+land), Round 21's select control and review of each change (ADR-0048 amendment 2; 2026-10-28,
+"Refreshed 2026-10-28, the review" below; all nine files `cmp`-equal to `3fd5cea`). Before it,
+`130e513`, the platform's `main` after its #254
 squash-merged Round 21's self-contained flows PR 1 (2026-10-28, "Refreshed 2026-10-28, the menu"
 below; first copied at its branch head `38a2a80`, all nine files `cmp`-equal to `130e513`). Before it,
 `71d8e1b`, the platform's `main` after its #252
@@ -406,6 +409,25 @@ The other seven files are byte-identical to `71d8e1b`'s (each checked with `cmp`
 request makes the platform convert an enum value written in another case to the schema's spelling
 for every flow (README, "Model calls"), which the SDK's `RecordingPlatform` copies.
 
+Refreshed 2026-10-28, the review, from the platform's `3fd5cea` (PR #255's head; re-cited to its
+merge commit at land; ADR-0048 amendment 2, its BUILD-PLAN 29.4.2). Four files moved:
+
+- `automation-manifest.json`: `select` joins the setup controls, with `options` (1 to 32, each 1 to
+  80 characters, none twice) and `multiple`, a boolean; never a run input control.
+- `automation-run-result.json`: `held.decisions`, optional, 1 to 40 `{id, label, detail?}` — the
+  review of each change (`label` 1 to 120 characters, `detail` 1 to 200).
+- `automation-invoke-request.json`: `continuation.decisions`, 1 to 40 `{id, decision}`, each
+  `accepted` or `denied` — the answers to a saved review, which always continues, approved.
+- `platform-menu.json`: the question form `review`, the setup control `select` and
+  `limits.manifest.setupOptionLength` (80).
+
+The other five files are byte-identical to `130e513`'s (each checked with `cmp`). The SDK's
+`held({ decisions })`, `boundedDecisions`, `DECISION_LIMITS`, `answersOf` and the `select` control
+(`packages/automation-sdk/src/review.ts`, `manifest.ts`) follow, held to these schemas by
+`packages/automation-sdk/test/contract-review.test.ts`. Until PR #255 merges and a promotion
+carries it, the live platform refuses a manifest declaring a `select` and a held result carrying
+`decisions`.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -417,7 +439,8 @@ enforces these further rules at registration, and its result callback those for 
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
-at `71d8e1b`, its file paths written from `snoopy-backend/`.
+at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `3fd5cea`, its
+file paths written from `snoopy-backend/`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
@@ -450,7 +473,13 @@ refused.
 
 **`setup[]`** — a `key` "is declared more than once" refused; `required` "must be a
 boolean"; `defaultValue` "must be a `<type>` for a `<control>` control" and, for
-`money`, "must not be negative".
+`money`, "must not be negative". A `select` (ADR-0048 amendment 2) "must declare at least 1
+option", at most `ITEM_LIMITS.options`, each within `LIMITS.setupOptionLength`, none "declared
+more than once"; `multiple` "must be a boolean"; on any other control `options` and `multiple`
+are each "only meaningful on a 'select' control". Its default "must be one of the field's
+options", or with `multiple` "must be a list of the field's options", "must not name an option
+more than once" and "must name at least 1 option". A saved value takes the same words, and a
+required one saved as `[]` "is required by the manifest".
 
 **`trigger`** — `connection` "is only meaningful when kind is 'provider-event'";
 `everySeconds` "is only meaningful when kind is 'schedule'" and must lie within the
@@ -458,7 +487,7 @@ platform's schedule bounds; a `provider-event` trigger cannot name a connection 
 manifest does not declare; a trigger kind the platform does not implement is refused at
 registration. `input` (ADR-0030) "is only meaningful when kind is 'manual'"; each field takes the
 setup field's properties except `section` and `notifies` — anything else "is not a run input
-property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact`; an `email`
+property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact` (never `select`); an `email`
 value "must be an email address for an email control"; an `artifact` field "must be false for an
 artifact control" when required and "is not meaningful for an artifact control" with a default —
 a file is uploaded, never required or shared; a key "is declared more than once" refused.
@@ -598,6 +627,15 @@ at `blocks`): "blocks is not allowed with sections: send one or the other", the 
 `details`, and "blocks is not allowed when the outcome is failed". The SDK refuses blocks beside `sections` or `details` before sending, in
 those words, and `boundedBlocks` cuts or leaves out the rest (`README.md`, "What an automation
 looks like").
+
+**A held result's `decisions`** (ADR-0048 amendment 2; `heldDecisionsProblem` in
+`snoopy-backend/packages/contracts/src/held-decisions.ts`) — `held.decisions` "must list 1 to 40";
+each is `{id, label, detail?}`, anything else "is not an accepted field"; an `id` "must be
+lowercase letters, digits and hyphens, starting with a letter" and one "is listed more than once"
+is refused; `label` "must be 1 to 120 characters" and `detail` "must be 1 to 200 characters", each
+one line with nothing shaped like a tag. The decision route then takes one answer per change:
+"decisions must answer every change once". The SDK's `boundedDecisions` holds a flow's list to
+these before sending (`packages/automation-sdk/src/review.ts`).
 
 **Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
 scopes per connection each "must contain at most N entries".
