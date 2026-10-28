@@ -188,6 +188,28 @@ test('two verdicts for one line ref: not_supported then supported drops the line
   assert.ok(data.gaps.includes(`criteria: "three-way match" — ${why}`), data.gaps.join('\n'));
 });
 
+test('a confirmed verdict for an id no line cites never makes it a source', async () => {
+  const withSkeptic = normalWith((prompt) => {
+    const out = skepticSays()(prompt);
+    out.verdicts.push({ id: 'rules-1', verdict: 'confirmed', why: 'not asked' });
+    return out;
+  });
+  const { data, calls } = await run((label, attempt, prompt, dir) => {
+    if (label !== 'synthesis') return withSkeptic(label, attempt, prompt, dir);
+    const brief: Any = BRIEF();
+    for (const lines of Object.values(brief) as Any[][])
+      for (const l of lines) l.cites = l.cites.filter((id: string) => id !== 'rules-1');
+    return brief;
+  });
+  const { findings } = skepticInput(calls.find((c) => c.label === 'skeptic')!.prompt);
+  assert.ok(!findings.some((f) => f.id === 'rules-1'), 'the skeptic is not asked about rules-1');
+  assert.ok(
+    data.sources.some((s: Any) => s.id === 'practice-1'),
+    'a cited finding still is',
+  );
+  assert.ok(!data.sources.some((s: Any) => s.id === 'rules-1'), 'rules-1 is no source');
+});
+
 test("ids are the code's: a lens that reuses another lens's id cannot make it a source", async () => {
   const unchecked = 'https://unchecked.example/r';
   const { data, calls } = await run((label, attempt, prompt, dir) => {
