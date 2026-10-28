@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { ModelCompletion, ModelRequest } from '../src/contract.js';
-import { defineFlow, quotesIn, type FlowDefinition } from '../src/flow.js';
+import type { ModelRequest } from '../src/contract.js';
+import { quotesIn } from '../src/flow.js';
 import { CallbackRefusedError } from '../src/refusals.js';
 import { MIN_STEP_BACKOFF_MS } from '../src/retry.js';
 import { failed, settle, type Settled } from '../src/settle.js';
 import type { Step } from '../src/steps.js';
 import { RecordingPlatform, refusalFixture } from '../src/testing.js';
 import { FLOW_WORDS } from '../src/words.js';
+import { classify, completion, flow, reading } from './flow-fixtures.js';
 import { recordedWaits } from './retry-fixtures.js';
-import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
-import { definePrompt } from '../src/prompt.js';
+import { invoke } from './runner-fixtures.js';
 
 /**
  * `defineFlow` (Round 21, D2.1 and D2.4): a throw never reaches a person, a code reaches the log
@@ -20,40 +20,6 @@ import { definePrompt } from '../src/prompt.js';
  */
 
 recordedWaits();
-
-const classify = definePrompt({
-  id: 'classify',
-  version: 1,
-  capability: 'classification',
-  template: 'Which kind of document is this?',
-  outputSchema: { type: 'object', properties: { kind: { enum: ['bill'] } }, required: ['kind'] },
-});
-
-const completion = (text: string, finishReason: ModelCompletion['finishReason'] = 'stop') => ({
-  text,
-  model: 'test-model',
-  finishReason,
-  usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-});
-
-function flow(step: Step, overrides: Partial<FlowDefinition> = {}) {
-  const logged: unknown[][] = [];
-  const automation = defineFlow({
-    templateId: TEMPLATE,
-    manifests: [manifest(1, ['read'], ['classification'])],
-    prompts: [classify],
-    steps: { read: step },
-    result: (state) => ({ output: state, summary: 'Done' }),
-    log: (...line) => void logged.push(line),
-    ...overrides,
-  });
-  return { automation, logged };
-}
-
-const reading: Step = async ({ platform }) => {
-  const answer = await platform.callModel(classify, {}, { maxOutputTokens: 4_000 });
-  return { outcome: 'ok', summary: 'Read', state: { kind: JSON.parse(answer.text).kind } };
-};
 
 test('defineFlow: no error.message reaches the failure reason; the log keeps its shape, not its text', async () => {
   const secret = 'ACCOUNT-9911 from the document';
@@ -171,7 +137,7 @@ test('Q2: an answer off its schema is asked once more with one fixed line, and a
 });
 
 test('Q2: a second miss holds the run for a person, never "unreadable"', async () => {
-  const { automation } = flow(reading);
+  const { automation } = flow(reading, { holdUnmatched: ['read'] });
   const platform = new RecordingPlatform();
   platform.model = () => Promise.resolve(completion('{"kind":"memo"}'));
   const result = await automation.execute(invoke(), platform);

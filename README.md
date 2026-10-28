@@ -193,7 +193,10 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   provider's own non-2xx inside a 200 included. A typed model refusal's sentence says what a person
   can do: the month's allowance used up (`over_plan_limit`), AI not set up for the flow
   (`capability_not_in_plan`, `entitlements_not_configured`, `no_model_left`), an answer too long
-  (`truncated`), else a clearer file. It works with the step retry, not around it: `defineFlow` gives
+  (`truncated`), else a clearer file. A model call's untyped refusal is "AI is busy. Try again in a
+  minute." only when it may clear on its own (a 502/503/504 that decided nothing, a 429, or one that
+  provably never left); a 413 says the file is too large for the AI, a 400 that the flow can't ask
+  the AI yet, any other the general sentence. It works with the step retry, not around it: `defineFlow` gives
   each attempt's context `retryLeft(error)`, true while the runner would run the step again (its
   policy repeats the error, a wait remains, the next attempt starts before the deadline), and
   `settle` rethrows while it is true, so a 502 is retried before it is `unconfirmed`. **Once an
@@ -204,9 +207,11 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   (`isUnsent`) is `unconfirmed`: "The connected app didn't confirm this. Check it before you run this
   again." A re-run carries a new run's key, so it would do the write again (the template's `act`
   says why). `defineFlow` notes per run when a provider call has answered 2xx or was unconfirmed;
-  once noted, a step's throw or a report the platform refuses ends the run "Something went wrong
-  after a connected app was used. Check it before you run this again." (Invoice Processing's
-  `RunNotes`, generalised.)
+  once noted, a step's throw (ahead of the flow's own `sentences`), every failure `settle` words at
+  a later step but `unconfirmed` (each attempt's context carries the note as `wrote()`), and a
+  report the platform refuses end the run "Something went wrong after a connected app was used.
+  Check it before you run this again." — never "Connect it, then run it again" after a write.
+  (Invoice Processing's `RunNotes`, generalised.)
 - **The log says what each standard did.** Each attempt's context carries `log`, with the run's and
   the step's ids on every line: `settled` (the kind and the error's name, status, code and reason),
   `model_reasked` (Q2's or 5d's reason, the schema's `path` and `rule`) and `not_connected` (the
@@ -220,9 +225,12 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
 - **Q1, the exact-quote check**: `quotesIn(documentText, values)` names each value whose exact
   words are not in the document; the template's `review` holds those for a person.
 - **Q2**: an answer off its schema (`output_schema_mismatch`) is asked once more with the same
-  registered prompt and one fixed line naming the schema's `path` and `rule`; a second miss holds the
-  run for a person ("The AI's answer needs a person to check it.", the state's `unmatchedAnswer` the
-  step's id). **One to three more paid AI calls**: the platform tries the request's next model on a
+  registered prompt and one fixed line naming the schema's `path` and `rule`; a second miss at a step
+  the flow names in `holdUnmatched` holds the run for a person ("The AI's answer needs a person to
+  check it.", the state's `unmatchedAnswer` the step's id), and **the step after it must handle
+  `unmatchedAnswer`**: an approval carries a decision, never the AI's fields. At any other step — the
+  template's `extract` among them — a second miss ends "The AI's answer couldn't be used. Try a
+  clearer file.", so no hold is offered whose approval cannot go on. **One to three more paid AI calls**: the platform tries the request's next model on a
   miss too, each a `runs.model_calls` row against the plan's allowance.
 - **5d**: a call asks at the owner's cap (the menu's `limits.modelAnswerTokens`) unless the step names a lower
   `maxOutputTokens`, which only a flow's spec sets; one cut off (`truncated`) below the cap is asked
@@ -235,7 +243,7 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
 - **The shared failure drill**: `failureDrill(automation, fixture)` from
   `@autom8x/automation-sdk/testing` (`packages/automation-sdk/src/drill.ts`) runs the flow once per
   case — a missing connection (404, then `provider_not_declared`), the vendor down (502, then no
-  answer, then no answer from the app alone), a malformed AI answer twice (which must end held), a
+  answer, then no answer from the app alone), a malformed AI answer twice (which must end held, or "couldn't be used" where the flow holds no miss), a
   timeout, and a report the platform refuses once the app answered — and fails on a throw, a raw
   message, words in neither `FLOW_WORDS` nor the flow's spec and `words.md`, or "Try again" in the
   two cases where the app may have done it. Every new flow's

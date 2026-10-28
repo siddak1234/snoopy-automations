@@ -13,8 +13,8 @@ import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
 
 /**
  * The shared failure drill (Round 21, D2.5): a `defineFlow` flow ends every case in a typed
- * result in the SDK's or its own words, and a malformed answer twice ends held; a flow that
- * lets a raw message through fails it.
+ * result in the SDK's or its own words, and a malformed answer twice ends held where the flow
+ * holds it, else "couldn't be used"; a flow that lets a raw message through fails it.
  */
 
 const classify = definePrompt({
@@ -63,7 +63,10 @@ const fixture = {
 };
 
 test('drill: a defineFlow flow passes every case, and a malformed answer twice ends held', async () => {
-  const cases = await failureDrill(defineFlow({ ...definition, log: () => undefined }), fixture);
+  const cases = await failureDrill(
+    defineFlow({ ...definition, holdUnmatched: ['read'], log: () => undefined }),
+    fixture,
+  );
   assert.deepEqual(
     cases.map((entry) => [entry.name, entry.reached, entry.result?.outcome]),
     [
@@ -90,6 +93,25 @@ test('drill: a defineFlow flow passes every case, and a malformed answer twice e
     FLOW_WORDS.timeout,
     FLOW_WORDS.after_write,
   ]);
+});
+
+test('drill: without holdUnmatched a malformed answer twice ends "couldn\'t be used"; any other end fails it', async () => {
+  const cases = await failureDrill(defineFlow({ ...definition, log: () => undefined }), fixture);
+  const c = cases.find((entry) => entry.name.startsWith('c'));
+  assert.deepEqual(c?.result, { outcome: 'failed', failureReason: FLOW_WORDS.ai_unusable });
+  // A step that words the miss itself, as the old "unreadable" did, fails the drill.
+  const unreadable = defineFlow({
+    ...definition,
+    steps: {
+      read: (context) => read(context).catch(() => failed(FLOW_WORDS.ai_refused)),
+      record,
+    },
+    log: () => undefined,
+  });
+  await assert.rejects(
+    failureDrill(unreadable, fixture),
+    /c: malformed AI answer, twice ends failed, neither held for a person nor/u,
+  );
 });
 
 test('drill: "Try again" once an app may have done it fails it, naming the case', async () => {

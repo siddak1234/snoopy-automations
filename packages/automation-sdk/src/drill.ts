@@ -15,7 +15,8 @@ import { FLOW_WORDS } from './words.js';
  *   from the app alone — which must not end saying "Try again": the app may have done it, and a
  *   re-run would do it again (`FLOW_WORDS.unconfirmed`);
  * - (c) a malformed AI answer: every answer off its schema, so the re-ask misses too — which must
- *   end `held`;
+ *   end `held` at a step the flow holds (`holdUnmatched`), else with `FLOW_WORDS.ai_unusable` (or
+ *   `after_write`, once an app answered first);
  * - (d) a timeout, on every provider and model call;
  * - (e) a report the platform refuses once an app has answered — which must not end saying
  *   "Try again" either (`FLOW_WORDS.after_write`).
@@ -66,6 +67,9 @@ const NO_TRY_AGAIN = new Set([
   'b: no answer from the app',
   'e: a refused report after the app answered',
 ]);
+
+/** How (c) may end when the flow does not hold the miss: the answer unusable, or after a write. */
+const UNMATCHED_ENDS = new Set<string>([FLOW_WORDS.ai_unusable, FLOW_WORDS.after_write]);
 
 const CASES: readonly (readonly [string, Fail])[] = [
   ['a: not connected (404)', (p) => (p.provider = () => Promise.reject(refused(404, 'NOT_FOUND')))],
@@ -162,8 +166,14 @@ export async function failureDrill(
       ) {
         problem = `says "Try again" after an app may have done it: "${result.failureReason}"`;
       }
-      if (problem === undefined && name.startsWith('c') && reached && result?.outcome !== 'held') {
-        problem = `ends ${result?.outcome ?? 'nowhere'}, not held for a person`;
+      if (
+        problem === undefined &&
+        name.startsWith('c') &&
+        reached &&
+        result?.outcome !== 'held' &&
+        !(result?.outcome === 'failed' && UNMATCHED_ENDS.has(result.failureReason))
+      ) {
+        problem = `ends ${result?.outcome ?? 'nowhere'}, neither held for a person nor "${FLOW_WORDS.ai_unusable}"`;
       }
       cases.push({ name, reached, result, problem });
     }

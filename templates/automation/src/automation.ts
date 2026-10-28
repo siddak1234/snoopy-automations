@@ -21,8 +21,8 @@ import {
 
 /**
  * The template automation, on `defineFlow` (Round 21): the SDK's standards are on — a throw ends
- * the run in plain words, an answer off its schema is asked once more and then held for a person,
- * the step retry's waits are spread — and each risky call goes through `settle`. A new flow is not
+ * the run in plain words, an answer off its schema is asked once more and then ends in plain
+ * words, the step retry's waits are spread — and each risky call goes through `settle`. A new flow is not
  * copied from here by hand: `npm run scaffold -- <id>` writes its frame from its manifest (README,
  * "Build a flow"); this file is the worked example of the steps a developer then writes.
  *
@@ -82,8 +82,10 @@ export const MODELS: readonly string[] | undefined = undefined; // the platform'
 const extract: Step = async (context) => {
   const { state, platform } = context;
   // The document travels as the model's INPUT; the prompt is rendered from the reference alone.
-  // `defineFlow` asks once more when the answer misses its schema, and holds the run for a person
-  // when it misses again (Q2) — one to three more paid AI calls; `settle` words the rest.
+  // `defineFlow` asks once more when the answer misses its schema (Q2) — one to three more paid AI
+  // calls — and a second miss ends "The AI's answer couldn't be used.": `review` cannot go on
+  // without the vendor and the amount, and an approval carries none, so the template names no
+  // step in `holdUnmatched`. `settle` words the rest.
   const asked = await settle(context, () =>
     platform.callModel(
       extractFields,

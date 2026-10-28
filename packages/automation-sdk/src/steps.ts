@@ -121,6 +121,12 @@ export interface StepContext {
    * (`not_connected`) say what they did. Codes and shapes only, never a document's words.
    */
   readonly log?: (level: 'info' | 'error', event: string, fields?: Record<string, unknown>) => void;
+  /**
+   * Under `defineFlow` only: whether a provider call in this run, at any step, has answered 2xx or
+   * was left unconfirmed — an app may hold a write, and a re-run would make it again. While it is
+   * true, `settle` words every failure but `unconfirmed` as `FLOW_WORDS.after_write`.
+   */
+  readonly wrote?: () => boolean;
 }
 
 /**

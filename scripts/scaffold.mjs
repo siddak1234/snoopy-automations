@@ -178,7 +178,7 @@ export function frame(root, id) {
       "  .map((path) => readFileSync(path, 'utf8'))",
       "  .join('\\n');",
       '',
-      "test('the failure drill: every failure ends in plain words, and a bad AI answer twice is held', async () => {",
+      "test('the failure drill: every failure ends in plain words, never a throw or a raw message', async () => {",
       '  await failureDrill(define(manifests), {',
       `    request: invokeFixture({ templateId: TEMPLATE_ID, templateVersion: ${manifest.version} }),`,
       '    platform: () => new RecordingPlatform(),',

@@ -23,6 +23,11 @@ import { FLOW_WORDS, notSentLine } from './words.js';
  * sentence says to check the app, never "Try again" (Invoice Processing's `UNCONFIRMED_LINE`).
  * Under `defineFlow` each attempt's context also carries `log`, and `settle` logs `settled` with
  * the kind and the error's shape (`shapeOf`) — never its text.
+ *
+ * **Once a provider call in the run may have written** (`context.wrote()`, `defineFlow`'s per-run
+ * note), every failure but `unconfirmed` keeps its kind and takes `FLOW_WORDS.after_write` as its
+ * sentence: "Connect it, then run it again" after an earlier step's write would make that write
+ * again under a new run's key.
  */
 
 export type SettleKind =
@@ -105,7 +110,7 @@ export function kindOf(error: unknown): Kind | undefined {
     if (error.reason === 'provider_not_declared') return of('not_declared');
     const provider = error.callback === 'provider';
     if (provider && error.status === 404) return of('not_connected');
-    if (error.callback === 'model') return of('unanswered', 'ai_busy');
+    if (error.callback === 'model') return modelKind(error);
     if (provider && leavesUnconfirmed(error)) return of('unconfirmed');
     if (isTransient(error) || error.status === 429 || isUnsent(error)) {
       return provider ? of('vendor_down') : of('unanswered');
@@ -115,6 +120,20 @@ export function kindOf(error: unknown): Kind | undefined {
   }
   if (isUnanswered(error) || isUnsent(error)) return of('unanswered');
   return undefined;
+}
+
+/**
+ * A model callback's untyped refusal: "AI is busy" only for what may clear on its own — a 502/503/504
+ * that decided nothing, a 429, or one that provably never left. A 413 is the file, too large; a 400
+ * the flow's own request; any other the general sentence. Retrying none of those changes anything.
+ */
+function modelKind(error: CallbackRefusedError): Kind {
+  if (isTransient(error) || error.status === 429 || isUnsent(error)) {
+    return of('unanswered', 'ai_busy');
+  }
+  if (error.status === 413) return of('ai_refused', 'ai_too_large');
+  if (error.status === 400) return of('ai_refused', 'ai_request');
+  return of('ai_refused', 'other');
 }
 
 /** A provider's own answer inside a 200 that is not a success: the vendor refused, or is down. */
@@ -128,9 +147,13 @@ function answerKind(value: unknown): Kind | undefined {
 }
 
 export async function settle<T>(
-  context: Pick<StepContext, 'retryLeft' | 'log'>,
+  context: Pick<StepContext, 'retryLeft' | 'log' | 'wrote'>,
   call: () => Promise<T>,
 ): Promise<Settled<T>> {
+  const worded = (kind: Kind): Kind =>
+    kind.kind !== 'unconfirmed' && context.wrote?.() === true
+      ? { kind: kind.kind, sentence: FLOW_WORDS.after_write }
+      : kind;
   let value: T;
   try {
     value = await call();
@@ -139,7 +162,7 @@ export async function settle<T>(
     const kind = kindOf(error);
     if (kind === undefined) throw error;
     context.log?.('info', 'settled', { kind: kind.kind, ...shapeOf(error) });
-    return { ok: false, ...kind };
+    return { ok: false, ...worded(kind) };
   }
   const refused = answerKind(value);
   if (refused === undefined) return { ok: true, value };
@@ -147,7 +170,7 @@ export async function settle<T>(
     kind: refused.kind,
     status: (value as ProviderAnswer).status,
   });
-  return { ok: false, ...refused };
+  return { ok: false, ...worded(refused) };
 }
 
 /** What the log keeps of an error: its name, and a refusal's status, code and reason — never its text. */

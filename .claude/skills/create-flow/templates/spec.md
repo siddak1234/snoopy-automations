@@ -31,7 +31,7 @@ brief does not carry is not written here.
 | Name       |       | 80 characters; the document, then the job ("Invoice Processing", "Resume Screening")                                                                                                        |
 | One line   |       | 200 characters: what it does, in a person's words                                                                                                                                           |
 | Department |       | one of HR, Accounting, Finance, Legal, Compliance, Data, Operations, Sales, Marketing, Customer Support, IT, Engineering, Product, Procurement, Administration, Research; the flow joins it |
-| Icon       |       | a name in `snoopy-mobile/lib/view/icon-registry.ts`; any other draws a placeholder in the app (section 10)                                                                                  |
+| Icon       |       | a name in the menu's `icons` (`contract/schemas/platform-menu.json`); any other draws a placeholder in the app (section 10)                                                                 |
 | Price      |       | US dollars a month, cents at most; 0 unless the owner says                                                                                                                                  |
 
 ## 2. How it starts

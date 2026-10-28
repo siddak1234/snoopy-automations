@@ -27,8 +27,15 @@ export const FLOW_WORDS = {
     'Something went wrong after a connected app was used. Check it before you run this again.',
   /** No answer came at all. */
   unanswered: "This couldn't finish just now. Try again in a minute.",
-  /** The model call got no usable answer in time. */
+  /**
+   * The model call got no answer that decided anything: a 502/503/504 that decided nothing, a 429,
+   * or a call that provably never left — what may clear on its own (`settle`'s `modelKind`).
+   */
   ai_busy: 'AI is busy. Try again in a minute.',
+  /** The platform refused the model call's request as too large (413): the file. */
+  ai_too_large: 'This file is too large for the AI. Try a smaller file.',
+  /** The platform refused the model call's request as malformed (400): the flow's own mistake. */
+  ai_request: "This flow can't ask the AI yet.",
   /** The model or the platform refused the answer or the file (a filter, the file's type or size). */
   ai_refused: "The AI couldn't read this. Try a clearer file.",
   /** The plan's monthly AI allowance is spent (`over_plan_limit`). */
@@ -41,8 +48,10 @@ export const FLOW_WORDS = {
   ai_setup: "AI isn't set up for this flow yet.",
   /** The answer was cut off at the owner's cap, the most a call may ask for. */
   ai_too_long: "The AI's answer was too long to finish. Try a shorter file.",
-  /** The answer missed its schema twice: the run waits for a person (Q2). */
+  /** The answer missed its schema twice: the run waits for a person (Q2, `holdUnmatched`). */
   ai_unmatched: "The AI's answer needs a person to check it.",
+  /** The answer missed its schema twice at a step whose next step cannot go on without it (Q2). */
+  ai_unusable: "The AI's answer couldn't be used. Try a clearer file.",
   /** The run's time ran out. */
   timeout: 'This took too long. Try again.',
   /** A step the scaffold wrote and the developer has not (`npm run scaffold`). */

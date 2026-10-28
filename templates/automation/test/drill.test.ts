@@ -14,13 +14,13 @@ import { TEMPLATE_ID, WORDS, define } from '../src/automation.js';
 /**
  * The shared failure drill (Round 21, D2.5): a missing connection, the vendor down, a malformed
  * AI answer twice and a timeout each end in a result in plain words, never a throw or a raw
- * message, and the malformed answer is held for a person. Every new flow's `automations/<id>/test/drill.test.ts`
+ * message; the malformed answer ends "couldn't be used", the template holding no miss. Every new flow's `automations/<id>/test/drill.test.ts`
  * (written by `npm run scaffold`) runs it; `test/conformance.test.ts` requires it.
  */
 
 const manifests = readManifests(resolve(import.meta.dirname, '..'), TEMPLATE_ID);
 
-test('the failure drill: every failure ends in plain words, and a bad AI answer twice is held', async () => {
+test('the failure drill: every failure ends in plain words, never a throw or a raw message', async () => {
   await failureDrill(define(manifests), {
     request: invokeFixture({
       templateId: TEMPLATE_ID,

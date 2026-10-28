@@ -39,8 +39,10 @@ import { FLOW_WORDS } from './words.js';
  * - **Never "Try again" once an app may have done something.** Per run, `defineFlow` notes when a
  *   provider call has answered 2xx, or got no answer and was not provably unsent — that error
  *   marked so `settle` and `kindOf` read it as `unconfirmed` ("Check it before you run this
- *   again"). A re-run is a new run's key, so it would do the write again. Once noted, a throw ends
- *   the run with `FLOW_WORDS.after_write`, not "Try again" (Invoice Processing's `RunNotes`).
+ *   again"). A re-run is a new run's key, so it would do the write again. Once noted — each
+ *   attempt's context carries it as `wrote()` — a throw ends the run with `FLOW_WORDS.after_write`,
+ *   ahead of the flow's own `sentences`, and `settle` words every failure but `unconfirmed` the same
+ *   way, at any later step (Invoice Processing's `RunNotes`).
  * - **The log, per attempt** (`context.log`): `settled`, `model_reasked` (the reason, the schema's
  *   path and rule) and `not_connected`, each with the run's and the step's ids.
  * - **`retryLeft` on every attempt** (`settle`): true while the runner would run the step again,
@@ -48,9 +50,11 @@ import { FLOW_WORDS } from './words.js';
  *   as `unanswered`, and the billed first call is never made again (the re-check's finding 1).
  * - **Q2.** An answer that misses its schema (`output_schema_mismatch`) is asked once more with
  *   the same registered prompt and one fixed line naming the schema's `path` and `rule`. A second
- *   miss holds the run for a person (`FLOW_WORDS.ai_unmatched`; the state gains
- *   `unmatchedAnswer: <step id>` for the step after it). **One to three more paid AI calls**: the
- *   platform tries the request's next model on a miss too.
+ *   miss at a step in `holdUnmatched` holds the run for a person (`FLOW_WORDS.ai_unmatched`; the
+ *   state gains `unmatchedAnswer: <step id>` for the step after it); at any other step it ends the
+ *   run with `FLOW_WORDS.ai_unusable` — an approval carries a decision, never the AI's fields, so a
+ *   hold is offered only where the next step can go on without them. **One to three more paid AI
+ *   calls**: the platform tries the request's next model on a miss too.
  * - **5d.** A call asks at the owner's cap unless the step names a lower `maxOutputTokens`; one
  *   cut off (`truncated`) below the cap is asked once more at the cap, **one to three more paid
  *   AI calls**; one cut off at the cap is not asked again, and ends with `FLOW_WORDS.ai_too_long`.
@@ -63,6 +67,13 @@ export interface FlowDefinition extends AutomationDefinition {
   sentences?: Readonly<Record<string, string>>;
   /** Where codes and error shapes go; `jsonLogger(templateId)` unless given. */
   log?: Logger;
+  /**
+   * The steps whose answer, off its schema twice, holds the run for a person (Q2). The step after
+   * each must read `state.unmatchedAnswer` (the held step's id) and go on without that step's
+   * fields: an approval carries a decision, never fields. None unless given: any other step's
+   * second miss ends the run with `FLOW_WORDS.ai_unusable`.
+   */
+  holdUnmatched?: readonly string[];
 }
 
 /** The owner's cap on one answer, the most a re-ask asks for. */
@@ -88,6 +99,12 @@ const notesOf = (request: InvokeRequest): RunNotes => {
 export function defineFlow(definition: FlowDefinition): Automation {
   const log = definition.log ?? jsonLogger(definition.templateId);
   const sentences = definition.sentences ?? {};
+  const holds = new Set(definition.holdUnmatched ?? []);
+  for (const stepId of holds) {
+    if (definition.steps[stepId] === undefined) {
+      throw new Error(`holdUnmatched names "${stepId}", which is not one of the flow's steps`);
+    }
+  }
   const standards: RunnerStandards = {
     waits: (policy) => spreadWaits(policy),
     attemptOf(attempt, { context, policy, waits, platform, platformWith }) {
@@ -104,29 +121,32 @@ export function defineFlow(definition: FlowDefinition): Automation {
         repeats(error) &&
         wait !== undefined &&
         Date.now() + wait < deadlineAt;
-      const stepPlatform = watching(
-        platformWith(reasking(platform, answered, stepLog)),
-        notesOf(context.request),
-      );
+      const notes = notesOf(context.request);
+      const stepPlatform = watching(platformWith(reasking(platform, answered, stepLog)), notes);
       return {
-        context: { ...context, platform: stepPlatform, retryLeft, log: stepLog },
+        context: {
+          ...context,
+          platform: stepPlatform,
+          retryLeft,
+          log: stepLog,
+          wrote: () => notes.wrote,
+        },
         retryable: retryLeft,
       };
     },
     thrown(stepId, error, context): StepResult {
       log('error', 'step_threw', { runId: context.request.runId, stepId, ...shapeOf(error) });
-      if (isUnmatched(error)) {
+      if (isUnmatched(error) && holds.has(stepId)) {
         return held({
           summary: FLOW_WORDS.ai_unmatched,
           heldReason: FLOW_WORDS.ai_unmatched,
           state: { ...context.state, unmatchedAnswer: stepId },
         });
       }
-      const kind = kindOf(error);
+      const kind = isUnmatched(error) ? undefined : kindOf(error);
       const wrote = notesOf(context.request).wrote && kind?.kind !== 'unconfirmed';
-      const sentence =
-        sentences[stepId] ??
-        (wrote ? FLOW_WORDS.after_write : (kind?.sentence ?? FLOW_WORDS.other));
+      const own = isUnmatched(error) ? FLOW_WORDS.ai_unusable : sentences[stepId];
+      const sentence = wrote ? FLOW_WORDS.after_write : (own ?? kind?.sentence ?? FLOW_WORDS.other);
       return { outcome: 'failed', summary: sentence, failureReason: sentence };
     },
     returned(stepId, result, context) {

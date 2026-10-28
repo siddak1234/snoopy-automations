@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "repository": "snoopy-automations",
-  "head": "dc83fd1",
+  "head": "41e1b00",
   "readAt": "2026-10-28",
   "counts": {
     "typescriptFiles": {
-      "value": 327,
+      "value": 329,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)**/*.ts' | wc -l"
     },
     "automations": {
@@ -25,7 +25,7 @@
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)automations/*/prompts/*.json' | wc -l"
     },
     "testFiles": {
-      "value": 145,
+      "value": 146,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)**/*.test.ts' | wc -l"
     }
   }

@@ -292,6 +292,30 @@ test('settle: each kind, with the SDK’s sentence and never the raw text', asyn
   );
 });
 
+test('settle: a model callback is "AI is busy" only when it may clear; a 400 or a 413 says what is wrong', async () => {
+  const context: Pick<StepContext, 'retryLeft'> = {};
+  const model = (status: number, code: string) =>
+    refusalFixture('model', { status, code, detail: 'the raw text' });
+  const cases: [string, CallbackRefusedError, string, keyof typeof FLOW_WORDS][] = [
+    ['a 502 that decided nothing', model(502, 'DEPENDENCY_FAILURE'), 'unanswered', 'ai_busy'],
+    ['a 429', model(429, 'RATE_LIMITED'), 'unanswered', 'ai_busy'],
+    ['a codeless 503, unsent', new CallbackRefusedError('model', 503, ''), 'unanswered', 'ai_busy'],
+    ['a 400, the flow’s own request', model(400, 'BAD_REQUEST'), 'ai_refused', 'ai_request'],
+    ['a 413, the file too large', model(413, 'PAYLOAD_TOO_LARGE'), 'ai_refused', 'ai_too_large'],
+    ['a 403 with no reason', model(403, 'FORBIDDEN'), 'ai_refused', 'other'],
+  ];
+  for (const [name, error, kind, word] of cases) {
+    assert.ok(error instanceof CallbackRefusedError, `${name}: untyped`);
+    assert.deepEqual(
+      await settle(context, () => Promise.reject(error)),
+      { ok: false, kind, sentence: FLOW_WORDS[word] },
+      name,
+    );
+  }
+  assert.doesNotMatch(FLOW_WORDS.ai_request, /busy|try again/iu);
+  assert.doesNotMatch(FLOW_WORDS.ai_too_large, /busy|in a minute/iu);
+});
+
 test('optionalConnection: not chosen is skipped by the step; chosen and not connected goes on with its line, logged', () => {
   const logged: unknown[][] = [];
   const chosen = optionalConnection(

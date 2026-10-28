@@ -185,15 +185,15 @@ test('an amount above the threshold ends the run held, and the approval records 
   });
 });
 
-test('a completion off its schema is asked once more, then held for a person, never quoted', async () => {
+test('a completion off its schema is asked once more, then ends in plain words with no hold to approve, never quoted', async () => {
   const secret = 'ACCOUNT-9911-ROUTING-2200';
   // Off the declared schema: the platform refuses it before the step sees it, typed, and the
   // recording platform answers as the platform does (SDK 25.3.10). `defineFlow` asks once more
-  // with one fixed line (Q2), and holds the run when the answer misses again.
+  // with one fixed line (Q2). A second miss is not held: `review` would get no fields from an
+  // approval, so the run ends "couldn't be used", never a hold whose approval cannot go on.
   const offSchema = platformWith({ vendor: 'Contoso', note: secret });
   const result = await automation.execute(invoke(), offSchema);
-  assert.ok(result.outcome === 'held');
-  assert.equal(result.held.reason, FLOW_WORDS.ai_unmatched);
+  assert.deepEqual(result, { outcome: 'failed', failureReason: FLOW_WORDS.ai_unusable });
   assert.equal(offSchema.modelCalls.length, 2, 'one more paid call, never a third');
   assert.ok(!JSON.stringify([result, offSchema.steps]).includes(secret));
   assert.equal(offSchema.providerCalls.length, 0);

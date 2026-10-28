@@ -58,8 +58,7 @@ what follows is for a platform round's new screen. One sketch per new screen, th
 clients: what is drawn, in which order, which parts
 only owners and admins see, what is open and what collapsed, and the order the platform gives that
 the clients keep (a ranking is drawn as the platform answers it, never re-sorted). Start each sketch
-from the clients' design standards (`snoopy-mobile/DESIGN-CONTRACT.md`, `snoopy/docs/ARCHITECTURE.md`), which
-hold the page orders the owner's test of Round 19's build 28 settled: a list field is the glass
+from the page orders the owner's test of Round 19's build 28 settled: a list field is the glass
 dropdown; the flows list is grouped by department A–Z; a flow with items shows its items, filtered by
 its group; an item's page is its tiles, its file's row, the add, then compact ranked rows; every
 uploaded file opens to view, download and share; a run's page ends with the "Run details" row, then

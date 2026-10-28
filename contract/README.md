@@ -389,14 +389,15 @@ Round 21's self-contained flows PR 1). Nine files now, two moved:
   triggers, the capabilities, the connection kinds (required or optional) and the providers' auth
   types; every provider the platform has a file for, with its id, display name, auth type, scopes
   and each operation's name, method and scopes (no URL and no secret); and its `limits` — the
-  manifest's (`limits.manifest`), a model answer's token cap (`modelAnswerTokens`, 8,000), the
-  models a call may name, a version's slot (0.50 CPU, 88M) and the versions served (6).
+  manifest's (`limits.manifest`), a model answer's token cap (`limits.modelAnswerTokens`), the
+  models a call may name (`limits.models`), a version's slot (`limits.slot`) and the versions served
+  (`limits.servedVersions`) — read there, never restated here.
   `/create-flow` reads it in place of the platform's files, `test/menu.test.ts` holds every flow's
   integrations and operation literals to it, and CI's review rows read it (README, "Build a flow").
   A flow that needs a provider or an operation it lacks is two pull requests: the platform's
   provider file first, then this copy re-pinned to its merge with the flow.
-- `automation-model-request.json`: `maxOutputTokens`, optional, a whole number from 1 to 8,000 —
-  the most an answer may be; the platform sends the smaller of it and the owner's cap, and without
+- `automation-model-request.json`: `maxOutputTokens`, optional, a whole number from 1 to the
+  menu's `limits.modelAnswerTokens` — the most an answer may be; the platform sends the smaller of it and the owner's cap, and without
   it the cap. The SDK's `ModelRequest`, `MODEL_REQUEST_LIMITS.maxOutputTokens` and
   `maxOutputTokensProblem` follow (`packages/automation-sdk/src/model-request.ts`), held to the
   schema by `packages/automation-sdk/test/contract-model-request.test.ts`.
