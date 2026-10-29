@@ -42,7 +42,8 @@
     "approval",
     "run",
     "item",
-    "setup"
+    "setup",
+    "review"
   ],
   "setupControls": [
     "toggle",
@@ -50,7 +51,8 @@
     "text",
     "email",
     "resource-picker",
-    "connection"
+    "connection",
+    "select"
   ],
   "runInputControls": [
     "toggle",
@@ -232,6 +234,7 @@
       "groupTitle": 40,
       "documentWord": 40,
       "groupDescription": 120,
+      "setupOptionLength": 80,
       "groupTitlesByConnection": 16,
       "scopesPerConnection": 32,
       "maxConcurrentRuns": 1000,

@@ -18,3 +18,8 @@ scripts/kit/
 # Carried byte for byte from snoopy-backend (its claude-install's CARRIED list, Round 21):
 # canonical there, so no formatter here may touch it.
 .claude/workflows/build-round.js
+
+# A flow's research brief, rendered by `.claude/skills/create-flow/research-render.mjs` from its
+# research.json and approved as rendered: a formatter would rewrite its quotes (a `*` read as
+# emphasis), so it is kept byte for byte.
+automations/*/research.md

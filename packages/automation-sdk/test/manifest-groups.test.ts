@@ -63,7 +63,7 @@ test('a connection may be optional, chosen in a setup field whose control is con
     validate({ ...optional, requiredConnections: [{ ...connection, optional: 'yes' }] }),
     false,
   );
-  assert.equal(validate({ ...optional, setup: [{ ...vendor, control: 'select' }] }), false);
+  assert.equal(validate({ ...optional, setup: [{ ...vendor, control: 'dropdown' }] }), false);
   assert.ok(isManifest(optional), 'and the runner reads it');
 });
 

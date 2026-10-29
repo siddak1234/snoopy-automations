@@ -4,6 +4,7 @@ import { boundedBlocks } from './blocks.js';
 import { oneLine, type RunResult } from './contract.js';
 import { boundedDetails } from './details.js';
 import { boundedDocuments } from './documents.js';
+import { boundedDecisions, type HeldPart } from './review.js';
 import { boundedScore, boundedSections, boundedTitle, boundedVerdict } from './sections.js';
 
 /**
@@ -82,7 +83,7 @@ export function boundedResult(result: RunResult): RunResult {
       const drawn = boundedBlocks(blocks);
       const bounded: Extract<RunResult, { outcome: 'held' }> = {
         ...rest,
-        held: { ...result.held, reason: oneLine(result.held.reason, 'held.reason') },
+        held: heldPart(result.held),
         ...(kept === undefined ? {} : { documents: kept }),
         ...(drawn === undefined ? {} : { blocks: drawn }),
       };
@@ -108,4 +109,15 @@ export function boundedResult(result: RunResult): RunResult {
     case 'failed':
       return { ...result, failureReason: oneLine(result.failureReason, 'failureReason') };
   }
+}
+
+/** `held` with its reason one line and its offered changes bounded (`review.ts`), none sent when none. */
+function heldPart(held: HeldPart): HeldPart {
+  const { decisions, ...rest } = held;
+  const offered = boundedDecisions(decisions);
+  return {
+    ...rest,
+    reason: oneLine(held.reason, 'held.reason'),
+    ...(offered === undefined ? {} : { decisions: offered }),
+  };
 }
