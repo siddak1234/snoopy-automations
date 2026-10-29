@@ -1,0 +1,193 @@
+{
+  "templateId": "icd10-code-check",
+  "version": 1,
+  "display": {
+    "name": "ICD-10 Code Check",
+    "description": "Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now.",
+    "category": "Compliance",
+    "icon": "Sparkles"
+  },
+  "pricing": {
+    "monthlyPriceUsd": 0
+  },
+  "trigger": {
+    "kind": "manual",
+    "input": [
+      {
+        "key": "visitNote",
+        "title": "Visit note",
+        "description": "A PDF or photo of the visit note.",
+        "control": "artifact",
+        "required": false
+      }
+    ]
+  },
+  "artifacts": {
+    "acceptedContentTypes": ["application/pdf", "image/jpeg", "image/png"],
+    "maximumSizeBytes": 3500000,
+    "maximumPdfPages": 30,
+    "maximumImageSidePixels": 8000
+  },
+  "requiredConnections": [],
+  "requiredCapabilities": ["document-extraction", "classification"],
+  "setup": [
+    {
+      "section": "rules",
+      "key": "specialties",
+      "title": "Specialties",
+      "description": "The specialties your clinic treats. Their codes are listed first when a code is picked.",
+      "control": "select",
+      "options": [
+        "Nephrology",
+        "Internal medicine",
+        "Cardiology",
+        "Endocrinology",
+        "Family practice",
+        "Geriatric medicine"
+      ],
+      "multiple": true,
+      "defaultValue": ["Nephrology"],
+      "required": true,
+      "group": "check"
+    }
+  ],
+  "groups": [
+    { "id": "upload", "title": "Add visit", "description": "A PDF or photo of the visit note." },
+    {
+      "id": "read",
+      "title": "AI reading",
+      "description": "AI reads the patient and each diagnosis."
+    },
+    {
+      "id": "check",
+      "title": "Code check",
+      "description": "Each code checked against the note and the code table."
+    },
+    { "id": "approve", "title": "Your review", "description": "Accept or deny each change." },
+    {
+      "id": "email",
+      "title": "Run completed",
+      "description": "Done when the run succeeds.",
+      "platform": "email"
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "receive",
+      "kicker": "TRIGGER",
+      "title": "Visit received",
+      "description": "A visit note arrives.",
+      "group": "upload"
+    },
+    {
+      "id": "read-note",
+      "kicker": "AI STEP",
+      "title": "Note read",
+      "description": "AI reads the patient, the codes and each diagnosis, word for word.",
+      "group": "read"
+    },
+    {
+      "id": "check-note",
+      "kicker": "ACTION",
+      "title": "Note checked",
+      "description": "Checks it is one patient's visit note and picks the code table for its date.",
+      "group": "read"
+    },
+    {
+      "id": "find-codes",
+      "kicker": "ACTION",
+      "title": "Code choices found",
+      "description": "Real codes for each diagnosis, from that year's code table.",
+      "group": "check"
+    },
+    {
+      "id": "match-codes",
+      "kicker": "AI STEP",
+      "title": "Codes matched",
+      "description": "AI picks one listed code for each diagnosis, or none.",
+      "group": "check"
+    },
+    {
+      "id": "check-codes",
+      "kicker": "ACTION",
+      "title": "Codes checked",
+      "description": "Each code checked against the note and the coding rules.",
+      "group": "check"
+    },
+    {
+      "id": "decide",
+      "kicker": "ACTION",
+      "title": "Ready to save?",
+      "description": "Codes that match go through. Each change waits for your review.",
+      "group": "approve"
+    },
+    {
+      "id": "save",
+      "kicker": "ACTION",
+      "title": "Codes saved",
+      "description": "The final codes, ready to enter in your chart.",
+      "group": "approve"
+    }
+  ],
+  "service": {
+    "origin": "http://icd10-code-check-v1.autom8x.internal:8080",
+    "serviceAccount": "icd10-code-check-v1@autom8x.iam.gserviceaccount.com",
+    "contractVersion": 1,
+    "maxConcurrentRuns": 1,
+    "acceptTimeoutMs": 5000,
+    "runTimeoutSeconds": 900
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "patient": {
+        "type": "object",
+        "properties": {
+          "name": { "type": ["string", "null"] },
+          "birthDate": { "type": ["string", "null"] },
+          "sex": { "type": ["string", "null"] },
+          "recordNumber": { "type": ["string", "null"] },
+          "provider": { "type": ["string", "null"] }
+        }
+      },
+      "visitDate": { "type": ["string", "null"] },
+      "codeTable": { "type": "string" },
+      "specialties": { "type": "array", "items": { "type": "string" } },
+      "codesOnNote": { "type": "array", "items": { "type": "string" } },
+      "verdicts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "code": { "type": "string" },
+            "verdict": { "type": "string" },
+            "suggested": { "type": ["string", "null"] },
+            "check": { "type": "string" },
+            "quote": { "type": ["string", "null"] }
+          },
+          "required": ["id", "code", "verdict", "suggested", "check", "quote"]
+        }
+      },
+      "decisions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "accepted": { "type": "boolean" } },
+          "required": ["id", "accepted"]
+        }
+      },
+      "finalCodes": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": [
+      "patient",
+      "visitDate",
+      "codeTable",
+      "specialties",
+      "codesOnNote",
+      "verdicts",
+      "decisions",
+      "finalCodes"
+    ]
+  }
+}
