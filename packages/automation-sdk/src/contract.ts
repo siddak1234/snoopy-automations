@@ -18,6 +18,7 @@ import type { EmittedBlock } from './block-types.js';
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
 import { isInvokeItem, type InvokeItem } from './item.js';
+import { isContinuationDecisions, type ContinuationDecision, type HeldPart } from './review.js';
 import type { RunSection, RunVerdict } from './sections.js';
 
 export type JsonObject = Record<string, unknown>;
@@ -35,10 +36,7 @@ export const CONTRACT_VERSION = 1;
  */
 export interface Continuation {
   ofRunId: string;
-  /**
-   * `'retry'` was published and WITHDRAWN by the platform on 2026-09-08 (its
-   * §12.1 #84): nothing ever minted one. A failed run is re-run as a fresh run.
-   */
+  /** Only `approval`: `'retry'` was withdrawn by the platform on 2026-09-08 (its §12.1 #84). */
   kind: 'approval';
   /** The declared step that held. */
   stepId?: string;
@@ -46,6 +44,8 @@ export interface Continuation {
   decision?: 'approved' | 'rejected';
   decidedAt?: string;
   state: JsonObject;
+  /** A review's answers, every change the held run offered once (`review.ts`). */
+  decisions?: readonly ContinuationDecision[];
 }
 
 /** What the platform sends to start a run. Carries no credential — by design. */
@@ -137,7 +137,7 @@ export type RunResult =
     }
   | {
       outcome: 'held';
-      held: { stepId: string; reason: string; state: JsonObject };
+      held: HeldPart;
       documents?: readonly RunDocument[];
       blocks?: readonly EmittedBlock[];
     }
@@ -333,6 +333,7 @@ export function isContinuation(value: unknown): value is Continuation {
       value.decision === 'approved' ||
       value.decision === 'rejected') &&
     (value.decidedAt === undefined || typeof value.decidedAt === 'string') &&
+    (value.decisions === undefined || isContinuationDecisions(value.decisions)) &&
     isObject(value.state)
   );
 }

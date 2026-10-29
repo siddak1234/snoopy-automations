@@ -172,6 +172,20 @@ refused, in the platform's words:
 [contract/README.md](contract/README.md#what-the-platform-refuses-beyond-the-schema), "A result's
 blocks". The template sends its readout this way (`templates/automation/src/automation.ts`).
 
+**A review of each change, and a dropdown of several** (the platform round for ICD-10 Code Check,
+2026-10-28, the platform's PR #255; `contract/` carries them at its merge commit, snoopy-backend
+27c3051 (#255)). A held step may offer `decisions`,
+changes a person accepts or denies one by one — `held({ …, decisions })`, each an `id` (a step id's
+shape), a `label` and an optional `detail`, bounded by `boundedDecisions`
+(`packages/automation-sdk/src/review.ts`, its `DECISION_LIMITS`: a label and a detail cut to one
+plain line; too many changes, an id twice or a label left empty refused before sending). Saving the
+review always continues the run approved, even when every change is denied, and `continuation.decisions` carries
+every answer; a step reads them with `answersOf(request)`. In a suite, `answerReview(platform,
+request, answers)` from `@autom8x/automation-sdk/testing` answers the review `RecordingPlatform`
+last held as the platform does, and refuses answers that miss a change or name another. A setup
+field's `select` control lists `options`, one picked or, with `multiple`, several; a step reads the
+picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest.ts`).
+
 ## A new flow's standards (`defineFlow`)
 
 Every flow built from Round 21 on is defined with `defineFlow` (`packages/automation-sdk/src/flow.ts`):
@@ -584,6 +598,11 @@ a `*` bound to the flow's id):
 Both are live on `defineAutomation`, and their code, prompts and manifests are unchanged until their
 after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `defineFlow`
 ("Build a flow", below).
+
+- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; on `defineFlow`): its own pull request,
+  after the SDK's review of each change and dropdown of several, brings its folder, whose README is
+  its spec and how the code does it. It waits for the platform round that adds the two (section 10
+  of its spec, PR #255) to merge; `contract/` carries them at that pull request's head.
 
 ## The kit
 

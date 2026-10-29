@@ -23,7 +23,11 @@ const flows = dockerfilesUnder();
 const all = flows.map((flow) => flow.name).sort();
 
 test('a flow’s own source, prompts, manifest or Dockerfile builds that flow alone', () => {
-  assert.deepEqual(all, ['candidate-reviewer', 'invoice-processing']);
+  // Every flow with a Dockerfile, as `dockerfilesUnder()` finds it: a new flow needs no edit here.
+  assert.ok(all.includes('candidate-reviewer') && all.includes('invoice-processing'), all.join());
+  for (const name of all) {
+    assert.deepEqual(changedImages(flows, [`automations/${name}/Dockerfile`]), [name], name);
+  }
   for (const [changed, built] of [
     [['automations/candidate-reviewer/src/steps/candidate.ts'], ['candidate-reviewer']],
     [['automations/invoice-processing/prompts/extract-documents.v1.json'], ['invoice-processing']],

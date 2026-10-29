@@ -280,7 +280,12 @@ export function buildRunner(
           });
           return {
             outcome: 'held',
-            held: { stepId, reason: outcome.reason, state: outcome.state },
+            held: {
+              stepId,
+              reason: outcome.reason,
+              state: outcome.state,
+              ...(outcome.decisions === undefined ? {} : { decisions: outcome.decisions }),
+            },
             ...(outcome.documents === undefined ? {} : { documents: outcome.documents }),
             ...(outcome.blocks === undefined ? {} : { blocks: outcome.blocks }),
           };

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { isObject } from './contract.js';
+import { isObject, type JsonObject } from './contract.js';
 
 /**
  * The manifest, as the runner reads it.
@@ -97,8 +97,13 @@ export interface ManifestConnection {
   optional?: boolean;
 }
 
-/** The controls a setup field may have — `connection` the vendor choice (platform ADR-0037). */
-export type SetupControl = 'toggle' | 'money' | 'text' | 'email' | 'resource-picker' | 'connection';
+/**
+ * The controls a setup field may have — `connection` the vendor choice (platform ADR-0037), and
+ * `select` a dropdown of `options`, one or (`multiple`) several picked (the platform round for
+ * ICD-10 Code Check, F1, 2026-10-28).
+ */
+export type SetupControl =
+  'toggle' | 'money' | 'text' | 'email' | 'resource-picker' | 'connection' | 'select';
 
 export interface ManifestSetupField {
   key: string;
@@ -112,6 +117,27 @@ export interface ManifestSetupField {
   providers?: readonly string[];
   /** The step group the field is drawn in (platform ADR-0040), by its id. */
   group?: string;
+  /** A `select` field's choices, 1 to 32, each 1 to 80 characters. */
+  options?: readonly string[];
+  /** A `select` field that picks several: its value is a list. Absent is false: one string. */
+  multiple?: boolean;
+}
+
+/**
+ * A `select` field's picks, from a run's `config`: a string or a list of strings, as the platform
+ * saved it, kept only where it is one of the field's options, each once, in the options' order;
+ * nothing saved, the field's default, read the same way. A value of any other shape picks none.
+ */
+export function chosenOptions(config: JsonObject, field: ManifestSetupField): string[] {
+  const options = field.options ?? [];
+  const read = (value: unknown): string[] | undefined =>
+    typeof value === 'string'
+      ? [value]
+      : Array.isArray(value) && value.every((one) => typeof one === 'string')
+        ? (value as string[])
+        : undefined;
+  const picked = read(config[field.key]) ?? read(field.defaultValue) ?? [];
+  return options.filter((option) => picked.includes(option));
 }
 
 /**
