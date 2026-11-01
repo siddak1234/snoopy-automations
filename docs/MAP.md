@@ -47,7 +47,7 @@
 ### Packages
 
 - `packages/automation-kit/` (`@autom8x/automation-kit`): A library automations build with: QuickBooks reads and writes through the SDK's provider call, the one cleaning of values read from a docum…
-- `packages/automation-sdk/` (`@autom8x/automation-sdk`): The Autom8x automation SDK: the step runner, prompt modules, the six callbacks, the serving shell, and test doubles. Deliberately depends o…
+- `packages/automation-sdk/` (`@autom8x/automation-sdk`): The Autom8x automation SDK: the step runner, prompt modules, the callbacks, the serving shell, and test doubles. Deliberately depends on no…
 
 ### Template
 
@@ -59,6 +59,8 @@
 - [contract/schemas/automation-invoke-request.json](../contract/schemas/automation-invoke-request.json): AutomationInvokeRequest
 - [contract/schemas/automation-mail-request.json](../contract/schemas/automation-mail-request.json): AutomationMailRequest
 - [contract/schemas/automation-manifest.json](../contract/schemas/automation-manifest.json): AutomationManifest
+- [contract/schemas/automation-memory-get-request.json](../contract/schemas/automation-memory-get-request.json): AutomationMemoryGetRequest
+- [contract/schemas/automation-memory-put-request.json](../contract/schemas/automation-memory-put-request.json): AutomationMemoryPutRequest
 - [contract/schemas/automation-model-request.json](../contract/schemas/automation-model-request.json): AutomationModelRequest
 - [contract/schemas/automation-provider-request.json](../contract/schemas/automation-provider-request.json): AutomationProviderRequest
 - [contract/schemas/automation-run-result.json](../contract/schemas/automation-run-result.json): AutomationRunResult

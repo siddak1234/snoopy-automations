@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 
+import { boundedUnits } from './batch.js';
 import { boundedBlocks } from './blocks.js';
 import { oneLine, type RunResult } from './contract.js';
 import { boundedDetails } from './details.js';
@@ -36,7 +37,8 @@ function refuseBeside(result: { sections?: unknown; details?: unknown }): void {
  * The result with every one-line field, each line of its `details` and each of its `documents`,
  * normalised to what the wire accepts — and a success's `title`, `score`, `verdict` and `sections` too
  * (`sections.ts`: cut, or left out, never refused), and a success's or a held result's `blocks`
- * (`boundedBlocks`); `blocks` beside `sections` or `details` is refused. A success whose body would pass
+ * (`boundedBlocks`), and a batch run's `units` (`boundedUnits`); `blocks` beside `sections` or
+ * `details` is refused. A success whose body would pass
  * `RESULT_BODY_LIMIT_BYTES` leaves out its `output` — the structured result the platform keeps and
  * never publishes — so the documents, sections and blocks a person reads still arrive; nothing a
  * person reads in a success is ever left out for size. A held result past it never leaves out its
@@ -51,7 +53,8 @@ function refuseBeside(result: { sections?: unknown; details?: unknown }): void {
 export function boundedResult(result: RunResult): RunResult {
   switch (result.outcome) {
     case 'success': {
-      const { details, documents, title, score, verdict, sections, blocks, ...rest } = result;
+      const { details, documents, title, score, verdict, sections, blocks, units, ...rest } =
+        result;
       if (blocks !== undefined) refuseBeside({ sections, details });
       const lines = boundedDetails(details);
       const kept = boundedDocuments(documents);
@@ -60,6 +63,7 @@ export function boundedResult(result: RunResult): RunResult {
       const counted = boundedVerdict(verdict);
       const shown = boundedSections(sections);
       const drawn = boundedBlocks(blocks);
+      const queued = boundedUnits(units);
       const bounded: Extract<RunResult, { outcome: 'success' }> = {
         ...rest,
         ...(result.summary === undefined ? {} : { summary: oneLine(result.summary, 'summary') }),
@@ -70,6 +74,7 @@ export function boundedResult(result: RunResult): RunResult {
         ...(counted === undefined ? {} : { verdict: counted }),
         ...(shown === undefined ? {} : { sections: shown }),
         ...(drawn === undefined ? {} : { blocks: drawn }),
+        ...(queued === undefined ? {} : { units: queued }),
       };
       if (bounded.output === undefined || bodyBytes(bounded) <= RESULT_BODY_LIMIT_BYTES) {
         return bounded;

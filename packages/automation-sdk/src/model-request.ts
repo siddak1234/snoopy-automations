@@ -1,4 +1,5 @@
 import type { ModelRequest } from './contract.js';
+import { pageRangeProblem } from './batch.js';
 
 /**
  * The models a model request may name, and the one rule each model id is held to —
@@ -188,7 +189,7 @@ export function maxOutputTokensProblem(value: unknown): string | undefined {
 /**
  * Why the platform would answer this request's own lists with a 400, in its words, or undefined:
  * its `models`, then its `excludeModelAuthors`, then its `artifactId`, then its
- * `maxOutputTokens`, each only when present.
+ * `maxOutputTokens`, then its `pages` (which need an `artifactId`), each only when present.
  * What the client (`platform.ts`) and the recording double (`testing.ts`) refuse before anything
  * is sent or recorded, so the two cannot disagree.
  */
@@ -201,6 +202,11 @@ export function modelRequestProblem(request: ModelRequest): string | undefined {
     (request.artifactId === undefined ? undefined : artifactIdProblem(request.artifactId)) ??
     (request.maxOutputTokens === undefined
       ? undefined
-      : maxOutputTokensProblem(request.maxOutputTokens))
+      : maxOutputTokensProblem(request.maxOutputTokens)) ??
+    (request.pages === undefined
+      ? undefined
+      : request.artifactId === undefined
+        ? 'pages needs an artifactId'
+        : pageRangeProblem(request.pages))
   );
 }

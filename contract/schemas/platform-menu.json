@@ -31,7 +31,8 @@
     "run": [
       "files",
       "outcome",
-      "result"
+      "result",
+      "batch"
     ],
     "file": [
       "viewer",
@@ -74,7 +75,8 @@
     "document-extraction",
     "classification",
     "screening",
-    "summarization"
+    "summarization",
+    "memory"
   ],
   "connectionKinds": [
     "required",
@@ -82,7 +84,8 @@
   ],
   "providerAuthTypes": [
     "oauth2",
-    "api-key"
+    "api-key",
+    "none"
   ],
   "providers": [
     {
@@ -112,6 +115,19 @@
           "scopes": [
             "https://www.googleapis.com/auth/gmail.send"
           ]
+        }
+      ]
+    },
+    {
+      "id": "nppes",
+      "displayName": "NPI Registry",
+      "auth": "none",
+      "scopes": [],
+      "operations": [
+        {
+          "name": "npi.lookup",
+          "method": "GET",
+          "scopes": []
         }
       ]
     },
@@ -235,6 +251,10 @@
       "documentWord": 40,
       "groupDescription": 120,
       "setupOptionLength": 80,
+      "setupOptions": 1000,
+      "setupOptionValueLength": 64,
+      "setupOptionLabelLength": 120,
+      "setupOptionGroupLength": 80,
       "groupTitlesByConnection": 16,
       "scopesPerConnection": 32,
       "maxConcurrentRuns": 1000,
@@ -245,6 +265,23 @@
       "artifactBytes": 104857600,
       "pdfPages": 1000,
       "imageSidePixels": 20000
+    },
+    "runInput": {
+      "filesPerSelection": 200,
+      "defaultMaxFiles": 50
+    },
+    "memory": {
+      "keys": 100,
+      "keyLength": 64,
+      "valueBytes": 65536
+    },
+    "batch": {
+      "units": 500,
+      "unitLabelLength": 120,
+      "unitArtifacts": 50,
+      "unitDataBytes": 8192,
+      "pages": 20,
+      "queuedRunsPerFlow": 500
     },
     "modelAnswerTokens": 8000,
     "models": 3,

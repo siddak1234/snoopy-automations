@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { ManifestBatch } from './batch.js';
 import { isObject, type JsonObject } from './contract.js';
 
 /**
@@ -44,6 +45,13 @@ export interface Manifest {
    * schema are for the platform and the clients, and are validated by the published schema.
    */
   items?: ManifestItems;
+  /**
+   * The flow's batch (platform ADR-0048 amendment 4, `batch.ts`): its manual run is a batch run,
+   * which runs `batch.pipeline` and answers units; each unit's child run runs `pipeline`.
+   */
+  batch?: ManifestBatch;
+  /** The trigger, as far as an automation reads it: its run-input fields. */
+  trigger?: { kind: string; input?: readonly ManifestRunInputField[] };
   /** What a flow shows, as far as an automation reads it: the order of its pages' parts. */
   display?: { pages?: ManifestPages };
 }
@@ -51,7 +59,8 @@ export interface Manifest {
 /**
  * The parts of each page a manifest's `display.pages` may order (platform ADR-0048 decision 5):
  * a closed set, the schema's `enum`s. Each part on its own page and used once; a run page holds
- * `outcome` and `result`, an item page `add` and `runs`; item parts need `items`, and `tiles`
+ * `outcome` and `result`, an item page `add` and `runs`, and a batch flow's run page `batch` (a
+ * batch run's children; amendment 4, needed on a batch flow and refused on any other); item parts need `items`, and `tiles`
  * `items.verdictWords` (the rules beyond the schema: `contract/README.md`). `scores`, the item's
  * runs by score as a bar chart (amendment 1, point 3b), is opt-in: a page left out, drawn in
  * today's order, never gets it. Inside `result`, the blocks keep the order the automation sent them.
@@ -59,7 +68,7 @@ export interface Manifest {
 export const PAGE_PARTS = {
   flow: ['dashboard', 'steps', 'items'],
   item: ['tiles', 'file', 'add', 'runs', 'scores'],
-  run: ['files', 'outcome', 'result'],
+  run: ['files', 'outcome', 'result', 'batch'],
   file: ['viewer', 'reading'],
 } as const;
 
@@ -117,19 +126,69 @@ export interface ManifestSetupField {
   providers?: readonly string[];
   /** The step group the field is drawn in (platform ADR-0040), by its id. */
   group?: string;
-  /** A `select` field's choices, 1 to 32, each 1 to 80 characters. */
-  options?: readonly string[];
+  /**
+   * A `select` field's choices, 1 to 1,000: all strings of 1 to 80 characters, or all
+   * `{value, label, group?}` (platform ADR-0048 amendment 3, point 1). A saved value is a `value`.
+   */
+  options?: readonly (string | SelectOption)[];
   /** A `select` field that picks several: its value is a list. Absent is false: one string. */
   multiple?: boolean;
 }
 
 /**
+ * One choice of a bigger dropdown: `value` 1 to 64 printable ASCII characters, what is saved;
+ * `label` 1 to 120, what a person reads; `group` 1 to 80, its heading, on every option or on none.
+ */
+export interface SelectOption {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+/** A setup field's option values, in order: a string is its own value. */
+export function optionValues(field: ManifestSetupField): string[] {
+  return (field.options ?? []).map((option) =>
+    typeof option === 'string' ? option : option.value,
+  );
+}
+
+/**
+ * A run-input field (the trigger's `input`): an `artifact` field may take several files into ONE
+ * run (`multiple`), at most `maxFiles` (1 to 200; default 50) — platform ADR-0048 amendment 4.
+ */
+export interface ManifestRunInputField {
+  key: string;
+  control: string;
+  multiple?: boolean;
+  maxFiles?: number;
+}
+
+/** The platform's bounds on a several-file field (the menu's `limits.runInput`). */
+export const RUN_INPUT_LIMITS = { filesPerSelection: 200, defaultMaxFiles: 50 } as const;
+
+/** The most files an artifact field takes in one run: 1, or its `maxFiles` (default 50). */
+export function maxFilesOf(field: ManifestRunInputField): number {
+  return field.multiple === true ? (field.maxFiles ?? RUN_INPUT_LIMITS.defaultMaxFiles) : 1;
+}
+
+/**
+ * The upload ids an artifact run-input value names: one id as before, or — a `multiple` field —
+ * a list of them, as the platform sends it (amendment 4). Anything else names none.
+ */
+export function artifactIdsOf(input: JsonObject, key: string): string[] {
+  const value = input[key];
+  if (typeof value === 'string') return [value];
+  return Array.isArray(value) ? value.filter((one): one is string => typeof one === 'string') : [];
+}
+
+/**
  * A `select` field's picks, from a run's `config`: a string or a list of strings, as the platform
- * saved it, kept only where it is one of the field's options, each once, in the options' order;
- * nothing saved, the field's default, read the same way. A value of any other shape picks none.
+ * saved it, kept only where it is one of the field's option values, each once, in the options'
+ * order; nothing saved, the field's default, read the same way. A value of any other shape picks
+ * none.
  */
 export function chosenOptions(config: JsonObject, field: ManifestSetupField): string[] {
-  const options = field.options ?? [];
+  const options = optionValues(field);
   const read = (value: unknown): string[] | undefined =>
     typeof value === 'string'
       ? [value]
@@ -162,7 +221,21 @@ export function isManifest(value: unknown): value is Manifest {
     Array.isArray(value.pipeline) &&
     value.pipeline.length > 0 &&
     value.pipeline.every((step) => isObject(step) && typeof step.id === 'string') &&
-    (value.items === undefined || isManifestItems(value.items))
+    (value.items === undefined || isManifestItems(value.items)) &&
+    (value.batch === undefined || isManifestBatch(value.batch))
+  );
+}
+
+/** A `batch` block the runner can run: a non-empty pipeline of step ids, and its unit's words. */
+function isManifestBatch(value: unknown): value is ManifestBatch {
+  return (
+    isObject(value) &&
+    Array.isArray(value.pipeline) &&
+    value.pipeline.length > 0 &&
+    value.pipeline.every((step) => isObject(step) && typeof step.id === 'string') &&
+    isObject(value.unitWords) &&
+    typeof value.unitWords.singular === 'string' &&
+    typeof value.unitWords.plural === 'string'
   );
 }
 
@@ -188,7 +261,7 @@ export function readManifest(path: string): Manifest {
   }
   if (!isManifest(parsed)) {
     throw new Error(
-      `${path} is not a manifest: templateId, version, requiredCapabilities and a non-empty pipeline of step ids are required, and items, when declared, a file key and a non-empty pipeline of step ids`,
+      `${path} is not a manifest: templateId, version, requiredCapabilities and a non-empty pipeline of step ids are required, items, when declared, a file key and a non-empty pipeline of step ids, and batch, when declared, a non-empty pipeline of step ids and its unit's words`,
     );
   }
   return parsed;

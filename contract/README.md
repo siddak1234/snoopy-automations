@@ -1,7 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `27c3051` (snoopy-backend 27c3051 (#255), the platform's
+(`snoopy-backend`, private) at commit `d9f7fe2` (snoopy-backend d9f7fe2, re-cited to the merge at
+land: the head of the platform's Round 21 platform round 2 branch, ADR-0048 amendments 3 and 4;
+2026-11-01, "Refreshed 2026-11-01, platform round 2" below; all eleven files `cmp`-equal to
+`d9f7fe2`). Before it, `27c3051` (snoopy-backend 27c3051 (#255), the platform's
 `main` after its #255 squash-merged; first copied at its branch head `3fd5cea`, tree-identical),
 Round 21's select control and review of each change (ADR-0048 amendment 2; 2026-10-28,
 "Refreshed 2026-10-28, the review" below; all nine files `cmp`-equal to `27c3051`). Before it,
@@ -430,6 +433,33 @@ The other five files are byte-identical to `130e513`'s (each checked with `cmp`)
 deployed 2026-10-28 23:26Z, so the live platform accepts a manifest declaring a `select` and a held
 result carrying `decisions`.
 
+Refreshed 2026-11-01, platform round 2, from snoopy-backend d9f7fe2 (re-cited to the merge at
+land), the platform's ADR-0048 amendments 3 and 4 (its BUILD-PLAN 29.4.4). Eleven files now, two
+new and five moved; all eleven `cmp`-equal to `d9f7fe2`:
+
+- `automation-memory-get-request.json` and `automation-memory-put-request.json`, new: a flow's
+  memory per workspace, `{key}` and `{key, value}` (a key `^[a-z0-9-]{1,64}$`); the callbacks answer
+  `{value}` (null when absent) and `{keys}`, and a `null` value removes the key.
+- `automation-manifest.json`: `display.category` gains `Healthcare`; a `select`'s `options` up to
+  1,000, all strings or all `{value, label, group?}`; a run-input field's `multiple` and `maxFiles`
+  (1 to 200); the capability `memory`; the run page's part `batch`; and `batch: {pipeline (1 to 8
+steps), unitWords: {singular, plural}}`.
+- `automation-invoke-request.json`: `batch: true` on a batch run and `unit: {parentRunId, index,
+label, artifacts, data}` on its child; `continuation.decisions` up to 400.
+- `automation-model-request.json`: `pages: {from, to}`.
+- `automation-run-result.json`: a success's `units` (1 to 500 of `{label, artifacts, data}`); a held
+  decision's `group` (1 to 120), up to 400 decisions.
+- `platform-menu.json`: the provider auth type `none` and the provider `nppes` (the NPI Registry,
+  `npi.lookup`), the capability `memory`, the page part `batch`, and `limits.batch`,
+  `limits.memory`, `limits.runInput` and the setup option bounds.
+
+The other four files are byte-identical to `27c3051`'s (each checked with `cmp`). The SDK follows
+(`README.md`, "What an automation looks like", "Platform round 2"): `batch.ts`, `memory.ts`,
+`SelectOption`, `artifactIdsOf` and `maxFilesOf` in `manifest.ts`, a decision's `group`, and the
+recording double's answers in `testing-batch.ts` — held to these schemas and the menu's limits by
+the SDK's `contract-v2.test.ts`. A flow pulls these in only after the platform's
+merge and both clients ship (amendment 3's "Keeps").
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -441,8 +471,10 @@ enforces these further rules at registration, and its result callback those for 
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
-at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, its
-file paths written from `snoopy-backend/`.
+at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, and
+amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
+decision's `group`, the `memory` capability) at `d9f7fe2`, its file paths written from
+`snoopy-backend/`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
@@ -478,7 +510,12 @@ boolean"; `defaultValue` "must be a `<type>` for a `<control>` control" and, for
 `money`, "must not be negative". A `select` (ADR-0048 amendment 2) "must declare at least 1
 option", at most `ITEM_LIMITS.options`, each within `LIMITS.setupOptionLength`, none "declared
 more than once"; `multiple` "must be a boolean"; on any other control `options` and `multiple`
-are each "only meaningful on a 'select' control". Its default "must be one of the field's
+are each "only meaningful on a 'select' control". Its options (amendment 3) are all strings, each
+within `LIMITS.setupOptionLength`, or all `{value, label, group?}` objects, at most
+`LIMITS.setupOptions` (1,000) — one mixed in "must be an object, as the other options are";
+another key "is not an option property"; `value` within `LIMITS.setupOptionValueLength` and "must
+be printable ASCII characters"; `label` and `group` within their `LIMITS`; `group` "must be on
+every option or on none". Its default names values, never labels: "must be one of the field's
 options", or with `multiple` "must be a list of the field's options", "must not name an option
 more than once" and "must name at least 1 option". A saved value takes the same words, and a
 required one saved as `[]` "is required by the manifest".
@@ -492,7 +529,23 @@ setup field's properties except `section` and `notifies` — anything else "is n
 property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact` (never `select`); an `email`
 value "must be an email address for an email control"; an `artifact` field "must be false for an
 artifact control" when required and "is not meaningful for an artifact control" with a default —
-a file is uploaded, never required or shared; a key "is declared more than once" refused.
+a file is uploaded, never required or shared; its `multiple` (amendment 3; since amendment 4 every
+file goes into ONE run, its value a list of 1 to `maxFiles` upload ids) "must be a boolean" and on
+any other control "is only meaningful on an 'artifact' control"; its `maxFiles` (amendment 4: 1 to
+200, default 50, Runs refuses a longer list) "is only meaningful on a field with multiple"; a key
+"is declared more than once" refused.
+
+**`batch`** (ADR-0048 amendment 4) — optional; its manual run is a batch run, which runs
+`batch.pipeline` and may answer `units` (1 to 500, each a one-line label of 1 to 120, 1 to 50 of
+the run's files with an optional PDF page range, data of at most 8 KiB), each queued as a waiting
+child run of `pipeline`, invoked with `unit`. `batch` "needs trigger.kind 'manual': a person starts
+a batch run", "needs an artifacts block: a unit names the run's files" and "is not declared with
+items: a first run is an item run or a batch run"; `batch.pipeline` "must declare at least 1 step"
+(at most 8), each step its own ("is a pipeline step id: a batch run reports its own steps");
+`unitWords` `{singular, plural}`, 1 to 40 each. The run page then holds the `batch` part ("must
+hold batch: no flow can leave it out"); any other flow's "needs batch: the flow declares none".
+`requiredCapabilities` may name `memory` (amendment 3), a platform capability that asks no AI
+consent; the model route refuses it.
 
 **`pipeline`** — "must declare at least the trigger step"; a step `id` "is declared more
 than once" refused; "only the first step may be a TRIGGER".
@@ -631,11 +684,14 @@ those words, and `boundedBlocks` cuts or leaves out the rest (`README.md`, "What
 looks like").
 
 **A held result's `decisions`** (ADR-0048 amendment 2; `heldDecisionsProblem` in
-`snoopy-backend/packages/contracts/src/held-decisions.ts`) — `held.decisions` "must list 1 to 40";
-each is `{id, label, detail?}`, anything else "is not an accepted field"; an `id` "must be
+`snoopy-backend/packages/contracts/src/held-decisions.ts`) — `held.decisions` "must list 1 to 400"
+(40 before amendment 3); each is `{id, label, detail?, group?}`, anything else "is not an accepted
+field"; an `id` "must be
 lowercase letters, digits and hyphens, starting with a letter" and one "is listed more than once"
-is refused; `label` "must be 1 to 120 characters" and `detail` "must be 1 to 200 characters", each
-one line with nothing shaped like a tag. The decision route then takes one answer per change:
+is refused; `label` "must be 1 to 120 characters", `detail` "must be 1 to 200 characters" and
+`group` (amendment 3, the heading a client draws the change under, in the order sent) "must be 1
+to 120 characters", each one line with nothing shaped like a tag; a `group` "must be on every
+change or on none". The decision route then takes one answer per change:
 "decisions must answer every change once". The SDK's `boundedDecisions` holds a flow's list to
 these before sending (`packages/automation-sdk/src/review.ts`).
 

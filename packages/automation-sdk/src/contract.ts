@@ -1,19 +1,18 @@
 /**
  * The wire contract, copied deliberately.
  *
- * This file does NOT import the platform's `@snoopy/contracts`, and that is the
- * point. A third-party automation could not import it either — it would have only
- * the published wire format (`contract/schemas` at the repository root). Sharing
- * the package would test the boundary against something no real automation could
- * reproduce.
+ * This file does NOT import the platform's `@snoopy/contracts`, and that is the point: a
+ * third-party automation could not import it either — it would have only the published wire format
+ * (`contract/schemas` at the repository root), and sharing the package would test the boundary
+ * against something no real automation could reproduce.
  *
- * Only the fields an automation reads are declared. An unknown field arriving from
- * the platform is ignored rather than rejected, because the platform may add one at
- * a later contract version and an automation that refuses on sight would break on
- * an addition it does not care about. Fields an automation SENDS are exact: the
- * platform refuses one it does not accept rather than ignoring it.
+ * Only the fields an automation reads are declared. An unknown field arriving from the platform is
+ * ignored rather than rejected: the platform may add one at a later contract version, and an
+ * automation that refuses on sight would break on an addition it does not care about. Fields an
+ * automation SENDS are exact: the platform refuses one it does not accept.
  */
 
+import { isInvokeUnit, type BatchUnit, type InvokeUnit, type PageRange } from './batch.js';
 import type { EmittedBlock } from './block-types.js';
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
@@ -65,6 +64,9 @@ export interface InvokeRequest {
   item?: InvokeItem;
   /** Present, and true, only on an item run: the run that reads a new item's file (ADR-0046). */
   readsItem?: true;
+  /** True only on a batch run, which runs `batch.pipeline`; `unit`, a child run's (`batch.ts`). */
+  batch?: true;
+  unit?: InvokeUnit;
   callbackOrigin: string;
   /** Scoped to this run, expires with it. The only thing this automation may present. */
   runToken: string;
@@ -122,7 +124,8 @@ export type RunResult =
   // read and downloadable as a JSON file — on a success and on a held run, never on a failed one.
   // `title`, `score` and `sections` (its ADR-0046) name, rank and show a run of a flow with items,
   // and `verdict` (Round 19, build 28) is what its item counts it as (`sections.ts`). `blocks` (its
-  // ADR-0048) are what a person reads, never beside `sections` or `details` (`block-types.ts`).
+  // ADR-0048) are what a person reads, never beside `sections` or `details` (`block-types.ts`), and
+  // `units` (amendment 4) a batch run's, one child run each (`batch.ts`).
   | {
       outcome: 'success';
       output?: JsonObject;
@@ -134,6 +137,7 @@ export type RunResult =
       verdict?: RunVerdict;
       sections?: readonly RunSection[];
       blocks?: readonly EmittedBlock[];
+      units?: readonly BatchUnit[];
     }
   | {
       outcome: 'held';
@@ -194,6 +198,8 @@ export interface ModelRequest {
    * holds no link for it. This run's file or its chain's first run's, and no other.
    */
   artifactId?: string;
+  /** Pages of that file, a PDF only, at most 20 (`batch.ts`): the platform sends those alone. */
+  pages?: PageRange;
   /** The most this answer may be, in tokens: 1 to the owner's cap (`MODEL_REQUEST_LIMITS`); left out, the cap. */
   maxOutputTokens?: number;
 }
@@ -280,20 +286,15 @@ export type { MailContent, MailRequest } from './mail.js';
 /* --- one-line fields ------------------------------------------------------ */
 
 /**
- * The bound on every one-line field an automation sends: a step's `summary` and
- * `heldReason`, a result's `summary`, `held.reason` and `failureReason`. The
- * platform's schema, its handler, and its column all name 200, and refuse longer.
+ * The bound on every one-line field an automation sends (a step's `summary` and `heldReason`, a
+ * result's `summary`, `held.reason` and `failureReason`): the platform's schema, handler and column.
  */
 export const ONE_LINE_MAX_LENGTH = 200;
 
 /**
- * Normalises a one-line field to what the wire accepts.
- *
- * Trimmed and cut at the bound rather than refused: a run whose work is done
- * must not become unreportable because a sentence ran to 201 characters — the
- * platform would answer 400, and a success with its side effects complete would
- * end as a deadline failure. An EMPTY line is refused here, because the platform
- * refuses it too and an author's own suite should be where that surfaces.
+ * Normalises a one-line field to what the wire accepts: trimmed and cut at the bound rather than
+ * refused, so a run whose work is done never becomes unreportable over a 201st character. An EMPTY
+ * line is refused here, as the platform refuses it, so an author's own suite is where it surfaces.
  */
 export function oneLine(value: string, field: string): string {
   const line = truncateText(value.trim(), ONE_LINE_MAX_LENGTH).trimEnd();
@@ -302,10 +303,8 @@ export function oneLine(value: string, field: string): string {
 }
 
 /**
- * Cuts text to at most `maximum` UTF-16 units — the length the platform checks —
- * without splitting a surrogate pair: a cut by index inside an astral character
- * would send a lone surrogate that passes the length check and is mangled at the
- * transport. The last character kept is always whole.
+ * Cuts text to at most `maximum` UTF-16 units — the length the platform checks — without splitting
+ * a surrogate pair, which would pass the length check and be mangled at the transport.
  */
 export function truncateText(value: string, maximum: number): string {
   if (value.length <= maximum) return value;
@@ -350,6 +349,8 @@ export function isInvokeRequest(value: unknown): value is InvokeRequest {
     (value.continuation === undefined || isContinuation(value.continuation)) &&
     (value.item === undefined || isInvokeItem(value.item)) &&
     (value.readsItem === undefined || value.readsItem === true) &&
+    (value.batch === undefined || value.batch === true) &&
+    (value.unit === undefined || isInvokeUnit(value.unit)) &&
     typeof value.callbackOrigin === 'string' &&
     typeof value.runToken === 'string' &&
     typeof value.deadline === 'string'

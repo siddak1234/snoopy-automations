@@ -39,19 +39,35 @@ export type {
 export {
   CONNECTION_NONE,
   PAGE_PARTS,
+  RUN_INPUT_LIMITS,
+  artifactIdsOf,
   chosenOptions,
   isManifest,
+  maxFilesOf,
+  optionValues,
   readManifest,
   readManifests,
 } from './manifest.js';
+export {
+  BATCH_LIMITS,
+  batchUnitsProblem,
+  boundedUnits,
+  isInvokeUnit,
+  pageRangeProblem,
+} from './batch.js';
+export type { BatchUnit, InvokeUnit, ManifestBatch, PageRange, UnitArtifact } from './batch.js';
+export { MEMORY_KEY_PATTERN, MEMORY_LIMITS, memoryProblem } from './memory.js';
+export type { FlowMemory } from './memory.js';
 export type {
   Manifest,
   ManifestConnection,
   ManifestItems,
   ManifestPages,
+  ManifestRunInputField,
   ManifestSetupField,
   ManifestStep,
   ManifestStepGroup,
+  SelectOption,
   SetupControl,
 } from './manifest.js';
 export {
