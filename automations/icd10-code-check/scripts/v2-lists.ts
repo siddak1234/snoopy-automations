@@ -235,9 +235,8 @@ export const GUIDE_MAPPING: Readonly<Record<Guide, readonly MappedSpecialty[]>> 
 };
 
 /**
- * Nephrology's kidney families, the go's list for v2: the same for both NUCC nephrology codes. They
- * differ from v1's N00–N29 (v1's section 4, `automations/icd10-code-check/src/families.ts`) on purpose, pending a person's
- * decision (the README's "Open, for a person").
+ * Nephrology's families for v2: v1's approved list (v1's section 4, `SPECIALTIES` in
+ * `automations/icd10-code-check/src/families.ts`), the same for both NUCC nephrology codes.
  */
 export const NEPHROLOGY = {
   specialties: [
@@ -255,7 +254,7 @@ export const NEPHROLOGY = {
     },
   ] as readonly MappedSpecialty[],
   families: [
-    'N17-N19',
+    'N00-N29',
     'I12-I13',
     'E08.22',
     'E09.22',

@@ -30,7 +30,7 @@ test('preference families first, then the words shared, then shorter codes, then
   const d = { statement: 'Hypertensive CKD stage 4', categories: ['N18', 'I12', 'I10'] };
   assert.deepEqual(rankCandidates(d, codes, []), ['I12.9', 'N18.1', 'N18.4', 'I10', 'N18.9']);
   assert.deepEqual(rankCandidates(d, codes, ['I10']), ['I10', 'I12.9', 'N18.1', 'N18.4', 'N18.9']);
-  assert.deepEqual(rankCandidates(d, codes, ['N17-N19']), [
+  assert.deepEqual(rankCandidates(d, codes, ['N00-N29']), [
     'N18.1',
     'N18.4',
     'N18.9',

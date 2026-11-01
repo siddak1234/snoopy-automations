@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { MAX_VISITS, visitsGate, visitsOf } from '../src/v2/visits.js';
+import { visitsGate, visitsOf } from '../src/v2/visits.js';
 
 /** v2's `read-note` answer: a file read as several visits, each its own patient, date, codes and diagnoses. */
 
@@ -61,19 +61,20 @@ test('a multi-visit file is read as several visits, each with its own patient, d
   assert.equal(visitsGate(reading), undefined);
 });
 
-test('gate A per visit: one patient per visit, 1 to 10 visits, v1 bounds per visit', () => {
+test('gate A per visit: one patient per visit; no count of visits, diagnoses or codes stops it', () => {
   const base = visitsOf(answer);
   assert.equal(visitsGate({ ...base, isVisitNote: false }), 'notVisitNote');
   assert.equal(visitsGate({ ...base, readable: false }), 'unreadable');
   assert.equal(visitsGate(visitsOf({ ...answer, visits: [] })), 'noVisit');
   const two = visitsOf({ ...answer, visits: [visit('A B', '2026-10-12', [], 'x', 2)] });
   assert.equal(visitsGate(two), 'patients');
-  const many = Array.from({ length: MAX_VISITS + 1 }, () => base.visits[0]!);
-  assert.equal(visitsGate({ ...base, visits: many }), 'tooManyVisits');
-  assert.equal(visitsGate({ ...base, visits: many.slice(1) }), undefined);
+  // No visit cap (the owner: "there should not be a limitation"): only the run's limits stop a
+  // file, in `fileReview`.
+  const many = Array.from({ length: 100 }, () => base.visits[0]!);
+  assert.equal(visitsGate({ ...base, visits: many }), undefined);
   const codes = Array.from({ length: 41 }, (_, i) => `N18.${i}`);
   assert.equal(
     visitsGate(visitsOf({ ...answer, visits: [visit('A B', '2026-10-12', codes, 'x')] })),
-    'tooMany',
+    undefined,
   );
 });

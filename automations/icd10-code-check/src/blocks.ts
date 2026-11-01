@@ -64,7 +64,7 @@ export function patientSection(view: View): SectionBlock {
 }
 
 /** (3) One row per code: the note's in order, then each to add; after the review, Accepted or Denied. */
-export function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): EmittedLeaf {
+function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): EmittedLeaf {
   return {
     type: 'table',
     columns: WORDS.codeColumns.map((title) => ({ title })),

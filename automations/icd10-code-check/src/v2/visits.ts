@@ -25,13 +25,6 @@ export interface VisitsReading {
   directions: string[];
 }
 
-/**
- * The most visits one file is read as **(default)**, this draft's: with at most 40 changes a visit
- * (`MAX_DECISIONS_PER_VISIT`, enforced by `groupedDecisions`), 10 visits fill the 400 decisions a
- * held run may offer (the platform round's B3).
- */
-export const MAX_VISITS = 10;
-
 /** The reading of a v2 answer; anything out of shape is read as not printed. */
 export function visitsOf(value: unknown): VisitsReading {
   const source = isObject(value) ? value : {};
@@ -57,21 +50,18 @@ export function visitsOf(value: unknown): VisitsReading {
   };
 }
 
-/** What v2's gate A stops on (its words are v1's where they still hold; the rest wait, the spec says). */
-export type VisitsStop =
-  'notVisitNote' | 'unreadable' | 'noVisit' | 'tooManyVisits' | 'patients' | 'tooMany';
-
 /**
- * Gate A, per visit: a visit note, readable, 1 to `MAX_VISITS` visits, and each visit exactly one
- * patient with at most 40 diagnoses and 40 codes on the note (v1's per-visit bounds).
+ * What v2's gate A stops on (its words are v1's where they still hold; the rest wait, the spec says).
+ * No count of visits, diagnoses or codes stops here: a file stops only past the platform's limits
+ * (the spec's "v2 (draft, 2026-11-01)", row 6), which `fileReview` (`review.ts`) applies.
  */
+export type VisitsStop = 'notVisitNote' | 'unreadable' | 'noVisit' | 'patients';
+
+/** Gate A, per visit: a visit note, readable, at least one visit, and each visit one patient. */
 export function visitsGate(reading: VisitsReading): VisitsStop | undefined {
   if (!reading.isVisitNote) return 'notVisitNote';
   if (!reading.readable) return 'unreadable';
   if (reading.visits.length === 0) return 'noVisit';
-  if (reading.visits.length > MAX_VISITS) return 'tooManyVisits';
   if (reading.visits.some((visit) => visit.patientCount !== 1)) return 'patients';
-  if (reading.visits.some((v) => v.diagnoses.length > 40 || v.codesOnNote.length > 40))
-    return 'tooMany';
   return undefined;
 }

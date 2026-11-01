@@ -88,17 +88,18 @@ The two platform features this flow waits for add these words to both clients, c
 The owner's go, 2026-11-01 ~04:45Z, after the nine screens; the spec's "v2 (draft, 2026-11-01)"
 says what each line serves. Every word of sections 1–3 that v2 does not replace stays.
 
-| Where                                   | The words                                                                                                                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Starting a run, the file field          | Add visit notes                                                                                                                             |
-| The catalog card, who it is for         | For doctors and coders.                                                                                                                     |
-| Setup, the specialties                  | Specialties                                                                                                                                 |
-| Setup, the NPI                          | NPI; its line: Fills your specialties when none are picked. Optional.                                                                       |
-| The review, each change's why (a table) | the columns: (none) · On the note · Suggested; the rows: Code · Title, each code's official title beside the other's                        |
-| The review, each change's why (a list)  | Words that differ: Only on the note: {words} · Only suggested: {words} (or The same words); From the note: {quote}; Rule: {check}: {reason} |
+| Where                                  | The words                                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Starting a run, the file field         | Add visit notes                                                                                                                 |
+| The catalog card, who it is for        | For doctors and coders.                                                                                                         |
+| Setup, the specialties                 | Specialties                                                                                                                     |
+| Setup, the NPI                         | NPI; its line: Fills your specialties when none are picked. Optional.                                                           |
+| The review, each change (a decision)   | the label: {code} → {suggested} (Add {code}); the group: {patient name} · {visit date}                                          |
+| The review, each change's why (detail) | Difference: "{words only in the first}" vs "{words only in the second}" · From the note: "{quote}" · Rule: {the check's reason} |
+| A file one run cannot review           | This file has more visits than one run can review. Upload the visits as separate files.                                         |
 
 The screens' NPI line read "Fills your specialties. Optional."; the NPI is read at run time (the
 platform round sets nothing up from a connected app), so the line says when it fills them. The
-why's labels ("On the note", "Suggested", "Words that differ", "Only on the note", "Only
-suggested", "The same words", "Rule") are this draft's, written where the screens' exact words were
-not in the lane's brief: a person checks them against the screens before v2 ships.
+why's labels are the owner's screens' ('Difference: "unspecified" vs "3a"', 'From the note: "CKD
+stage 3a"', 'Rule: most specific code the note shows'); the stop is the session's, 2026-11-01, for
+a file past one run's limits (the spec's v2 section, row 6).

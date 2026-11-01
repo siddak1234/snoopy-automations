@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { GUIDES, GUIDE_MAPPING, NEPHROLOGY, NUCC } from '../scripts/v2-lists.js';
+import { SPECIALTIES } from '../src/families.js';
 import { loadTable } from '../src/tables.js';
 
 /**
@@ -48,6 +49,10 @@ test("preferences.json: the five guides' NUCC codes and Nephrology's two, each a
   for (const code of mapped) assert.ok(values.has(code), code);
   assert.deepEqual(preferences['207RN0300X'], [...NEPHROLOGY.families]);
   assert.deepEqual(preferences['2080P0210X'], [...NEPHROLOGY.families]);
+  // v1's approved Nephrology families (N00–N29 first), not a narrower kidney range.
+  const v1 = SPECIALTIES.find((s) => s.name === 'Nephrology')!.families;
+  assert.deepEqual(preferences['207RN0300X'], [...v1]);
+  assert.deepEqual([...NEPHROLOGY.families], [...v1]);
 });
 
 test('preferences.json: every listed code valid (flag 1) in the 2027 table, else a category it holds', () => {

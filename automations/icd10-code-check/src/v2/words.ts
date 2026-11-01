@@ -1,6 +1,7 @@
 /**
- * v2's own words (`words.md`, "v2 (draft, 2026-11-01)"): the screens' lines, and the review's
- * side-by-side "why", whose labels are this draft's, not yet checked against the screens. Everything v1 says that v2 still says stays in `words.ts`, unchanged.
+ * v2's own words (`words.md`, section 4, "v2 (draft, 2026-11-01)"): the screens' lines, the
+ * review's "why" as the owner's screens showed it, and the stop for a file one run cannot review.
+ * Everything v1 says that v2 still says stays in `words.ts`, unchanged.
  */
 export const WORDS_V2 = {
   /** The run input, the card's one line, the NPI setup field and the specialties (setup; wired with the contract). */
@@ -9,17 +10,14 @@ export const WORDS_V2 = {
   npi: 'NPI',
   npiHelp: 'Fills your specialties when none are picked. Optional.',
   specialties: 'Specialties',
-  /** The review's "why" for one change: both codes side by side, the words that differ, the note's, the rule. */
+  /** A file whose visits pass one run's limits (the spec's v2 section, row 6). */
+  tooManyVisits:
+    'This file has more visits than one run can review. Upload the visits as separate files.',
+  /** A decision's detail, its parts joined by " · " (the owner's screens). */
   why: {
-    columns: ['', 'On the note', 'Suggested'],
-    code: 'Code',
-    title: 'Title',
-    differ: 'Words that differ',
-    onlyNote: (words: string) => `Only on the note: ${words}`,
-    onlySuggested: (words: string) => `Only suggested: ${words}`,
-    same: 'The same words',
-    fromNote: 'From the note',
-    rule: 'Rule',
-    ruleLine: (check: string, reason: string) => `${check}: ${reason}`,
+    difference: (first: string, second: string) => `Difference: "${first}" vs "${second}"`,
+    fromNote: (quote: string) => `From the note: "${quote}"`,
+    rule: (rule: string) => `Rule: ${rule}`,
+    join: ' · ',
   },
 } as const;
