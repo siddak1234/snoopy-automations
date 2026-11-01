@@ -1,7 +1,7 @@
 # /create-flow stage 1b: Research
 
 The steps of [SKILL.md](SKILL.md)'s stage 1b, between the decisions and the spec. The session runs
-them; the owner says yes or corrects. The owner's words (2026-10-27): "understanding the use case
+them alone; the owner approves the brief at stage 2, with the screens and the words. The owner's words (2026-10-27): "understanding the use case
 end to end. how it works, the expert ideology and deep expertise in that specific problem. not
 just some random generic. this does not mean complicate flow. something simple, intuitive but
 depth in the research and understanding"; "no assumptions".
@@ -30,8 +30,9 @@ supported (any other verdict beside them is a gap); a throw before the skeptic's
 From the ICD-10 pilot (Round 21): the practice lens researches every list a person picks from (a
 setup choice, a run choice) as the full official list, with its source and its count (F1: "These
 are not all specialties that use icd10 codes. Your research was not sufficient." — six specialties
-were chosen by the session); the frame gives a lens at most four targets, so it fits its call
-budget, a quote is one exact sentence copied character for character, and a very long page is
+were chosen by the session); a lens gets at most four questions — the frame is told so, and the
+script keeps four after adding its own, first, each one past them a gap — so it fits its call
+budget; a quote is one exact sentence copied character for character, and a very long page is
 skipped for a small specific one (pass 1's vendors lens: every finding dropped as a paraphrase or
 out of calls; passes 2–4 needed).
 Its `researcher` agent is the kit's ([.claude/agents/researcher.md](../../agents/researcher.md),

@@ -15,15 +15,12 @@ export const meta = {
 
 // /create-flow stage 1b. Source tags (URLs: create-flow/research-stage.md, Sources): A1 multi-agent
 // research system, A2 Building effective agents, A3 Reduce hallucinations, A5 Demystifying evals,
-// O1 OpenAI's guide to agents, O2 OpenAI deep research, WF the Workflow tool's reference. At most
-// three agents at once. API retries are the harness's (agent() is null only "after retries", WF);
-// our rule: none stacked on them. A step that throws, fails or comes back empty is re-run once with
-// the failure named, then a gap, never a guess (A1, O1). Every stop is logged and joined, never
-// overwritten; every gap is logged before the write, and one added later as it comes. A write that
-// failed its checksum re-runs through resumeFromRunId with writeAttempt = 2 (only its prompt
-// changes). The checksum, the stops and the gaps are the return value: the Workflow tool hands the
-// session the top-level return; log() lines do not reach it. `node --check` refuses that return, so
-// test/flow-research.ts compiles this file as the harness runs it, an async function body.
+// O1 OpenAI's guide to agents, O2 OpenAI deep research, WF the Workflow tool's reference. API
+// retries are the harness's (agent() is null only "after retries", WF); ours is once()'s, one. A
+// write that failed its checksum re-runs through resumeFromRunId with writeAttempt = 2 (only its
+// prompt changes). The checksum, the stops and the gaps are the return value: the Workflow tool
+// hands the session the top-level return; log() lines do not reach it. `node --check` refuses it,
+// so test/flow-research.ts compiles this file as the harness runs it, an async function body.
 const { runDir, automations, backend, name, idea, answers, platform } = args ?? {};
 const writeAttempt = args?.writeAttempt ?? 1;
 const needs = 'flow-research needs args { runDir, automations, name, idea, answers }';
@@ -31,10 +28,12 @@ if (!runDir || !automations || !name || !idea) throw new Error(needs);
 const LENSES = ['practice', 'rules', 'vendors', 'streamlining'];
 const CAP = { simple: 10, broad: 15 }; // tool calls a lens: A1 "2-4 subagents with 10-15 calls each"
 const MAX_FINDINGS = 12;
+const MAX_QUESTIONS = 4; // a lens's, ours first; each one past it a gap (WF: "No silent caps")
 const NEED = { frame: 10_000, lenses: 60_000, synthesis: 30_000, skeptic: 30_000, write: 20_000 };
 const PERSON = 'a person decides'; // O1: "escalate to human intervention"
 const gaps = [];
-let [gapsLogged, stopped] = [false, ''];
+let gapsLogged = false;
+let stopped = '';
 /** A gap goes to research.json and the result; after the gap log has run, it is logged at once. */
 const gap = (text) => (gaps.push(text), gapsLogged && log(`gap: ${text}`));
 /** A stop is logged where it happens and joined to any earlier one, never overwritten. */
@@ -44,8 +43,7 @@ function stop(why) {
 }
 
 // Each lens's brief: "an objective, an output format, guidance on the tools and sources to use, and
-// clear task boundaries" (A1). [objective, sources, not its job]. A pick list in full, four targets
-// a lens, one-sentence quotes, small pages: the ICD-10 pilot's evidence, research-stage.md "The run".
+// clear task boundaries" (A1). [objective, sources, not its job]
 const LENS = {
   practice: [
     "how the people who do this work judge it: the expert's criteria, their order and weight; what separates expert judgement from novice; the usual judgement errors; every list a person picks from (a setup choice, a run choice): the full official list, its source, its count and the rule that selects its entries, never a sample",
@@ -119,7 +117,7 @@ async function attempt(run, extra) {
 }
 const failure = (a) =>
   a.why ?? (a.out === null ? 'it ended with an error' : 'it returned nothing usable');
-/** One run, then one more with the failure named; a second failure is a gap. */
+/** One run, one more with the failure named; a second failure is a gap, never a guess (A1, O1). */
 async function once(label, run, usable, hint = '') {
   const first = await attempt(run, '');
   if (usable(first.out)) return first.out;
@@ -182,7 +180,7 @@ try {
   const framePrompt = (extra) =>
     `${extra}Frame the research for the flow "${name}". Do no research and open no web page. ${task} The platform check: ${JSON.stringify(platform ?? '')}. ` +
     `ownerWords: copy, word for word, the owner's own sentence that names the job, the decision the flow helps make, and what a good result is; an empty string where the owner did not say it — never your words. ` +
-    `Size: simple (one kind of document, one decision) or broad. questions: for each lens, the questions this idea raises, at most four a lens, the ones that decide the build first, so a lens fits its tool calls — everything you would otherwise assume about the job goes here as a question. The lenses: ${lensList}.`;
+    `Size: simple (one kind of document, one decision) or broad. questions: for each lens, the questions this idea raises, at most ${MAX_QUESTIONS} a lens, the ones that decide the build first, so a lens fits its tool calls — everything you would otherwise assume about the job goes here as a question. The lenses: ${lensList}.`;
   const frame = stopped
     ? null
     : await once(
@@ -203,10 +201,12 @@ try {
     }
     size = frame.size;
     questions = frame.questions;
-    if (!framing.job)
-      questions.streamlining.push('Who does this job today, and what do they call it?');
-    if (!framing.decision) questions.practice.push('Which decision does this work exist to make?');
-    if (!framing.goodResult) questions.practice.push('What does an expert count as a good result?');
+    const ask = (l, q) => questions[l].unshift(q); // the script's own go first, kept by the cap
+    if (!framing.goodResult) ask('practice', 'What does an expert count as a good result?');
+    if (!framing.decision) ask('practice', 'Which decision does this work exist to make?');
+    if (!framing.job) ask('streamlining', 'Who does this job today, and what do they call it?');
+    for (const l of LENSES)
+      for (const q of questions[l].splice(MAX_QUESTIONS)) gap(`${l}: "${q}" past the cap; dropped`);
   } else if (!stopped) stop('the frame failed twice');
 
   if (frame && !stopped && !fits(NEED.lenses)) stop('the token target is spent before the lenses');

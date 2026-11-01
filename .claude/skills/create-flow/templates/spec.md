@@ -157,7 +157,10 @@ merged before this flow (`.claude/skills/create-flow/templates/order.md`, step 1
 platform does not offer is a platform change — a block, a page part, a question form or a target
 (the platform's ADR-0048 decision 12), and a control, a capability, a trigger, a department or an
 icon (a platform round under v3: a flow has no platform lane, 29.3.2): `/create-flow` stops, and
-this flow waits for that round.
+this flow waits for that round. Each gap the menu leaves is shown to the owner at stage 1 as
+"workaround with today's blocks" beside "a new block (platform round)", for the owner to pick (the
+ICD-10 pilot: the owner rejected the setup switches and the one approval per run (2026-10-28
+~21:05Z), which reworked the spec).
 
 Each vendor the research's vendors lens found is here with its provider file, or "to add".
 

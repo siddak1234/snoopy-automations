@@ -259,10 +259,10 @@ test('a throw after the synthesis writes no unverified line: the lines are gaps'
   assert.equal(render(r.runDir, r.result).code, 0);
 });
 
-test("the ICD-10 pilot's lessons reach the prompts: four targets, a pick list in full, one-sentence quotes", async () => {
+test("the ICD-10 pilot's lessons reach the prompts: four questions, a pick list in full, one-sentence quotes", async () => {
   const { calls } = await run(normal);
   const frame = calls.find((c) => c.label === 'frame')!.prompt;
-  assert.ok(frame.includes('at most four a lens'), 'the frame gives a lens at most four targets');
+  assert.ok(frame.includes('at most 4 a lens'), 'the frame gives a lens at most four questions');
   const practice = calls.find((c) => c.label === 'practice lens')!.prompt;
   assert.ok(
     practice.includes('the full official list, its source, its count and the rule'),
@@ -273,4 +273,25 @@ test("the ICD-10 pilot's lessons reach the prompts: four targets, a pick list in
     assert.ok(prompt.includes('one exact sentence from that page copied character for character'));
     assert.ok(prompt.includes('Skip a very long page'), `${lens}: small pages over long ones`);
   }
+});
+
+test("a frame's six questions reach their lens as four, the script's own first, each dropped one a gap", async () => {
+  const six = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'];
+  const { calls, data } = await run((label, attempt, prompt, dir) => {
+    const out = normal(label, attempt, prompt, dir);
+    if (label !== 'frame') return out;
+    return {
+      ...out,
+      ownerWords: { ...out.ownerWords, decision: '' },
+      questions: { ...out.questions, practice: six },
+    };
+  });
+  const practice = calls.find((c) => c.label === 'practice lens')!.prompt;
+  const kept = ['Which decision does this work exist to make?', 'q1', 'q2', 'q3'];
+  assert.ok(
+    practice.includes(`Questions: ${JSON.stringify(kept)}.`),
+    "four, the script's own first",
+  );
+  for (const q of ['q4', 'q5', 'q6'])
+    assert.ok(data.gaps.includes(`practice: "${q}" past the cap; dropped`), `${q} is a gap`);
 });
