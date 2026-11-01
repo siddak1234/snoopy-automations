@@ -42,7 +42,7 @@ test("the child runs v1's chain on its unit's pages: each step reported, read-no
   const read = ran.platform.modelCalls[0]!;
   assert.equal(read.artifactId, NOTE_ID);
   assert.deepEqual(read.pages, { from: 1, to: 2 });
-  assert.match(read.prompt, /The clinic treats Nephrology Physician\./u);
+  assert.deepEqual(read.input, { specialties: 'Nephrology Physician', readOnly: null });
   assert.deepEqual(rowsOf(ran.result), [
     ['I10', 'change', 'I12.9', 'L1'],
     ['N18.31', 'add', 'N18.31', 'G7'],
@@ -77,14 +77,17 @@ test("save-visit: the save applies the answers and writes the accepted codes to 
   assert.deepEqual(done.platform.memory.values.get(ACCEPTED_KEY), { codes: { 'I12.9': 1 } });
 });
 
-test("the clinic's memory ranks a code it accepted before ahead of the words shared, after the preferences", async () => {
+test("the index's codes first, then the clinic's memory ahead of the words shared, after the preferences", async () => {
   const platform = platformFor(note, picks);
   await platform.memory.put(ACCEPTED_KEY, { codes: { 'N18.30': 3 } });
   await runChild(note, picks, { platform });
   const sent = platform.modelCalls[1]!.input.diagnoses as { candidates: { code: string }[] }[];
   const kidney = sent.find((d) => d.candidates.some((c) => c.code.startsWith('N18')))!;
-  // Nephrology's preference families hold every N18 code; inside them, the remembered one first.
-  assert.equal(kidney.candidates[0]!.code, 'N18.30');
+  // The index gives N18.31 for "CKD stage 3a"; then Nephrology's families, the remembered first.
+  assert.deepEqual(
+    kidney.candidates.slice(0, 2).map((c) => c.code),
+    ['N18.31', 'N18.30'],
+  );
 });
 
 test('no specialty picked: the NPI Registry fills them (the keyless nppes provider); a failed lookup goes on', async () => {
@@ -102,7 +105,7 @@ test('no specialty picked: the NPI Registry fills them (the keyless nppes provid
     platform.providerCalls.map((c) => [c.providerId, c.operation, c.input]),
     [['nppes', 'npi.lookup', { number: '1234567893' }]],
   );
-  assert.match(platform.modelCalls[0]!.prompt, /The clinic treats Nephrology Physician\./u);
+  assert.equal(platform.modelCalls[0]!.input.specialties, 'Nephrology Physician');
   assert.equal(ran.result.outcome, 'held');
 
   const refused = platformFor(note, picks);

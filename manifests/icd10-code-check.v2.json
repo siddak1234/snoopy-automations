@@ -3535,6 +3535,16 @@
       "multiple": true,
       "required": false,
       "group": "check"
+    },
+    {
+      "section": "rules",
+      "key": "learn",
+      "title": "Learn from this clinic's reviews",
+      "description": "On by default. Each accepted or denied change, without names, numbers or dates, guides later picks. Turn it off to stop and clear what was learned.",
+      "control": "toggle",
+      "defaultValue": true,
+      "required": false,
+      "group": "check"
     }
   ],
   "groups": [
@@ -3626,7 +3636,7 @@
       "id": "rank-codes",
       "kicker": "ACTION",
       "title": "Code choices found",
-      "description": "Real codes for each diagnosis, your specialties' and your clinic's first.",
+      "description": "Real codes for each diagnosis from the official index, your specialties' and your clinic's first.",
       "group": "check"
     },
     {
@@ -3754,6 +3764,15 @@
         "items": {
           "type": "string"
         }
+      },
+      "audit": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "measures": {
+        "type": "object"
       }
     },
     "required": [

@@ -71,7 +71,7 @@ test("one patient and date across files is one visit, in its pages' order; a fil
   ]);
   assert.equal(visits.length, 1);
   assert.deepEqual(
-    visits[0]!.pieces.map((p) => [p.artifactId, p.pageOfVisit]),
+    visits[0]!.pieces.map((p) => [p.artifactId, p.position]),
     [
       [PHOTO_ID, 1],
       [PDF_ID, 2],
@@ -108,9 +108,30 @@ test("a dateless visit with a known name joins that name's one dated visit, in a
     file(PHOTO_ID, [page(1, 'note', 'Jane Doe', '2026-10-12', 1)]),
   ]);
   assert.deepEqual(
-    visits.map((v) => [v.visitDate, v.pieces.map((p) => p.pageOfVisit)]),
+    visits.map((v) => [v.visitDate, v.pieces.map((p) => p.position)]),
     [['2026-10-12', [1, 2]]],
   );
+});
+
+test("a dateless visit whose page positions are the dated visit's own stays its own visit", () => {
+  const { visits, setAside } = organize([
+    file(PDF_ID, [
+      page(1, 'note', 'Jane Doe', '2026-10-12', 1),
+      page(2, 'note', 'Jane Doe', '2026-10-12', 2),
+    ]),
+    file('44444444-4444-4444-8444-444444444443', [
+      page(1, 'note', 'Jane Doe', null, 1),
+      page(2, 'note', null, null, 2),
+    ]),
+  ]);
+  assert.deepEqual(
+    visits.map((v) => [v.visitDate, v.pieces.map((p) => p.position)]),
+    [
+      ['2026-10-12', [1, 2]],
+      [null, [1, 2]],
+    ],
+  );
+  assert.equal(setAside, 0, 'no page of either visit is dropped');
 });
 
 test('a page of a visit read twice is dropped: the later copy, set aside', () => {

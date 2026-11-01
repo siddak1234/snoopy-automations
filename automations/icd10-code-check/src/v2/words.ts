@@ -12,6 +12,10 @@ export const WORDS_V2 = {
   npi: 'NPI',
   npiHelp: 'Fills your specialties when none are picked. Optional.',
   specialties: 'Specialties',
+  /** The clinic's learning (setup, the owner's L5): on by default; off clears the examples. */
+  learn: "Learn from this clinic's reviews",
+  learnHelp:
+    'On by default. Each accepted or denied change, without names, numbers or dates, guides later picks. Turn it off to stop and clear what was learned.',
   /** A file whose visits pass one run's limits (the spec's v2 section, row 6). */
   tooManyVisits:
     'This file has more visits than one run can review. Upload the visits as separate files.',

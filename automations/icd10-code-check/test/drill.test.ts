@@ -56,7 +56,7 @@ test('§9 the failure drill on v2: a visit run reaching the NPI Registry, and a 
   const batch = await failureDrill(flow2, {
     request: batchRequest([PDF_ID]),
     platform: () =>
-      batchPlatform([{ id: PDF_ID, contentType: 'application/pdf', pageCount: 2 }], {
+      batchPlatform([{ id: PDF_ID, contentType: 'application/pdf', pageCount: 6 }], {
         [PDF_ID]: [page(1, 'note', 'Jane Doe', '2026-10-12'), page(2, 'note')],
       }),
     words,

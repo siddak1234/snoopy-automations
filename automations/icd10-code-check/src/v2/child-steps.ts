@@ -1,7 +1,6 @@
 import {
   failed,
   held,
-  readJsonCompletion,
   settle,
   type JsonObject,
   type Step,
@@ -9,10 +8,18 @@ import {
   type UnitArtifact,
 } from '@autom8x/automation-sdk';
 
-import { MODELS } from '../models.js';
+import { gateB, type MatchInput } from '../candidates.js';
 import { prompt } from '../prompts.js';
-import { readingOf, type Reading } from '../reading.js';
-import { TABLE_NAMES, loadTable, pickTable, realDate, type TableId } from '../tables.js';
+import { readingOf, withoutPatient, type Reading } from '../reading.js';
+import {
+  TABLE_NAMES,
+  loadTable,
+  normalCode,
+  pickTable,
+  realDate,
+  type TableId,
+} from '../tables.js';
+import { askModel, atOnce, auditOf, type AuditRecord } from './audit.js';
 import { FAILURES, WORDS } from '../words.js';
 import {
   loadPreferences,
@@ -21,15 +28,24 @@ import {
   specialtiesForRun,
   taxonomiesOf,
 } from './candidates.js';
-import { acceptedOf, ACCEPTED_KEY } from './memory.js';
+import { lookUp, loadIndex } from './lookup.js';
+import {
+  ACCEPTED_KEY,
+  EXAMPLES_KEY,
+  acceptedOf,
+  examplesFor,
+  examplesOf,
+  learning,
+  type Example,
+} from './memory.js';
 import { labelsOf, npiOf, pickedSpecialties, specialtyOptions, v1NamesOf } from './specialties.js';
 import { WORDS_V2 } from './words.js';
 
 /**
  * A visit's run, the first half (the spec's v2 section; each batch unit is one child run): the
  * visit received from its unit, the specialties from the NPI when none are picked, the note read
- * page range by page range, the note checked, and the code choices ranked. The review and the save
- * are `review-steps.ts`; v1's `match-codes` and `check-codes` run between them unchanged.
+ * page range by page range, the note checked, the code choices found and matched. The review and
+ * the save are `review-steps.ts`; v1's `check-codes` runs between them unchanged.
  */
 
 const nucc = (state: JsonObject): string[] =>
@@ -108,34 +124,43 @@ export function mergeReadings(readings: readonly Reading[]): Reading {
 }
 
 /**
- * Note read: v1's `read-note` on each of the unit's files, a PDF's page range at a time (the
- * platform cuts it), the readings joined as one visit's (`mergeReadings`).
+ * Note read: `read-note` v2 on each of the unit's files, a PDF's page range at a time (the
+ * platform cuts it), told the patient to read when a page holds another's too (`readOnly`), the
+ * readings joined as one visit's (`mergeReadings`); each call's audit record kept.
  */
 export const readVisit: Step = async (context) => {
-  const { state, platform } = context;
+  const { state, request } = context;
   const pieces = Array.isArray(state.pieces) ? (state.pieces as UnitArtifact[]) : [];
   const specialties = labelsOf(nucc(state)).join(', ') || 'any specialty';
+  const only = request.unit?.data?.readOnly;
+  const readOnly = typeof only === 'string' ? only : null;
   const readings: Reading[] = [];
+  const audit: AuditRecord[] = [];
   for (const piece of pieces) {
-    const asked = await settle(context, () =>
-      platform.callModel(
-        prompt('read-note'),
-        { specialties },
-        {
-          models: MODELS,
-          artifactId: piece.artifactId,
-          ...(piece.pages === undefined ? {} : { pages: piece.pages }),
-        },
-      ),
+    const asked = await askModel(
+      context,
+      prompt('read-note', 2),
+      { specialties, readOnly },
+      {
+        artifactId: piece.artifactId,
+        ...(piece.pages === undefined ? {} : { pages: piece.pages }),
+      },
     );
     if (!asked.ok) return failed(asked.sentence, asked.kind);
-    readings.push(readingOf(readJsonCompletion(asked.value)));
+    const reading = readingOf(asked.answer);
+    readings.push(reading);
+    audit.push({ ...asked.record, gate: `diagnoses read: ${reading.diagnoses.length}` });
   }
   const reading = mergeReadings(readings);
   return {
     outcome: 'ok',
     summary: 'Note read',
-    state: { ...state, reading: { ...reading }, specialties: v1NamesOf(nucc(state)) },
+    state: {
+      ...state,
+      reading: { ...reading },
+      specialties: v1NamesOf(nucc(state)),
+      audit: audit.map((r) => ({ ...r })),
+    },
   };
 };
 
@@ -169,20 +194,140 @@ function gateV2(
   return { outcome: 'ok', summary: 'Note checked', state: next };
 }
 
+/** The most code choices one diagnosis is sent with (the owner's audit fixes). */
+export const MAX_CHOICES = 30;
+
 /**
- * Code choices found: every code under each diagnosis's categories, ranked — the specialties'
- * preference families, then the clinic's memory (the codes it accepted before), then the words
- * shared (`rankCandidates`). A memory that cannot be read ranks without it.
+ * Code choices found: each diagnosis looked up in the official Alphabetic Index and verified in
+ * the Tabular (`lookUp`), then every code under its categories ranked — the specialties'
+ * preference families, the clinic's memory, the words shared (`rankCandidates`) — at most
+ * `MAX_CHOICES`. A diagnosis whose lookup settles on a code the note prints is kept with no AI
+ * (the owner's I2), its quote its statement. The clinic's examples of the families still to match
+ * are read when it learns. A memory that cannot be read ranks and matches without it.
  */
 export const rankCodes: Step = async (context) => {
-  const { state, platform } = context;
+  const { state, platform, request } = context;
   const reading = readingOf(state.reading);
-  const { codes } = loadTable(state.table as TableId);
+  const table = state.table as TableId;
+  const { codes } = loadTable(table);
+  const index = loadIndex(table);
   const preferred = preferredFamilies(nucc(state), loadPreferences());
   const kept = await settle(context, () => platform.memory.get(ACCEPTED_KEY));
   const remembered = kept.ok ? acceptedOf(kept.value) : {};
-  const candidates = reading.diagnoses.map((diagnosis) =>
-    rankCandidates(diagnosis, codes, preferred, remembered),
+  const onNote = new Set(reading.codesOnNote.map(normalCode));
+  const settled: Record<string, { code: string; quote: string }> = {};
+  const candidates = reading.diagnoses.map((diagnosis, at) => {
+    const found = lookUp(diagnosis.statement, index, codes);
+    if (found.settled !== null && onNote.has(found.settled)) {
+      settled[String(at)] = { code: found.settled, quote: diagnosis.statement };
+    }
+    const ranked = rankCandidates(diagnosis, codes, preferred, remembered);
+    return [...new Set([...found.codes, ...ranked])].slice(0, MAX_CHOICES);
+  });
+  const families = reading.diagnoses.flatMap((diagnosis, at) =>
+    String(at) in settled
+      ? []
+      : [...diagnosis.categories, ...candidates[at]!.slice(0, 1).map((c) => c.slice(0, 3))],
   );
-  return { outcome: 'ok', summary: 'Code choices found', state: { ...state, candidates } };
+  let examples: Example[] = [];
+  if (learning(request.config) && families.length > 0) {
+    const read = await settle(context, () => platform.memory.get(EXAMPLES_KEY));
+    if (read.ok) examples = examplesFor(examplesOf(read.value), families);
+  }
+  return {
+    outcome: 'ok',
+    summary: 'Code choices found',
+    state: { ...state, candidates, settled, examples: examples.map((e) => ({ ...e })) },
+  };
+};
+
+/** How many diagnoses one `match-codes` call is sent, and how many calls are asked at once. */
+export const DIAGNOSES_A_CALL = 8;
+export const CALLS_AT_ONCE = 3;
+
+/**
+ * Codes matched (v2): v1's `match-codes` on the diagnoses the lookup did not settle, in calls of
+ * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent the
+ * clinic's examples of its families that `rank-codes` read, after the prompt's own, their ids in
+ * its audit record — and every pick held to gate B (`gateB`), examples or not. The run's counts go
+ * to `measures`.
+ */
+export const matchVisit: Step = async (context) => {
+  const { state } = context;
+  const reading = readingOf(state.reading);
+  const { codes } = loadTable(state.table as TableId);
+  const lists = Array.isArray(state.candidates) ? (state.candidates as string[][]) : [];
+  const settled = (state.settled ?? {}) as Record<string, { code: string; quote: string }>;
+  const examples = Array.isArray(state.examples) ? (state.examples as unknown as Example[]) : [];
+  const sent: MatchInput[] = reading.diagnoses
+    .map((diagnosis, index) => ({
+      diagnosis: index,
+      statement: withoutPatient(diagnosis.statement, reading),
+      certainty: diagnosis.certainty,
+      evidence: diagnosis.evidence === null ? null : withoutPatient(diagnosis.evidence, reading),
+      candidates: (lists[index] ?? []).map((code, at) => ({
+        number: at + 1,
+        code,
+        title: codes[code] ?? code,
+      })),
+    }))
+    .filter((input) => input.candidates.length > 0 && !(String(input.diagnosis) in settled));
+  const calls: MatchInput[][] = [];
+  for (let at = 0; at < sent.length; at += DIAGNOSES_A_CALL) {
+    calls.push(sent.slice(at, at + DIAGNOSES_A_CALL));
+  }
+  const matches: Record<string, { code: string; quote: string }> = { ...settled };
+  const audit: AuditRecord[] = [];
+  let stop: { sentence: string; kind: string } | undefined;
+  await atOnce(calls.length, CALLS_AT_ONCE, async (at) => {
+    const call = calls[at]!;
+    const families = new Set(
+      call.flatMap((input) => [
+        ...reading.diagnoses[input.diagnosis]!.categories,
+        input.candidates[0]!.code.slice(0, 3),
+      ]),
+    );
+    const clinic = examples.filter((e) => families.has(e.code.slice(0, 3)));
+    const asked = await askModel(
+      context,
+      prompt('match-codes', 2),
+      {
+        clinicExamples: clinic.map(({ statement, code, verdict }) => ({
+          statement,
+          code,
+          verdict,
+        })),
+        diagnoses: call.map((input) => ({ ...input })),
+      },
+      {},
+      clinic.map((e) => e.id),
+    );
+    if (!asked.ok) {
+      stop ??= { sentence: asked.sentence, kind: asked.kind };
+      return false;
+    }
+    const picks = gateB(call, asked.answer, codes);
+    for (const [index, match] of picks) matches[String(index)] = match;
+    audit[at] = { ...asked.record, gate: `gate B kept ${picks.size} of ${call.length}` };
+    return true;
+  });
+  if (stop !== undefined) return failed(stop.sentence, stop.kind);
+  const { candidates: _c, settled: _s, examples: _e, ...rest } = state;
+  const used = new Set(audit.flatMap((r) => r.examples));
+  return {
+    outcome: 'ok',
+    summary: 'Codes matched',
+    state: {
+      ...rest,
+      matches,
+      audit: [...auditOf(state), ...audit].map((r) => ({ ...r })),
+      measures: {
+        diagnoses: reading.diagnoses.length,
+        settled: Object.keys(settled).length,
+        sent: sent.length,
+        kept: Object.keys(matches).length - Object.keys(settled).length,
+        examplesUsed: used.size,
+      },
+    },
+  };
 };

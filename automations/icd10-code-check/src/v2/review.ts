@@ -15,11 +15,11 @@ import { VERDICTS, WORDS } from '../words.js';
 import { WORDS_V2 } from './words.js';
 
 /**
- * v2's review (the spec, "v2", rows 6 to 8): per visit, one section — the patient and one compact
- * codes table — and each change offered as a decision whose label is "{code} → {suggested}", whose
- * detail is its "why" in the owner's screens' words, and whose group is the visit's title. One run's
- * limits are row 6's; a run past them stops (`fileReview`). Each batch unit is one visit, so a child
- * run reviews one (`review-visit`), its decisions grouped under its title.
+ * v2's review (the spec, "v2", rows 6 to 8): each batch unit is one visit, whose run reviews it
+ * (`review-visit`): one section — the patient and one compact codes table — and each change offered
+ * as a decision whose label is "{code} → {suggested}", whose detail is its "why" in the owner's
+ * screens' words, and whose group is the visit's title. One run's limits are row 6's; a visit past
+ * them stops (`visitReview`).
  */
 
 /** The words of a title, as a person reads them, each once: letters and digits, in order. */
@@ -142,56 +142,37 @@ export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): str
 export const decisionLabel = (r: Row): string =>
   r.verdict === 'add' ? WORDS.label.add(r.code) : WORDS.label.change(r.code, suggestionOf(r));
 
-/** One visit of a file, as v2's review reads it. */
-export type VisitView = View;
-
-/** Each visit's title (v1's, "{patient name} · {visit date}"), made unique when two read the same: "… (2)". */
-export function visitTitles(views: readonly VisitView[]): string[] {
-  const seen = new Map<string, number>();
-  return views.map((view) => {
-    const title = titleOf(view);
-    const n = (seen.get(title) ?? 0) + 1;
-    seen.set(title, n);
-    return n === 1 ? title : `${title} (${n})`;
-  });
-}
-
-/** A visit's decision id: `v{visit}-{row id}` ("v2-n1"), a step id's shape, unique in the run. */
-export const decisionId = (visit: number, rowId: string): string => `v${visit + 1}-${rowId}`;
+/** A decision's id: `v1-{row id}` ("v1-n1"), a step id's shape. */
+const decisionId = (rowId: string): string => `v1-${rowId}`;
 
 /** One offered change with its visit's title, the platform v2's `group`. */
 export type GroupedDecision = HeldDecision & { group: string };
 
-/** Every change of the file, visit by visit: its id, label, why and group. */
-export function fileDecisions(views: readonly VisitView[]): GroupedDecision[] {
-  const titles = visitTitles(views);
-  return views.flatMap((view, i) =>
-    view.rows
-      .filter((r) => DECIDED.has(r.verdict))
-      .map((r): GroupedDecision => {
-        const detail = whyDetail(r, view.titles);
-        return {
-          id: decisionId(i, r.id),
-          label: decisionLabel(r),
-          ...(detail === undefined ? {} : { detail }),
-          group: titles[i]!,
-        };
-      }),
-  );
+/** Every change of the visit: its id, label, why and group (the visit's title). */
+export function visitDecisions(view: View): GroupedDecision[] {
+  const group = titleOf(view);
+  return view.rows
+    .filter((r) => DECIDED.has(r.verdict))
+    .map((r): GroupedDecision => {
+      const detail = whyDetail(r, view.titles);
+      return {
+        id: decisionId(r.id),
+        label: decisionLabel(r),
+        ...(detail === undefined ? {} : { detail }),
+        group,
+      };
+    });
 }
 
-/** One visit's answers, by its rows' own ids, from the run's answers: what v1's `finalCodes` reads. */
-export function answersOfVisit(
+/** The run's answers by the visit's rows' own ids: what v1's `finalCodes` reads. */
+export const rowAnswers = (
   answers: ReadonlyMap<string, DecisionAnswer>,
-  visit: number,
-): Map<string, DecisionAnswer> {
-  const prefix = `v${visit + 1}-`;
-  return new Map(
+): Map<string, DecisionAnswer> =>
+  new Map(
     [...answers]
-      .filter(([id]) => id.startsWith(prefix))
-      .map(([id, answer]) => [id.slice(prefix.length), answer]),
+      .filter(([id]) => id.startsWith(decisionId('')))
+      .map(([id, answer]) => [id.slice(decisionId('').length), answer]),
   );
-}
 
 /**
  * One visit's compact codes table — the note's codes, then each to add: the code with its full
@@ -199,7 +180,7 @@ export function answersOfVisit(
  * passes a cell's bound, that cell the code alone and the full title in a list item's text, whose
  * bound is wider, after the table: never cut (`BLOCK_LIMITS`).
  */
-export function codesBlocks(view: VisitView): EmittedLeaf[] {
+export function codesBlocks(view: View): EmittedLeaf[] {
   const long = new Map<string, string>();
   const cell = (code: string): string => {
     const full = withTitle(code, view.titles);
@@ -228,52 +209,35 @@ export function codesBlocks(view: VisitView): EmittedLeaf[] {
 }
 
 /**
- * A held run's blocks, visit by visit: a section titled the visit's title (the patient's rows, then
- * the codes), the visit's asks; then the file's directions and v1's footer once.
+ * A held run's blocks: a section titled the visit's title (the patient's rows, then the codes),
+ * the visit's asks, its directions and v1's footer.
  */
-export function visitBlocks(
-  views: readonly VisitView[],
-  directions: readonly string[],
-  tableNames: readonly string[],
-): EmittedBlock[] {
-  const titles = visitTitles(views);
-  const several = views.length > 1;
-  const blocks: EmittedBlock[] = views.flatMap((view, i): EmittedBlock[] => {
-    const heading = titles[i]!;
-    const asks = view.asks.map((ask) => ({
-      title: ask.title,
-      ...(ask.reason === null ? {} : { subtitle: ask.reason }),
-    }));
-    return [
-      {
-        type: 'section',
-        title: heading,
-        blocks: [...patientSection(view).blocks, ...codesBlocks(view)],
-      },
-      ...(asks.length === 0
-        ? []
-        : [
-            {
-              type: 'section' as const,
-              title: WORDS.asks,
-              ...(several ? { subtitle: heading } : {}),
-              blocks: [{ type: 'list' as const, items: asks }],
-            },
-          ]),
-    ];
-  });
+export function visitBlocks(view: View): EmittedBlock[] {
+  const asks = view.asks.map((ask) => ({
+    title: ask.title,
+    ...(ask.reason === null ? {} : { subtitle: ask.reason }),
+  }));
   return [
-    ...blocks,
-    ...directions.map((direction): EmittedBlock => ({
+    {
+      type: 'section',
+      title: titleOf(view),
+      blocks: [...patientSection(view).blocks, ...codesBlocks(view)],
+    },
+    ...(asks.length === 0
+      ? []
+      : [
+          {
+            type: 'section' as const,
+            title: WORDS.asks,
+            blocks: [{ type: 'list' as const, items: asks }],
+          },
+        ]),
+    ...view.directions.map((direction): EmittedBlock => ({
       type: 'text',
       text: WORDS.directions(cleanQuote(direction)),
       tone: 'warning',
     })),
-    ...[...new Set(tableNames)].map((name): EmittedBlock => ({
-      type: 'text',
-      text: WORDS.footer(name),
-      style: 'muted',
-    })),
+    { type: 'text', text: WORDS.footer(view.tableName), style: 'muted' },
   ];
 }
 
@@ -306,19 +270,15 @@ export function fitsBlocks(blocks: readonly EmittedBlock[]): boolean {
 }
 
 /**
- * One run's review: its blocks and decisions, or the stop when its visits pass row 6's limits (the
- * platform's `DECISION_LIMITS` and `BLOCK_LIMITS`, the SDK's copies). The run's deadline is not
- * checked here: a run past it is failed by the platform, as v1's is (row 6's seam).
+ * A visit's review: its blocks and decisions, or the stop when its blocks pass row 6's limits (the
+ * platform's `BLOCK_LIMITS`, the SDK's copy; its decisions, each a row of the visit's one table of
+ * at most 200, stay within `DECISION_LIMITS`). The run's deadline is not checked here: a run past
+ * it is failed by the platform, as v1's is (row 6's seam).
  */
-export function fileReview(
-  views: readonly VisitView[],
-  directions: readonly string[],
-  tableNames: readonly string[],
+export function visitReview(
+  view: View,
 ): { blocks: EmittedBlock[]; decisions: GroupedDecision[] } | { stop: string } {
-  const decisions = fileDecisions(views);
-  const blocks = visitBlocks(views, directions, tableNames);
-  if (decisions.length > DECISION_LIMITS.decisions || !fitsBlocks(blocks)) {
-    return { stop: WORDS_V2.tooManyVisits };
-  }
-  return { blocks, decisions };
+  const decisions = visitDecisions(view);
+  const blocks = visitBlocks(view);
+  return fitsBlocks(blocks) ? { blocks, decisions } : { stop: WORDS_V2.tooManyVisits };
 }

@@ -19,14 +19,20 @@ import { NOTE_ID, manifests, platformFor, type Picks } from './fixtures.js';
 export const PDF_ID = '44444444-4444-4444-8444-444444444441';
 export const PHOTO_ID = '44444444-4444-4444-8444-444444444442';
 
-/** One page as the model sorts it. */
+/** One page as the model sorts it: one segment, or (`also`) more, top to bottom. */
 export const page = (
   number: number,
-  kind: 'note' | 'lab' | 'cover' | 'other',
+  kind: 'note' | 'lab' | 'cover' | 'separator' | 'other',
   patient: string | null = null,
   visitDate: string | null = null,
-  pageOfVisit: number | null = null,
-) => ({ page: number, kind, patient, visitDate, pageOfVisit });
+  position: number | null = null,
+  also: {
+    kind: 'note' | 'lab';
+    patient: string | null;
+    visitDate: string | null;
+    position: number | null;
+  }[] = [],
+) => ({ page: number, segments: [{ kind, patient, visitDate, position }, ...also] });
 
 /** A batch run's platform: its files, and per file the pages the model answers, by page number. */
 export function batchPlatform(

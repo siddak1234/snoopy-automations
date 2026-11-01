@@ -24,9 +24,16 @@ import { save } from './steps/save.js';
 import { TABLES } from './tables.js';
 import { viewOf } from './view.js';
 import { WORDS } from './words.js';
-import { batchResult, childRequest } from './v2/result.js';
+import { batchResult, childRequest, visitResult } from './v2/result.js';
 import { categorize, chunk, organize, queue } from './v2/batch-steps.js';
-import { checkVisit, lookUpNpi, rankCodes, readVisit, receiveVisit } from './v2/child-steps.js';
+import {
+  checkVisit,
+  lookUpNpi,
+  matchVisit,
+  rankCodes,
+  readVisit,
+  receiveVisit,
+} from './v2/child-steps.js';
 import { reviewVisit, saveVisit } from './v2/review-steps.js';
 
 /** ICD-10 Code Check, on `defineFlow`: its spec is README.md beside src/. */
@@ -45,7 +52,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 /**
  * The flow, for the manifests given: v1's steps and v2's — its batch run's and its visit run's —
  * each only where a given manifest declares it, so the image (v2 alone) and the suite (both)
- * build from one list. `options` are for its suite: the day a run starts and the tables the build
+ * build from one list; `match-codes` is v1's on a v1 run and `matchVisit` on a v2 run. `options` are for its suite: the day a run starts and the tables the build
  * holds (`check-note`, `check-visit`). Each AI step is run once more on a failure that decided
  * nothing (README, "Retrying a step"): `settle` rethrows while a repeat is left, and never once a
  * model answered.
@@ -60,7 +67,8 @@ export function define(
     'read-note': readNote,
     'check-note': checkNote(dated),
     'find-codes': findCodes,
-    'match-codes': matchCodes,
+    'match-codes': (context) =>
+      context.request.templateVersion === 1 ? matchCodes(context) : matchVisit(context),
     'check-codes': checkCodes,
     decide,
     save,
@@ -96,7 +104,7 @@ export function define(
         ? result(state, request)
         : request.batch === true
           ? batchResult(state)
-          : result(state, childRequest(request)),
+          : visitResult(result(state, childRequest(request)), state),
   });
 }
 

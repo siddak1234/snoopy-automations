@@ -54,6 +54,14 @@ test("setup: an optional NPI in the screens' words, and the 695 specialties in 1
   assert.deepEqual(specialties.options, specialtyOptions(), 'the asset, option for option');
 });
 
+test('setup: "Learn from this clinic\'s reviews", a toggle on by default (L5)', () => {
+  const learn = v2.setup[2];
+  assert.deepEqual(
+    [learn.key, learn.title, learn.description, learn.control, learn.defaultValue, learn.required],
+    ['learn', WORDS_V2.learn, WORDS_V2.learnHelp, 'toggle', true, false],
+  );
+});
+
 test('the run input: several visit notes into one run, at most 50; a batch of Visits', () => {
   assert.deepEqual(v2.trigger.input, [
     {
