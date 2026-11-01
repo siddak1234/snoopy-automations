@@ -58,6 +58,10 @@ export function defaultAnswer(message: string, body: Record<string, unknown>): A
       };
     case 'provider':
       return { status: 200, body: { provider: { status: 200, body: { id: 'sent' } } } };
+    case 'memory-get':
+      return { status: 200, body: { value: null } };
+    case 'memory-put':
+      return { status: 200, body: { keys: 1 } };
     case 'mail':
       return { status: 200, body: { mail: { accepted: true } } };
     case 'artifact':
@@ -117,7 +121,7 @@ export async function startStubPlatform(): Promise<StubPlatform> {
       const body: unknown = text ? JSON.parse(text) : undefined;
       stub.calls.push({ method: request.method ?? '', path, headers: request.headers, body });
 
-      const message = /^\/v1\/automations\/callbacks\/([a-z]+)$/u.exec(path)?.[1] ?? '';
+      const message = /^\/v1\/automations\/callbacks\/([a-z-]+)$/u.exec(path)?.[1] ?? '';
       const parsed = (body ?? {}) as Record<string, unknown>;
       const answer = (stub.answers[message] ?? ((b) => defaultAnswer(message, b)))(parsed);
       // Unref'd so a deliberately slow answer (the timeout test) never pins the

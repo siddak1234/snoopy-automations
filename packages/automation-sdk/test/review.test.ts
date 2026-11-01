@@ -60,8 +60,8 @@ test('decisions are bounded as the platform takes them, or refused when bounding
   );
   assert.throws(() => boundedDecisions([{ id: 'Bad Id', label: 'one' }]), /out of shape/u);
   assert.throws(() => boundedDecisions([{ id: 'a1', label: '<script>' }]), /not one plain line/u);
-  const many = Array.from({ length: 41 }, (_, i) => ({ id: `c${i}`, label: `Change ${i}` }));
-  assert.throws(() => boundedDecisions(many), /1 to 40/u);
+  const many = Array.from({ length: 401 }, (_, i) => ({ id: `c${i}`, label: `Change ${i}` }));
+  assert.throws(() => boundedDecisions(many), /1 to 400/u);
   const result = boundedResult({
     outcome: 'held',
     held: {

@@ -47,7 +47,7 @@ Four rules follow, and the tests enforce them:
 
 ```
 contract/schemas/            the wire contract — JSON Schemas vendored from the platform, and its menu
-packages/automation-sdk/     the step runner, prompt modules, the six callbacks, the serving shell, test doubles
+packages/automation-sdk/     the step runner, prompt modules, the callbacks, the serving shell, test doubles
 packages/automation-kit/     a library automations build with: QuickBooks calls, value cleaning, a QuickBooks simulator
 automations/<name>/          one automation per directory, with its own Dockerfile and lockfile
 templates/automation/        the template directory: a worked flow on defineFlow, tested by the gate, which the scaffold builds from
@@ -185,6 +185,29 @@ request, answers)` from `@autom8x/automation-sdk/testing` answers the review `Re
 last held as the platform does, and refuses answers that miss a change or name another. A setup
 field's `select` control lists `options`, one picked or, with `multiple`, several; a step reads the
 picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest.ts`).
+
+**Platform round 2: a bigger dropdown, several files, a grouped review, a public provider, a flow's
+memory and batch intake** (the platform's ADR-0048 amendments 3 and 4, 2026-11-01; `contract/`
+carries them at snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
+objects, up to 1,000 (`SelectOption`; `optionValues`, and `chosenOptions` reads values). A run-input
+`artifact` field with `multiple` puts up to its `maxFiles` (1 to 200, default 50; `RUN_INPUT_LIMITS`,
+`maxFilesOf`) files into ONE run, and `artifactIdsOf(input, key)` reads its list. A held decision may
+carry a `group` (one line, on every change or none), up to 400 a review (`DECISION_LIMITS`). A
+provider whose auth is `none` (the NPI Registry, `nppes`) is declared in `requiredConnections` like
+any other and is connected in every workspace; a caller naming a parameter its operation fixes is
+refused `fixed_query` (`RecordingPlatform.fixedQuery` rehearses it). A step's `platform.memory.get(key)`
+and `put(key, value)` reach the `memory-get` and `memory-put` callbacks, for a manifest declaring the
+`memory` capability (the SDK's `memory.ts`: a key of 1 to 64 lowercase letters,
+digits and hyphens, a value of at most 64 KiB as JSON, 100 keys a flow and workspace; `null`
+removes); `RecordingPlatform.memory` keeps them as the platform does. A model call may read a page
+range of a PDF, `callModel(prompt, input, { artifactId, pages: { from, to } })`, at most 20 pages
+(`pageRangeProblem`). A manifest's `batch: {pipeline, unitWords}` makes its manual run a batch run
+(`request.batch`): the runner runs `batch.pipeline`, which may not hold, and the result's `units`
+(1 to 500 of `{label, artifacts, data}`, bounded by `boundedUnits` in
+the SDK's `batch.ts`) become one waiting child run each; a child's
+`request.unit` names its label, files (each with an optional page range) and data, and it runs the
+`pipeline`. `unitFixture` builds one for a suite, and the double refuses a page range the file
+cannot give (`pagesRefusal`).
 
 ## A new flow's standards (`defineFlow`)
 
@@ -552,7 +575,7 @@ defineAutomation({
     25.2.22 the Edge relays a model callback for up to 230 seconds — every attempt
     inside the owner's budget, at most 150, and the waits around it — inside the load
     balancer's 250 and this client's 260 (`DEFAULT_MODEL_TIMEOUT_MS`, in every image
-    built since). Before those limits are all live — and whenever the platform's own
+    built since; every other callback's wait is `DEFAULT_CALLBACK_TIMEOUT_MS`, both exported). Before those limits are all live — and whenever the platform's own
     dependencies run a call past them — a model call can reach the container as a 502
     while the platform completes and counts it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
