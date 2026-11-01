@@ -47,7 +47,7 @@ export function titleOf(view: Pick<View, 'patient' | 'visitDate'>): string {
 const titled = (view: View, code: string): string => withTitle(code, view.titles);
 
 /** (1) The patient, as read from the note: a row left out when not printed. */
-function patientSection(view: View): SectionBlock {
+export function patientSection(view: View): SectionBlock {
   const values: Record<string, string | null> = {
     ...view.patient,
     visitDate: view.visitDate && dateWords(view.visitDate),
@@ -64,7 +64,7 @@ function patientSection(view: View): SectionBlock {
 }
 
 /** (3) One row per code: the note's in order, then each to add; after the review, Accepted or Denied. */
-function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): EmittedLeaf {
+export function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): EmittedLeaf {
   return {
     type: 'table',
     columns: WORDS.codeColumns.map((title) => ({ title })),

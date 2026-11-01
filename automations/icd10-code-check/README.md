@@ -399,3 +399,84 @@ dialysis next week": an ask); T1 asks once per table note naming codes, with its
 associated: …"); a supported diagnosis no listed code fits is an ask in G7's words; a run with
 asks and no change is not held, shows its asks and no "All codes supported" badge, and its summary
 is "{n} codes · {c} to review".
+
+## v2 (draft, 2026-11-01)
+
+**Status:** a draft beside v1, which stays served unchanged (its manifest, steps, prompts and
+assets). The owner's go, 2026-11-01 ~04:45Z: "continue and complete. A-g. i want to test right
+after on the app. no assumptions." — after the nine screens. **Words:** `words.md`, section 4.
+**Waits for:** the platform round's v2 contract (a bigger dropdown, several files, a review
+grouped by visit, the Healthcare department, a connected app with no key, a flow's memory). This
+draft holds the data and the logic that need none of it; each seam is named below.
+
+**What moved it** — TestFlight build 32 feedback, 2026-10-29, the owner's words:
+
+| Id  | The words                                                                                                            |
+| --- | -------------------------------------------------------------------------------------------------------------------- |
+| F1  | "These are not all specialties that use icd10 codes. Your research was not sufficient."                              |
+| F2  | "The flow is under healthcare not compliance"                                                                        |
+| F3  | "Is the visit as a patient uploading or doctor. It should be a batch i shiuld upload as a doctor"                    |
+| F4  | "Integrations for step 1. Your review after completion of approving it should automatically go into the ehr system." |
+
+**Its sources** (new for v2; v1's ids are `research.md`'s):
+
+| Id          | Source                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v2-nucc-1` | NUCC Health Care Provider Taxonomy v26.1, effective 7/1/26: https://www.nucc.org/images/stories/CSV/nucc_taxonomy_261.csv (read 2026-10-31)                                       |
+| `v2-cms-1`  | CMS, ICD-10 Clinical Concepts for Cardiology (2015), "Common Codes", pages 3–10 of 29: https://www.cms.gov/Medicare/Coding/ICD10/Downloads/ICD10ClinicalConceptsCardiology1.pdf   |
+| `v2-cms-2`  | … for Internal Medicine, pages 3–8 of 32 (`ICD10ClinicalConceptsInternalMedicine1.pdf`, same folder)                                                                              |
+| `v2-cms-3`  | … for Pediatrics, pages 3–13 of 28 (`ICD10ClinicalConceptsPediatrics1.pdf`)                                                                                                       |
+| `v2-cms-4`  | … for OB/GYN, pages 3–7 of 19 (`ICD10ClinicalConceptsObGyn1.pdf`)                                                                                                                 |
+| `v2-cms-5`  | … for Orthopedics, pages 3–16 of 34 (`ICD10ClinicalConceptsOrthopedics1.pdf`)                                                                                                     |
+| `v2-npi-1`  | CMS NPPES NPI Registry, `https://npiregistry.cms.hhs.gov/api/?version=2.1&number=…`: answered without a key, `results[].taxonomies[]` with `code`, `desc`, `primary` (2026-10-31) |
+
+Each guide was read whole by poppler's `pdftotext -layout`, installed on the building Mac; the
+Common Codes section is the pages from the one that starts "Common Codes" to the one that starts
+the next section.
+
+**The changes:**
+
+| #   | Change                                                                                                                                                                                                                                                                                                                                                           | From                                                                        | In this draft                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | The specialties are NUCC's: every row whose Section is "Individual", minus the groupings "Student, Health Care" and "Group" — 695 in 16 groupings, in the file's order, each `{value: Code, label: Display Name, group: Grouping}`; the setup dropdown shows them grouped, with a search box. v1's six names stay v1's                                           | F1, `v2-nucc-1`                                                             | built: `assets/v2/specialties.json`; the setup field waits for the bigger dropdown              |
+| 2   | The preferences: per NUCC code, the code families listed first — each guide's Common Codes, each code kept when valid (flag 1) in the 2027 table, else its three-character category; Nephrology (207RN0300X, 2080P0210X): N17–N19, I12–I13, E08.22–E13.22, D63.1, Z49, Z94.0, Z99.2. Every other specialty has none, learned later from what each clinic accepts | F1, `v2-cms-1` to `v2-cms-5`, `p3-rules-11`, `p3-rules-12`, `p1-practice-8` | built: `assets/v2/preferences.json`, 19 NUCC codes; the learning waits for the flow's memory    |
+| 3   | The candidates: every flag-1 code under the diagnosis's categories, never limited (v1's 60: the flow's second review found 40,646 of 74,719 codes never offerable), the clinic's preference families first, then v1's rank (the words shared, the shorter codes, the table's order)                                                                              | F1                                                                          | done: `rankCandidates`; v1's `find-codes` is unchanged                                          |
+| 4   | An optional NPI in setup: the NPI registry's taxonomies, read at run time, fill the specialties when none are picked                                                                                                                                                                                                                                             | F1, `v2-npi-1`                                                              | done: `taxonomiesOf`, `specialtiesForRun`; the registry call waits for the no-key connected app |
+| 5   | The department is Healthcare                                                                                                                                                                                                                                                                                                                                     | F2                                                                          | waits for the 17th department                                                                   |
+| 6   | For doctors and coders: "Add visit notes", several files at once, each its own run; one PDF of several visits read as several visits, each with its own patient, date, codes and diagnoses, one patient each; at most 10 visits a file (10 × 40 changes is the platform's 400)                                                                                   | F3                                                                          | done: `visitsOf`, `visitsGate`; the v2 prompt, the run input and the stop sentences wait        |
+| 7   | The review grouped by visit: each visit's result and its changes under the visit's title ("Jane Doe · Oct 12, 2026", a repeated title numbered "(2)"), a decision's id `v{visit}-{row}`, at most 400 in all                                                                                                                                                      | F3                                                                          | done: `groupedDecisions`, `answersOfVisit`, `visitBlocks`; a decision's `group` waits           |
+| 8   | Each change's why, side by side: both codes' official titles, the words only one title holds, the note's words, the check's rule ("{check}: {reason}") — from the blocks v1 sends (section, table, list)                                                                                                                                                         | the nine screens                                                            | done: `whySection`, `titleDifference`                                                           |
+| 9   | The EHR: a live intake and the accepted codes written back                                                                                                                                                                                                                                                                                                       | F4                                                                          | not in this round: it needs the owner's accounts and agreements (section 10's rows)             |
+
+**The NUCC mapping** (`automations/icd10-code-check/scripts/v2-lists.ts`, `GUIDE_MAPPING`, each row
+with its reason, checked against the NUCC file's names when built): Cardiology → Cardiovascular
+Disease, Interventional Cardiology, Clinical Cardiac Electrophysiology, Advanced Heart Failure and
+Transplant Cardiology; Internal Medicine → Internal Medicine (no specialization); Pediatrics →
+Pediatrics (no specialization); OB/GYN → Obstetrics & Gynecology, Obstetrics, Gynecology;
+Orthopedics → Orthopaedic Surgery and its seven specializations. Left out: Pediatric Cardiology and
+Adult Congenital Heart Disease (the guide's codes are adult, acquired heart disease), the other
+subspecialties, and nurse practitioners and physician assistants (NUCC's own classifications).
+
+**What the build read** (2027 table, `codes-2027-oct.json`): Cardiology 128 codes, 127 kept, as a
+category I48.1, I48.2, I49.8, I20.8, I34.8; Internal Medicine 109, as a category R10.2, M54.5, R51,
+I48.2; Pediatrics 193, R10.2, R51; OB/GYN 106 (97 kept), N63, N83.0–N83.52 (10); Orthopedics 336
+(329 kept), M50.02–M50.92 (6), M54.5, M48.06, M51.07, M51.36, M51.37. The guides print some zeros
+as "Ø", read as 0.
+
+```bash
+npx tsx scripts/build-v2-assets.ts download <downloads>
+npx tsx scripts/build-v2-assets.ts build <downloads> assets/codes-2027-oct.json assets/v2
+```
+
+**The code:** `automations/icd10-code-check/src/v2/visits.ts` (the visits),
+`automations/icd10-code-check/src/v2/candidates.ts` (the ranking, the preferences, the NPI),
+`automations/icd10-code-check/src/v2/review.ts` (the why, the grouping),
+`automations/icd10-code-check/src/v2/words.ts`; v1's `patientSection` and `codeTable`
+(`src/blocks.ts`) are exported for it, unchanged. Tests: `test/v2-lists.test.ts`,
+`test/v2-assets.test.ts`, `test/v2-visits.test.ts`, `test/v2-candidates.test.ts`,
+`test/v2-review.test.ts`.
+
+**Open, for a person:** v1's section 4 lists Nephrology's kidney range as N00–N29; the go's list,
+used here, is N17–N19. The stop sentences for a file with no visit, more than 10 visits, or a visit
+with more than one patient are not yet worded (v1's "Add one visit at a time." no longer fits a
+batch).
