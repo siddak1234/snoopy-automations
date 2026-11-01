@@ -19,11 +19,15 @@ to the spec's section 11 with its default, never a new round of questions.
 The Workflow tool, with `scriptPath` set to the clone's `.claude/workflows/flow-research.js` and
 `args` set to `{ runDir, automations, name, idea, answers, platform }` — no backend clone: the
 adoption lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
-is read-only and its files a source too). Its lens briefs and schemas are data in
-`.claude/workflows/flow-research-tables.js`, which it loads with `workflow({ scriptPath })`. Inside: the
+is read-only and its files a source too). It runs two children beside it, each once with
+`workflow({ scriptPath })` inside its try (one level, the harness's limit; a child that fails to
+load stops the run with the failure a gap, and the result keeps its shape): its lens briefs and
+schemas, data in `.claude/workflows/flow-research-tables.js`, and the integrations stage, the
+adoption lens and its researchers, in `.claude/workflows/flow-research-integrations.js`. Inside: the
 owner's words quoted, never researched; four lenses — practice and expert judgement; rules,
 standards and data, the model vendors' rules on our own AI calls included; adoption; the
-streamlining of the process — then the integrations stage; at most three agents at once
+streamlining of the process — practice then streamlining, and rules, at once, then the integrations
+stage (adoption, then its researchers); at most three agents at once
 (`MAX_AGENTS`); one synthesis from the gated findings only; one skeptic that re-opens every cited
 page and judges every line, golden case and cited default against the quotes it cites; a code
 gate after each (A2: "programmatic checks").
@@ -31,8 +35,8 @@ gate after each (A2: "programmatic checks").
 **The integrations** (the owner's words, 2026-11-01: "integrations and connections to third party
 services is a crucial part in our create flow"). The adoption lens ranks at most five integrations
 the business line uses, by evidence of adoption (market share, surveys, regulator or certification
-data, the vendor's own customer counts), each with its source and its menu status (a provider id,
-or "to add"); one past five is a gap. research.json keeps that ranking, and research.md gives each
+data, the vendor's own customer counts), each with its source and its menu status: the provider id
+alone (its schema refuses anything else) and, apart, the menu's path:line, or "to add"; one past five is a gap. research.json keeps that ranking, and research.md gives each
 ranked integration its row, its "On the menu" cell the provider id only when the menu's `providers`
 list it, else "to add" — research-render.mjs checks it; no finding can quote an absence. After the
 lenses (skipped, one gap, when the token target cannot fit them), one researcher per integration, three at
@@ -44,7 +48,8 @@ official SDK's issues and community posts — T4, rendered "community report"); 
 vendor's pricing page, or "not published" as a gap); **constraints and concerns** (access programs,
 contracts such as a business associate agreement, regions, deprecations, lock-in, failure modes).
 The code gate keeps a T4 finding only when an integration researcher labelled it "in practice", and a line keeps a T4 cite
-only in the practice column. The synthesis writes each row's lines and at most one "First to build: X,
+only in the practice column. The synthesis keys each line by a ranked id, `integration-<k>` (its schema's enum; no ranking, no
+line), and a line naming anything else is a gap; it writes each row's lines and at most one "First to build: X,
 because …" (its schema's `maxItems`) on confirmed ids only, else "a person decides"; research.md renders them as its
 Integrations table. The script numbers each finding `<lens>-<n>`, never
 the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
@@ -89,7 +94,7 @@ new vendor" (stage 1): a provider file, or a platform round when no file can des
 
 ## Sources
 
-The tags this stage, `.claude/workflows/flow-research.js` and its tables, [evals/research.md](evals/research.md)
+The tags this stage, `.claude/workflows/flow-research.js` and its two children, [evals/research.md](evals/research.md)
 and the templates cite (every page fetched 2026-10-27, every quote found on it):
 
 | Tag                 | Source                                                                                                                                                |

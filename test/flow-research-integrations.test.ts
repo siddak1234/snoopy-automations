@@ -63,7 +63,7 @@ test('a community report: kept for a practice line, never for a price, a limit o
   assert.ok(data.gaps.includes('integration-1-3: a tier 4 page, a lead only; dropped'));
   assert.ok(data.sources.some((s: Any) => s.id === 'integration-1-2' && s.tier === 'T4'));
   const kept = data.brief.integrations.map((l: Any) => `${l.integration} ${l.column}`);
-  assert.deepEqual(kept, ['QuickBooks api', 'QuickBooks practice']);
+  assert.deepEqual(kept, ['integration-1 api', 'integration-1 practice']);
   assert.ok(
     data.gaps.includes(
       'integrations: "QuickBooks, cost: free" — integration-1-2 is T4; cite dropped',
@@ -157,3 +157,72 @@ test('the community-report rule is in the researcher and the skeptic prompts', a
     ),
   );
 });
+
+test("the synthesis keys each line by adoption's ranked ids: another name is a gap, never a row", async () => {
+  const { data, calls, runDir, result } = await run((label, attempt, prompt, dir) => {
+    if (label !== 'synthesis') return normal(label, attempt, prompt, dir);
+    const brief = BRIEF();
+    brief.integrations.push({
+      integration: 'Epic Systems',
+      column: 'api',
+      text: 'FHIR R4',
+      cites: ['integration-1-1'],
+    });
+    return brief;
+  });
+  const rows = calls.find((c) => c.label === 'synthesis')!.schema.properties.integrations;
+  assert.deepEqual(rows.items.properties.integration.enum, ['integration-1', 'integration-2']);
+  assert.ok(
+    data.gaps.includes('integrations: "Epic Systems, api: FHIR R4" — not a ranked id; dropped'),
+  );
+  assert.ok(!data.brief.integrations.some((l: Any) => l.integration === 'Epic Systems'));
+  assert.equal(render(runDir, result).code, 0);
+  const md = readFileSync(join(runDir, 'research.md'), 'utf8');
+  const table = md.split('## Integrations')[1]!.split('\n\nFirst to build')[0]!;
+  assert.deepEqual(
+    table
+      .split('\n')
+      .filter((l) => /^\| (?!Integration|---)/u.test(l))
+      .map((l) => l.split(' | ')[0]),
+    ['| QuickBooks', '| Xero'],
+  );
+  const none = await run((label, attempt, prompt, dir) =>
+    label === 'adoption lens'
+      ? { ...lensOut('adoption'), integrations: [] }
+      : normal(label, attempt, prompt, dir),
+  );
+  const empty = none.calls.find((c) => c.label === 'synthesis')!.schema.properties.integrations;
+  assert.equal(empty.maxItems, 0, 'no ranking: no integration line');
+});
+
+test("adoption's menu is a provider id alone, its path:line apart: a decorated value fails the schema", async () => {
+  const { calls, data } = await run(normal);
+  const adoption = calls.find((c) => c.label === 'adoption lens')!;
+  const ranked = adoption.schema.properties.integrations.items;
+  assert.ok(ranked.required.includes('menuAt'));
+  const id = new RegExp(ranked.properties.menu.pattern, 'u');
+  for (const ok of ['quickbooks', 'to add']) assert.ok(id.test(ok), ok);
+  for (const bad of ['quickbooks (platform-menu.json:119)', 'QuickBooks', 'quickbooks '])
+    assert.ok(!id.test(bad), bad);
+  assert.ok(adoption.prompt.includes('with menu its provider id alone'));
+  assert.deepEqual(data.integrations, RANKED, 'research.json keeps menuAt beside the id');
+});
+
+for (const child of ['flow-research-integrations.js', 'flow-research-tables.js'])
+  test(`a child that does not load (${child}): the documented result, the failure a gap`, async () => {
+    const r = await run(normal, { unreadable: child });
+    assert.deepEqual(Object.keys(r.result).sort(), [
+      'djb2',
+      'gaps',
+      'length',
+      'notResearched',
+      'research',
+      'sources',
+      'stopped',
+    ]);
+    assert.match(r.result.stopped, /^a step threw \(unreadable scriptPath /u);
+    assert.ok(r.result.gaps.some((g: string) => g.startsWith('the run: a step threw (unreadable')));
+    assert.equal(r.result.research, join(r.runDir, 'research.json'), 'what it has is written');
+    assert.deepEqual(r.data.gaps, r.result.gaps);
+    assert.equal(render(r.runDir, r.result).code, 0);
+  });

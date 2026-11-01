@@ -7,8 +7,9 @@ import { pathToFileURL } from 'node:url';
 /**
  * The stand-in harness for `.claude/workflows/flow-research.js` (/create-flow stage 1b): the
  * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args`, `budget` and `workflow` replaced,
- * the file and its tables compiled as the tool runs them (async function bodies, each top-level
- * return the result). Its
+ * the file and its two children (the tables, the integrations stage) compiled as the tool runs
+ * them (async function bodies, each top-level return the result); a child's workflow() throws, as
+ * the tool's does (one level). Its
  * cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
  * (stops, retries and the write).
  */
@@ -31,11 +32,10 @@ const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget', 'workflo
 // is the syntax check too: `node --check` refuses the top-level return the result travels in.
 export const compile = (file = 'flow-research.js'): Body =>
   new AsyncFunction(...GLOBALS, read(file).replace('export const meta', 'const meta'));
-const TABLES = '/clones/snoopy-automations/.claude/workflows/flow-research-tables.js';
-/** The tool's workflow({ scriptPath }, args): only the tables, at the clone's path. */
-const workflow = async ({ scriptPath }: { scriptPath: string }, args: unknown) => {
-  if (scriptPath !== TABLES) throw new Error(`unexpected workflow ${scriptPath}`);
-  return compile('flow-research-tables.js')(null, null, null, null, args, null, null);
+const WORKFLOWS = '/clones/snoopy-automations/.claude/workflows/';
+const CHILDREN = ['flow-research-tables.js', 'flow-research-integrations.js'];
+const nested = async () => {
+  throw new Error('workflow() inside a child: nesting is one level only');
 };
 const dirs: string[] = [];
 after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
@@ -52,8 +52,8 @@ export const finding = (lens: string, n: number, extra: object = {}) => ({
   ...extra,
 });
 export const RANKED = [
-  { name: 'QuickBooks', menu: 'quickbooks' },
-  { name: 'Xero', menu: 'to add' },
+  { name: 'QuickBooks', menu: 'quickbooks', menuAt: 'contract/schemas/platform-menu.json:119' },
+  { name: 'Xero', menu: 'to add', menuAt: '' },
 ];
 export function lensOut(lens: string): Any {
   if (lens.startsWith('integration-'))
@@ -98,14 +98,19 @@ export const BRIEF = () => ({
     { text: 'from a T4 page', cites: ['rules-3'] },
   ],
   integrations: [
-    { integration: 'QuickBooks', column: 'api', text: 'REST, OAuth 2', cites: ['integration-1-1'] },
     {
-      integration: 'QuickBooks',
+      integration: 'integration-1',
+      column: 'api',
+      text: 'REST, OAuth 2',
+      cites: ['integration-1-1'],
+    },
+    {
+      integration: 'integration-1',
       column: 'practice',
       text: 'teams sync bills nightly',
       cites: ['integration-1-2'],
     },
-    { integration: 'QuickBooks', column: 'cost', text: 'free', cites: ['integration-1-2'] },
+    { integration: 'integration-1', column: 'cost', text: 'free', cites: ['integration-1-2'] },
   ],
   firstToBuild: [
     { text: 'QuickBooks, because most firms use it', cites: ['adoption-1', 'integration-1-1'] },
@@ -178,7 +183,13 @@ export const normal = normalWith();
 
 export async function run(
   behave: Behave,
-  options: { total?: number; writeAttempt?: number; dir?: string; noBackend?: boolean } = {},
+  options: {
+    total?: number;
+    writeAttempt?: number;
+    dir?: string;
+    noBackend?: boolean;
+    unreadable?: string;
+  } = {},
 ) {
   const runDir = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
   if (!options.dir) dirs.push(runDir);
@@ -210,6 +221,18 @@ export async function run(
   };
   const parallel = async (thunks: (() => Promise<unknown>)[]) =>
     Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
+  const log = (m: string) => logs.push(m);
+  /** The tool's workflow({ scriptPath }, args): a child at the clone's path, the same globals. */
+  const workflow = async ({ scriptPath }: { scriptPath: string }, childArgs: unknown) => {
+    const file = scriptPath.slice(WORKFLOWS.length);
+    if (
+      !scriptPath.startsWith(WORKFLOWS) ||
+      !CHILDREN.includes(file) ||
+      file === options.unreadable
+    )
+      throw new Error(`unreadable scriptPath ${scriptPath}`);
+    return compile(file)(agent, parallel, log, () => {}, childArgs, budget, nested);
+  };
   const args = {
     runDir,
     automations: '/clones/snoopy-automations',
@@ -220,15 +243,7 @@ export async function run(
     platform: 'everything there',
     writeAttempt: options.writeAttempt,
   };
-  const result = await compile()(
-    agent,
-    parallel,
-    (m: string) => logs.push(m),
-    () => {},
-    args,
-    budget,
-    workflow,
-  );
+  const result = await compile()(agent, parallel, log, () => {}, args, budget, workflow);
   const file = join(runDir, 'research.json');
   const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
   return { runDir, logs, calls, peak, finishedAt, result, data };

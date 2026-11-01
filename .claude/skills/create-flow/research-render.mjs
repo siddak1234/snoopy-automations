@@ -40,27 +40,28 @@ export const COLUMNS = [
   ['concerns', 'Concerns'],
   ['practice', 'In practice'],
 ];
-// "On the menu" is checked here, never written by a model: a ranked menu id the menu's providers
-// list, else "to add" (no finding can quote an absence).
+// "On the menu" is checked here, never written by a model: adoption's menu value when it is exactly
+// a provider id the menu lists, else "to add" (no finding can quote an absence).
 const MENU = join(import.meta.dirname, '../../../contract/schemas/platform-menu.json');
 const onMenu = new Set(JSON.parse(readFileSync(MENU, 'utf8')).providers.map((p) => p.id));
 const cell = (text) => text.replaceAll('|', '\\|');
 
-/** One row per ranked integration (then any other a line names), each cell its lines with their ids. */
+/** One row per ranked integration, its lines keyed by its id `integration-<k>`, with their cites. */
 function integrations(b, ranked, ids) {
   const lines = b?.integrations ?? [];
   const out = ['## Integrations', ''];
   out.push(`| Integration | ${COLUMNS.map(([, h]) => h).join(' | ')} | On the menu |`);
   out.push(`|---|${COLUMNS.map(() => '---').join('|')}|---|`);
-  for (const name of new Set([...ranked.map((i) => i.name), ...lines.map((l) => l.integration)])) {
+  for (const [k, { name, menu }] of ranked.entries()) {
     const cells = COLUMNS.map(([key]) => {
-      const here = lines.filter((l) => l.integration === name && l.column === key);
+      const here = lines.filter(
+        (l) => l.integration === `integration-${k + 1}` && l.column === key,
+      );
       return here.length ? here.map((l) => `${l.text}${ids(l.cites)}`).join('; ') : 'not found';
     });
-    const menu = ranked.find((i) => i.name === name)?.menu;
     out.push(`| ${[name, ...cells, onMenu.has(menu) ? menu : 'to add'].map(cell).join(' | ')} |`);
   }
-  if (!ranked.length && !lines.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
+  if (!ranked.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
   const first = b?.firstToBuild?.[0];
   out.push('', `First to build: ${first ? first.text + ids(first.cites) : 'a person decides'}`, '');
   return out;

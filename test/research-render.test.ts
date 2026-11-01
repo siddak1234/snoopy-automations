@@ -38,8 +38,13 @@ const data = {
     rubric: [],
     rules: [],
     integrations: [
-      { integration: 'Epic', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
-      { integration: 'Epic', column: 'practice', text: 'a | pipe', cites: ['integration-1-2'] },
+      { integration: 'integration-1', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
+      {
+        integration: 'integration-1',
+        column: 'practice',
+        text: 'a | pipe',
+        cites: ['integration-1-2'],
+      },
     ],
     firstToBuild: [{ text: 'Epic, because most use it', cites: ['integration-1-1'] }],
     v1: [],
@@ -66,8 +71,8 @@ const data = {
     ],
   },
   integrations: [
-    { name: 'Epic', menu: 'epic' },
-    { name: 'QuickBooks', menu: 'quickbooks' },
+    { name: 'Epic', menu: 'epic', menuAt: '' },
+    { name: 'QuickBooks', menu: 'quickbooks', menuAt: 'contract/schemas/platform-menu.json:119' },
   ],
   sources: [
     {

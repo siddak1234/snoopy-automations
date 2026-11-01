@@ -6,8 +6,8 @@ export const meta = {
     'After /create-flow stage 1 (the platform check and the decisions); pass args { runDir, automations, name, idea, answers, platform, backend?, writeAttempt? }; no backend clone is needed: the adoption lens reads the menu in contract/schemas.',
   phases: [
     { title: 'Frame', detail: "the owner's words, quoted; the lens questions; no research" },
-    { title: 'Lenses', detail: 'practice, rules, adoption at once; streamlining after practice' },
-    { title: 'Integrations', detail: 'a researcher per ranked integration, three at once' },
+    { title: 'Lenses', detail: 'practice then streamlining, and rules, at once' },
+    { title: 'Integrations', detail: 'flow-research-integrations.js: adoption, then its ranking' },
     { title: 'Synthesis', detail: 'the domain brief from the findings only' },
     { title: 'Skeptic', detail: 'one retry: every cited page re-opened, every line judged' },
     { title: 'Write', detail: 'research.json exactly as computed; its checksum returned' },
@@ -21,18 +21,14 @@ export const meta = {
 // write that failed its checksum re-runs through resumeFromRunId with writeAttempt = 2 (only its
 // prompt changes). The checksum, the stops and the gaps are the return value: the Workflow tool
 // hands the session the top-level return; log() lines do not reach it. `node --check` refuses it,
-// so test/flow-research.ts compiles this file and its tables as the harness runs them.
+// so test/flow-research.ts compiles this file and its two children as the harness runs them.
 const { runDir, automations, backend, name, idea, answers, platform } = args ?? {};
 const writeAttempt = args?.writeAttempt ?? 1;
 const needs = 'flow-research needs args { runDir, automations, name, idea, answers }';
 if (!runDir || !automations || !name || !idea) throw new Error(needs);
-// The limits, the lens briefs and the schemas are data, in flow-research-tables.js beside this file.
-const tables = { scriptPath: `${automations}/.claude/workflows/flow-research-tables.js` };
-const T = await workflow(tables, { automations });
-const { LENS, INTEGRATION, T4, DATA, SECTIONS, SCHEMA, CAP, NEED } = T;
-const { MAX_AGENTS, MAX_FINDINGS, MAX_QUESTIONS, MAX_INTEGRATIONS } = T;
-const LENSES = Object.keys(LENS);
-const ALL = [...SECTIONS, 'integrations', 'firstToBuild', 'goldenCases'];
+// Two children beside this file, each run once in the try (one level, the harness's limit).
+const child = (file) => ({ scriptPath: `${automations}/.claude/workflows/${file}` });
+let T, LENS, DATA, SCHEMA, CAP, NEED, MAX_FINDINGS, MAX_QUESTIONS, LENSES, ALL;
 const PERSON = 'a person decides'; // O1: "escalate to human intervention"
 const gaps = [];
 let gapsLogged = false;
@@ -72,7 +68,7 @@ async function once(label, run, usable, hint = '') {
   gap(`${label}: failed twice (${why}; then ${failure(second)}); not researched${looked}`);
   return null;
 }
-const fits = (needed) => !budget.total || budget.remaining() > needed;
+const fits = (needed = 0) => !budget.total || budget.remaining() > needed;
 const strings = (v) => (typeof v === 'string' ? [v] : Object.values(v ?? {}).flatMap(strings));
 const norm = (text) => text.replace(/\s+/gu, ' ').trim().toLowerCase();
 /** djb2 over the exact text the write is given; research-render.mjs recomputes it (SKILL.md 1b). */
@@ -85,10 +81,10 @@ const djb2 = (text) => {
 const ownerText = norm([...strings(idea), ...strings(answers ?? [])].join(' '));
 const task = `The owner's words — the task, never a source, cite nothing from them: the idea ${JSON.stringify(idea)}; the answers ${JSON.stringify(answers ?? [])}.`;
 let [framing, size] = [null, 'broad'];
-let questions = Object.fromEntries(LENSES.map((l) => [l, []]));
+let questions = {};
 let [found, cited, notResearched] = [[], [], []];
 const products = {}; // `integration-<k>` → the name adoption ranked k-th
-let ranked = []; // adoption's { name, menu }, at most MAX_INTEGRATIONS: research.md's rows
+let ranked = []; // adoption's { name, menu, menuAt }, at most MAX_INTEGRATIONS: research.md's rows
 let sources = []; // only what the skeptic confirmed
 let [brief, verified] = [null, false]; // verified: the skeptic's gate finished, so a line may stay
 let skeptic = 'it was not reached';
@@ -116,10 +112,15 @@ function gate(results, flagged) {
   });
 }
 const lineText = (l) =>
-  (l.integration ? `${l.integration}, ${l.column}: ` : '') +
+  (l.integration ? `${products[l.integration] ?? l.integration}, ${l.column}: ` : '') +
   (l.text ?? l.question ?? `${l.input} → ${l.expected}`);
 
 try {
+  T = await workflow(child('flow-research-tables.js'), { automations });
+  ({ LENS, DATA, SCHEMA, CAP, NEED, MAX_FINDINGS, MAX_QUESTIONS } = T);
+  LENSES = Object.keys(LENS);
+  ALL = [...T.SECTIONS, 'integrations', 'firstToBuild', 'goldenCases'];
+  questions = Object.fromEntries(LENSES.map((l) => [l, []]));
   phase('Frame');
   if (!fits(NEED.frame)) stop('the token target is spent before the frame');
   const lensList = LENSES.map((l) => `${l} (${LENS[l][0]})`).join('; ');
@@ -158,10 +159,9 @@ try {
   if (frame && !stopped && !fits(NEED.lenses)) stop('the token target is spent before the lenses');
   if (frame && !stopped) {
     phase('Lenses');
+    // product: the integration researcher's, its "<lens>" and "<product>" filled by the stage.
     const lensPrompt = (lens, product, cap, leads, extra) => {
-      const [objective, sources, notJob, t4] = product
-        ? INTEGRATION.map((t) => t.replaceAll('<product>', product))
-        : [...LENS[lens], T4];
+      const [objective, sources, notJob, t4] = product ? T.INTEGRATION : [...LENS[lens], T.T4];
       const asked = product ? '' : `Questions: ${JSON.stringify(questions[lens])}. `;
       const given = leads
         ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
@@ -173,21 +173,17 @@ try {
       );
     };
     const runLens = (lens, leads = null) => {
-      const product = products[lens];
-      const label = product ? `${lens} lens (${product})` : `${lens} lens`;
-      const cap = product || lens === 'adoption' ? CAP.broad : (CAP[size] ?? CAP.broad);
-      const { INTEGRATION_FINDINGS, ADOPTION, FINDINGS } = SCHEMA;
-      const schema = product ? INTEGRATION_FINDINGS : lens === 'adoption' ? ADOPTION : FINDINGS;
-      const phaseOf = product ? 'Integrations' : 'Lenses';
+      const label = `${lens} lens`;
+      const cap = CAP[size] ?? CAP.broad;
       return once(
         label,
         (extra) =>
           agent(
-            lensPrompt(lens, product, cap, leads, extra),
-            opts(phaseOf, label, 'researcher', schema),
+            lensPrompt(lens, false, cap, leads, extra),
+            opts('Lenses', label, 'researcher', SCHEMA.FINDINGS),
           ),
         (out) => Boolean(out && out.findings.length > 0),
-        'If you still find nothing, return no findings and list in notFound what you looked for and where.',
+        T.NOTHING,
       ).then((out) => {
         if (out?.toolCalls > cap) log(`${label}: ${out.toolCalls} tool calls, cap ${cap}`);
         // Ids are the script's, `<lens>-<n>` by position, never the model's: no two are the same.
@@ -195,8 +191,8 @@ try {
         return out ? { lens, label, ...out, findings } : null;
       });
     };
-    // MAX_AGENTS slots: practice then streamlining (a chain, A2: "each LLM call processes the output
-    // of the previous one"), rules, adoption. The leads are filtered without recording: the one gate below does.
+    // Two slots: practice then streamlining (a chain, A2: "each LLM call processes the output of the
+    // previous one"), and rules. The leads are filtered without recording: the one gate below does.
     const slots = await parallel([
       async () => {
         const practice = await runLens('practice');
@@ -205,28 +201,25 @@ try {
         return [practice, await runLens('streamlining', leads)];
       },
       async () => [await runLens('rules')],
-      async () => [await runLens('adoption')],
     ]);
     const lensesDone = slots.flatMap((slot) => slot ?? []).filter(Boolean);
-    const failed = LENSES.filter((l) => !lensesDone.some((r) => r.lens === l));
+    // Then the integrations stage, MAX_AGENTS at once (the other lenses are done), unless two failed.
+    const stage =
+      lensesDone.length < 2
+        ? null
+        : await workflow(child('flow-research-integrations.js'), {
+            T,
+            adoption: lensPrompt('adoption', false, CAP.broad, null, ''),
+            integration: lensPrompt('<lens>', true, CAP.broad, null, ''),
+          });
+    for (const g of stage?.gaps ?? []) gap(g);
+    lensesDone.push(...(stage?.results ?? []));
+    ranked = stage?.ranked ?? [];
+    ranked.forEach((i, k) => (products[`integration-${k + 1}`] = i.name));
+    const ran = (l) => l !== 'adoption' || stage;
+    const failed = LENSES.filter((l) => ran(l) && !lensesDone.some((r) => r.lens === l));
     // Half the angles missing is not the depth the owner asked for: two failed lenses stop the run.
     if (failed.length >= 2) stop(`${failed.length} of 4 lenses failed (${failed.join(', ')})`);
-    // Then one researcher per integration adoption ranked, MAX_AGENTS at once (the lenses are done).
-    const adoption = stopped ? null : lensesDone.find((r) => r.lens === 'adoption');
-    for (const i of (adoption?.integrations ?? []).slice(MAX_INTEGRATIONS))
-      gap(`adoption: "${i.name}" past the cap of ${MAX_INTEGRATIONS}; not researched`);
-    ranked = (adoption?.integrations ?? []).slice(0, MAX_INTEGRATIONS);
-    ranked.forEach((i, k) => (products[`integration-${k + 1}`] = i.name));
-    let each = Object.keys(products);
-    if (each.length && !fits(NEED.integrations)) {
-      gap(`integrations: the token target is spent before them; ${each.length} not researched`);
-      each = [];
-    }
-    if (each.length) phase('Integrations');
-    for (let k = 0; k < each.length; k += MAX_AGENTS) {
-      const batch = await parallel(each.slice(k, k + MAX_AGENTS).map((l) => () => runLens(l)));
-      lensesDone.push(...batch.filter(Boolean));
-    }
     const flagged = new Set(lensesDone.flatMap((r) => r.injectionSeen));
     if (flagged.size) log(`pages that tried to direct a researcher: ${[...flagged].join(' ')}`);
     found = gate(lensesDone, flagged);
@@ -239,13 +232,17 @@ try {
     const synthesisPrompt = (extra) =>
       `${extra}Write the domain brief for the flow "${name}" from these findings only — no memory, no web: ${JSON.stringify(found)}. ${task} ` +
       `Fill: process (today's work end to end: who, what goes in, what comes out); waste (where the time and the errors go); criteria (what an expert checks, in order); rubric (the criteria as the flow will score or decide them); rules (what binds a result, the model vendors' rules on our own AI calls included); ` +
-      `integrations: for each integration the adoption lens ranked (the researchers: ${JSON.stringify(products)}), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it) — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: one line "X, because …" citing the findings that separate it, or none when they do not (${PERSON}); ` +
+      `integrations: for each integration the adoption lens ranked, its id from ${JSON.stringify(products)} (no other name), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it) — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: one line "X, because …" citing the findings that separate it, or none when they do not (${PERSON}); ` +
       `v1 (the simplest pipeline: what is automated, what stays with a person, what is left out — few steps, few questions); failures (when it goes wrong); 5 to 10 golden cases with invented inputs only (example.com for any link) and the expected result; open questions. ` +
       `Every line cites the finding ids it rests on; a line no finding carries is not written — it becomes an open question. An open question is kind domain_fact (its default states something about the job, the rules or a vendor) or our_choice (a product choice); a default with no finding is "${PERSON}".`;
+    const BRIEF = JSON.parse(JSON.stringify(SCHEMA.BRIEF)); // rows: adoption's ranked ids only
+    const rows = BRIEF.properties.integrations;
+    const ids = Object.keys(products);
+    if (ids.length) rows.items.properties.integration = { type: 'string', enum: ids };
+    else rows.maxItems = 0;
     brief = await once(
       'synthesis',
-      (extra) =>
-        agent(synthesisPrompt(extra), opts('Synthesis', 'synthesis', 'explorer', SCHEMA.BRIEF)),
+      (extra) => agent(synthesisPrompt(extra), opts('Synthesis', 'synthesis', 'explorer', BRIEF)),
       (out) => Boolean(out && out.process.length > 0 && out.criteria.length > 0),
     );
     if (!brief) stop('the synthesis failed twice');
@@ -261,6 +258,10 @@ try {
         gap(`${s}: "${lineText(l)}" — ${id} is T4; cite dropped`);
       return { ...l, cites: l.cites.filter((id) => ids.has(id) && !lead(id)) };
     };
+    for (const l of brief.integrations)
+      if (!products[l.integration])
+        gap(`integrations: "${lineText(l)}" — not a ranked id; dropped`);
+    brief.integrations = brief.integrations.filter((l) => products[l.integration]);
     for (const s of ALL) {
       brief[s] = brief[s].map(keep(s));
       for (const l of brief[s])
@@ -346,6 +347,7 @@ try {
   }
 } catch (error) {
   // A throw outside an agent call: the run stops; what it has is written, but no unverified line.
+  gap(`the run: a step threw (${message(error)}); it stopped there`);
   stop(`a step threw (${message(error)})`);
   for (const s of brief && !verified ? [...ALL, 'openQuestions'] : [])
     for (const l of [brief[s] ?? []].flat())
@@ -376,7 +378,7 @@ const text = JSON.stringify(payload);
 const checksum = djb2(text);
 log(`research.json: djb2 ${checksum} length ${text.length}`);
 let written = null;
-if (!fits(NEED.write)) stop('the token target is spent; research.json was not written');
+if (!fits(NEED?.write)) stop('the token target is spent; research.json was not written');
 else {
   const again = writeAttempt > 1 ? `Attempt ${writeAttempt}: a file failed its checksum. ` : '';
   const writePrompt = (extra) =>
