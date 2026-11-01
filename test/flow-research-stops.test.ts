@@ -10,15 +10,15 @@ import { type Any, finding, lensOut, normal, run, render, has } from './flow-res
 
 test('two failed lenses and a failed write: both stops logged and joined, every gap logged', async () => {
   const r = await run((label, attempt, prompt, dir) =>
-    ['rules lens', 'vendors lens', 'write'].includes(label)
+    ['rules lens', 'adoption lens', 'write'].includes(label)
       ? null
       : normal(label, attempt, prompt, dir),
   );
   assert.equal(
     r.result.stopped,
-    '2 of 4 lenses failed (rules, vendors); then research.json was not written',
+    '2 of 4 lenses failed (rules, adoption); then research.json was not written',
   );
-  assert.ok(r.logs.includes('stopped: 2 of 4 lenses failed (rules, vendors)'));
+  assert.ok(r.logs.includes('stopped: 2 of 4 lenses failed (rules, adoption)'));
   assert.ok(!r.calls.some((c) => c.label === 'synthesis'));
   assert.equal(r.calls.filter((c) => c.label === 'rules lens').length, 2, 'one retry each');
   assert.equal(r.result.research, null);
@@ -30,13 +30,27 @@ test('two failed lenses and a failed write: both stops logged and joined, every 
 
 test('two failed lenses with a working write: the gaps are written, no source is', async () => {
   const r = await run((label, attempt, prompt, dir) =>
-    label === 'rules lens' || label === 'vendors lens' ? null : normal(label, attempt, prompt, dir),
+    label === 'rules lens' || label === 'adoption lens'
+      ? null
+      : normal(label, attempt, prompt, dir),
   );
-  assert.equal(r.data.stopped, '2 of 4 lenses failed (rules, vendors)');
+  assert.equal(r.data.stopped, '2 of 4 lenses failed (rules, adoption)');
   assert.equal(r.data.brief, null);
   assert.equal(r.data.sources.length, 0, 'nothing unverified is written as a source');
   assert.ok(has(r.data.gaps, 'rules lens: failed twice'));
   assert.equal(render(r.runDir, r.result).code, 0);
+});
+
+test('streamlining and rules fail: the integrations stage never runs, adoption is not counted', async () => {
+  const r = await run((label, attempt, prompt, dir) =>
+    label === 'streamlining lens' || label === 'rules lens'
+      ? null
+      : normal(label, attempt, prompt, dir),
+  );
+  assert.ok(
+    !r.calls.some((c) => c.label === 'adoption lens' || c.label.startsWith('integration-')),
+  );
+  assert.equal(r.data.stopped, '2 of 4 lenses failed (rules, streamlining)');
 });
 
 test('findings past the cap of twelve are gaps, never dropped silently', async () => {
@@ -53,11 +67,11 @@ test('findings past the cap of twelve are gaps, never dropped silently', async (
 
 test('a throwing agent is retried once; a skeptic that throws twice stops the run', async () => {
   const r = await run((label, attempt, prompt, dir) => {
-    if (label === 'vendors lens' && attempt === 1) throw new Error('terminal API error');
+    if (label === 'adoption lens' && attempt === 1) throw new Error('terminal API error');
     if (label === 'skeptic') throw new Error('terminal API error');
     return normal(label, attempt, prompt, dir);
   });
-  assert.ok(r.logs.includes('vendors lens: it threw (terminal API error); one retry'));
+  assert.ok(r.logs.includes('adoption lens: it threw (terminal API error); one retry'));
   assert.ok(has(r.data.gaps, 'skeptic: failed twice (it threw'));
   assert.equal(r.data.sources.length, 0);
   assert.equal(

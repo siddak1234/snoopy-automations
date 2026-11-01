@@ -20,6 +20,7 @@ const { main, djb2 } = (await import(pathToFileURL(script).href)) as {
   main: (argv: string[], write: (text: string) => void) => number;
   djb2: (text: string) => string;
 };
+type Any = any;
 const dir = mkdtempSync(join(tmpdir(), 'autom8x-research-render-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -37,7 +38,28 @@ const data = {
     criteria: [{ text: 'three-way match', cites: ['practice-1'] }],
     rubric: [],
     rules: [],
-    vendors: [],
+    integrations: [
+      {
+        integration: 'integration-1',
+        column: 'adoption',
+        text: 'most use it',
+        cites: ['adoption-1'],
+      },
+      { integration: 'integration-1', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
+      {
+        integration: 'integration-1',
+        column: 'practice',
+        text: 'a | pipe',
+        cites: ['integration-1-2'],
+      },
+    ],
+    firstToBuild: [
+      {
+        integration: 'integration-1',
+        text: 'Epic, because most use it',
+        cites: ['integration-1-1'],
+      },
+    ],
     v1: [],
     failures: [],
     goldenCases: [
@@ -61,6 +83,10 @@ const data = {
       },
     ],
   },
+  integrations: [
+    { name: 'Epic', menu: 'epic', menuAt: '' },
+    { name: 'QuickBooks', menu: 'quickbooks', menuAt: 'contract/schemas/platform-menu.json:119' },
+  ],
   sources: [
     {
       id: 'practice-1',
@@ -68,6 +94,13 @@ const data = {
       publisher: 'A body',
       url: 'https://example.org/p/1',
       quote: 'a | b',
+    },
+    {
+      id: 'integration-1-2',
+      tier: 'T4',
+      publisher: 'A forum',
+      url: 'https://example.org/f/1',
+      quote: 'we sync at night',
     },
   ],
   gaps: ['practice-2: not_on_page — checked'],
@@ -95,6 +128,14 @@ test('a matching file renders research.md and a short summary', () => {
   assert.match(md, /- decision: not stated/u);
   assert.match(md, /- three-way match \[practice-1\]/u);
   assert.match(md, /## The rubric\n\n- Unknown: nothing confirmed \(see Gaps\)/u);
+  assert.match(
+    md,
+    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| most use it \[adoption-1\] \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| to add \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
+  );
+  assert.ok(!md.includes('| QuickBooks'), 'a ranked entry with no confirmed adoption line: no row');
+  assert.match(md, /## Gaps\n\n.*\n- QuickBooks: ranked by adoption, not confirmed\n/u);
+  assert.match(md, /\| integration-1-2 \| T4, community report \| A forum \|/u);
+  assert.match(result.out, /integrations 3; first to build: Epic, because most use it;/u);
   assert.match(md, /- Tax rule\? — default: as the statute says \[practice-1\]/u);
   assert.match(
     md,
@@ -129,4 +170,146 @@ test('no file is exit 1, missing arguments exit 2, and the command line runs it'
     spawnSync(process.execPath, [script, file, 'deadbeef', '1'], { encoding: 'utf8' }).status,
     1,
   );
+});
+
+/** Renders `d` through main() in its own folder: research.md and the summary. */
+const renderOf = (d: Any) => {
+  const at = mkdtempSync(join(dir, 'case-'));
+  const json = JSON.stringify(d);
+  writeFileSync(join(at, 'research.json'), json);
+  const result = call([join(at, 'research.json'), djb2(json), String(json.length)]);
+  assert.equal(result.code, 0, result.out);
+  return { md: readFileSync(join(at, 'research.md'), 'utf8'), out: result.out };
+};
+
+test('an entry whose adoption line fails the gate is no row, though its api line stays', () => {
+  // The skeptic found integration-2's adoption cite not_on_page: the line and the finding are gone.
+  const { md, out } = renderOf({
+    ...data,
+    integrations: [data.integrations[0], { name: 'Xero', menu: 'to add', menuAt: '' }],
+    brief: {
+      ...data.brief,
+      integrations: [
+        ...data.brief.integrations,
+        { integration: 'integration-2', column: 'api', text: 'REST', cites: ['integration-2-1'] },
+      ],
+      firstToBuild: [
+        {
+          integration: 'integration-2',
+          text: 'Xero, because it is cheap',
+          cites: ['integration-2-1'],
+        },
+      ],
+    },
+  });
+  assert.ok(!md.includes('| Xero'), md);
+  assert.match(md, /## Gaps\n\n.*\n- Xero: ranked by adoption, not confirmed\n/u);
+  assert.match(md, /\nFirst to build: a person decides\n/u, 'Xero is no row: no first to build');
+  assert.match(out, /first to build: a person decides;/u);
+  assert.match(
+    out,
+    /gaps \(2\): Xero: ranked by adoption, not confirmed \| practice-2: not_on_page — checked\n/u,
+  );
+});
+
+test('an entry with an adoption finding naming it but no confirmed line is no row; its gap leads the summary', () => {
+  // 40 gaps of 60 characters: past the summary's 2,000-character cut.
+  const gaps = Array.from(
+    { length: 40 },
+    (_, k) => `gap ${String(k).padStart(2, '0')}: ${'x'.repeat(52)}`,
+  );
+  const { md, out } = renderOf({
+    ...data,
+    integrations: [data.integrations[0], { name: 'Xero', menu: 'to add', menuAt: '' }],
+    sources: [
+      ...data.sources,
+      {
+        id: 'adoption-2',
+        tier: 'T1',
+        publisher: 'A survey',
+        url: 'https://example.org/s',
+        claim: 'Xero is second',
+        quote: '| Xero | 20% |',
+      },
+    ],
+    gaps,
+  });
+  assert.ok(gaps.join(' | ').length > 2000);
+  assert.ok(!/^\| Xero/mu.test(md), md);
+  assert.match(md, /\n- Xero: ranked by adoption, not confirmed\n/u);
+  assert.ok(out.length <= 2001, String(out.length));
+  assert.match(out, /\ngaps \(41\): Xero: ranked by adoption, not confirmed \| gap 00: /u);
+});
+
+test("the real run's shape: no adoption column, each row's adoption from the findings naming it", () => {
+  // Trimmed from the icd10-code-check run (2026-11-01; public sources only): five ranked EHRs, lines
+  // keyed integration-1 … integration-5 in the ranking's order, adoption's evidence only as findings.
+  const names = ['Epic (incl. Acumen Epic Connect for nephrology)', 'MEDITECH', 'eClinicalWorks'];
+  names.push('athenahealth', 'Oracle Health (Cerner)');
+  const claims = [
+    'Epic is the most-used EHR',
+    'MEDITECH ranks second',
+    'eClinicalWorks ranks third',
+  ];
+  claims.push('athenahealth ranks fourth', 'Cerner (Oracle Health) ranks fifth');
+  const source = (id: string, claim: string, quote = claim) => ({
+    claim,
+    id,
+    tier: 'T1',
+    publisher: 'ONC / ASTP (HHS), source 2024 NEHRS',
+    url: 'https://healthit.gov/data/data-briefs/office-based-physician-electronic-health-record-adoption-2008-2024/',
+    quote,
+  });
+  // The skeptic dropped each rank ("ranks second" is not in the quote): a cell shows the quote only.
+  const shares = ['27.70%', '11.10%', '7.50%', '7.30%', '5.50%'];
+  const quotes = ['Epic', 'Meditech', 'eClinicalWorks', 'athenahealth', 'Cerner'].map(
+    (n, k) => `| ${n} | Top 5 | ${shares[k]} |`,
+  );
+  const { md } = renderOf({
+    ...data,
+    integrations: names.map((name) => ({ name, menu: 'to add', menuAt: '' })),
+    brief: {
+      ...data.brief,
+      integrations: names.map((_, k) => ({
+        integration: `integration-${k + 1}`,
+        column: 'api',
+        text: `FHIR R4 ${k + 1}`,
+        cites: [`integration-${k + 1}-1`],
+      })),
+      firstToBuild: [],
+    },
+    sources: [
+      ...claims.map((c, k) => source(`adoption-${k + 1}`, c, quotes[k])),
+      source('adoption-6', 'NextGen is outside the top 5'),
+      source(
+        'adoption-10',
+        'Acumen runs on Epic as Acumen Epic Connect',
+        '150 practices run Acumen Epic',
+      ),
+      // Not an adoption finding: it names MEDITECH but never fills MEDITECH's Adoption cell.
+      source('integration-2-1', 'MEDITECH is used by most hospitals'),
+    ],
+  });
+  const rows = md
+    .split('\n')
+    .filter((l) => /^\| (?!Integration \||Id \||---|adoption-|practice-|integration-)/u.test(l));
+  assert.deepEqual(
+    rows.map((l) => l.split(' | ').slice(0, 3)),
+    [
+      [
+        `| ${names[0]}`,
+        `27.70% (ONC / ASTP (HHS)) [adoption-1]; "150 practices run Acumen Epic" (ONC / ASTP (HHS)) [adoption-10]`,
+        'FHIR R4 1 [integration-1-1]',
+      ],
+      ...names
+        .slice(1)
+        .map((n, k) => [
+          `| ${n}`,
+          `${shares[k + 1]} (ONC / ASTP (HHS)) [adoption-${k + 2}]`,
+          `FHIR R4 ${k + 2} [integration-${k + 2}-1]`,
+        ]),
+    ],
+  );
+  assert.ok(!md.includes('ranked by adoption, not confirmed'), md);
+  assert.ok(!/ranks|most-used|most hospitals/u.test(md.slice(0, md.indexOf('## Sources'))), md);
 });

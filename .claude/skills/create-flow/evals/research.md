@@ -15,17 +15,22 @@ real usage patterns" and A5's "20-50 simple tasks drawn from real failures". Sou
   efficiency. It grades the brief: "grade what the agent produced, not the path it took" (A5).
 - The session also reads the run's transcript: "People testing agents find edge cases that evals
   miss" (A1).
-- The owner's corrections at stage 1b step 4 calibrate the grader: "Use human feedback to calibrate
-  automated scoring" (O3).
+- The owner's corrections at stage 2 (research-stage.md step 4, shown at stage 2) calibrate the
+  grader: "Use human feedback to calibrate automated scoring" (O3).
 
 ## The cases
 
-| #   | Flow                 | The idea (input)                                                                                                                                                          | Reference output                                                                                                                                                                |
-| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `candidate-reviewer` | the owner's words (2026-10-23) and answers (2026-10-24), `automations/candidate-reviewer/README.md:31-42`                                                                 | its approved spec, `automations/candidate-reviewer/README.md`, and its prompts under `automations/candidate-reviewer/prompts/`                                                  |
-| 2   | `invoice-processing` | not found in this repository (`git grep`, 2026-10-28). Until the owner's words for it are found and copied here with their date, this case has no input and is not scored | its newest manifest, `manifests/invoice-processing.v7.json`, and its prompts, `automations/invoice-processing/prompts/extract-documents.v1.json` and `verify-documents.v1.json` |
+| #   | Flow                 | The idea (input)                                                                                                                                                                                                          | Reference output                                                                                                                                                                                                   |
+| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `candidate-reviewer` | the owner's words (2026-10-23) and answers (2026-10-24), `automations/candidate-reviewer/README.md:31-42`                                                                                                                 | its approved spec, `automations/candidate-reviewer/README.md`, and its prompts under `automations/candidate-reviewer/prompts/`                                                                                     |
+| 2   | `invoice-processing` | not found in this repository (`git grep`, 2026-10-28). Until the owner's words for it are found and copied here with their date, this case has no input and is not scored                                                 | its newest manifest, `manifests/invoice-processing.v7.json`, and its prompts, `automations/invoice-processing/prompts/extract-documents.v1.json` and `verify-documents.v1.json`                                    |
+| 3   | `icd10-code-check`   | the owner's words (2026-10-28 ~15:37Z), `automations/icd10-code-check/README.md:42-53`: an industry (EHRs, "epic systems, and davita") whose systems the menu lacks; the owner's question (2026-11-01): "which EHR first" | research.md's Integrations table: each EHR ranked with its adoption evidence, its row "to add" per contract/schemas/platform-menu.json, and "First to build: X, because …" on confirmed ids, or "a person decides" |
 
 ## Pilot failures
 
 Each pilot failure of a flow built from a research brief is added here at stage 8: the idea, what
-the brief got wrong or left out, and the corrected reference. None yet.
+the brief got wrong or left out, and the corrected reference.
+
+| #   | Flow               | The idea (input)                                                                       | What the brief got wrong or left out                                                                                                                                        | Reference output                                                                                                           |
+| --- | ------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| P1  | `icd10-code-check` | the owner's words (2026-10-28 ~15:37Z), `automations/icd10-code-check/README.md:42-53` | pass 1's vendors lens: every finding dropped as a paraphrase or out of calls; passes 2–4 needed. Graded on: at most four questions a lens, one-sentence quotes, small pages | its approved brief, `automations/icd10-code-check/research.md`, passes 1–4; a pass 1 whose vendors lens keeps its findings |

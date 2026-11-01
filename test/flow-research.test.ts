@@ -37,12 +37,12 @@ test('the file parses as the Workflow tool runs it: an async function body, its 
   ]);
 });
 
-test('a developer with this repository alone: no backend clone, the vendors lens reads the menu', async () => {
+test('a developer with this repository alone: no backend clone, the adoption lens reads the menu', async () => {
   const r = await run(normal, { noBackend: true });
   assert.equal(r.data.stopped, '');
-  const vendors = r.calls.find((c) => c.label === 'vendors lens')!;
+  const adoption = r.calls.find((c) => c.label === 'adoption lens')!;
   assert.ok(
-    vendors.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
+    adoption.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
   );
   assert.ok(
     !r.calls.some((c) => c.prompt.includes('snoopy-backend')),
@@ -58,10 +58,14 @@ test('a normal run: three agents at most, the gates drop and name, the checksum 
   assert.equal(r.data.stopped, '');
   assert.equal(r.data.framing.decision, null, 'an invented frame field is dropped');
   assert.equal(r.data.framing.job, 'Check each supplier invoice against its purchase order');
-  for (const start of ['vendors-3: its page tried', 'rules-3: a tier 4', 'practice-2: not_on_page'])
+  for (const start of [
+    'adoption-3: its page tried',
+    'rules-3: a tier 4',
+    'practice-2: not_on_page',
+  ])
     assert.ok(has(r.data.gaps, start), start);
   assert.ok(r.data.gaps.some((g: string) => g.includes('"invented step" — no source')));
-  assert.ok(!r.data.sources.some((s: Any) => ['vendors-3', 'practice-2'].includes(s.id)));
+  assert.ok(!r.data.sources.some((s: Any) => ['adoption-3', 'practice-2'].includes(s.id)));
   assert.ok(
     r.logs.some((l) => l.includes('evil.example.org')),
     'the flagged URL is logged',
@@ -210,8 +214,8 @@ test('a confirmed verdict for an id no line cites never makes it a source', asyn
   const { data, calls } = await run((label, attempt, prompt, dir) => {
     if (label !== 'synthesis') return withSkeptic(label, attempt, prompt, dir);
     const brief: Any = BRIEF();
-    for (const lines of Object.values(brief) as Any[][])
-      for (const l of lines) l.cites = l.cites.filter((id: string) => id !== 'rules-1');
+    for (const lines of Object.values(brief) as Any[])
+      for (const l of [lines].flat()) l.cites = l.cites.filter((id: string) => id !== 'rules-1');
     return brief;
   });
   const { findings } = skepticInput(calls.find((c) => c.label === 'skeptic')!.prompt);
@@ -257,4 +261,41 @@ test('a throw after the synthesis writes no unverified line: the lines are gaps'
   );
   assert.ok(!r.calls.some((c) => c.label === 'skeptic'));
   assert.equal(render(r.runDir, r.result).code, 0);
+});
+
+test("the ICD-10 pilot's lessons reach the prompts: four questions, a pick list in full, one-sentence quotes", async () => {
+  const { calls } = await run(normal);
+  const frame = calls.find((c) => c.label === 'frame')!.prompt;
+  assert.ok(frame.includes('at most 4 a lens'), 'the frame gives a lens at most four questions');
+  const practice = calls.find((c) => c.label === 'practice lens')!.prompt;
+  assert.ok(
+    practice.includes('the full official list, its source, its count and the rule'),
+    'the practice lens researches every pick list in full',
+  );
+  for (const lens of ['practice', 'rules', 'adoption', 'streamlining']) {
+    const prompt = calls.find((c) => c.label === `${lens} lens`)!.prompt;
+    assert.ok(prompt.includes('one exact sentence from that page copied character for character'));
+    assert.ok(prompt.includes('Skip a very long page'), `${lens}: small pages over long ones`);
+  }
+});
+
+test("a frame's six questions reach their lens as four, the script's own first, each dropped one a gap", async () => {
+  const six = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'];
+  const { calls, data } = await run((label, attempt, prompt, dir) => {
+    const out = normal(label, attempt, prompt, dir);
+    if (label !== 'frame') return out;
+    return {
+      ...out,
+      ownerWords: { ...out.ownerWords, decision: '' },
+      questions: { ...out.questions, practice: six },
+    };
+  });
+  const practice = calls.find((c) => c.label === 'practice lens')!.prompt;
+  const kept = ['Which decision does this work exist to make?', 'q1', 'q2', 'q3'];
+  assert.ok(
+    practice.includes(`Questions: ${JSON.stringify(kept)}.`),
+    "four, the script's own first",
+  );
+  for (const q of ['q4', 'q5', 'q6'])
+    assert.ok(data.gaps.includes(`practice: "${q}" past the cap; dropped`), `${q} is a gap`);
 });

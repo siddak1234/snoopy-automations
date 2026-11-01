@@ -1,4 +1,4 @@
-# <Flow name>: the backend pull request (2 pull requests)
+# <Flow name>: the backend pull request (step 1)
 
 Filled at `/create-flow` stage 3 when the flow needs a vendor the menu
 (`contract/schemas/platform-menu.json`) lacks, or a menu provider without one operation the spec's
