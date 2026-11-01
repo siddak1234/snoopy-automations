@@ -41,7 +41,7 @@ const data = {
       { integration: 'Epic', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
       { integration: 'Epic', column: 'practice', text: 'a | pipe', cites: ['integration-1-2'] },
     ],
-    firstToBuild: { text: 'Epic, because most use it', cites: ['integration-1-1'] },
+    firstToBuild: [{ text: 'Epic, because most use it', cites: ['integration-1-1'] }],
     v1: [],
     failures: [],
     goldenCases: [

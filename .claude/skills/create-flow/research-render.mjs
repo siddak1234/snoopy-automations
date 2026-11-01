@@ -57,12 +57,8 @@ function integrations(b, ids) {
     out.push(`| ${[name, ...cells].map(cell).join(' | ')} |`);
   }
   if (!lines.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
-  const first = b?.firstToBuild;
-  out.push(
-    '',
-    `First to build: ${first ? first.text + (first.cites.length ? ids(first.cites) : '') : 'a person decides'}`,
-    '',
-  );
+  const first = b?.firstToBuild?.[0];
+  out.push('', `First to build: ${first ? first.text + ids(first.cites) : 'a person decides'}`, '');
   return out;
 }
 
@@ -136,7 +132,7 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   const counts = HEADINGS.map(([k]) => `${k} ${data.brief?.[k]?.length ?? 0}`).join(', ');
   const lines = [
     `research-render: checksum ok (${sum}); research.md written${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
-    `lines: ${counts}; integrations ${data.brief?.integrations?.length ?? 0}; first to build: ${data.brief?.firstToBuild?.text ?? 'a person decides'}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
+    `lines: ${counts}; integrations ${data.brief?.integrations?.length ?? 0}; first to build: ${data.brief?.firstToBuild?.[0]?.text ?? 'a person decides'}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
     `not researched: ${data.notResearched.length ? data.notResearched.join(' | ') : 'none'}`,
     `gaps (${data.gaps.length}): ${data.gaps.join(' | ')}`,
   ];

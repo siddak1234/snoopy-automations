@@ -101,10 +101,9 @@ export const BRIEF = () => ({
     { integration: 'QuickBooks', column: 'cost', text: 'free', cites: ['integration-1-2'] },
     { integration: 'QuickBooks', column: 'menu', text: 'quickbooks', cites: ['adoption-1'] },
   ],
-  firstToBuild: {
-    text: 'QuickBooks, because most firms use it',
-    cites: ['adoption-1', 'integration-1-1'],
-  },
+  firstToBuild: [
+    { text: 'QuickBooks, because most firms use it', cites: ['adoption-1', 'integration-1-1'] },
+  ],
   v1: [{ text: 'match, a person approves', cites: ['streamlining-1', 'practice-1'] }],
   failures: [{ text: 'scanned PDF with no text', cites: ['adoption-2'] }],
   goldenCases: [{ input: 'invented invoice', expected: 'mismatch on line 2', cites: ['rules-1'] }],

@@ -7,10 +7,7 @@ export const meta = {
   phases: [
     { title: 'Frame', detail: "the owner's words, quoted; the lens questions; no research" },
     { title: 'Lenses', detail: 'practice, rules, adoption at once; streamlining after practice' },
-    {
-      title: 'Integrations',
-      detail: 'one researcher per integration adoption ranked, three at once',
-    },
+    { title: 'Integrations', detail: 'a researcher per ranked integration, three at once' },
     { title: 'Synthesis', detail: 'the domain brief from the findings only' },
     { title: 'Skeptic', detail: 'one retry: every cited page re-opened, every line judged' },
     { title: 'Write', detail: 'research.json exactly as computed; its checksum returned' },
@@ -104,24 +101,16 @@ const ADOPTION = obj({ ...FINDINGS.properties, integrations: list(obj({ name: st
 const PARTED = obj({ ...FINDING.properties, part: one(...PARTS) });
 const INTEGRATION_FINDINGS = obj({ ...FINDINGS.properties, findings: list(PARTED) });
 const SECTIONS = ['process', 'waste', 'criteria', 'rubric', 'rules', 'v1', 'failures'];
-const ALL = [...SECTIONS, 'integrations', 'goldenCases'];
+const ALL = [...SECTIONS, 'integrations', 'firstToBuild', 'goldenCases'];
 const KIND = one('domain_fact', 'our_choice');
 // research-render.mjs's COLUMNS heads the table, in this order.
 const COLUMN = one(
-  'adoption',
-  'api',
-  'signIn',
-  'events',
-  'cost',
-  'constraints',
-  'concerns',
-  'practice',
-  'menu',
+  ...'adoption api signIn events cost constraints concerns practice menu'.split(' '),
 );
 const BRIEF = obj({
   ...Object.fromEntries(SECTIONS.map((s) => [s, list(obj({ text: str, cites: strs }))])),
   integrations: list(obj({ integration: str, column: COLUMN, text: str, cites: strs })),
-  firstToBuild: obj({ text: str, cites: strs }),
+  firstToBuild: list(obj({ text: str, cites: strs })), // at most one; none: a person decides
   goldenCases: list(obj({ input: str, expected: str, cites: strs })),
   openQuestions: list(obj({ question: str, kind: KIND, proposedDefault: str, cites: strs })),
 });
@@ -203,9 +192,8 @@ function gate(results, flagged) {
   });
 }
 const lineText = (l) =>
-  l.integration
-    ? `${l.integration}, ${l.column}: ${l.text}`
-    : (l.text ?? l.question ?? `${l.input} → ${l.expected}`);
+  (l.integration ? `${l.integration}, ${l.column}: ` : '') +
+  (l.text ?? l.question ?? `${l.input} → ${l.expected}`);
 
 try {
   phase('Frame');
@@ -252,15 +240,14 @@ try {
       const product = products[lens];
       const [objective, sources, notJob] = product ? INTEGRATION(product) : LENS[lens];
       const t4 = product
-        ? `T4 (developer forums, the official SDK's issues, community posts) only for a finding of part "in practice", a community report, never for a price, a limit or a rule; SEO and AI-written pages never cited`
+        ? `T4 (forums, the SDK's issues, community posts) only for a finding of part "in practice", a community report, never for a price, a limit or a rule; SEO and AI-written pages never cited`
         : 'T4 (SEO pages, forums, AI-written pages) never cited';
+      const asked = product ? '' : `Questions: ${JSON.stringify(questions[lens])}. `;
+      const given = leads
+        ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
+        : '';
       return (
-        `${extra}Research one ${product ? 'integration' : 'lens'} of the flow "${name}": ${lens}. ${task} Objective: ${objective}. ` +
-        (product ? '' : `Questions: ${JSON.stringify(questions[lens])}. `) +
-        `Sources: ${sources}. Not your job: ${notJob}. ` +
-        (leads
-          ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
-          : '') +
+        `${extra}Research one ${product ? 'integration' : 'lens'} of the flow "${name}": ${lens}. ${task} Objective: ${objective}. ${asked}Sources: ${sources}. Not your job: ${notJob}. ${given}` +
         `At most ${capOf(lens)} tool calls and ${MAX_FINDINGS} findings. Search short and broad, then narrow; prefer T1 (regulator, statute, standards body, the vendor's own docs, our repos by path:line) and T2 (professional bodies, practitioner standards, named experts); T3 only reporting on those; ${t4}. ` +
         `Skip a very long page (a whole code set, a full manual) for a small specific one. Each finding: one claim, the URL you fetched, one exact sentence from that page copied character for character (a paraphrase is dropped), its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${backend === undefined ? `${automations} is` : `${automations} and ${backend} are`} read-only. ${DATA}`
       );
@@ -326,7 +313,7 @@ try {
     const synthesisPrompt = (extra) =>
       `${extra}Write the domain brief for the flow "${name}" from these findings only — no memory, no web: ${JSON.stringify(found)}. ${task} ` +
       `Fill: process (today's work end to end: who, what goes in, what comes out); waste (where the time and the errors go); criteria (what an expert checks, in order); rubric (the criteria as the flow will score or decide them); rules (what binds a result, the model vendors' rules on our own AI calls included); ` +
-      `integrations: for each integration the adoption lens ranked (the researchers: ${JSON.stringify(products)}), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it), menu (its menu id, or "to add") — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: "X, because …" citing the findings that separate it, or "${PERSON}" with no cites when they do not; ` +
+      `integrations: for each integration the adoption lens ranked (the researchers: ${JSON.stringify(products)}), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it), menu (its menu id, or "to add") — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: one line "X, because …" citing the findings that separate it, or none when they do not (${PERSON}); ` +
       `v1 (the simplest pipeline: what is automated, what stays with a person, what is left out — few steps, few questions); failures (when it goes wrong); 5 to 10 golden cases with invented inputs only (example.com for any link) and the expected result; open questions. ` +
       `Every line cites the finding ids it rests on; a line no finding carries is not written — it becomes an open question. An open question is kind domain_fact (its default states something about the job, the rules or a vendor) or our_choice (a product choice); a default with no finding is "${PERSON}".`;
     brief = await once(
@@ -344,9 +331,7 @@ try {
     const keep = (s) => (l) => {
       const lead = (id) => t4.has(id) && l.column !== 'practice';
       for (const id of l.cites.filter(lead))
-        gap(
-          `${s}: "${lineText(l)}" — ${id} is a community report, for a practice line only; cite dropped`,
-        );
+        gap(`${s}: "${lineText(l)}" — ${id} is T4; cite dropped`);
       return { ...l, cites: l.cites.filter((id) => ids.has(id) && !lead(id)) };
     };
     for (const s of ALL) {
@@ -356,9 +341,7 @@ try {
       brief[s] = brief[s].filter((l) => l.cites.length > 0);
     }
     brief.openQuestions = brief.openQuestions.map(keep('openQuestions'));
-    brief.firstToBuild = keep('firstToBuild')(brief.firstToBuild);
-    const first = brief.firstToBuild;
-    const citing = [...ALL.flatMap((s) => brief[s]), ...brief.openQuestions, first];
+    const citing = [...ALL.flatMap((s) => brief[s]), ...brief.openQuestions];
     cited = found.filter((f) => citing.some((l) => l.cites.includes(f.id)));
     const byId = new Map(found.map((f) => [f.id, f]));
     const quoted = (cites) => cites.map((id) => ({ id, quote: byId.get(id).quote }));
@@ -370,12 +353,6 @@ try {
       const text = `${q.question} — default: ${q.proposedDefault}`;
       if (q.cites.length) lines.push({ ref: `openQuestions.${i}`, text, cites: quoted(q.cites) });
     }
-    if (first.cites.length)
-      lines.push({
-        ref: 'firstToBuild',
-        text: `First to build: ${first.text}`,
-        cites: quoted(first.cites),
-      });
 
     let verdicts = null;
     if (!fits(NEED.skeptic)) skeptic = 'the token target was spent before it';
@@ -432,11 +409,6 @@ try {
       if (researched) return { ...q, researched };
       return { ...q, cites: [], proposedDefault: PERSON, proposal: q.proposedDefault, researched };
     });
-    // First to build stands as a line does, on confirmed ids only; else a person decides.
-    const firstWhy = first.cites.length ? unsupported('firstToBuild', first.cites) : 'no source';
-    if (firstWhy && first.text !== PERSON)
-      gap(`firstToBuild: "${first.text}" — ${firstWhy}; ${PERSON}`);
-    if (firstWhy) brief.firstToBuild = { text: PERSON, cites: [] };
     const keepIt = (q) => (q.proposal !== PERSON ? `, unless the owner keeps "${q.proposal}"` : '');
     notResearched = brief.openQuestions
       .filter((q) => !q.researched)
@@ -447,7 +419,7 @@ try {
 } catch (error) {
   // A throw outside an agent call: the run stops; what it has is written, but no unverified line.
   stop(`a step threw (${message(error)})`);
-  for (const s of brief && !verified ? [...ALL, 'openQuestions', 'firstToBuild'] : [])
+  for (const s of brief && !verified ? [...ALL, 'openQuestions'] : [])
     for (const l of [brief[s] ?? []].flat())
       gap(`${s}: "${lineText(l ?? {})}" — not verified; the run stopped`);
   if (!verified) brief = null;

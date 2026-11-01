@@ -345,7 +345,7 @@ test('a community report: kept for a practice line, never for a price, a limit o
   assert.deepEqual(kept, ['QuickBooks api', 'QuickBooks practice', 'QuickBooks menu']);
   assert.ok(
     data.gaps.includes(
-      'integrations: "QuickBooks, cost: free" — integration-1-2 is a community report, for a practice line only; cite dropped',
+      'integrations: "QuickBooks, cost: free" — integration-1-2 is T4; cite dropped',
     ),
   );
   assert.ok(data.gaps.includes('integrations: "QuickBooks, cost: free" — no source; dropped'));
@@ -354,19 +354,22 @@ test('a community report: kept for a practice line, never for a price, a limit o
 test('first to build: kept on confirmed ids, else "a person decides" and a gap', async () => {
   const ok = await run(normal);
   assert.deepEqual(ok.data.brief.firstToBuild, BRIEF().firstToBuild);
-  const { data } = await run(
+  const { data, runDir, result } = await run(
     normalWith((prompt) => {
       const out = skepticSays()(prompt);
       for (const v of out.verdicts) if (v.id === 'integration-1-1') v.verdict = 'not_on_page';
       return out;
     }),
   );
-  assert.deepEqual(data.brief.firstToBuild, { text: 'a person decides', cites: [] });
+  assert.deepEqual(data.brief.firstToBuild, [], 'none: research.md says "a person decides"');
   assert.ok(
     data.gaps.includes(
-      'firstToBuild: "QuickBooks, because most firms use it" — a cite was not confirmed (integration-1-1); a person decides',
+      'firstToBuild: "QuickBooks, because most firms use it" — a cite was not confirmed (integration-1-1); dropped',
     ),
   );
+  assert.equal(render(runDir, result).code, 0);
+  const md = readFileSync(join(runDir, 'research.md'), 'utf8');
+  assert.ok(md.includes('\nFirst to build: a person decides\n'), 'shown to the owner');
 });
 
 test("the synthesis's integration columns are the rendered table's, in order", async () => {
