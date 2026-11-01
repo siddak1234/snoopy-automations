@@ -37,7 +37,7 @@ services is a crucial part in our create flow"). The adoption lens ranks at most
 the business line uses, by evidence of adoption (market share, surveys, regulator or certification
 data, the vendor's own customer counts), each with its source and its menu status: the provider id
 alone (its schema refuses anything else) and, apart, the menu's path:line, or "to add"; one past five is a gap. research.json keeps that ranking, and research.md gives each
-ranked integration its row, its "On the menu" cell the provider id only when the menu's `providers`
+ranked integration whose adoption column keeps a confirmed line its row (any other is a Gaps line, "ranked by adoption, not confirmed"), its "On the menu" cell the provider id only when the menu's `providers`
 list it, else "to add" — research-render.mjs checks it; no finding can quote an absence. After the
 lenses (skipped, one gap, when the token target cannot fit them), one researcher per integration, three at
 once, at most 15 tool calls each (as adoption; A1's 10–15), labels each finding with its part:

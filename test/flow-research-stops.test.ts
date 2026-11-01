@@ -41,6 +41,18 @@ test('two failed lenses with a working write: the gaps are written, no source is
   assert.equal(render(r.runDir, r.result).code, 0);
 });
 
+test('streamlining and rules fail: the integrations stage never runs, adoption is not counted', async () => {
+  const r = await run((label, attempt, prompt, dir) =>
+    label === 'streamlining lens' || label === 'rules lens'
+      ? null
+      : normal(label, attempt, prompt, dir),
+  );
+  assert.ok(
+    !r.calls.some((c) => c.label === 'adoption lens' || c.label.startsWith('integration-')),
+  );
+  assert.equal(r.data.stopped, '2 of 4 lenses failed (rules, streamlining)');
+});
+
 test('findings past the cap of twelve are gaps, never dropped silently', async () => {
   const many = (lens: string) => ({
     ...lensOut(lens),

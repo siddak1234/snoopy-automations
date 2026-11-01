@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // /create-flow stage 1b: checks <runDir>/research.json against the checksum and length that
 // `.claude/workflows/flow-research.js` returned in its Workflow result, then renders research.md
-// from the checked file. Nothing a model typed reaches the owner unchecked.
+// from the checked file. Nothing a model typed reaches the owner unchecked: a ranked integration is a
+// row only while its adoption column keeps a confirmed line, else a Gaps line.
 //   node research-render.mjs <runDir>/research.json <djb2> <length>
 // Exit 0: research.md written beside it, a summary of 2 KB or less printed. Exit 1: a mismatch or
 // no readable file (re-run the workflow with resumeFromRunId and args.writeAttempt = 2). Exit 2:
@@ -46,17 +47,24 @@ const MENU = join(import.meta.dirname, '../../../contract/schemas/platform-menu.
 const onMenu = new Set(JSON.parse(readFileSync(MENU, 'utf8')).providers.map((p) => p.id));
 const cell = (text) => text.replaceAll('|', '\\|');
 
-/** One row per ranked integration, its lines keyed by its id `integration-<k>`, with their cites. */
+/** Adoption's ranking is model text: an entry is a row only while its adoption column keeps a
+ * line the skeptic's gate let stand; the rest are listed under Gaps. */
+const rank = (b, ranked) =>
+  ranked.map((r, k) => {
+    const id = `integration-${k + 1}`;
+    const ok = (b?.integrations ?? []).some((l) => l.integration === id && l.column === 'adoption');
+    return { ...r, id, ok };
+  });
+
+/** One row per confirmed ranked integration, its lines keyed by its id, with their cites. */
 function integrations(b, ranked, ids) {
   const lines = b?.integrations ?? [];
   const out = ['## Integrations', ''];
   out.push(`| Integration | ${COLUMNS.map(([, h]) => h).join(' | ')} | On the menu |`);
   out.push(`|---|${COLUMNS.map(() => '---').join('|')}|---|`);
-  for (const [k, { name, menu }] of ranked.entries()) {
+  for (const { id, name, menu } of ranked) {
     const cells = COLUMNS.map(([key]) => {
-      const here = lines.filter(
-        (l) => l.integration === `integration-${k + 1}` && l.column === key,
-      );
+      const here = lines.filter((l) => l.integration === id && l.column === key);
       return here.length ? here.map((l) => `${l.text}${ids(l.cites)}`).join('; ') : 'not found';
     });
     out.push(`| ${[name, ...cells, onMenu.has(menu) ? menu : 'to add'].map(cell).join(' | ')} |`);
@@ -89,12 +97,14 @@ export function render(data) {
     out.push('');
   }
   const b = data.brief;
+  const ranked = rank(b, data.integrations ?? []);
+  const rows = ranked.filter((r) => r.ok);
   for (const [key, heading] of HEADINGS) {
     out.push(`## ${heading}`, '');
     for (const l of b?.[key] ?? []) out.push(`- ${l.text}${ids(l.cites)}`);
     if (!(b?.[key] ?? []).length) out.push('- Unknown: nothing confirmed (see Gaps)');
     out.push('');
-    if (key === 'rules') out.push(...integrations(b, data.integrations ?? [], ids));
+    if (key === 'rules') out.push(...integrations(b, rows, ids));
   }
   out.push('## Golden cases (invented data)', '');
   for (const c of b?.goldenCases ?? []) out.push(`- ${c.input} → ${c.expected}${ids(c.cites)}`);
@@ -102,6 +112,8 @@ export function render(data) {
   for (const q of b?.openQuestions ?? []) out.push(question(q, ids));
   out.push('', '## Gaps', '');
   for (const g of data.gaps) out.push(`- ${g}`);
+  for (const { name } of ranked.filter((r) => !r.ok))
+    out.push(`- ${name}: ranked by adoption, not confirmed`);
   out.push(
     '',
     '## Sources',

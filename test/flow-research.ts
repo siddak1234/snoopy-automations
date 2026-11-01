@@ -100,6 +100,12 @@ export const BRIEF = () => ({
   integrations: [
     {
       integration: 'integration-1',
+      column: 'adoption',
+      text: 'most firms use it',
+      cites: ['adoption-1'],
+    },
+    {
+      integration: 'integration-1',
       column: 'api',
       text: 'REST, OAuth 2',
       cites: ['integration-1-1'],

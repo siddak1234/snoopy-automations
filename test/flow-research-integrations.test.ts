@@ -63,7 +63,7 @@ test('a community report: kept for a practice line, never for a price, a limit o
   assert.ok(data.gaps.includes('integration-1-3: a tier 4 page, a lead only; dropped'));
   assert.ok(data.sources.some((s: Any) => s.id === 'integration-1-2' && s.tier === 'T4'));
   const kept = data.brief.integrations.map((l: Any) => `${l.integration} ${l.column}`);
-  assert.deepEqual(kept, ['integration-1 api', 'integration-1 practice']);
+  assert.deepEqual(kept, ['integration-1 adoption', 'integration-1 api', 'integration-1 practice']);
   assert.ok(
     data.gaps.includes(
       'integrations: "QuickBooks, cost: free" — integration-1-2 is T4; cite dropped',
@@ -104,14 +104,34 @@ test("the synthesis's integration columns are the rendered table's, in order", a
   assert.ok(calls.find((c) => c.label === 'synthesis')!.prompt.includes('"integration-2":"Xero"'));
 });
 
-test("research.json keeps adoption's ranking: one row each, its menu id checked against the menu", async () => {
-  const { data, runDir, result } = await run(normal);
+test("research.json keeps adoption's ranking; a row only on a confirmed adoption line", async () => {
+  // Every integration-2 line fails: its one finding is not on its page.
+  const { data, runDir, result } = await run((label, attempt, prompt, dir) => {
+    if (label === 'synthesis') {
+      const brief = BRIEF();
+      brief.integrations.push(
+        {
+          integration: 'integration-2',
+          column: 'adoption',
+          text: 'some',
+          cites: ['integration-2-1'],
+        },
+        { integration: 'integration-2', column: 'api', text: 'REST', cites: ['integration-2-1'] },
+      );
+      return brief;
+    }
+    if (label !== 'skeptic') return normal(label, attempt, prompt, dir);
+    const out = skepticSays()(prompt);
+    for (const v of out.verdicts) if (v.id === 'integration-2-1') v.verdict = 'not_on_page';
+    return out;
+  });
   assert.deepEqual(data.integrations, RANKED);
+  assert.ok(!data.brief.integrations.some((l: Any) => l.integration === 'integration-2'));
   assert.equal(render(runDir, result).code, 0);
   const md = readFileSync(join(runDir, 'research.md'), 'utf8');
-  assert.match(md, /\n\| QuickBooks \| .* \| quickbooks \|\n/u);
-  const xero = `| Xero | ${COLUMNS.map(() => 'not found').join(' | ')} | to add |`;
-  assert.ok(md.includes(`\n${xero}\n`), 'a ranked integration with no line keeps its row');
+  assert.match(md, /\n\| QuickBooks \| most firms use it \[adoption-1\] \| .* \| quickbooks \|\n/u);
+  assert.ok(!md.includes('| Xero'), 'no confirmed adoption line: no row');
+  assert.ok(md.split('## Gaps')[1]!.includes('\n- Xero: ranked by adoption, not confirmed\n'));
 });
 
 test('first to build is at most one line: the synthesis schema says so', async () => {
@@ -184,7 +204,7 @@ test("the synthesis keys each line by adoption's ranked ids: another name is a g
       .split('\n')
       .filter((l) => /^\| (?!Integration|---)/u.test(l))
       .map((l) => l.split(' | ')[0]),
-    ['| QuickBooks', '| Xero'],
+    ['| QuickBooks'],
   );
   const none = await run((label, attempt, prompt, dir) =>
     label === 'adoption lens'

@@ -38,6 +38,12 @@ const data = {
     rubric: [],
     rules: [],
     integrations: [
+      {
+        integration: 'integration-1',
+        column: 'adoption',
+        text: 'most use it',
+        cites: ['adoption-1'],
+      },
       { integration: 'integration-1', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
       {
         integration: 'integration-1',
@@ -117,10 +123,12 @@ test('a matching file renders research.md and a short summary', () => {
   assert.match(md, /## The rubric\n\n- Unknown: nothing confirmed \(see Gaps\)/u);
   assert.match(
     md,
-    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| not found \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| to add \|\n\| QuickBooks \| (not found \| ){8}quickbooks \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
+    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| most use it \[adoption-1\] \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| to add \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
   );
+  assert.ok(!md.includes('| QuickBooks'), 'a ranked entry with no confirmed adoption line: no row');
+  assert.match(md, /## Gaps\n\n.*\n- QuickBooks: ranked by adoption, not confirmed\n/u);
   assert.match(md, /\| integration-1-2 \| T4, community report \| A forum \|/u);
-  assert.match(result.out, /integrations 2; first to build: Epic, because most use it;/u);
+  assert.match(result.out, /integrations 3; first to build: Epic, because most use it;/u);
   assert.match(md, /- Tax rule\? — default: as the statute says \[practice-1\]/u);
   assert.match(
     md,

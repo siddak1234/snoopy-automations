@@ -8,8 +8,8 @@ export const meta = {
 
 // The data half of `.claude/workflows/flow-research.js` (the line ceiling): what each researcher
 // is asked and the shape each step returns. A Workflow script cannot import, so the main script
-// loads this with workflow() and test/flow-research.ts compiles both. "<product>" in INTEGRATION
-// is the ranked integration's name, filled in by the main script.
+// loads this with workflow() and test/flow-research.ts compiles the three files. "<product>" in
+// INTEGRATION is the ranked integration's name, filled in by flow-research-integrations.js.
 const { automations } = args ?? {};
 const MAX_INTEGRATIONS = 5; // adoption's ranking; each past it a gap
 const CAP = { simple: 10, broad: 15 }; // tool calls a lens: A1 "2-4 subagents with 10-15 calls each"
