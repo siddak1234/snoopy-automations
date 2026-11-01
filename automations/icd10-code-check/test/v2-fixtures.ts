@@ -74,16 +74,19 @@ export const batchRequest = (ids: string[]): InvokeRequest =>
     input: { visitNotes: ids },
   });
 
-/** A visit's child run: its unit's one file (pages 1–2 of the note) and its setup. */
-export const childInvoke = (config: JsonObject = {}): InvokeRequest =>
+/** A visit's child run: its unit's pieces (each two pages of the note; one by default) and its setup. */
+export const childInvoke = (config: JsonObject = {}, pieces = 1): InvokeRequest =>
   invokeFixture({
     templateId: TEMPLATE_ID,
     templateVersion: 2,
     config,
     unit: unitFixture({
       label: 'Jane Doe · Oct 12, 2026',
-      artifacts: [{ artifactId: NOTE_ID, pages: { from: 1, to: 2 } }],
-      data: { patient: 'Jane Doe', visitDate: '2026-10-12', pages: 2 },
+      artifacts: Array.from({ length: pieces }, (_, i) => ({
+        artifactId: NOTE_ID,
+        pages: { from: 2 * i + 1, to: 2 * i + 2 },
+      })),
+      data: { patient: 'Jane Doe', visitDate: '2026-10-12', pages: 2 * pieces },
     }),
   });
 
@@ -99,10 +102,10 @@ const flow = () => define(manifests, { today: () => '2026-10-28' });
 export async function runChild(
   note: JsonObject,
   picks: Picks = {},
-  options: { config?: JsonObject; platform?: RecordingPlatform } = {},
+  options: { config?: JsonObject; platform?: RecordingPlatform; pieces?: number } = {},
 ): Promise<ChildRan> {
   const platform = options.platform ?? platformFor(note, picks);
-  const request = childInvoke(options.config ?? { specialties: ['207RN0300X'] });
+  const request = childInvoke(options.config ?? { specialties: ['207RN0300X'] }, options.pieces);
   const result = await flow().execute(request, platform);
   await platform.reportResult(request.runId, result);
   return { result: platform.results.at(-1)!.result, platform, request };

@@ -74,6 +74,48 @@ test('I2: a printed code the index settles is kept with no AI; only the others a
   assert.equal((output(settledOnly.result).measures as JsonObject).settled, 1);
 });
 
+test('I1: a "without" statement never settles on the "with" code; "no" reads as "without"', () => {
+  const { codes } = loadTable('2027-oct');
+  const index = loadIndex('2027-oct');
+  for (const [statement, wrong] of [
+    ['COPD without exacerbation', 'J44.1'],
+    ['Asthma without status asthmaticus', 'J45.902'],
+    ['Cystitis without hematuria', 'N30.91'],
+    ['Acute cystitis without hematuria', 'N30.01'],
+    ['Hypertensive chronic kidney disease without heart failure', 'I13.10'],
+    ['COPD, no exacerbation', 'J44.1'],
+  ]) {
+    const found = lookUp(statement!, index, codes);
+    assert.notEqual(found.settled, wrong, statement);
+    assert.notEqual(found.codes[0], wrong, statement);
+  }
+  assert.equal(lookUp('Cystitis with hematuria', index, codes).settled, 'N30.91');
+  // It settles only where the path or the code's title says "without" too.
+  assert.equal(lookUp('GERD without esophagitis', index, codes).settled, 'K21.9');
+  assert.equal(lookUp('Low back pain, no radiation', index, codes).settled, null);
+});
+
+test('I1: a keyword lookup ranks the Tabular titles too', () => {
+  const { codes } = loadTable('2027-oct');
+  // No index path holds all three words; "Mild persistent asthma, uncomplicated" shares two.
+  const found = lookUp('Mild intermittent uncomplicated', loadIndex('2027-oct'), codes);
+  assert.equal(found.via, 'keyword');
+  assert.ok(found.codes.includes('J45.30'), found.codes.join(' '));
+});
+
+test('I2: a printed "with" code on a "without" statement is sent to the AI, not kept', async () => {
+  const ran = await runChild(
+    reading(['J44.1'], [{ statement: 'COPD without exacerbation', categories: ['J44'] }]),
+    {},
+    { config: {} },
+  );
+  const sent = matchCalls(ran.platform).flatMap((c) => c.input.diagnoses as Sent);
+  assert.deepEqual(
+    sent.map((d) => d.statement),
+    ['COPD without exacerbation'],
+  );
+});
+
 test('the match: at most 8 diagnoses a call, at most 30 choices each, 3 calls at once', async () => {
   const many = Array.from({ length: 20 }, (_, i) => ({
     statement: `Type 2 diabetes mellitus with complication number ${i}`,

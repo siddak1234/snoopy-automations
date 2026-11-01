@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 
-import { DEFAULT_MODEL_TIMEOUT_MS, type RunResult } from '@autom8x/automation-sdk';
+import {
+  DEFAULT_CALLBACK_TIMEOUT_MS,
+  DEFAULT_MODEL_TIMEOUT_MS,
+  type RunResult,
+} from '@autom8x/automation-sdk';
 
 import { define } from '../src/automation.js';
 import { WINDOWS_AT_ONCE, WINDOW_ROOM_MS, pagesOfAnswer } from '../src/v2/batch-steps.js';
@@ -268,7 +272,10 @@ test('many windows: three asked at once, none started without room for its call 
   assert.equal(most, WINDOWS_AT_ONCE);
   assert.equal(WINDOWS_AT_ONCE, 3);
   assert.equal(late, 0, 'no window started without its room');
-  assert.ok(clock + 4 * 25_000 <= deadline, `ended ${(deadline - clock) / 1000} s before it`);
+  assert.ok(
+    clock + 4 * DEFAULT_CALLBACK_TIMEOUT_MS <= deadline,
+    `ended ${(deadline - clock) / 1000} s before it`,
+  );
   assert.ok(platform.modelCalls.length < 25, `${platform.modelCalls.length} of 25 windows asked`);
 });
 

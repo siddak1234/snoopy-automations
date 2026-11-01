@@ -9,14 +9,15 @@ import type { CodeTable, TableId } from '../tables.js';
  * the Tabular List"). Each table's index is a built asset, `assets/v2/index-<table>.json`: every
  * index path that names a code, its levels' words as `termWords` keeps them, levels joined by "|"
  * and a level's alternatives ("Disease, diseased") by ",". A diagnosis is looked up exact, then by
- * main term and subterms, then by keyword; each code found is verified in the Tabular — kept when
- * flag 1, else its flag-1 codes under it, ranked by the words their titles share with the
- * statement, so laterality and a 7th character come from the Tabular only.
+ * main term and subterms, then by keyword, the keyword stage with the Tabular's titles too; each
+ * code found is verified in the Tabular — kept when flag 1, else its flag-1 codes under it, ranked
+ * by the words their titles share with the statement, so laterality and a 7th character come from
+ * the Tabular only. "with" and "without" ("no" read as it) are words: a path's "with" is said unless
+ * the statement says "without", and a "without" statement settles only on a path or a code whose
+ * Tabular title holds it too.
  */
 
-const STOP = new Set(
-  'a an and as at by due for in is nec nos of on or other the to with'.split(' '),
-);
+const STOP = new Set('a an and as at by due for in is nec nos of on or other the to'.split(' '));
 
 /** Short forms a note prints, read as the index words them. */
 const SHORT: Readonly<Record<string, string>> = {
@@ -34,6 +35,7 @@ const SHORT: Readonly<Record<string, string>> = {
   hld: 'hyperlipidemia',
   htn: 'hypertension',
   mi: 'myocardial infarction',
+  no: 'without',
   osa: 'obstructive sleep apnea',
   sob: 'shortness breath',
   t1dm: 'type 1 diabetes mellitus',
@@ -136,14 +138,23 @@ export function verify(
   };
 }
 
-/** Whether every level of a path is a connective or has an alternative whose words were all said. */
+/**
+ * Whether every level of a path is a connective or has an alternative whose words were all said, a
+ * "with" said unless the statement says "without".
+ */
 const said = (path: string, words: ReadonlySet<string>): boolean =>
   path
     .split('|')
     .every(
       (level) =>
         level === '' ||
-        level.split(',').some((alternative) => alternative.split(' ').every((w) => words.has(w))),
+        level
+          .split(',')
+          .some((alternative) =>
+            alternative
+              .split(' ')
+              .every((w) => words.has(w) || (w === 'with' && !words.has('without'))),
+          ),
     );
 
 /** A diagnosis's statement looked up in the index, its codes verified in the Tabular. */
@@ -174,10 +185,24 @@ export function lookUp(statement: string, index: Index, codes: CodeTable): Looku
       .filter((code) => code !== undefined),
   );
   const strict = verified.slice(0, top.length).every((one) => one.strict);
+  const first = firsts.size === 1 ? [...firsts][0]! : undefined;
+  // A "without" statement settles only on a path, or a code's Tabular title, that holds it too.
+  const negationKept =
+    !words.has('without') ||
+    (first !== undefined && termWords(codes[first]!).includes('without')) ||
+    top.every(([at]) => index.paths[at]!.split(/[|, ]/u).includes('without'));
+  const titled =
+    via === 'keyword' || via === 'none'
+      ? Object.keys(codes)
+          .map((code) => ({ code, n: shared(codes[code]!, words) }))
+          .filter((one) => one.n >= most)
+          .sort((a, b) => b.n - a.n)
+          .slice(0, 10)
+          .map((one) => one.code)
+      : [];
   return {
-    settled:
-      (via === 'exact' || via === 'term') && strict && firsts.size === 1 ? [...firsts][0]! : null,
+    settled: (via === 'exact' || via === 'term') && strict && negationKept ? (first ?? null) : null,
     via,
-    codes: [...new Set(verified.flatMap((one) => one.codes))],
+    codes: [...new Set([...verified.flatMap((one) => one.codes), ...titled])],
   };
 }

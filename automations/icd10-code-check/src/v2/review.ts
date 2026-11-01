@@ -280,5 +280,5 @@ export function visitReview(
 ): { blocks: EmittedBlock[]; decisions: GroupedDecision[] } | { stop: string } {
   const decisions = visitDecisions(view);
   const blocks = visitBlocks(view);
-  return fitsBlocks(blocks) ? { blocks, decisions } : { stop: WORDS_V2.tooManyVisits };
+  return fitsBlocks(blocks) ? { blocks, decisions } : { stop: WORDS_V2.tooManyCodes };
 }

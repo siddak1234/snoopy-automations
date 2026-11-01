@@ -16,9 +16,8 @@ export const WORDS_V2 = {
   learn: "Learn from this clinic's reviews",
   learnHelp:
     'On by default. Each accepted or denied change, without names, numbers or dates, guides later picks. Turn it off to stop and clear what was learned.',
-  /** A file whose visits pass one run's limits (the spec's v2 section, row 6). */
-  tooManyVisits:
-    'This file has more visits than one run can review. Upload the visits as separate files.',
+  /** A visit whose codes table or blocks pass one run's limits (the spec's v2 section, row 6). */
+  tooManyCodes: 'This visit has more codes than one run can review.',
   /** The batch run's one line, its summary and its block (the task's words, 1 in the singular). */
   batch: (files: number, pages: number, visits: number, setAside: number) =>
     `${count(files, 'file')} · ${count(pages, 'page')} · ${count(visits, 'visit')} · ${setAside} set aside`,

@@ -9,13 +9,15 @@ import {
 } from '@autom8x/automation-sdk/testing';
 
 import { define } from '../src/automation.js';
+import { DIAGNOSES_A_CALL } from '../src/v2/child-steps.js';
 import { manifests, platformFor, reading, type Dx } from './fixtures.js';
 import { runChild } from './v2-fixtures.js';
 
 /**
  * The owner's A4 budgets (2026-11-01), measured on a visit's run, its review and its save: AI
- * calls at most 2 for a visit of one file and at most 8 diagnoses to match (one read, one match),
- * and no match call once every diagnosis is settled; platform calls (model, provider, file and
+ * calls one read per file piece plus one match call per `DIAGNOSES_A_CALL` unsettled diagnoses
+ * (rounded up), so at most 2 for one file and at most `DIAGNOSES_A_CALL` unsettled, and no match
+ * call once every diagnosis is settled; platform calls (model, provider, file and
  * memory) at most 15; and every message — the held result, the answered invoke, the final result —
  * at most the platform's 256 KiB, for a visit of 40 long diagnoses too.
  */
@@ -38,7 +40,7 @@ function counted(platform: RecordingPlatform, store: RecordingMemory = platform.
 
 const flow = () => define(manifests, { today: () => '2026-10-28' });
 
-async function visit(diagnoses: Dx[], codes: string[], npi = false) {
+async function visit(diagnoses: Dx[], codes: string[], npi = false, pieces = 1) {
   const note = reading(codes, diagnoses);
   const picks = Object.fromEntries(diagnoses.map((d) => [d.statement, { code: 'N18.31' }]));
   const first = platformFor(note, picks);
@@ -46,7 +48,7 @@ async function visit(diagnoses: Dx[], codes: string[], npi = false) {
   const config = npi ? { npi: '1234567893' } : { specialties: ['207RN0300X'] };
   if (npi) first.provider = () => Promise.resolve({ status: 200, body: { results: [] } });
   const before = counted(first, store);
-  const held = await runChild(note, picks, { platform: first, config });
+  const held = await runChild(note, picks, { platform: first, config, pieces });
   const messages: number[] = [bytes(held.result)];
   let ai = first.modelCalls.length;
   let platformCalls = before();
@@ -69,7 +71,11 @@ async function visit(diagnoses: Dx[], codes: string[], npi = false) {
   return { ai, platformCalls, messages };
 }
 
-test('A4: at most 2 AI calls a visit, none to match once every diagnosis is settled', async (t) => {
+/** A visit's AI calls: one read per file piece, one match call per `DIAGNOSES_A_CALL` unsettled. */
+const calls = (pieces: number, unsettled: number) =>
+  pieces + Math.ceil(unsettled / DIAGNOSES_A_CALL);
+
+test('A4: AI calls a visit, one read a piece and a match call per 8 unsettled; none to match once all are settled', async (t) => {
   const typical = await visit(
     [
       { statement: 'Hypertension', categories: ['I10'] },
@@ -77,10 +83,28 @@ test('A4: at most 2 AI calls a visit, none to match once every diagnosis is sett
     ],
     ['I10', 'N18.30'],
   );
+  assert.equal(typical.ai, calls(1, 1));
   assert.ok(typical.ai <= 2, `${typical.ai} AI calls`);
   const settled = await visit([{ statement: 'Hypertension', categories: ['I10'] }], ['I10']);
-  assert.equal(settled.ai, 1, 'the read alone');
-  t.diagnostic(`AI calls: ${typical.ai} a visit, ${settled.ai} settled`);
+  assert.equal(settled.ai, calls(1, 0), 'the read alone');
+  const forty = await visit(
+    Array.from({ length: 40 }, (_, i) => ({
+      statement: `Chronic kidney disease stage 3a, visit item ${i}`,
+      categories: ['N18'],
+    })),
+    ['N18.30'],
+  );
+  assert.equal(forty.ai, calls(1, 40));
+  const photos = await visit(
+    [{ statement: 'CKD stage 3a, eGFR 52 today', categories: ['N18'] }],
+    ['N18.30'],
+    false,
+    3,
+  );
+  assert.equal(photos.ai, calls(3, 3), 'each piece read, its diagnosis read three times');
+  t.diagnostic(
+    `AI calls: ${typical.ai} typical, ${settled.ai} settled, ${forty.ai} for 40, ${photos.ai} for 3 pieces`,
+  );
 });
 
 test('A4: at most 15 platform calls a visit, its NPI looked up, reviewed and saved', async (t) => {

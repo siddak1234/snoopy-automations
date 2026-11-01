@@ -1,4 +1,5 @@
 import {
+  DEFAULT_CALLBACK_TIMEOUT_MS,
   DEFAULT_MODEL_TIMEOUT_MS,
   artifactIdsOf,
   boundedUnits,
@@ -143,9 +144,9 @@ export const WINDOWS_AT_ONCE = 3;
 
 /**
  * The time a window needs before the run's deadline: one model call's wait and four callbacks'
- * (25 s each, the SDK's callback wait), the step reports and the result that follow it.
+ * (the SDK's callback wait each), the step reports and the result that follow it.
  */
-export const WINDOW_ROOM_MS = DEFAULT_MODEL_TIMEOUT_MS + 4 * 25_000;
+export const WINDOW_ROOM_MS = DEFAULT_MODEL_TIMEOUT_MS + 4 * DEFAULT_CALLBACK_TIMEOUT_MS;
 
 /** The pages of an upload sent to no AI: each a note's, its patient and date left to `read-note`. */
 const unsorted = (pages: number): PageRead[] =>

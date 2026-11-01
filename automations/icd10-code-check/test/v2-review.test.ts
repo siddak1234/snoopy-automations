@@ -241,8 +241,7 @@ const removes = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ ...remove, id: `n${i + 1}` }));
 const keeps = (n: number, code: string) =>
   Array.from({ length: n }, (_, i) => row({ id: `n${i + 1}`, code, verdict: 'keep' }));
-const STOP =
-  'This file has more visits than one run can review. Upload the visits as separate files.';
+const STOP = 'This visit has more codes than one run can review.';
 
 test("no cap on changes a visit but the table's: 200 decisions offered, and every block kept", () => {
   const review = visitReview(view('Jane Doe', '2026-10-12', removes(BLOCK_LIMITS.tableRows)));
