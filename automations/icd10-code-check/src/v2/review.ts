@@ -111,12 +111,16 @@ export function visitTitles(views: readonly VisitView[]): string[] {
 /** The most decisions one held run may offer, the platform round's B3 (v1's is 40). */
 export const MAX_DECISIONS_V2 = 400;
 
+/** The most decisions one visit may offer, v1's 40 (`decide.ts`): a visit past it stops the run. */
+export const MAX_DECISIONS_PER_VISIT = 40;
+
 /** A visit's decision id: `v{visit}-{row id}` ("v2-n1"), a step id's shape, unique in the run. */
 export const decisionId = (visit: number, rowId: string): string => `v${visit + 1}-${rowId}`;
 
 /**
  * Each visit's changes under its heading, in the visits' order: v1's decisions, each id made
- * unique by its visit. Undefined past 400 in all (the run stops, as v1 stops past 40).
+ * unique by its visit. Undefined when a visit holds more than 40 or the run more than 400 (the run
+ * stops, as v1 stops past 40).
  */
 export function groupedDecisions(
   views: readonly VisitView[],
@@ -131,6 +135,7 @@ export function groupedDecisions(
       })),
     }))
     .filter((g) => g.decisions.length > 0);
+  if (groups.some((g) => g.decisions.length > MAX_DECISIONS_PER_VISIT)) return undefined;
   const total = groups.reduce((sum, g) => sum + g.decisions.length, 0);
   return total > MAX_DECISIONS_V2 ? undefined : groups;
 }

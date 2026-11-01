@@ -1,6 +1,6 @@
 /**
  * v2's own words (`words.md`, "v2 (draft, 2026-11-01)"): the screens' lines, and the review's
- * side-by-side "why". Everything v1 says that v2 still says stays in `words.ts`, unchanged.
+ * side-by-side "why", whose labels are this draft's, not yet checked against the screens. Everything v1 says that v2 still says stays in `words.ts`, unchanged.
  */
 export const WORDS_V2 = {
   /** The run input, the card's one line, the NPI setup field and the specialties (setup; wired with the contract). */

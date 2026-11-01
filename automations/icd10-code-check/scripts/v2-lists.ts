@@ -10,7 +10,7 @@
  *     ICD-10 Clinical Concepts guides (2015), mapped to NUCC codes by Classification/Specialization
  *     name (`GUIDE_MAPPING`, each row with its reason); each listed code kept when it is a valid
  *     code (flag 1) of the current table, else its three-character category; and Nephrology's
- *     kidney families from v1's spec (`NEPHROLOGY`). Every other specialty has none: they are
+ *     kidney families from the go's list (`NEPHROLOGY`), not v1's N00–N29. Every other specialty has none: they are
  *     learned later, from what each clinic accepts.
  */
 
@@ -234,7 +234,11 @@ export const GUIDE_MAPPING: Readonly<Record<Guide, readonly MappedSpecialty[]>> 
   ],
 };
 
-/** Nephrology's kidney families, v1's spec's (section 4): the same for both NUCC nephrology codes. */
+/**
+ * Nephrology's kidney families, the go's list for v2: the same for both NUCC nephrology codes. They
+ * differ from v1's N00–N29 (v1's section 4, `automations/icd10-code-check/src/families.ts`) on purpose, pending a person's
+ * decision (the README's "Open, for a person").
+ */
 export const NEPHROLOGY = {
   specialties: [
     {

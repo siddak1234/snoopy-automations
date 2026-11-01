@@ -25,7 +25,11 @@ export interface VisitsReading {
   directions: string[];
 }
 
-/** The most visits one file is read as: 400 decisions a held run may offer (the platform round's B3), 40 a visit. */
+/**
+ * The most visits one file is read as **(default)**, this draft's: with at most 40 changes a visit
+ * (`MAX_DECISIONS_PER_VISIT`, enforced by `groupedDecisions`), 10 visits fill the 400 decisions a
+ * held run may offer (the platform round's B3).
+ */
 export const MAX_VISITS = 10;
 
 /** The reading of a v2 answer; anything out of shape is read as not printed. */

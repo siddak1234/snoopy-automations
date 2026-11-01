@@ -8,6 +8,7 @@ import type { Row } from '../src/checks.js';
 import { finalCodes } from '../src/decisions.js';
 import { REASONS } from '../src/words.js';
 import {
+  MAX_DECISIONS_PER_VISIT,
   MAX_DECISIONS_V2,
   answersOfVisit,
   groupedDecisions,
@@ -187,6 +188,14 @@ test('more than 400 decisions in all stops; 400 is offered', () => {
     MAX_DECISIONS_V2,
   );
   assert.equal(groupedDecisions([...views, view('Q', '2026-10-12', rows(1))]), undefined);
+});
+
+test('more than 40 decisions in one visit stops; 40 is offered', () => {
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ ...remove, id: `n${i + 1}` }));
+  const forty = [view('Jane Doe', '2026-10-12', rows(MAX_DECISIONS_PER_VISIT))];
+  assert.equal(groupedDecisions(forty)![0]!.decisions.length, MAX_DECISIONS_PER_VISIT);
+  const over = [view('Jane Doe', '2026-10-12', rows(MAX_DECISIONS_PER_VISIT + 1))];
+  assert.equal(groupedDecisions(over), undefined);
 });
 
 test("the held blocks, visit by visit: the visit's section, each why, the asks; then directions and one footer", () => {
