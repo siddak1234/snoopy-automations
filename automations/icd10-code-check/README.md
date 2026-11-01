@@ -407,7 +407,8 @@ is "{n} codes · {c} to review".
 manifest, steps, prompts and assets unchanged; this image serves v2 alone (`SERVED_VERSIONS`).
 The owner's go, 2026-11-01 ~04:45Z: "continue and complete. A-g. i want to test right after on the
 app. no assumptions." — after the nine screens; and ~06:15Z, "A. Full pipeline now (Recommended)":
-chunk, categorize, organize, queue per unit, check. **Words:** `words.md`, section 4. **Rests on:**
+chunk, categorize, organize, queue per unit, check. **Words:** `words.md`, section 4; its lines not
+from the screens approved by the owner 2026-11-01 ~18:58Z ("Approve all (Recommended)"). **Rests on:**
 the platform round 2 contract (ADR-0048 amendments 3 and 4, vendored in `contract/`): a bigger
 dropdown, several files in one run, a review grouped by visit, the Healthcare department, a
 connected app with no key, a flow's memory, a page range of a PDF and a batch's units.

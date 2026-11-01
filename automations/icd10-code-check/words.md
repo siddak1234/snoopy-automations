@@ -87,7 +87,9 @@ The two platform features this flow waits for add these words to both clients, c
 
 The owner's go, 2026-11-01 ~04:45Z, after the nine screens, and ~06:15Z for the batch; the spec's
 "v2 (2026-11-01)" says what each line serves. Every word of sections 1–3 that v2 does not replace
-stays.
+stays. **The lines below not from the screens** (the task's and the session's) **were approved by the
+owner on 2026-11-01 ~18:58Z**, shown as written (question form): "Approve all (Recommended)". The
+"Whose" column still says who wrote each line.
 
 | Where                                    | The words                                                                                                                                                                                       | Whose                                                 |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
