@@ -18,14 +18,14 @@ Unnumbered, so sections 1–11 keep their numbers. Each line carries the ids of 
 on, lines the skeptic called supported on sources it confirmed (`/create-flow` stage 1b); a fact the
 brief does not carry is not written here.
 
-| Part                   | From the brief, with its ids                                                       |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| Today's process        | five lines or fewer: who does what, what goes in, what comes out                   |
-| The simplest pipeline  | five lines or fewer, on the twelve blocks                                          |
-| What an expert checks  | the criteria, in order                                                             |
-| The rubric             | the criteria as this flow scores or decides them                                   |
-| Vendors                | each vendor, and whether the menu (`contract/schemas/platform-menu.json`) lists it |
-| Left to a person in v1 | what the first version does not decide                                             |
+| Part                   | From the brief, with its ids                                         |
+| ---------------------- | -------------------------------------------------------------------- |
+| Today's process        | five lines or fewer: who does what, what goes in, what comes out     |
+| The simplest pipeline  | five lines or fewer, on the twelve blocks                            |
+| What an expert checks  | the criteria, in order                                               |
+| The rubric             | the criteria as this flow scores or decides them                     |
+| Integrations           | each row of research.md's Integrations table, and its first to build |
+| Left to a person in v1 | what the first version does not decide                               |
 
 ## 1. What it is
 
@@ -69,7 +69,10 @@ Made once, from a file, by owners and admins; every run names one; its runs are 
 ## 3. Integrations
 
 Only providers in the menu (`snoopy-automations/contract/schemas/platform-menu.json`), and only the
-operations it lists for each; anything else is section 10.
+operations it lists for each; anything else is section 10. Each row cites its research.md
+Integrations row (adoption, API / MCP, sign-in, events and write-back, cost, constraints, concerns)
+by id; the first one built is the brief's "First to build", or the owner's pick when it says "a
+person decides".
 
 | Provider | Why, as the person reads it (200) | Operations it calls | Required, or optional with None |
 | -------- | --------------------------------- | ------------------- | ------------------------------- |
@@ -162,7 +165,8 @@ this flow waits for that round. Each gap the menu leaves is shown to the owner a
 ICD-10 pilot: the owner rejected the setup switches and the one approval per run (2026-10-28
 ~21:05Z), which reworked the spec).
 
-Each vendor the research's vendors lens found is here with its provider file, or "to add".
+Each research.md Integrations row "to add" the flow uses is here with its provider file and the
+ids of its row (sign-in, operations, cost, constraints), or the platform round no file can serve.
 
 | What | Repository | The change |
 | ---- | ---------- | ---------- |

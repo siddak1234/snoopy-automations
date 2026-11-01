@@ -37,7 +37,11 @@ const data = {
     criteria: [{ text: 'three-way match', cites: ['practice-1'] }],
     rubric: [],
     rules: [],
-    vendors: [],
+    integrations: [
+      { integration: 'Epic', column: 'api', text: 'FHIR R4', cites: ['integration-1-1'] },
+      { integration: 'Epic', column: 'practice', text: 'a | pipe', cites: ['integration-1-2'] },
+    ],
+    firstToBuild: { text: 'Epic, because most use it', cites: ['integration-1-1'] },
     v1: [],
     failures: [],
     goldenCases: [
@@ -69,6 +73,13 @@ const data = {
       url: 'https://example.org/p/1',
       quote: 'a | b',
     },
+    {
+      id: 'integration-1-2',
+      tier: 'T4',
+      publisher: 'A forum',
+      url: 'https://example.org/f/1',
+      quote: 'we sync at night',
+    },
   ],
   gaps: ['practice-2: not_on_page — checked'],
   notResearched: [
@@ -95,6 +106,12 @@ test('a matching file renders research.md and a short summary', () => {
   assert.match(md, /- decision: not stated/u);
   assert.match(md, /- three-way match \[practice-1\]/u);
   assert.match(md, /## The rubric\n\n- Unknown: nothing confirmed \(see Gaps\)/u);
+  assert.match(
+    md,
+    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| not found \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| not found \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
+  );
+  assert.match(md, /\| integration-1-2 \| T4, community report \| A forum \|/u);
+  assert.match(result.out, /integrations 2; first to build: Epic, because most use it;/u);
   assert.match(md, /- Tax rule\? — default: as the statute says \[practice-1\]/u);
   assert.match(
     md,

@@ -39,7 +39,7 @@ every pull request, and says go for each step that publishes or touches producti
    its `$defs.emittedBlock`); and the newest filled spec (`automations/*/README.md`) and its
    manifest. **Check the idea against the menu** ([templates/order.md](templates/order.md), "The
    check"): tell the owner in one line — 1, 2 or 3 pull requests, or stop — each listed up front.
-   The department and each gap: [spec.md](templates/spec.md) §1, §10; a named integration: order.md.
+   The department and each gap: [spec.md](templates/spec.md) §1, §10; a named integration or 1b's "to add": order.md.
 
    Then list at most five decisions, each with a recommended default — only what the idea leaves
    open and changes the build (a field's choices, file types, who may act, what a result shows).
@@ -48,8 +48,8 @@ every pull request, and says go for each step that publishes or touches producti
 
    **1b. Research** (the session alone; its brief is approved at stage 2), in
    [research-stage.md](research-stage.md): the `flow-research` workflow (four `researcher` lenses,
-   one synthesis, one skeptic), its checksum checked by `research-render.mjs`. No spec is written
-   from a stopped run, and nothing is registered from a brief the owner has not approved.
+   one researcher per integration adoption ranks, one synthesis, one skeptic), its checksum checked
+   by `research-render.mjs`. No spec from a stopped run; nothing registered from an unapproved brief.
 
 2. **The spec and the words list** (the session; the owner approves). Copy the spec template to
    `snoopy-automations/automations/<name>/README.md` and [templates/words.md](templates/words.md)

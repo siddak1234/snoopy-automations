@@ -15,6 +15,7 @@ import {
   run,
   render,
   has,
+  COLUMNS,
 } from './flow-research.js';
 
 /**
@@ -37,12 +38,12 @@ test('the file parses as the Workflow tool runs it: an async function body, its 
   ]);
 });
 
-test('a developer with this repository alone: no backend clone, the vendors lens reads the menu', async () => {
+test('a developer with this repository alone: no backend clone, the adoption lens reads the menu', async () => {
   const r = await run(normal, { noBackend: true });
   assert.equal(r.data.stopped, '');
-  const vendors = r.calls.find((c) => c.label === 'vendors lens')!;
+  const adoption = r.calls.find((c) => c.label === 'adoption lens')!;
   assert.ok(
-    vendors.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
+    adoption.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
   );
   assert.ok(
     !r.calls.some((c) => c.prompt.includes('snoopy-backend')),
@@ -58,10 +59,14 @@ test('a normal run: three agents at most, the gates drop and name, the checksum 
   assert.equal(r.data.stopped, '');
   assert.equal(r.data.framing.decision, null, 'an invented frame field is dropped');
   assert.equal(r.data.framing.job, 'Check each supplier invoice against its purchase order');
-  for (const start of ['vendors-3: its page tried', 'rules-3: a tier 4', 'practice-2: not_on_page'])
+  for (const start of [
+    'adoption-3: its page tried',
+    'rules-3: a tier 4',
+    'practice-2: not_on_page',
+  ])
     assert.ok(has(r.data.gaps, start), start);
   assert.ok(r.data.gaps.some((g: string) => g.includes('"invented step" — no source')));
-  assert.ok(!r.data.sources.some((s: Any) => ['vendors-3', 'practice-2'].includes(s.id)));
+  assert.ok(!r.data.sources.some((s: Any) => ['adoption-3', 'practice-2'].includes(s.id)));
   assert.ok(
     r.logs.some((l) => l.includes('evil.example.org')),
     'the flagged URL is logged',
@@ -210,8 +215,8 @@ test('a confirmed verdict for an id no line cites never makes it a source', asyn
   const { data, calls } = await run((label, attempt, prompt, dir) => {
     if (label !== 'synthesis') return withSkeptic(label, attempt, prompt, dir);
     const brief: Any = BRIEF();
-    for (const lines of Object.values(brief) as Any[][])
-      for (const l of lines) l.cites = l.cites.filter((id: string) => id !== 'rules-1');
+    for (const lines of Object.values(brief) as Any[])
+      for (const l of [lines].flat()) l.cites = l.cites.filter((id: string) => id !== 'rules-1');
     return brief;
   });
   const { findings } = skepticInput(calls.find((c) => c.label === 'skeptic')!.prompt);
@@ -268,7 +273,7 @@ test("the ICD-10 pilot's lessons reach the prompts: four questions, a pick list 
     practice.includes('the full official list, its source, its count and the rule'),
     'the practice lens researches every pick list in full',
   );
-  for (const lens of ['practice', 'rules', 'vendors', 'streamlining']) {
+  for (const lens of ['practice', 'rules', 'adoption', 'streamlining']) {
     const prompt = calls.find((c) => c.label === `${lens} lens`)!.prompt;
     assert.ok(prompt.includes('one exact sentence from that page copied character for character'));
     assert.ok(prompt.includes('Skip a very long page'), `${lens}: small pages over long ones`);
@@ -294,4 +299,83 @@ test("a frame's six questions reach their lens as four, the script's own first, 
   );
   for (const q of ['q4', 'q5', 'q6'])
     assert.ok(data.gaps.includes(`practice: "${q}" past the cap; dropped`), `${q} is a gap`);
+});
+
+test('integrations: at most five researched after the lenses, three at once, fifteen calls each', async () => {
+  const seven = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((name) => ({ name, menu: 'to add' }));
+  const r = await run((label, attempt, prompt, dir) =>
+    label === 'adoption lens'
+      ? { ...lensOut('adoption'), integrations: seven }
+      : normal(label, attempt, prompt, dir),
+  );
+  const each = r.calls.filter((c) => c.label.startsWith('integration-'));
+  assert.deepEqual(
+    each.map((c) => c.label),
+    ['A', 'B', 'C', 'D', 'E'].map((n, k) => `integration-${k + 1} lens (${n})`),
+  );
+  assert.ok(r.peak <= 3, `peak ${r.peak}`);
+  const lensesEnd = Math.max(
+    ...['practice', 'rules', 'adoption', 'streamlining'].map((l) => r.finishedAt[`${l} lens`]!),
+  );
+  assert.ok(
+    each.every((c) => c.startedAt > lensesEnd),
+    'after the lenses',
+  );
+  for (const c of each) {
+    assert.ok(c.prompt.includes('At most 15 tool calls'), 'fifteen calls');
+    for (const part of ['docs —', 'in practice —', 'cost —', 'constraints and concerns —', 'MCP'])
+      assert.ok(c.prompt.includes(part), part);
+  }
+  const practice = r.calls.find((c) => c.label === 'practice lens')!.prompt;
+  const adoption = r.calls.find((c) => c.label === 'adoption lens')!.prompt;
+  assert.ok(
+    practice.includes('At most 10 tool calls') && adoption.includes('At most 15 tool calls'),
+  );
+  for (const n of ['F', 'G'])
+    assert.ok(r.data.gaps.includes(`adoption: "${n}" past the cap of 5; not researched`), n);
+  const rules = r.calls.find((c) => c.label === 'rules lens')!.prompt;
+  assert.ok(rules.includes("the model vendors' rules that bind our own AI calls"));
+});
+
+test('a community report: kept for a practice line, never for a price, a limit or a rule', async () => {
+  const { data } = await run(normal);
+  assert.ok(data.gaps.includes('integration-1-3: a tier 4 page, a lead only; dropped'));
+  assert.ok(data.sources.some((s: Any) => s.id === 'integration-1-2' && s.tier === 'T4'));
+  const kept = data.brief.integrations.map((l: Any) => `${l.integration} ${l.column}`);
+  assert.deepEqual(kept, ['QuickBooks api', 'QuickBooks practice', 'QuickBooks menu']);
+  assert.ok(
+    data.gaps.includes(
+      'integrations: "QuickBooks, cost: free" — integration-1-2 is a community report, for a practice line only; cite dropped',
+    ),
+  );
+  assert.ok(data.gaps.includes('integrations: "QuickBooks, cost: free" — no source; dropped'));
+});
+
+test('first to build: kept on confirmed ids, else "a person decides" and a gap', async () => {
+  const ok = await run(normal);
+  assert.deepEqual(ok.data.brief.firstToBuild, BRIEF().firstToBuild);
+  const { data } = await run(
+    normalWith((prompt) => {
+      const out = skepticSays()(prompt);
+      for (const v of out.verdicts) if (v.id === 'integration-1-1') v.verdict = 'not_on_page';
+      return out;
+    }),
+  );
+  assert.deepEqual(data.brief.firstToBuild, { text: 'a person decides', cites: [] });
+  assert.ok(
+    data.gaps.includes(
+      'firstToBuild: "QuickBooks, because most firms use it" — a cite was not confirmed (integration-1-1); a person decides',
+    ),
+  );
+});
+
+test("the synthesis's integration columns are the rendered table's, in order", async () => {
+  const { calls } = await run(normal);
+  const schema = calls.find((c) => c.label === 'synthesis')!.schema;
+  const columns = schema.properties.integrations.items.properties.column.enum;
+  assert.deepEqual(
+    columns,
+    COLUMNS.map(([key]: string[]) => key),
+  );
+  assert.ok(calls.find((c) => c.label === 'synthesis')!.prompt.includes('"integration-2":"Xero"'));
 });

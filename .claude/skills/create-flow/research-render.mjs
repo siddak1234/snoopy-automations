@@ -25,10 +25,46 @@ const HEADINGS = [
   ['criteria', 'What an expert checks'],
   ['rubric', 'The rubric'],
   ['rules', 'The rules that bind a result'],
-  ['vendors', 'Vendors and our providers'],
   ['v1', 'The simplest first version'],
   ['failures', 'When it goes wrong'],
 ];
+
+/** The Integrations table's columns, in the order of flow-research.js's synthesis schema. */
+export const COLUMNS = [
+  ['adoption', 'Adoption'],
+  ['api', 'API / MCP'],
+  ['signIn', 'Sign-in'],
+  ['events', 'Events and write-back'],
+  ['cost', 'Cost'],
+  ['constraints', 'Constraints'],
+  ['concerns', 'Concerns'],
+  ['practice', 'In practice'],
+  ['menu', 'On the menu'],
+];
+const cell = (text) => text.replaceAll('|', '\\|');
+
+/** One row per integration, each cell its lines with their ids; then the first to build. */
+function integrations(b, ids) {
+  const lines = b?.integrations ?? [];
+  const out = ['## Integrations', ''];
+  out.push(`| Integration | ${COLUMNS.map(([, h]) => h).join(' | ')} |`);
+  out.push(`|---|${COLUMNS.map(() => '---').join('|')}|`);
+  for (const name of new Set(lines.map((l) => l.integration))) {
+    const cells = COLUMNS.map(([key]) => {
+      const here = lines.filter((l) => l.integration === name && l.column === key);
+      return here.length ? here.map((l) => `${l.text}${ids(l.cites)}`).join('; ') : 'not found';
+    });
+    out.push(`| ${[name, ...cells].map(cell).join(' | ')} |`);
+  }
+  if (!lines.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
+  const first = b?.firstToBuild;
+  out.push(
+    '',
+    `First to build: ${first ? first.text + (first.cites.length ? ids(first.cites) : '') : 'a person decides'}`,
+    '',
+  );
+  return out;
+}
 
 /** An open question: its default and ids, or "not researched" with the proposal the owner may keep. */
 function question(q, ids) {
@@ -57,6 +93,7 @@ export function render(data) {
     for (const l of b?.[key] ?? []) out.push(`- ${l.text}${ids(l.cites)}`);
     if (!(b?.[key] ?? []).length) out.push('- Unknown: nothing confirmed (see Gaps)');
     out.push('');
+    if (key === 'rules') out.push(...integrations(b, ids));
   }
   out.push('## Golden cases (invented data)', '');
   for (const c of b?.goldenCases ?? []) out.push(`- ${c.input} → ${c.expected}${ids(c.cites)}`);
@@ -73,7 +110,7 @@ export function render(data) {
   );
   for (const s of data.sources)
     out.push(
-      `| ${s.id} | ${s.tier} | ${s.publisher} | ${s.url} | "${s.quote.replaceAll('|', '\\|')}" |`,
+      `| ${s.id} | ${s.tier === 'T4' ? 'T4, community report' : s.tier} | ${s.publisher} | ${s.url} | "${cell(s.quote)}" |`,
     );
   return `${out.join('\n')}\n`;
 }
@@ -99,7 +136,7 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   const counts = HEADINGS.map(([k]) => `${k} ${data.brief?.[k]?.length ?? 0}`).join(', ');
   const lines = [
     `research-render: checksum ok (${sum}); research.md written${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
-    `lines: ${counts}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
+    `lines: ${counts}; integrations ${data.brief?.integrations?.length ?? 0}; first to build: ${data.brief?.firstToBuild?.text ?? 'a person decides'}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
     `not researched: ${data.notResearched.length ? data.notResearched.join(' | ') : 'none'}`,
     `gaps (${data.gaps.length}): ${data.gaps.join(' | ')}`,
   ];
