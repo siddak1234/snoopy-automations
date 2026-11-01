@@ -575,7 +575,7 @@ defineAutomation({
     25.2.22 the Edge relays a model callback for up to 230 seconds — every attempt
     inside the owner's budget, at most 150, and the waits around it — inside the load
     balancer's 250 and this client's 260 (`DEFAULT_MODEL_TIMEOUT_MS`, in every image
-    built since). Before those limits are all live — and whenever the platform's own
+    built since; every other callback's wait is `DEFAULT_CALLBACK_TIMEOUT_MS`, both exported). Before those limits are all live — and whenever the platform's own
     dependencies run a call past them — a model call can reach the container as a 502
     while the platform completes and counts it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when

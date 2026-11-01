@@ -144,6 +144,7 @@ export type {
 export { isUnanswered, isUnsent } from './marks.js';
 export { artifactIdProblem, excludeModelAuthorsProblem, modelAuthor } from './model-request.js';
 export {
+  DEFAULT_CALLBACK_TIMEOUT_MS,
   DEFAULT_MODEL_TIMEOUT_MS,
   PlatformClient,
   RESULT_BODY_LIMIT_BYTES,
