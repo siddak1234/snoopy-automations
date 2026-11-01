@@ -112,7 +112,7 @@ function gate(results, flagged) {
   });
 }
 const lineText = (l) =>
-  (l.integration ? `${products[l.integration] ?? l.integration}, ${l.column}: ` : '') +
+  (l.column ? `${products[l.integration] ?? l.integration}, ${l.column}: ` : '') +
   (l.text ?? l.question ?? `${l.input} → ${l.expected}`);
 
 try {
@@ -232,14 +232,15 @@ try {
     const synthesisPrompt = (extra) =>
       `${extra}Write the domain brief for the flow "${name}" from these findings only — no memory, no web: ${JSON.stringify(found)}. ${task} ` +
       `Fill: process (today's work end to end: who, what goes in, what comes out); waste (where the time and the errors go); criteria (what an expert checks, in order); rubric (the criteria as the flow will score or decide them); rules (what binds a result, the model vendors' rules on our own AI calls included); ` +
-      `integrations: for each integration the adoption lens ranked, its id from ${JSON.stringify(products)} (no other name), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it) — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: one line "X, because …" citing the findings that separate it, or none when they do not (${PERSON}); ` +
+      `integrations: for each integration the adoption lens ranked, its id from ${JSON.stringify(products)} (no other name), lines by column — adoption (its evidence), api (the API, any MCP server, the SDKs), signIn, events (events and write-back), cost, constraints, concerns, practice (how teams integrate it) — a tier T4 finding (a community report) cited only by a practice line; firstToBuild: one line "X, because …" with X's id, citing the findings that separate it, or none when they do not (${PERSON}); ` +
       `v1 (the simplest pipeline: what is automated, what stays with a person, what is left out — few steps, few questions); failures (when it goes wrong); 5 to 10 golden cases with invented inputs only (example.com for any link) and the expected result; open questions. ` +
       `Every line cites the finding ids it rests on; a line no finding carries is not written — it becomes an open question. An open question is kind domain_fact (its default states something about the job, the rules or a vendor) or our_choice (a product choice); a default with no finding is "${PERSON}".`;
     const BRIEF = JSON.parse(JSON.stringify(SCHEMA.BRIEF)); // rows: adoption's ranked ids only
     const rows = BRIEF.properties.integrations;
     const ids = Object.keys(products);
-    if (ids.length) rows.items.properties.integration = { type: 'string', enum: ids };
-    else rows.maxItems = 0;
+    const [first, id] = [BRIEF.properties.firstToBuild, { type: 'string', enum: ids }]; // one row's id
+    if (ids.length) rows.items.properties.integration = first.items.properties.integration = id;
+    else rows.maxItems = first.maxItems = 0;
     brief = await once(
       'synthesis',
       (extra) => agent(synthesisPrompt(extra), opts('Synthesis', 'synthesis', 'explorer', BRIEF)),

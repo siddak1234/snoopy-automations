@@ -37,7 +37,7 @@ services is a crucial part in our create flow"). The adoption lens ranks at most
 the business line uses, by evidence of adoption (market share, surveys, regulator or certification
 data, the vendor's own customer counts), each with its source and its menu status: the provider id
 alone (its schema refuses anything else) and, apart, the menu's path:line, or "to add"; one past five is a gap. research.json keeps that ranking, and research.md gives each
-ranked integration whose adoption column keeps a confirmed line its row (any other is a Gaps line, "ranked by adoption, not confirmed"), its "On the menu" cell the provider id only when the menu's `providers`
+ranked integration its row while it keeps a confirmed line and its adoption cell is not empty — its adoption lines, else the confirmed adoption findings whose claim names it (any other is a Gaps line, "ranked by adoption, not confirmed", in research.md and in the render's summary of gaps), its "On the menu" cell the provider id only when the menu's `providers`
 list it, else "to add" — research-render.mjs checks it; no finding can quote an absence. After the
 lenses (skipped, one gap, when the token target cannot fit them), one researcher per integration, three at
 once, at most 15 tool calls each (as adoption; A1's 10–15), labels each finding with its part:
@@ -50,7 +50,7 @@ contracts such as a business associate agreement, regions, deprecations, lock-in
 The code gate keeps a T4 finding only when an integration researcher labelled it "in practice", and a line keeps a T4 cite
 only in the practice column. The synthesis keys each line by a ranked id, `integration-<k>` (its schema's enum; no ranking, no
 line), and a line naming anything else is a gap; it writes each row's lines and at most one "First to build: X,
-because …" (its schema's `maxItems`) on confirmed ids only, else "a person decides"; research.md renders them as its
+because …" (its schema's `maxItems`) with X's ranked id, rendered only when X is a row, else "a person decides"; research.md renders them as its
 Integrations table. The script numbers each finding `<lens>-<n>`, never
 the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
 and a line stays only when every id it cites is confirmed and every verdict for the line says
@@ -80,7 +80,7 @@ without it every lens fails.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
 4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work
    is done today, what an expert checks, the Integrations rows and the first to build, what the first
-   version automates and leaves to a person, and what was not found; then the gaps and every
+   version automates and leaves to a person, and what was not found; then the gaps (the render's summary, the unconfirmed ranked integrations included) and every
    not-researched default. A default no confirmed source carries, whatever its kind, is "a person
    decides" unless the owner keeps its proposal. The owner approves the three in one approval
    ([SKILL.md](SKILL.md), stage 2); record the owner's yes or corrections verbatim, with the time.

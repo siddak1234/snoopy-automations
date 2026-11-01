@@ -119,7 +119,11 @@ export const BRIEF = () => ({
     { integration: 'integration-1', column: 'cost', text: 'free', cites: ['integration-1-2'] },
   ],
   firstToBuild: [
-    { text: 'QuickBooks, because most firms use it', cites: ['adoption-1', 'integration-1-1'] },
+    {
+      integration: 'integration-1',
+      text: 'QuickBooks, because most firms use it',
+      cites: ['adoption-1', 'integration-1-1'],
+    },
   ],
   v1: [{ text: 'match, a person approves', cites: ['streamlining-1', 'practice-1'] }],
   failures: [{ text: 'scanned PDF with no text', cites: ['adoption-2'] }],

@@ -94,9 +94,10 @@ const KIND = one('domain_fact', 'our_choice');
 const COLUMN = one(...'adoption api signIn events cost constraints concerns practice'.split(' '));
 const BRIEF = obj({
   ...Object.fromEntries(SECTIONS.map((s) => [s, list(obj({ text: str, cites: strs }))])),
-  // integration: a ranked id, `integration-<k>`; flow-research.js sets the enum at run time.
+  // integration: a ranked id, `integration-<k>`; flow-research.js sets both enums at run time.
   integrations: list(obj({ integration: str, column: COLUMN, text: str, cites: strs })),
-  firstToBuild: { ...list(obj({ text: str, cites: strs })), maxItems: 1 }, // none: a person decides
+  // none, or one naming no row: research.md says "a person decides".
+  firstToBuild: { ...list(obj({ integration: str, text: str, cites: strs })), maxItems: 1 },
   goldenCases: list(obj({ input: str, expected: str, cites: strs })),
   openQuestions: list(obj({ question: str, kind: KIND, proposedDefault: str, cites: strs })),
 });

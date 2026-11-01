@@ -192,6 +192,8 @@ test("the synthesis keys each line by adoption's ranked ids: another name is a g
   });
   const rows = calls.find((c) => c.label === 'synthesis')!.schema.properties.integrations;
   assert.deepEqual(rows.items.properties.integration.enum, ['integration-1', 'integration-2']);
+  const first = calls.find((c) => c.label === 'synthesis')!.schema.properties.firstToBuild;
+  assert.deepEqual(first.items.properties.integration.enum, ['integration-1', 'integration-2']);
   assert.ok(
     data.gaps.includes('integrations: "Epic Systems, api: FHIR R4" — not a ranked id; dropped'),
   );

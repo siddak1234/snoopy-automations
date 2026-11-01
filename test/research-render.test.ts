@@ -20,6 +20,7 @@ const { main, djb2 } = (await import(pathToFileURL(script).href)) as {
   main: (argv: string[], write: (text: string) => void) => number;
   djb2: (text: string) => string;
 };
+type Any = any;
 const dir = mkdtempSync(join(tmpdir(), 'autom8x-research-render-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -52,7 +53,13 @@ const data = {
         cites: ['integration-1-2'],
       },
     ],
-    firstToBuild: [{ text: 'Epic, because most use it', cites: ['integration-1-1'] }],
+    firstToBuild: [
+      {
+        integration: 'integration-1',
+        text: 'Epic, because most use it',
+        cites: ['integration-1-1'],
+      },
+    ],
     v1: [],
     failures: [],
     goldenCases: [
@@ -163,4 +170,105 @@ test('no file is exit 1, missing arguments exit 2, and the command line runs it'
     spawnSync(process.execPath, [script, file, 'deadbeef', '1'], { encoding: 'utf8' }).status,
     1,
   );
+});
+
+/** Renders `d` through main() in its own folder: research.md and the summary. */
+const renderOf = (d: Any) => {
+  const at = mkdtempSync(join(dir, 'case-'));
+  const json = JSON.stringify(d);
+  writeFileSync(join(at, 'research.json'), json);
+  const result = call([join(at, 'research.json'), djb2(json), String(json.length)]);
+  assert.equal(result.code, 0, result.out);
+  return { md: readFileSync(join(at, 'research.md'), 'utf8'), out: result.out };
+};
+
+test('an entry whose adoption line fails the gate is no row, though its api line stays', () => {
+  // The skeptic found integration-2's adoption cite not_on_page: the line and the finding are gone.
+  const { md, out } = renderOf({
+    ...data,
+    integrations: [data.integrations[0], { name: 'Xero', menu: 'to add', menuAt: '' }],
+    brief: {
+      ...data.brief,
+      integrations: [
+        ...data.brief.integrations,
+        { integration: 'integration-2', column: 'api', text: 'REST', cites: ['integration-2-1'] },
+      ],
+      firstToBuild: [
+        {
+          integration: 'integration-2',
+          text: 'Xero, because it is cheap',
+          cites: ['integration-2-1'],
+        },
+      ],
+    },
+  });
+  assert.ok(!md.includes('| Xero'), md);
+  assert.match(md, /## Gaps\n\n.*\n- Xero: ranked by adoption, not confirmed\n/u);
+  assert.match(md, /\nFirst to build: a person decides\n/u, 'Xero is no row: no first to build');
+  assert.match(out, /first to build: a person decides;/u);
+  assert.match(
+    out,
+    /gaps \(2\): practice-2: not_on_page — checked \| Xero: ranked by adoption, not confirmed\n/u,
+  );
+});
+
+test("the real run's shape: no adoption column, each row's adoption from the findings naming it", () => {
+  // Trimmed from the icd10-code-check run (2026-11-01; public sources only): five ranked EHRs, lines
+  // keyed integration-1 … integration-5 in the ranking's order, adoption's evidence only as findings.
+  const names = ['Epic (incl. Acumen Epic Connect for nephrology)', 'MEDITECH', 'eClinicalWorks'];
+  names.push('athenahealth', 'Oracle Health (Cerner)');
+  const claims = [
+    'Epic is the most-used EHR',
+    'MEDITECH ranks second',
+    'eClinicalWorks ranks third',
+  ];
+  claims.push('athenahealth ranks fourth', 'Cerner (Oracle Health) ranks fifth');
+  const source = (id: string, claim: string) => ({
+    claim,
+    id,
+    tier: 'T1',
+    publisher: 'ONC / ASTP (HHS)',
+    url: 'https://healthit.gov/data/data-briefs/office-based-physician-electronic-health-record-adoption-2008-2024/',
+    quote: claim,
+  });
+  const { md } = renderOf({
+    ...data,
+    integrations: names.map((name) => ({ name, menu: 'to add', menuAt: '' })),
+    brief: {
+      ...data.brief,
+      integrations: names.map((_, k) => ({
+        integration: `integration-${k + 1}`,
+        column: 'api',
+        text: `FHIR R4 ${k + 1}`,
+        cites: [`integration-${k + 1}-1`],
+      })),
+      firstToBuild: [],
+    },
+    sources: [
+      ...claims.map((c, k) => source(`adoption-${k + 1}`, c)),
+      source('adoption-6', 'NextGen is outside the top 5'),
+      source('adoption-10', 'Acumen runs on Epic as Acumen Epic Connect'),
+    ],
+  });
+  const rows = md
+    .split('\n')
+    .filter((l) => /^\| (?!Integration \||Id \||---|adoption-|practice-)/u.test(l));
+  assert.deepEqual(
+    rows.map((l) => l.split(' | ').slice(0, 3)),
+    [
+      [
+        `| ${names[0]}`,
+        `${claims[0]} [adoption-1]; Acumen runs on Epic as Acumen Epic Connect [adoption-10]`,
+        'FHIR R4 1 [integration-1-1]',
+      ],
+      ...names
+        .slice(1)
+        .map((n, k) => [
+          `| ${n}`,
+          `${claims[k + 1]} [adoption-${k + 2}]`,
+          `FHIR R4 ${k + 2} [integration-${k + 2}-1]`,
+        ]),
+    ],
+  );
+  assert.ok(!md.includes('ranked by adoption, not confirmed'), md);
 });
