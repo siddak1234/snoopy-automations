@@ -208,8 +208,37 @@ test('an entry whose adoption line fails the gate is no row, though its api line
   assert.match(out, /first to build: a person decides;/u);
   assert.match(
     out,
-    /gaps \(2\): practice-2: not_on_page — checked \| Xero: ranked by adoption, not confirmed\n/u,
+    /gaps \(2\): Xero: ranked by adoption, not confirmed \| practice-2: not_on_page — checked\n/u,
   );
+});
+
+test('an entry with an adoption finding naming it but no confirmed line is no row; its gap leads the summary', () => {
+  // 40 gaps of 60 characters: past the summary's 2,000-character cut.
+  const gaps = Array.from(
+    { length: 40 },
+    (_, k) => `gap ${String(k).padStart(2, '0')}: ${'x'.repeat(52)}`,
+  );
+  const { md, out } = renderOf({
+    ...data,
+    integrations: [data.integrations[0], { name: 'Xero', menu: 'to add', menuAt: '' }],
+    sources: [
+      ...data.sources,
+      {
+        id: 'adoption-2',
+        tier: 'T1',
+        publisher: 'A survey',
+        url: 'https://example.org/s',
+        claim: 'Xero is second',
+        quote: '| Xero | 20% |',
+      },
+    ],
+    gaps,
+  });
+  assert.ok(gaps.join(' | ').length > 2000);
+  assert.ok(!/^\| Xero/mu.test(md), md);
+  assert.match(md, /\n- Xero: ranked by adoption, not confirmed\n/u);
+  assert.ok(out.length <= 2001, String(out.length));
+  assert.match(out, /\ngaps \(41\): Xero: ranked by adoption, not confirmed \| gap 00: /u);
 });
 
 test("the real run's shape: no adoption column, each row's adoption from the findings naming it", () => {
@@ -223,14 +252,19 @@ test("the real run's shape: no adoption column, each row's adoption from the fin
     'eClinicalWorks ranks third',
   ];
   claims.push('athenahealth ranks fourth', 'Cerner (Oracle Health) ranks fifth');
-  const source = (id: string, claim: string) => ({
+  const source = (id: string, claim: string, quote = claim) => ({
     claim,
     id,
     tier: 'T1',
-    publisher: 'ONC / ASTP (HHS)',
+    publisher: 'ONC / ASTP (HHS), source 2024 NEHRS',
     url: 'https://healthit.gov/data/data-briefs/office-based-physician-electronic-health-record-adoption-2008-2024/',
-    quote: claim,
+    quote,
   });
+  // The skeptic dropped each rank ("ranks second" is not in the quote): a cell shows the quote only.
+  const shares = ['27.70%', '11.10%', '7.50%', '7.30%', '5.50%'];
+  const quotes = ['Epic', 'Meditech', 'eClinicalWorks', 'athenahealth', 'Cerner'].map(
+    (n, k) => `| ${n} | Top 5 | ${shares[k]} |`,
+  );
   const { md } = renderOf({
     ...data,
     integrations: names.map((name) => ({ name, menu: 'to add', menuAt: '' })),
@@ -245,30 +279,37 @@ test("the real run's shape: no adoption column, each row's adoption from the fin
       firstToBuild: [],
     },
     sources: [
-      ...claims.map((c, k) => source(`adoption-${k + 1}`, c)),
+      ...claims.map((c, k) => source(`adoption-${k + 1}`, c, quotes[k])),
       source('adoption-6', 'NextGen is outside the top 5'),
-      source('adoption-10', 'Acumen runs on Epic as Acumen Epic Connect'),
+      source(
+        'adoption-10',
+        'Acumen runs on Epic as Acumen Epic Connect',
+        '150 practices run Acumen Epic',
+      ),
+      // Not an adoption finding: it names MEDITECH but never fills MEDITECH's Adoption cell.
+      source('integration-2-1', 'MEDITECH is used by most hospitals'),
     ],
   });
   const rows = md
     .split('\n')
-    .filter((l) => /^\| (?!Integration \||Id \||---|adoption-|practice-)/u.test(l));
+    .filter((l) => /^\| (?!Integration \||Id \||---|adoption-|practice-|integration-)/u.test(l));
   assert.deepEqual(
     rows.map((l) => l.split(' | ').slice(0, 3)),
     [
       [
         `| ${names[0]}`,
-        `${claims[0]} [adoption-1]; Acumen runs on Epic as Acumen Epic Connect [adoption-10]`,
+        `27.70% (ONC / ASTP (HHS)) [adoption-1]; "150 practices run Acumen Epic" (ONC / ASTP (HHS)) [adoption-10]`,
         'FHIR R4 1 [integration-1-1]',
       ],
       ...names
         .slice(1)
         .map((n, k) => [
           `| ${n}`,
-          `${claims[k + 1]} [adoption-${k + 2}]`,
+          `${shares[k + 1]} (ONC / ASTP (HHS)) [adoption-${k + 2}]`,
           `FHIR R4 ${k + 2} [integration-${k + 2}-1]`,
         ]),
     ],
   );
   assert.ok(!md.includes('ranked by adoption, not confirmed'), md);
+  assert.ok(!/ranks|most-used|most hospitals/u.test(md.slice(0, md.indexOf('## Sources'))), md);
 });

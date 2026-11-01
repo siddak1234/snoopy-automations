@@ -3,7 +3,7 @@
 // `.claude/workflows/flow-research.js` returned in its Workflow result, then renders research.md
 // from the checked file. Nothing a model typed reaches the owner unchecked: a ranked integration is a
 // row only while it keeps a confirmed line and confirmed adoption evidence, else a Gaps line (in
-// research.md and in the summary's gaps); "First to build" only when it names a row.
+// research.md, and first in the summary's gaps); "First to build" only when it names a row.
 //   node research-render.mjs <runDir>/research.json <djb2> <length>
 // Exit 0: research.md written beside it, a summary of 2 KB or less printed. Exit 1: a mismatch or
 // no readable file (re-run the workflow with resumeFromRunId and args.writeAttempt = 2). Exit 2:
@@ -48,7 +48,7 @@ const MENU = join(import.meta.dirname, '../../../contract/schemas/platform-menu.
 const onMenu = new Set(JSON.parse(readFileSync(MENU, 'utf8')).providers.map((p) => p.id));
 const cell = (text) => text.replaceAll('|', '\\|');
 
-/** Adoption's confirmed findings (`adoption-<n>`, sources holds only those) whose claim names an
+/** Adoption's confirmed findings (`adoption-<n>` ids only, never another finding) whose claim names an
  * entry: its name, or the name in its brackets ("Oracle Health (Cerner)"). */
 const naming = (sources, name) => {
   const terms = name.split(/[()]/u).map((t) => t.trim().replace(/[.*+?^${}|[\]\\]/gu, '\\$&'));
@@ -56,9 +56,23 @@ const naming = (sources, name) => {
   return sources.filter((s) => /^adoption-\d+$/u.test(s.id) && named.test(s.claim ?? ''));
 };
 
+/** A finding's own words, never its claim (the skeptic may have dropped the claim's wording, such as
+ * a rank): a table-row quote's last cell, else the quote; then its publisher, up to a comma. */
+const quoted = (s) => {
+  const row = /^\|(.*)\|$/u.exec(s.quote.trim());
+  const said = row
+    ? row[1]
+        .split('|')
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .at(-1)
+    : `"${s.quote}"`;
+  return `${said} (${s.publisher.split(',')[0].trim()})`;
+};
+
 /** Adoption's ranking is model text: `integration-<k>` is the k-th entry, a row only while it keeps
- * a confirmed line and its adoption cell (its adoption lines, else adoption's findings that name
- * it) is not empty; the rest are Gaps lines. */
+ * a confirmed line and its adoption cell (its adoption lines, else the quotes of adoption's findings
+ * that name it) is not empty; the rest are Gaps lines. */
 const rank = (data) =>
   (data.integrations ?? []).map((r, k) => {
     const id = `integration-${k + 1}`;
@@ -66,7 +80,7 @@ const rank = (data) =>
     const own = lines.filter((l) => l.column === 'adoption');
     const adoption = own.length
       ? own
-      : naming(data.sources, r.name).map((s) => ({ text: s.claim, cites: [s.id] }));
+      : naming(data.sources, r.name).map((s) => ({ text: quoted(s), cites: [s.id] }));
     return { ...r, id, lines, adoption, ok: lines.length > 0 && adoption.length > 0 };
   });
 const unconfirmed = (ranked) =>
@@ -166,7 +180,7 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   }
   writeFileSync(join(dirname(path), 'research.md'), render(data));
   const ranked = rank(data);
-  const gaps = [...data.gaps, ...unconfirmed(ranked)];
+  const gaps = [...unconfirmed(ranked), ...data.gaps];
   const first = firstOf(
     data.brief,
     ranked.filter((r) => r.ok),
