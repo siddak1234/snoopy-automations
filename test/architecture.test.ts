@@ -153,6 +153,7 @@ test('the SDK and the kit are consumable through their published entries', async
     'isUnsent',
     'isUnanswered',
     'DEFAULT_MODEL_TIMEOUT_MS',
+    'DEFAULT_CALLBACK_TIMEOUT_MS',
     'UNANSWERED_REASON',
     'modelAuthor',
     'excludeModelAuthorsProblem',

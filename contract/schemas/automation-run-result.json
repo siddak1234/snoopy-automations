@@ -1680,6 +1680,66 @@
         },
         "blocks": {
           "$ref": "#/$defs/emittedBlocks"
+        },
+        "units": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "artifacts",
+              "data"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "artifacts": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "artifactId"
+                  ],
+                  "properties": {
+                    "artifactId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                    },
+                    "pages": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "from",
+                        "to"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "to": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "data": {
+                "type": "object"
+              }
+            }
+          }
         }
       }
     },
@@ -1722,7 +1782,7 @@
             "decisions": {
               "type": "array",
               "minItems": 1,
-              "maxItems": 40,
+              "maxItems": 400,
               "items": {
                 "type": "object",
                 "additionalProperties": false,
@@ -1745,6 +1805,11 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
+                  },
+                  "group": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
                   }
                 }
               }

@@ -22,7 +22,9 @@ import {
   type SchemaMismatch,
 } from './output-schema.js';
 import { type AutomationPlatform, boundedResult } from './platform.js';
-import { type CallbackRefusedError, refusalFrom } from './refusals.js';
+import { refusalFixture } from './problem-fixture.js';
+import type { CallbackRefusedError } from './refusals.js';
+import { fixedQueryRefusal, pagesRefusal, RecordingMemory } from './testing-batch.js';
 
 /**
  * Test doubles for an automation's own suite.
@@ -50,11 +52,17 @@ import { type CallbackRefusedError, refusalFrom } from './refusals.js';
  * types it. An error `model` throws ends the call as thrown. A usable answer is handed on
  * as the platform hands it: an enum value in another case in the schema's spelling (5c).
  *
+ * The flow's memory is `memory` (a `RecordingMemory`); a page range the file cannot give is the
+ * platform's 422 (`pagesRefusal`); a call naming a keyless provider's fixed query (`fixedQuery`)
+ * its 400 `fixed_query` (`testing-batch.ts`).
+ *
  * Exported from `@autom8x/automation-sdk/testing` so no automation re-implements the double; with
- * it `failureDrill` (`drill.ts`) and `answerReview` (`review-testing.ts`).
+ * it `failureDrill` (`drill.ts`), `answerReview` (`review-testing.ts`) and `unitFixture`.
  */
 export { failureDrill, type DrillFixture } from './drill.js';
 export { answerReview } from './review-testing.js';
+export { problemFixture, refusalFixture, type ProblemInput } from './problem-fixture.js';
+export { fixedQueryRefusal, pagesRefusal, RecordingMemory, unitFixture } from './testing-batch.js';
 
 /** Records every call and answers from what the test configured. */
 export class RecordingPlatform implements AutomationPlatform {
@@ -91,6 +99,10 @@ export class RecordingPlatform implements AutomationPlatform {
   public artifacts: ArtifactReference[] = [];
   /** The bytes behind a reference. */
   public bytes: (artifact: ArtifactReference) => Uint8Array = () => new Uint8Array();
+  /** The flow's memory in this workspace (`testing-batch.ts`): seed or read its `values`. */
+  public memory = new RecordingMemory();
+  /** Each keyless provider operation's fixed query names, `"provider operation"` → names. */
+  public fixedQuery: Readonly<Record<string, readonly string[]>> = {};
 
   public reportStep(report: StepReport): Promise<void> {
     this.steps.push({
@@ -154,6 +166,9 @@ export class RecordingPlatform implements AutomationPlatform {
         );
       }
     }
+    // A page range the file cannot give (not a PDF, past its measured pages): the platform's 422.
+    const pagesRefused = pagesRefusal(request, this.artifacts);
+    if (pagesRefused) return Promise.reject(pagesRefused);
     this.modelCalls.push(request);
     return this.#attempt(request, serving);
   }
@@ -172,6 +187,8 @@ export class RecordingPlatform implements AutomationPlatform {
   }
 
   public callProvider(request: ProviderRequest): Promise<ProviderAnswer> {
+    const fixed = fixedQueryRefusal(request, this.fixedQuery);
+    if (fixed) return Promise.reject(fixed);
     this.providerCalls.push(request);
     return this.provider(request);
   }
@@ -318,59 +335,6 @@ export function artifactFixture(overrides: Partial<ArtifactReference> = {}): Art
     expiresAt: new Date(Date.now() + 300_000).toISOString(),
     ...overrides,
   };
-}
-
-/** A refusal as the platform's handlers raise it: a status, a code, a sentence, and the typed `details`. */
-export interface ProblemInput {
-  status: number;
-  code: string;
-  detail: string;
-  details?: JsonObject;
-  requestId?: string;
-}
-
-/** The problem codes the platform names and their titles — `titleFor` in its `packages/http`. */
-const PROBLEM_TITLES: Readonly<Record<string, string>> = {
-  BAD_REQUEST: 'Bad Request',
-  PAYLOAD_TOO_LARGE: 'Payload Too Large',
-  UNAUTHENTICATED: 'Authentication Required',
-  FORBIDDEN: 'Forbidden',
-  NOT_FOUND: 'Not Found',
-  CONFLICT: 'Conflict',
-  NOT_CONFIGURED: 'Service Not Configured',
-  TOO_MANY_REQUESTS: 'Too Many Requests',
-  DEPENDENCY_FAILURE: 'Dependency Failure',
-  INTERNAL_ERROR: 'Internal Server Error',
-};
-
-/**
- * A refusal body exactly as the platform's `createProblem` writes it and the Edge
- * relays it: RFC 7807, `details` at the top level, no `error` wrapper. Longer than
- * the 200 characters `CallbackRefusedError.detail` keeps — which is the point: a
- * fixture in this shape fails any reader that parses the cut instead of the body.
- */
-export function problemFixture(input: ProblemInput): JsonObject {
-  const requestId = input.requestId ?? '55555555-5555-4555-8555-555555555555';
-  return {
-    type: `urn:autom8x:problem:${input.code.toLowerCase().replaceAll('_', '-')}`,
-    title: PROBLEM_TITLES[input.code] ?? input.code,
-    status: input.status,
-    detail: input.detail,
-    instance: `urn:autom8x:request:${requestId}`,
-    code: input.code,
-    requestId,
-    ...(input.details ? { details: input.details } : {}),
-  };
-}
-
-/**
- * The error the client throws when `callback` answers this problem — built by the
- * same function the client uses, so a `ModelRefusedError` for a typed model
- * refusal and a `CallbackRefusedError` for anything else. Hand it to
- * `RecordingPlatform.mail`, `.model` or `.provider` to rehearse a refusal.
- */
-export function refusalFixture(callback: string, problem: ProblemInput): CallbackRefusedError {
-  return refusalFrom(callback, problem.status, JSON.stringify(problemFixture(problem)));
 }
 
 /**

@@ -17,6 +17,11 @@ export interface HeldDecision {
   label: string;
   /** Why, one line (the reason with its quote). */
   detail?: string;
+  /**
+   * The heading the clients draw the change under, one line ("Jane Doe · Oct 12, 2026"), in the
+   * order sent (platform ADR-0048 amendment 3, point 3): on every change of a review or on none.
+   */
+  group?: string;
 }
 
 /** A held result's `held`: the step that held, its reason, its state and the changes it offers. */
@@ -36,16 +41,17 @@ export interface ContinuationDecision {
   decision: DecisionAnswer;
 }
 
-/** The platform's bounds: 1 to 40 changes, a label of 120 characters, a detail of 200. */
-export const DECISION_LIMITS = { decisions: 40, label: 120, detail: 200 } as const;
+/** The platform's bounds: 1 to 400 changes, a label and a group of 120 characters, a detail of 200. */
+export const DECISION_LIMITS = { decisions: 400, label: 120, detail: 200, group: 120 } as const;
 
 const DECISION_ID = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u;
 
 /**
  * The offered changes as the platform takes them: none sent when there are none; each label and
  * detail one plain line, cut whole at its bound, a detail the platform would refuse (a tag, a
- * control character) left out. What cannot be fixed without changing the review — more than 40,
- * an id out of shape or offered twice, a label left empty — is refused before anything is sent,
+ * control character) left out; a group one plain line, cut whole at its bound. What cannot be
+ * fixed without changing the review — more than 400, an id out of shape or offered twice, a label
+ * or a group left empty, a group on some changes and not others — is refused before anything is sent,
  * since dropping a change would ask a person to answer a different review.
  */
 export function boundedDecisions(
@@ -56,6 +62,10 @@ export function boundedDecisions(
     throw new Error(
       `held.decisions offers ${decisions.length} changes; the platform takes 1 to ${DECISION_LIMITS.decisions}`,
     );
+  }
+  const grouped = decisions.filter((decision) => decision.group !== undefined).length;
+  if (grouped !== 0 && grouped !== decisions.length) {
+    throw new Error('held.decisions: a group goes on every change or on none');
   }
   const seen = new Set<string>();
   return decisions.map((decision) => {
@@ -68,7 +78,16 @@ export function boundedDecisions(
       throw new Error(`held.decisions: ${decision.id}'s label is not one plain line`);
     }
     const detail = line(decision.detail, DECISION_LIMITS.detail);
-    return { id: decision.id, label, ...(detail === undefined ? {} : { detail }) };
+    const group = line(decision.group, DECISION_LIMITS.group);
+    if (decision.group !== undefined && group === undefined) {
+      throw new Error(`held.decisions: ${decision.id}'s group is not one plain line`);
+    }
+    return {
+      id: decision.id,
+      label,
+      ...(detail === undefined ? {} : { detail }),
+      ...(group === undefined ? {} : { group }),
+    };
   });
 }
 

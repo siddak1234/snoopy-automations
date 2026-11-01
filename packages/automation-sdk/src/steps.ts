@@ -12,10 +12,12 @@ import type {
   ProviderRequest,
   RunResult,
 } from './contract.js';
+import type { BatchUnit, PageRange } from './batch.js';
 import type { EmittedBlock } from './block-types.js';
 import type { RunDetail } from './details.js';
 import type { RunDocument } from './documents.js';
 import type { Manifest } from './manifest.js';
+import type { FlowMemory } from './memory.js';
 import type { AutomationPlatform } from './platform.js';
 import type { PromptModule } from './prompt.js';
 import type { RetryPolicy } from './retry.js';
@@ -38,6 +40,8 @@ export interface ModelCallOptions {
   models?: readonly string[];
   excludeModelAuthors?: readonly string[];
   artifactId?: string;
+  /** Pages of that file, a PDF only, at most 20 (`ModelRequest.pages`, `batch.ts`). */
+  pages?: PageRange;
   /**
    * A first cap on the answer below the owner's (`ModelRequest.maxOutputTokens`), only where the
    * flow's spec sets one. Under `defineFlow`, an answer cut off at it is asked once more at the
@@ -99,6 +103,8 @@ export interface StepPlatform {
   readArtifact(artifactId: string): Promise<ArtifactReference>;
   listArtifacts(): Promise<ArtifactListing[]>;
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
+  /** The flow's memory in this workspace (`memory.ts`); the manifest must declare `memory`. */
+  readonly memory: FlowMemory;
 }
 
 export interface StepContext {
@@ -185,6 +191,8 @@ export interface AutomationDefinition {
     verdict?: RunVerdict;
     sections?: readonly RunSection[];
     blocks?: readonly EmittedBlock[];
+    /** A batch run's units, one child run each (`batch.ts`), bounded by the client. */
+    units?: readonly BatchUnit[];
   };
   /**
    * The steps that are run again after a TRANSIENT failure, and how (`retry.ts`):

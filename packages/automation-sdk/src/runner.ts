@@ -35,7 +35,8 @@ import {
  *
  * An automation is the manifest's declared pipeline, a function per step, and a
  * result. The runner runs the pipeline of the manifest VERSION the run pinned, in
- * order — on an item run (`readsItem`), that version's `items.pipeline` instead;
+ * order — on an item run (`readsItem`), that version's `items.pipeline` instead, and on a
+ * batch run (`batch`), its `batch.pipeline`;
  * reports each step through the step callback under the id the manifest
  * declares and no other; derives one idempotency key per run and step and attaches
  * it to every provider request and every mail; renders prompts by capability and
@@ -54,7 +55,7 @@ import {
  *
  * Checked here, once, at startup — a container that fails this never answers the
  * probe, which is louder than a 422 on the first run: every step a served manifest
- * declares — in its `pipeline`, or in its `items.pipeline` for the item run — is
+ * declares — in its `pipeline`, its `items.pipeline` or its `batch.pipeline` — is
  * implemented, and no id is declared twice across the two; every implemented step is
  * declared by a served manifest; every prompt's capability is in EVERY served manifest's
  * `requiredCapabilities` (one container serves these versions and any of its runs
@@ -90,10 +91,16 @@ export function buildRunner(
       throw new Error(`${templateId} v${manifest.version} is served twice`);
     }
     byVersion.set(manifest.version, manifest);
-    // A run's steps, then — a flow with items (platform ADR-0046) — its item run's, which a
-    // run never shares: each id once across both, and each implemented.
+    // A run's steps, then — a flow with items (platform ADR-0046) — its item run's, and — a flow
+    // with a batch (its ADR-0048 amendment 4) — its batch run's, which a run never shares: each id
+    // once across all, and each implemented.
     const ids = new Set<string>();
-    for (const step of [...manifest.pipeline, ...(manifest.items?.pipeline ?? [])]) {
+    const runs = [
+      manifest.pipeline,
+      manifest.items?.pipeline ?? [],
+      manifest.batch?.pipeline ?? [],
+    ];
+    for (const step of runs.flat()) {
       if (ids.has(step.id)) {
         throw new Error(`${templateId} v${manifest.version} declares step "${step.id}" twice`);
       }
@@ -154,8 +161,19 @@ export function buildRunner(
         `${templateId} v${manifest.version} declares no items, so it has no item run to run`,
       );
     }
+    // A batch run (`batch`, amendment 4) runs the manifest's `batch.pipeline`; its children, each
+    // with its `unit`, the `pipeline`. A version without a batch has no batch run.
+    if (request.batch === true && manifest.batch === undefined) {
+      return failed(
+        `${templateId} v${manifest.version} declares no batch, so it has no batch run to run`,
+      );
+    }
     const pipeline = (
-      request.readsItem === true ? (manifest.items?.pipeline ?? []) : manifest.pipeline
+      request.readsItem === true
+        ? (manifest.items?.pipeline ?? [])
+        : request.batch === true
+          ? (manifest.batch?.pipeline ?? [])
+          : manifest.pipeline
     ).map((step) => step.id);
 
     let state: JsonObject = {};
@@ -271,6 +289,8 @@ export function buildRunner(
           state = outcome.state ?? state;
           continue;
         case 'held':
+          // The platform cannot hold a batch run: its units are its answer.
+          if (request.batch === true) return failed(`a batch run cannot be held (${stepId})`);
           await platform.reportStep({
             runId: request.runId,
             stepId,
@@ -292,10 +312,8 @@ export function buildRunner(
       }
     }
 
-    const { output, summary, details, documents, title, score, verdict, sections, blocks } = result(
-      state,
-      request,
-    );
+    const { output, summary, details, documents, title, score, verdict, sections, blocks, units } =
+      result(state, request);
     return {
       outcome: 'success',
       ...(output === undefined ? {} : { output }),
@@ -307,6 +325,7 @@ export function buildRunner(
       ...(verdict === undefined ? {} : { verdict }),
       ...(sections === undefined ? {} : { sections }),
       ...(blocks === undefined ? {} : { blocks }),
+      ...(units === undefined ? {} : { units }),
     };
   }
 
@@ -354,7 +373,7 @@ function stepPlatform(
           `prompt ${module.id} v${module.version} uses ${module.capability}, which ${manifest.templateId} v${manifest.version} does not declare`,
         );
       }
-      const { models, excludeModelAuthors, artifactId, maxOutputTokens }: ModelCallOptions =
+      const { models, excludeModelAuthors, artifactId, pages, maxOutputTokens }: ModelCallOptions =
         Array.isArray(options)
           ? { models: options as readonly string[] }
           : ((options ?? {}) as ModelCallOptions);
@@ -363,6 +382,7 @@ function stepPlatform(
         ...(models === undefined ? {} : { models }),
         ...(excludeModelAuthors === undefined ? {} : { excludeModelAuthors }),
         ...(artifactId === undefined ? {} : { artifactId }),
+        ...(pages === undefined ? {} : { pages }),
         ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
       });
     },
@@ -374,5 +394,6 @@ function stepPlatform(
     readArtifact: (artifactId) => platform.readArtifact(artifactId),
     listArtifacts: () => platform.listArtifacts(),
     readArtifactBytes: (artifact) => platform.readArtifactBytes(artifact),
+    memory: platform.memory,
   };
 }
