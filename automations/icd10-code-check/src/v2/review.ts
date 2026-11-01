@@ -15,13 +15,11 @@ import { VERDICTS, WORDS } from '../words.js';
 import { WORDS_V2 } from './words.js';
 
 /**
- * v2's review (the spec, "v2 (draft, 2026-11-01)", rows 6 to 8): per visit, one section — the
- * patient and one compact codes table — and each change offered as a decision whose label is
- * "{code} → {suggested}", whose detail is its "why" in the owner's screens' words, and whose group
- * is the visit's title. One run's limits are row 6's; a file past them stops (`fileReview`).
- *
- * Seam: a decision's `group` and the 400 decisions of a held run are the platform's v2 contract;
- * `decide` still offers v1's flat list until it is pinned.
+ * v2's review (the spec, "v2", rows 6 to 8): per visit, one section — the patient and one compact
+ * codes table — and each change offered as a decision whose label is "{code} → {suggested}", whose
+ * detail is its "why" in the owner's screens' words, and whose group is the visit's title. One run's
+ * limits are row 6's; a run past them stops (`fileReview`). Each batch unit is one visit, so a child
+ * run reviews one (`review-visit`), its decisions grouped under its title.
  */
 
 /** The words of a title, as a person reads them, each once: letters and digits, in order. */
@@ -29,21 +27,40 @@ const titleWords = (title: string): string[] => [
   ...new Map((title.match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => [w.toLowerCase(), w])).values(),
 ];
 
-/** The words only one of two titles holds (case aside), each side in its own title's order. */
+/**
+ * The words only one of two titles holds (case aside), each side in its own title's order. A word
+ * counts as shared when the other title holds it or a word that extends it ("3" in "stage 3
+ * unspecified" is shared with "3a"), so N18.30 → N18.31 reads 'Difference: "unspecified" vs "3a"',
+ * as the owner's screen shows it.
+ */
 export function titleDifference(
   noteTitle: string,
   suggestedTitle: string,
 ): { onlyNote: string[]; onlySuggested: string[] } {
   const note = titleWords(noteTitle);
   const suggested = titleWords(suggestedTitle);
-  const has = (words: string[]) => new Set(words.map((w) => w.toLowerCase()));
-  const inNote = has(note);
-  const inSuggested = has(suggested);
+  const lower = (words: string[]) => words.map((w) => w.toLowerCase());
+  const shared = (word: string, other: string[]) =>
+    other.some((w) => w.startsWith(word.toLowerCase()));
+  const inNote = lower(note);
+  const inSuggested = lower(suggested);
   return {
-    onlyNote: note.filter((w) => !inSuggested.has(w.toLowerCase())),
-    onlySuggested: suggested.filter((w) => !inNote.has(w.toLowerCase())),
+    onlyNote: note.filter((w) => !shared(w, inSuggested)),
+    onlySuggested: suggested.filter((w) => !shared(w, inNote)),
   };
 }
+
+/**
+ * The rule a decision's why names, per check (the spec's v2 section, row 8): G3 in the owner's
+ * screen's words; every other check, until a person words its rule, v1's reason sentence (`REASONS`,
+ * `words.md` section 4 and README "Open, for a person").
+ */
+export const RULES_V2: Readonly<Record<string, string>> = {
+  G3: 'most specific code the note shows',
+};
+
+/** A row's rule: its first check's in `RULES_V2`, else its reason; none for a Keep. */
+const ruleOf = (r: Row): string | null => RULES_V2[r.check.split(',')[0]!.trim()] ?? r.reason;
 
 /** The first words of `words` whose line, built by `build`, fits `room`: "…" marks a cut; none fits, undefined. */
 function wordsWithin(
@@ -60,10 +77,11 @@ function wordsWithin(
 }
 
 /**
- * A change's "why", the decision's detail (1 to 200 characters, the platform's bound): 'Difference:
- * "{words only in the first}" vs "{words only in the second}"' (a Change whose titles differ), then
- * 'From the note: "{quote}"', then 'Rule: {the check's reason}', joined by " · ". Past 200 the rule
- * is dropped first, then the quote shortened by whole words, then the difference; never cut mid-word.
+ * A change's "why", the decision's detail (within the platform's detail bound, `DECISION_LIMITS`):
+ * 'Difference: "{words only in the first}" vs "{words only in the second}"' (a Change whose titles
+ * differ), then 'From the note: "{quote}"', then 'Rule: {the check's rule}' (`ruleOf`), joined by
+ * " · ". Past the bound the rule is dropped first, then the quote shortened by whole words, then
+ * the difference; never cut mid-word.
  */
 export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): string | undefined {
   const W = WORDS_V2.why;
@@ -83,8 +101,9 @@ export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): str
       : W.difference(first.join(' '), second.join(' '));
   const quote = r.quote === null ? '' : cleanQuote(r.quote);
   const fromNote = quote === '' ? undefined : W.fromNote(quote);
-  const rule = r.reason === null ? undefined : W.rule(r.reason);
-  const full = join([difference, fromNote, rule]);
+  const rule = ruleOf(r);
+  const ruled = rule === null ? undefined : W.rule(rule);
+  const full = join([difference, fromNote, ruled]);
   if (full.length <= room) return full === '' ? undefined : full;
   const noRule = join([difference, fromNote]);
   if (noRule.length <= room) return noRule;
@@ -94,7 +113,7 @@ export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): str
   if (shortQuote !== undefined) return join([difference, shortQuote]);
   if (difference === undefined) return undefined;
   if (difference.length <= room) return difference;
-  // The difference alone passes 200: each side by whole words, half the room each.
+  // The difference alone passes the bound: each side by whole words, half the room each.
   const half = Math.floor((room - W.difference('', '').length) / 2);
   const side = (words: string[]) => wordsWithin(words, half, (kept) => kept) ?? '…';
   return W.difference(side(first), side(second));
@@ -117,9 +136,6 @@ export function visitTitles(views: readonly VisitView[]): string[] {
     return n === 1 ? title : `${title} (${n})`;
   });
 }
-
-/** The most decisions one held run may offer: the spec's v2 section, row 6. */
-export const MAX_DECISIONS_V2 = 400;
 
 /** A visit's decision id: `v{visit}-{row id}` ("v2-n1"), a step id's shape, unique in the run. */
 export const decisionId = (visit: number, rowId: string): string => `v${visit + 1}-${rowId}`;
@@ -161,8 +177,8 @@ export function answersOfVisit(
 /**
  * One visit's compact codes table — the note's codes, then each to add: the code with its full
  * official title, the verdict, the suggestion with its title — and, when a code with its title
- * passes a cell's 200 characters, that cell the code alone and the full title in a list item's text
- * (600) after the table: never cut.
+ * passes a cell's bound, that cell the code alone and the full title in a list item's text, whose
+ * bound is wider, after the table: never cut (`BLOCK_LIMITS`).
  */
 export function codesBlocks(view: VisitView): EmittedLeaf[] {
   const long = new Map<string, string>();
@@ -250,8 +266,7 @@ const counted = (b: Inner): number => 1 + (b.blocks ?? []).length;
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), 'utf8');
 
 /**
- * Whether the platform keeps every block whole, within row 6's block bounds (the SDK's
- * `BLOCK_LIMITS`): each block's own, then the result's — measured on each block as `boundedBlocks`
+ * Whether the platform keeps every block whole, within row 6's limits (the SDK's `BLOCK_LIMITS`): each block's own, then the result's — measured on each block as `boundedBlocks`
  * sends it alone, so a long line it cuts is never counted as a lost block.
  */
 export function fitsBlocks(blocks: readonly EmittedBlock[]): boolean {
@@ -272,8 +287,9 @@ export function fitsBlocks(blocks: readonly EmittedBlock[]): boolean {
 }
 
 /**
- * A file's review in one run: its blocks and decisions, or the stop when its visits pass one run's
- * limits (row 6: 400 decisions, the block bounds). Separate files are separate runs.
+ * One run's review: its blocks and decisions, or the stop when its visits pass row 6's limits (the
+ * platform's `DECISION_LIMITS` and `BLOCK_LIMITS`, the SDK's copies). The run's deadline is not
+ * checked here: a run past it is failed by the platform, as v1's is (row 6's seam).
  */
 export function fileReview(
   views: readonly VisitView[],
@@ -282,7 +298,7 @@ export function fileReview(
 ): { blocks: EmittedBlock[]; decisions: GroupedDecision[] } | { stop: string } {
   const decisions = fileDecisions(views);
   const blocks = visitBlocks(views, directions, tableNames);
-  if (decisions.length > MAX_DECISIONS_V2 || !fitsBlocks(blocks)) {
+  if (decisions.length > DECISION_LIMITS.decisions || !fitsBlocks(blocks)) {
     return { stop: WORDS_V2.tooManyVisits };
   }
   return { blocks, decisions };

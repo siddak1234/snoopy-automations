@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { BLOCK_LIMITS, boundedBlocks, type EmittedBlock } from '@autom8x/automation-sdk';
+import {
+  BLOCK_LIMITS,
+  DECISION_LIMITS,
+  boundedBlocks,
+  type EmittedBlock,
+} from '@autom8x/automation-sdk';
 
 import type { View } from '../src/blocks.js';
 import type { Row } from '../src/checks.js';
 import { finalCodes } from '../src/decisions.js';
 import { REASONS } from '../src/words.js';
 import {
-  MAX_DECISIONS_V2,
+  RULES_V2,
   answersOfVisit,
   codesBlocks,
   fileDecisions,
@@ -76,8 +81,9 @@ const add = row({
 const remove = row({ id: 'n2', code: 'N18.4', verdict: 'remove', check: 'K1', reason: REASONS.K1 });
 
 test("the titles' difference: the words only one title holds, case aside, in each title's order", () => {
+  // "3" is shared with "3a", which extends it: the screen's own example.
   assert.deepEqual(titleDifference(TITLES['N18.30'], TITLES['N18.31']), {
-    onlyNote: ['3', 'unspecified'],
+    onlyNote: ['unspecified'],
     onlySuggested: ['3a'],
   });
   assert.deepEqual(
@@ -86,10 +92,16 @@ test("the titles' difference: the words only one title holds, case aside, in eac
   );
 });
 
+test("the why's rule: G3 in the owner's screen's words, every other check v1's reason until a person words it", () => {
+  assert.deepEqual(RULES_V2, { G3: 'most specific code the note shows' });
+  assert.equal(whyDetail({ ...stage, check: 'G3, L3' }, TITLES)?.endsWith(RULES_V2.G3!), true);
+  assert.equal(whyDetail(remove, TITLES), `Rule: ${REASONS.K1}`);
+});
+
 test("a change's why, in the screens' words: Difference, From the note, Rule, joined by ' · '", () => {
   assert.equal(
     whyDetail(stage, TITLES),
-    `Difference: "3 unspecified" vs "3a" · From the note: "CKD stage 3a" · Rule: ${REASONS.G3}`,
+    'Difference: "unspecified" vs "3a" · From the note: "CKD stage 3a" · Rule: most specific code the note shows',
   );
   // An Add or a Remove has no second title to compare: the quote and the rule.
   assert.equal(whyDetail(add, TITLES), `From the note: "CKD stage 3a" · Rule: ${REASONS.G7}`);
@@ -113,7 +125,7 @@ test('past 200 characters: the rule dropped first, then the quote shortened by w
   const long = whyDetail({ ...stage, quote: words.join(' ') }, TITLES)!;
   assert.ok(long.length <= 200, `${long.length}`);
   assert.ok(!long.includes('Rule:'));
-  assert.match(long, /^Difference: "3 unspecified" vs "3a" · From the note: "(word\d+ )+…"$/u);
+  assert.match(long, /^Difference: "unspecified" vs "3a" · From the note: "(word\d+ )+…"$/u);
   // Never cut mid-word: every word kept is whole.
   const kept = /From the note: "(.*) …"$/u.exec(long)![1]!.split(' ');
   assert.deepEqual(kept, words.slice(0, kept.length));
@@ -221,10 +233,13 @@ const STOP =
   'This file has more visits than one run can review. Upload the visits as separate files.';
 
 test('no visit cap, no 40 a visit: 400 decisions offered, and every block, visit and footer kept', () => {
-  for (const views of [visits(10, removes(40)), visits(2, removes(MAX_DECISIONS_V2 / 2))]) {
+  for (const views of [
+    visits(10, removes(40)),
+    visits(2, removes(DECISION_LIMITS.decisions / 2)),
+  ]) {
     const review = fileReview(views, [], ['2027']);
     assert.ok('blocks' in review);
-    assert.equal(review.decisions.length, MAX_DECISIONS_V2);
+    assert.equal(review.decisions.length, DECISION_LIMITS.decisions);
     assert.ok(review.decisions.every((d) => d.detail!.length <= 200));
     assert.deepEqual(boundedBlocks(review.blocks), review.blocks);
     assert.equal(review.blocks.at(-1)!.type, 'text');

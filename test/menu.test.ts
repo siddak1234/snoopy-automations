@@ -36,6 +36,7 @@ test('every flow and the kit use only what the menu offers', () => {
     'bill.create',
     'companyInfo.get',
     'journalEntry.create',
+    'npi.lookup',
     'preferences.get',
     'purchase.create',
     'query.run',

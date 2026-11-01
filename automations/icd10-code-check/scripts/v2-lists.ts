@@ -10,9 +10,11 @@
  *     ICD-10 Clinical Concepts guides (2015), mapped to NUCC codes by Classification/Specialization
  *     name (`GUIDE_MAPPING`, each row with its reason); each listed code kept when it is a valid
  *     code (flag 1) of the current table, else its three-character category; and Nephrology's
- *     kidney families from the go's list (`NEPHROLOGY`), not v1's N00–N29. Every other specialty has none: they are
+ *     families v1's approved ones (`NEPHROLOGY`, derived from v1's `SPECIALTIES`). Every other specialty has none: they are
  *     learned later, from what each clinic accepts.
  */
+
+import { SPECIALTIES } from '../src/families.js';
 
 /** One dropdown choice (the platform round's bigger `select`): `value` 1–64, `label` 1–120, `group` 1–80. */
 export interface SpecialtyOption {
@@ -253,19 +255,8 @@ export const NEPHROLOGY = {
       reason: 'the pediatric nephrologist',
     },
   ] as readonly MappedSpecialty[],
-  families: [
-    'N00-N29',
-    'I12-I13',
-    'E08.22',
-    'E09.22',
-    'E10.22',
-    'E11.22',
-    'E13.22',
-    'D63.1',
-    'Z49',
-    'Z94.0',
-    'Z99.2',
-  ],
+  // v1's list itself, so it lives in one place (`SPECIALTIES`, v1's section 4).
+  families: SPECIALTIES.find((specialty) => specialty.name === 'Nephrology')!.families,
 } as const;
 
 /**

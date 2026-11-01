@@ -83,23 +83,35 @@ The two platform features this flow waits for add these words to both clients, c
 | A held run       | the save failed                         | The review wasn't saved. Try again.                          | the platform refused or did not answer | those who may approve                        |
 | The email        | the line                                | {n} changes to review                                        | the run waits for a review             | those who may approve                        |
 
-## 4. v2 (draft, 2026-11-01)
+## 4. v2 (2026-11-01)
 
-The owner's go, 2026-11-01 ~04:45Z, after the nine screens; the spec's "v2 (draft, 2026-11-01)"
-says what each line serves. Every word of sections 1–3 that v2 does not replace stays.
+The owner's go, 2026-11-01 ~04:45Z, after the nine screens, and ~06:15Z for the batch; the spec's
+"v2 (2026-11-01)" says what each line serves. Every word of sections 1–3 that v2 does not replace
+stays.
 
-| Where                                  | The words                                                                                                                       |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Starting a run, the file field         | Add visit notes                                                                                                                 |
-| The catalog card, who it is for        | For doctors and coders.                                                                                                         |
-| Setup, the specialties                 | Specialties                                                                                                                     |
-| Setup, the NPI                         | NPI; its line: Fills your specialties when none are picked. Optional.                                                           |
-| The review, each change (a decision)   | the label: {code} → {suggested} (Add {code}); the group: {patient name} · {visit date}                                          |
-| The review, each change's why (detail) | Difference: "{words only in the first}" vs "{words only in the second}" · From the note: "{quote}" · Rule: {the check's reason} |
-| A file one run cannot review           | This file has more visits than one run can review. Upload the visits as separate files.                                         |
+| Where                                    | The words                                                                                                                     | Whose                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Starting a run, the file field's group   | Add visit notes                                                                                                               | the screens                                      |
+| Starting a run, the file field           | Visit notes; its line: For doctors and coders.                                                                                | the task                                         |
+| The catalog card, who it is for          | For doctors and coders.                                                                                                       | the screens                                      |
+| Setup, the specialties                   | Specialties                                                                                                                   | the screens                                      |
+| Setup, the NPI                           | NPI; its line: Fills your specialties when none are picked. Optional.                                                         | the screens, with "when none are picked" (below) |
+| The review, each change (a decision)     | the label: {code} → {suggested} (Add {code}); the group: {patient name} · {visit date}                                        | the screens                                      |
+| The review, each change's why (detail)   | Difference: "{words only in the first}" vs "{words only in the second}" · From the note: "{quote}" · Rule: {the check's rule} | the screens                                      |
+| The why's rule, G3                       | most specific code the note shows                                                                                             | the screens                                      |
+| The why's rule, every other check        | v1's reason sentence (section 2), until a person words it                                                                     | the session's                                    |
+| The batch run, its summary and its block | {files} files · {pages} pages · {visits} visits · {set aside} set aside                                                       | the task                                         |
+| The batch's unit words                   | Visit, Visits                                                                                                                 | the task                                         |
+| A visit's run past the review's limits   | This file has more visits than one run can review. Upload the visits as separate files.                                       | the session's, 2026-11-01                        |
+| An upload past one batch's limits        | This upload has more visits than one batch can hold. Upload fewer files at a time.                                            | the session's                                    |
+| The timeline, the NPI lookup failed      | Specialties not read from your NPI                                                                                            | the session's                                    |
+| The timeline, the memory not written     | Codes saved. Your clinic's choices were not remembered for next time.                                                         | the session's                                    |
 
 The screens' NPI line read "Fills your specialties. Optional."; the NPI is read at run time (the
 platform round sets nothing up from a connected app), so the line says when it fills them. The
 why's labels are the owner's screens' ('Difference: "unspecified" vs "3a"', 'From the note: "CKD
-stage 3a"', 'Rule: most specific code the note shows'); the stop is the session's, 2026-11-01, for
-a file past one run's limits (the spec's v2 section, row 6).
+stage 3a"', 'Rule: most specific code the note shows'); the code says that line exactly for
+N18.30 → N18.31. The screens show one rule, G3's: every other check's rule in their style is for a
+person (the spec's v2 section, "Open"), and until then the why carries v1's reason sentence, which
+differs from the screens' style. The batch's step titles and descriptions are the manifest's, the
+session's.

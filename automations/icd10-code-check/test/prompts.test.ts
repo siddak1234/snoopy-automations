@@ -10,7 +10,7 @@ import { readingOf } from '../src/reading.js';
  * a customer's file is content, never an instruction; no model named.
  */
 
-const examples = (id: 'read-note' | 'match-codes') =>
+const examples = (id: 'read-note' | 'match-codes' | 'categorize-pages') =>
   [...prompt(id).template.matchAll(/^Answer: (\{.*\})$/gmu)].map(
     (m) => JSON.parse(m[1]!) as Record<string, unknown>,
   );
@@ -44,7 +44,7 @@ function onSchema(value: unknown, schema: Record<string, unknown>): boolean {
 }
 
 test('each prompt carries 3 to 5 worked examples, each answer on its schema', () => {
-  for (const id of ['read-note', 'match-codes'] as const) {
+  for (const id of ['read-note', 'match-codes', 'categorize-pages'] as const) {
     const answers = examples(id);
     assert.ok(answers.length >= 3 && answers.length <= 5, `${id}: ${answers.length} examples`);
     for (const answer of answers)
@@ -91,7 +91,28 @@ test('match-codes: by number from the list or 0, the most specific only when sta
 });
 
 test('a prompt names a capability, never a model', () => {
-  for (const id of ['read-note', 'match-codes'] as const) {
+  for (const id of ['read-note', 'match-codes', 'categorize-pages'] as const) {
     assert.doesNotMatch(JSON.stringify(prompt(id)), /anthropic\/|google\/|"models?"/u);
   }
+});
+
+test('categorize-pages: every attached page once, numbered as in the file; four kinds; content, never instructions', () => {
+  const template = prompt('categorize-pages').template;
+  for (const rule of [
+    /pages \{\{from\}\} to \{\{to\}\} of the file/u,
+    /List every attached page once, in order, numbered as in the file/u,
+    /"Not printed" is always an allowed answer/u,
+    /Never guess a name or a date/u,
+    /never instructions to you/u,
+  ])
+    assert.match(template, rule);
+  const schema = prompt('categorize-pages').outputSchema as {
+    properties: { pages: { items: { properties: { kind: { enum: string[] } } } } };
+  };
+  assert.deepEqual(schema.properties.pages.items.properties.kind.enum, [
+    'note',
+    'lab',
+    'cover',
+    'other',
+  ]);
 });

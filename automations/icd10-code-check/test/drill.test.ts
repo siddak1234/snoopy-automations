@@ -8,6 +8,7 @@ import { failureDrill } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
 import { platformFor, reading, request } from './fixtures.js';
+import { PDF_ID, batchPlatform, batchRequest, childInvoke, page } from './v2-fixtures.js';
 
 /**
  * The SDK's shared failure drill (README, "Build a flow"), on a good run's platform: a made-up note
@@ -33,5 +34,35 @@ test("§9 the failure drill: every case in the SDK's or this spec's words, never
   assert.ok(
     cases.some((one) => one.reached),
     'the drill reached the flow',
+  );
+});
+
+test('§9 the failure drill on v2: a visit run reaching the NPI Registry, and a batch run', async () => {
+  const flow2 = define(manifests, { today: () => '2026-10-28' });
+  const child = await failureDrill(flow2, {
+    request: childInvoke({ npi: '1234567893' }),
+    platform: () => {
+      const platform = platformFor(note, { 'CKD stage 3a': { code: 'N18.31' } });
+      platform.provider = () =>
+        Promise.resolve({ status: 200, body: { results: [{ taxonomies: [] }] } });
+      return platform;
+    },
+    words,
+  });
+  assert.ok(
+    child.some((one) => one.name.startsWith('a') && one.reached),
+    'the drill reached the provider',
+  );
+  const batch = await failureDrill(flow2, {
+    request: batchRequest([PDF_ID]),
+    platform: () =>
+      batchPlatform([{ id: PDF_ID, contentType: 'application/pdf', pageCount: 2 }], {
+        [PDF_ID]: [page(1, 'note', 'Jane Doe', '2026-10-12'), page(2, 'note')],
+      }),
+    words,
+  });
+  assert.ok(
+    batch.some((one) => one.reached),
+    'the drill reached the batch run',
   );
 });

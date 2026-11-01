@@ -7,21 +7,22 @@ import type { Diagnosis } from '../reading.js';
 import type { CodeTable } from '../tables.js';
 
 /**
- * v2's candidates (the spec, "v2 (draft, 2026-11-01)", F1): every flag-1 code of the visit's
- * table under a diagnosis's categories, never limited — v1's 60 left 40,646 of the table's codes
- * never offerable — with the clinic's preference families first, then, inside each part, v1's
- * rank: the words its title shares with the statement, then the shorter codes, then the table's
- * order. The specialties are NUCC codes (`automations/icd10-code-check/assets/v2/specialties.json`); their families are
- * `automations/icd10-code-check/assets/v2/preferences.json`'s, built by `automations/icd10-code-check/scripts/build-v2-assets.ts`.
- *
- * Seam: which NUCC codes a run uses — the setup's picks, else the NPI's taxonomies read at run
- * time (`specialtiesForRun`), and later what the workspace's memory learned — is wired with the
- * platform's v2 contract; v1's `find-codes` still uses v1's six specialties.
+ * v2's candidates (the spec, "v2", F1): every flag-1 code of the visit's table under a diagnosis's
+ * categories, never limited — v1's 60 left 40,646 of the table's codes never offerable — with the
+ * clinic's preference families first, then the codes the clinic accepted before (its memory,
+ * `remembered`, the most accepted first), then, inside each part, v1's rank: the words its title
+ * shares with the statement, then the shorter codes, then the table's order. The specialties are
+ * NUCC codes (`automations/icd10-code-check/assets/v2/specialties.json`); their families are
+ * `automations/icd10-code-check/assets/v2/preferences.json`'s, built by
+ * `automations/icd10-code-check/scripts/build-v2-assets.ts`. Which NUCC codes a run uses — the
+ * setup's picks, else the NPI's taxonomies read at run time — is `specialtiesForRun`; v1's
+ * `find-codes` still uses v1's six specialties.
  */
 export function rankCandidates(
   diagnosis: Pick<Diagnosis, 'statement' | 'categories'>,
   codes: CodeTable,
   preferred: readonly string[],
+  remembered: Readonly<Record<string, number>> = {},
 ): string[] {
   const categories = new Set(diagnosis.categories);
   const said = wordsIn(diagnosis.statement);
@@ -33,11 +34,13 @@ export function rankCandidates(
       code,
       order,
       first: preferred.length > 0 && inFamily(code, preferred) ? 1 : 0,
+      accepted: remembered[code] ?? 0,
       shared: shared(code),
     }))
     .sort(
       (a, b) =>
         b.first - a.first ||
+        b.accepted - a.accepted ||
         b.shared - a.shared ||
         a.code.length - b.code.length ||
         a.order - b.order,
