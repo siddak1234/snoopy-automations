@@ -6,14 +6,15 @@ import { pathToFileURL } from 'node:url';
 
 /**
  * The stand-in harness for `.claude/workflows/flow-research.js` (/create-flow stage 1b): the
- * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args` and `budget` replaced, the file
- * compiled as the tool runs it (an async function body, its top-level return the result). Its
+ * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args`, `budget` and `workflow` replaced,
+ * the file and its tables compiled as the tool runs them (async function bodies, each top-level
+ * return the result). Its
  * cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
  * (stops, retries and the write).
  */
 
 const root = resolve(import.meta.dirname, '..');
-const source = readFileSync(join(root, '.claude/workflows/flow-research.js'), 'utf8');
+const read = (file: string) => readFileSync(join(root, '.claude/workflows', file), 'utf8');
 const renderUrl = pathToFileURL(join(root, '.claude/skills/create-flow/research-render.mjs')).href;
 const { main: renderMain, COLUMNS } = (await import(renderUrl)) as {
   main: (argv: string[], write: (text: string) => void) => number;
@@ -25,11 +26,17 @@ export type Any = any;
 export type Behave = (label: string, attempt: number, prompt: string, runDir: string) => Any;
 type Body = (...values: unknown[]) => Promise<Any>;
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget'];
+const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget', 'workflow'];
 // The harness's reading: an async function body, `meta` a plain constant, the result returned. This
 // is the syntax check too: `node --check` refuses the top-level return the result travels in.
-export const compile = (): Body =>
-  new AsyncFunction(...GLOBALS, source.replace('export const meta', 'const meta'));
+export const compile = (file = 'flow-research.js'): Body =>
+  new AsyncFunction(...GLOBALS, read(file).replace('export const meta', 'const meta'));
+const TABLES = '/clones/snoopy-automations/.claude/workflows/flow-research-tables.js';
+/** The tool's workflow({ scriptPath }, args): only the tables, at the clone's path. */
+const workflow = async ({ scriptPath }: { scriptPath: string }, args: unknown) => {
+  if (scriptPath !== TABLES) throw new Error(`unexpected workflow ${scriptPath}`);
+  return compile('flow-research-tables.js')(null, null, null, null, args, null, null);
+};
 const dirs: string[] = [];
 after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
@@ -99,7 +106,6 @@ export const BRIEF = () => ({
       cites: ['integration-1-2'],
     },
     { integration: 'QuickBooks', column: 'cost', text: 'free', cites: ['integration-1-2'] },
-    { integration: 'QuickBooks', column: 'menu', text: 'quickbooks', cites: ['adoption-1'] },
   ],
   firstToBuild: [
     { text: 'QuickBooks, because most firms use it', cites: ['adoption-1', 'integration-1-1'] },
@@ -221,6 +227,7 @@ export async function run(
     () => {},
     args,
     budget,
+    workflow,
   );
   const file = join(runDir, 'research.json');
   const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;

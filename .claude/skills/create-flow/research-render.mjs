@@ -29,7 +29,7 @@ const HEADINGS = [
   ['failures', 'When it goes wrong'],
 ];
 
-/** The Integrations table's columns, in the order of flow-research.js's synthesis schema. */
+/** The Integrations table's columns, in the order of the synthesis schema (flow-research-tables.js). */
 export const COLUMNS = [
   ['adoption', 'Adoption'],
   ['api', 'API / MCP'],
@@ -39,24 +39,28 @@ export const COLUMNS = [
   ['constraints', 'Constraints'],
   ['concerns', 'Concerns'],
   ['practice', 'In practice'],
-  ['menu', 'On the menu'],
 ];
+// "On the menu" is checked here, never written by a model: a ranked menu id the menu's providers
+// list, else "to add" (no finding can quote an absence).
+const MENU = join(import.meta.dirname, '../../../contract/schemas/platform-menu.json');
+const onMenu = new Set(JSON.parse(readFileSync(MENU, 'utf8')).providers.map((p) => p.id));
 const cell = (text) => text.replaceAll('|', '\\|');
 
-/** One row per integration, each cell its lines with their ids; then the first to build. */
-function integrations(b, ids) {
+/** One row per ranked integration (then any other a line names), each cell its lines with their ids. */
+function integrations(b, ranked, ids) {
   const lines = b?.integrations ?? [];
   const out = ['## Integrations', ''];
-  out.push(`| Integration | ${COLUMNS.map(([, h]) => h).join(' | ')} |`);
-  out.push(`|---|${COLUMNS.map(() => '---').join('|')}|`);
-  for (const name of new Set(lines.map((l) => l.integration))) {
+  out.push(`| Integration | ${COLUMNS.map(([, h]) => h).join(' | ')} | On the menu |`);
+  out.push(`|---|${COLUMNS.map(() => '---').join('|')}|---|`);
+  for (const name of new Set([...ranked.map((i) => i.name), ...lines.map((l) => l.integration)])) {
     const cells = COLUMNS.map(([key]) => {
       const here = lines.filter((l) => l.integration === name && l.column === key);
       return here.length ? here.map((l) => `${l.text}${ids(l.cites)}`).join('; ') : 'not found';
     });
-    out.push(`| ${[name, ...cells].map(cell).join(' | ')} |`);
+    const menu = ranked.find((i) => i.name === name)?.menu;
+    out.push(`| ${[name, ...cells, onMenu.has(menu) ? menu : 'to add'].map(cell).join(' | ')} |`);
   }
-  if (!lines.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
+  if (!ranked.length && !lines.length) out.push('', '- Unknown: nothing confirmed (see Gaps)');
   const first = b?.firstToBuild?.[0];
   out.push('', `First to build: ${first ? first.text + ids(first.cites) : 'a person decides'}`, '');
   return out;
@@ -89,7 +93,7 @@ export function render(data) {
     for (const l of b?.[key] ?? []) out.push(`- ${l.text}${ids(l.cites)}`);
     if (!(b?.[key] ?? []).length) out.push('- Unknown: nothing confirmed (see Gaps)');
     out.push('');
-    if (key === 'rules') out.push(...integrations(b, ids));
+    if (key === 'rules') out.push(...integrations(b, data.integrations ?? [], ids));
   }
   out.push('## Golden cases (invented data)', '');
   for (const c of b?.goldenCases ?? []) out.push(`- ${c.input} → ${c.expected}${ids(c.cites)}`);

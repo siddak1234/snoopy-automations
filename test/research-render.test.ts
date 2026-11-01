@@ -65,6 +65,10 @@ const data = {
       },
     ],
   },
+  integrations: [
+    { name: 'Epic', menu: 'epic' },
+    { name: 'QuickBooks', menu: 'quickbooks' },
+  ],
   sources: [
     {
       id: 'practice-1',
@@ -108,7 +112,7 @@ test('a matching file renders research.md and a short summary', () => {
   assert.match(md, /## The rubric\n\n- Unknown: nothing confirmed \(see Gaps\)/u);
   assert.match(
     md,
-    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| not found \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| not found \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
+    /## Integrations\n\n\| Integration \| Adoption \| API \/ MCP \|.*\n.*\n\| Epic \| not found \| FHIR R4 \[integration-1-1\] \|.*\| a \\\| pipe \[integration-1-2\] \| to add \|\n\| QuickBooks \| (not found \| ){8}quickbooks \|\n\nFirst to build: Epic, because most use it \[integration-1-1\]\n/u,
   );
   assert.match(md, /\| integration-1-2 \| T4, community report \| A forum \|/u);
   assert.match(result.out, /integrations 2; first to build: Epic, because most use it;/u);

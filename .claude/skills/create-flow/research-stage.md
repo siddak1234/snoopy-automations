@@ -19,7 +19,8 @@ to the spec's section 11 with its default, never a new round of questions.
 The Workflow tool, with `scriptPath` set to the clone's `.claude/workflows/flow-research.js` and
 `args` set to `{ runDir, automations, name, idea, answers, platform }` — no backend clone: the
 adoption lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
-is read-only and its files a source too). Inside: the
+is read-only and its files a source too). Its lens briefs and schemas are data in
+`.claude/workflows/flow-research-tables.js`, which it loads with `workflow({ scriptPath })`. Inside: the
 owner's words quoted, never researched; four lenses — practice and expert judgement; rules,
 standards and data, the model vendors' rules on our own AI calls included; adoption; the
 streamlining of the process — then the integrations stage; at most three agents at once
@@ -31,7 +32,10 @@ gate after each (A2: "programmatic checks").
 services is a crucial part in our create flow"). The adoption lens ranks at most five integrations
 the business line uses, by evidence of adoption (market share, surveys, regulator or certification
 data, the vendor's own customer counts), each with its source and its menu status (a provider id,
-or "to add"); one past five is a gap. After the lenses, one researcher per integration, three at
+or "to add"); one past five is a gap. research.json keeps that ranking, and research.md gives each
+ranked integration its row, its "On the menu" cell the provider id only when the menu's `providers`
+list it, else "to add" — research-render.mjs checks it; no finding can quote an absence. After the
+lenses (skipped, one gap, when the token target cannot fit them), one researcher per integration, three at
 once, at most 15 tool calls each (as adoption; A1's 10–15), labels each finding with its part:
 **docs** (the official API, sign-in, events and webhooks, read and write operations, sandbox, rate
 limits, data formats; any MCP server, official or in a known MCP registry; the official SDKs);
@@ -39,9 +43,9 @@ limits, data formats; any MCP server, official or in a known MCP registry; the o
 official SDK's issues and community posts — T4, rendered "community report"); **cost** (the
 vendor's pricing page, or "not published" as a gap); **constraints and concerns** (access programs,
 contracts such as a business associate agreement, regions, deprecations, lock-in, failure modes).
-The code gate keeps a T4 finding only when its part is "in practice", and a line keeps a T4 cite
-only in the practice column. The synthesis writes one row per integration and "First to build: X,
-because …" on confirmed ids only, else "a person decides"; research.md renders them as its
+The code gate keeps a T4 finding only when an integration researcher labelled it "in practice", and a line keeps a T4 cite
+only in the practice column. The synthesis writes each row's lines and at most one "First to build: X,
+because …" (its schema's `maxItems`) on confirmed ids only, else "a person decides"; research.md renders them as its
 Integrations table. The script numbers each finding `<lens>-<n>`, never
 the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
 and a line stays only when every id it cites is confirmed and every verdict for the line says
@@ -85,7 +89,7 @@ new vendor" (stage 1): a provider file, or a platform round when no file can des
 
 ## Sources
 
-The tags this stage, `.claude/workflows/flow-research.js`, [evals/research.md](evals/research.md)
+The tags this stage, `.claude/workflows/flow-research.js` and its tables, [evals/research.md](evals/research.md)
 and the templates cite (every page fetched 2026-10-27, every quote found on it):
 
 | Tag                 | Source                                                                                                                                                |
