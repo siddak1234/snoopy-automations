@@ -58,7 +58,8 @@ export const acceptedCodes = (rows: readonly Row[], answers: ReadonlyMap<string,
 /**
  * Codes saved: the final codes (v1's `finalCodes`, the accepted changes applied), and each code
  * accepted written to the clinic's memory. A memory that cannot be written is shown on the
- * timeline, and the codes stay saved.
+ * timeline, and the codes stay saved. Two runs saving at once can lose one's counts (README, the
+ * v2 changes' row 3, a known limit).
  */
 export const saveVisit: Step = async (context) => {
   const { request, state, platform } = context;

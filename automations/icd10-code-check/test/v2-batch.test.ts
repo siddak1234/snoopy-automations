@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 
-import type { RunResult } from '@autom8x/automation-sdk';
+import { DEFAULT_MODEL_TIMEOUT_MS, type RunResult } from '@autom8x/automation-sdk';
 
 import { define } from '../src/automation.js';
-import { pagesOfAnswer } from '../src/v2/batch-steps.js';
+import { WINDOWS_AT_ONCE, pagesOfAnswer } from '../src/v2/batch-steps.js';
+import { WORDS_V2 } from '../src/v2/words.js';
 import { FAILURES } from '../src/words.js';
 import { manifests } from './fixtures.js';
 import { PDF_ID, PHOTO_ID, batchPlatform, batchRequest, page } from './v2-fixtures.js';
@@ -119,7 +120,7 @@ test('no file, or no page a visit note: no unit queued; the upload stops or says
   });
   const done = success((await batch(platform, [PHOTO_ID])).result);
   assert.equal(done.units, undefined);
-  assert.equal(done.summary, '1 files · 1 pages · 0 visits · 1 set aside');
+  assert.equal(done.summary, '1 file · 1 page · 0 visits · 1 set aside');
 });
 
 test('a page the model left out or answered off its kinds is set aside, never guessed a note', () => {
@@ -140,6 +141,67 @@ test('a page the model left out or answered off its kinds is set aside, never gu
       [3, 'note', null],
     ],
   );
+});
+
+test("a later window answered as its own PDF's pages 1 to 20 is read as the window's pages", () => {
+  const answer = {
+    pages: [
+      { page: 1, kind: 'note', patient: 'Jane Doe', visitDate: '2026-10-12', pageOfVisit: 1 },
+      { page: 2, kind: 'note', pageOfVisit: 2 },
+    ],
+  };
+  assert.deepEqual(
+    pagesOfAnswer(answer, { from: 21, to: 40 })
+      .slice(0, 3)
+      .map((p) => [p.page, p.kind, p.patient]),
+    [
+      [21, 'note', 'Jane Doe'],
+      [22, 'note', null],
+      [23, 'other', null],
+    ],
+  );
+  // An answer that numbers the window's own pages is read as it is.
+  assert.deepEqual(
+    pagesOfAnswer({ pages: [{ page: 21, kind: 'note' }] }, { from: 21, to: 40 })[0]!.kind,
+    'note',
+  );
+});
+
+test('many windows: a few asked at once, and none started once the deadline is near; the run stops in words', async () => {
+  const pages = Array.from({ length: 500 }, (_, i) =>
+    page(i + 1, 'note', 'Jane Doe', '2026-10-12'),
+  );
+  const platform = batchPlatform([{ id: PDF_ID, contentType: 'application/pdf', pageCount: 500 }], {
+    [PDF_ID]: pages,
+  });
+  let clock = Date.now();
+  const now = mock.method(Date, 'now', () => clock);
+  const answer = platform.model;
+  const deadline = clock + 600_000;
+  let inFlight = 0;
+  let most = 0;
+  let late = 0;
+  platform.model = async (call, model) => {
+    if (deadline - clock < DEFAULT_MODEL_TIMEOUT_MS) late += 1;
+    inFlight += 1;
+    most = Math.max(most, inFlight);
+    await new Promise((resolve) => setImmediate(resolve));
+    clock += 60_000;
+    inFlight -= 1;
+    return answer(call, model);
+  };
+  try {
+    const ended = await flow().execute(
+      { ...batchRequest([PDF_ID]), deadline: new Date(deadline).toISOString() },
+      platform,
+    );
+    assert.equal(ended.outcome === 'failed' && ended.failureReason, WORDS_V2.tooLong);
+  } finally {
+    now.mock.restore();
+  }
+  assert.equal(most, WINDOWS_AT_ONCE);
+  assert.equal(late, 0, "no window started with less than one model call's wait left");
+  assert.ok(platform.modelCalls.length < 25, `${platform.modelCalls.length} of 25 windows asked`);
 });
 
 test('an upload past one batch (more than 500 visits) stops in its words, queuing none', async () => {

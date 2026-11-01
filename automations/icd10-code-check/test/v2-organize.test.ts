@@ -80,6 +80,39 @@ test("one patient and date across files is one visit, in its pages' order; a fil
   assert.equal(setAside, 1, 'the duplicate file');
 });
 
+test('W2: one visit photographed as several photos is one visit, its dateless photos on it', () => {
+  const photo = (id: string, pages: FileRead['pages']): FileRead => ({
+    artifactId: id,
+    contentType: 'image/jpeg',
+    sha256: id,
+    pages,
+  });
+  const { visits } = organize([
+    photo('p1', [page(1, 'note', 'Jane Doe', '2026-10-12', 1)]),
+    photo('p2', [page(1, 'note', null, null, 2)]),
+    photo('p3', [page(1, 'note', 'Jane Doe', null, 3)]),
+    photo('p4', [page(1, 'note', 'Sam Roe', '2026-10-13', 1)]),
+  ]);
+  assert.deepEqual(
+    visits.map((v) => [v.patient, v.visitDate, v.pieces.map((p) => p.artifactId)]),
+    [
+      ['Jane Doe', '2026-10-12', ['p1', 'p2', 'p3']],
+      ['Sam Roe', '2026-10-13', ['p4']],
+    ],
+  );
+});
+
+test("a dateless visit with a known name joins that name's one dated visit, in another file", () => {
+  const { visits } = organize([
+    file(PDF_ID, [page(1, 'note', 'Jane Doe', null, 2)]),
+    file(PHOTO_ID, [page(1, 'note', 'Jane Doe', '2026-10-12', 1)]),
+  ]);
+  assert.deepEqual(
+    visits.map((v) => [v.visitDate, v.pieces.map((p) => p.pageOfVisit)]),
+    [['2026-10-12', [1, 2]]],
+  );
+});
+
 test('a page of a visit read twice is dropped: the later copy, set aside', () => {
   const { visits, setAside } = organize([
     file(PDF_ID, [

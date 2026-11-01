@@ -100,10 +100,11 @@ stays.
 | The review, each change's why (detail)   | Difference: "{words only in the first}" vs "{words only in the second}" · From the note: "{quote}" · Rule: {the check's rule} | the screens                                      |
 | The why's rule, G3                       | most specific code the note shows                                                                                             | the screens                                      |
 | The why's rule, every other check        | v1's reason sentence (section 2), until a person words it                                                                     | the session's                                    |
-| The batch run, its summary and its block | {files} files · {pages} pages · {visits} visits · {set aside} set aside                                                       | the task                                         |
+| The batch run, its summary and its block | {files} files · {pages} pages · {visits} visits · {set aside} set aside; 1 in the singular (1 file · 1 page · 1 visit)        | the task, the singular the session's             |
 | The batch's unit words                   | Visit, Visits                                                                                                                 | the task                                         |
 | A visit's run past the review's limits   | This file has more visits than one run can review. Upload the visits as separate files.                                       | the session's, 2026-11-01                        |
 | An upload past one batch's limits        | This upload has more visits than one batch can hold. Upload fewer files at a time.                                            | the session's                                    |
+| An upload not sorted before the deadline | This upload has more pages than one run can sort in time. Upload fewer files at a time.                                       | the session's                                    |
 | The timeline, the NPI lookup failed      | Specialties not read from your NPI                                                                                            | the session's                                    |
 | The timeline, the memory not written     | Codes saved. Your clinic's choices were not remembered for next time.                                                         | the session's                                    |
 

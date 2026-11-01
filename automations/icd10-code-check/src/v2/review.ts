@@ -29,9 +29,11 @@ const titleWords = (title: string): string[] => [
 
 /**
  * The words only one of two titles holds (case aside), each side in its own title's order. A word
- * counts as shared when the other title holds it or a word that extends it ("3" in "stage 3
- * unspecified" is shared with "3a"), so N18.30 → N18.31 reads 'Difference: "unspecified" vs "3a"',
- * as the owner's screen shows it.
+ * counts as shared when the other title holds it, or when it ends in a digit and the other title
+ * holds it with letters after ("3" in "stage 3 unspecified" is shared with "3a"), so N18.30 →
+ * N18.31 reads 'Difference: "unspecified" vs "3a"', as the owner's screen shows it. "with" never
+ * extends to "without". Should that rule empty a side that whole words would fill ("stage 3" vs
+ * "stage 3a"), the words are compared whole only.
  */
 export function titleDifference(
   noteTitle: string,
@@ -40,14 +42,31 @@ export function titleDifference(
   const note = titleWords(noteTitle);
   const suggested = titleWords(suggestedTitle);
   const lower = (words: string[]) => words.map((w) => w.toLowerCase());
-  const shared = (word: string, other: string[]) =>
-    other.some((w) => w.startsWith(word.toLowerCase()));
   const inNote = lower(note);
   const inSuggested = lower(suggested);
-  return {
-    onlyNote: note.filter((w) => !shared(w, inSuggested)),
-    onlySuggested: suggested.filter((w) => !shared(w, inNote)),
+  const split = (extends_: boolean) => {
+    const shared = (word: string, other: string[]) => {
+      const key = word.toLowerCase();
+      return other.some(
+        (w) =>
+          w === key ||
+          (extends_ &&
+            /\p{N}$/u.test(key) &&
+            w.startsWith(key) &&
+            /^\p{L}/u.test(w.slice(key.length))),
+      );
+    };
+    return {
+      onlyNote: note.filter((w) => !shared(w, inSuggested)),
+      onlySuggested: suggested.filter((w) => !shared(w, inNote)),
+    };
   };
+  const extended = split(true);
+  const whole = split(false);
+  const emptied =
+    (extended.onlyNote.length === 0 && whole.onlyNote.length > 0) ||
+    (extended.onlySuggested.length === 0 && whole.onlySuggested.length > 0);
+  return emptied ? whole : extended;
 }
 
 /**

@@ -56,7 +56,10 @@ export interface Organized {
 const nameKey = (name: string | null): string | null =>
   name === null ? null : name.replace(/\s+/gu, ' ').trim().toLowerCase() || null;
 
-/** Whether a note page goes on the visit open before it in the same file. */
+/**
+ * Whether a note page goes on the visit open before it: in the same file, or in the photo before
+ * it when the page is a photo too (one visit photographed as several photos).
+ */
 function continues(open: OrganizedVisit, page: PageRead): boolean {
   if (page.pageOfVisit === 1) return false;
   const name = nameKey(page.patient);
@@ -68,18 +71,26 @@ function continues(open: OrganizedVisit, page: PageRead): boolean {
   );
 }
 
-/** Pages to visits: continuity in each file, then one visit per patient and date across files. */
+/**
+ * Pages to visits: continuity in each file and across consecutive photos, then one visit per
+ * patient and date across files, then a dateless visit with a name joined to that name's one dated
+ * visit.
+ */
 export function organize(files: readonly FileRead[]): Organized {
   let setAside = 0;
   const seen = new Set<string>();
   const found: OrganizedVisit[] = [];
+  let open: OrganizedVisit | undefined;
+  let lastPhoto = false;
   for (const file of files) {
     if (file.sha256 !== null && seen.has(file.sha256)) {
       setAside += file.pages.length;
       continue;
     }
     if (file.sha256 !== null) seen.add(file.sha256);
-    let open: OrganizedVisit | undefined;
+    const photo = file.contentType !== 'application/pdf';
+    if (!(photo && lastPhoto)) open = undefined;
+    lastPhoto = photo;
     for (const page of file.pages) {
       if (page.kind !== 'note') {
         setAside += 1;
@@ -112,6 +123,14 @@ export function organize(files: readonly FileRead[]): Organized {
     } else {
       same.pieces.push(...visit.pieces);
     }
+  }
+  for (const visit of [...visits]) {
+    const name = nameKey(visit.patient);
+    if (name === null || visit.visitDate !== null) continue;
+    const dated = visits.filter((v) => v.visitDate !== null && nameKey(v.patient) === name);
+    if (dated.length !== 1) continue;
+    dated[0]!.pieces.push(...visit.pieces);
+    visits.splice(visits.indexOf(visit), 1);
   }
   for (const visit of visits) {
     const places = new Set<number>();

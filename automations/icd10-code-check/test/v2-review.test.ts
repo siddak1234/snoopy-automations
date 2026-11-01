@@ -90,6 +90,26 @@ test("the titles' difference: the words only one title holds, case aside, in eac
     titleDifference('Chronic kidney disease, stage 3a', 'chronic KIDNEY disease, stage 4'),
     { onlyNote: ['3a'], onlySuggested: ['4'] },
   );
+  // "with" does not extend to "without": I11.9 → I11.0 keeps the one word that matters.
+  assert.deepEqual(
+    titleDifference(
+      'Hypertensive heart disease without heart failure',
+      'Hypertensive heart disease with heart failure',
+    ),
+    { onlyNote: ['without'], onlySuggested: ['with'] },
+  );
+  assert.deepEqual(
+    titleDifference(
+      'Type 2 diabetes mellitus without complications',
+      'Type 2 diabetes mellitus with hyperglycemia',
+    ),
+    { onlyNote: ['without', 'complications'], onlySuggested: ['with', 'hyperglycemia'] },
+  );
+  // An extension that would empty a side: whole words instead.
+  assert.deepEqual(titleDifference('stage 3', 'stage 3a'), {
+    onlyNote: ['3'],
+    onlySuggested: ['3a'],
+  });
 });
 
 test("the why's rule: G3 in the owner's screen's words, every other check v1's reason until a person words it", () => {

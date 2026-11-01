@@ -1,4 +1,5 @@
 import {
+  DEFAULT_MODEL_TIMEOUT_MS,
   artifactIdsOf,
   boundedUnits,
   failed,
@@ -85,8 +86,10 @@ const text = (value: unknown, max: number): string | null =>
 
 /**
  * One window's pages from the model's answer: each page of `window` once, as answered, a page the
- * answer leaves out or does not shape read as "other" (set aside, counted). Without a window (a
- * PDF read whole), every page the answer numbers, once each.
+ * answer leaves out or does not shape read as "other" (set aside, counted). The platform sends a
+ * later window as its own PDF from page 1, so an answer that numbers none of the window's pages and
+ * every page within 1 to the window's size is read as the window's pages in order (1 is `from`).
+ * Without a window (a PDF read whole), every page the answer numbers, once each.
  */
 export function pagesOfAnswer(answer: unknown, window: PageRange | undefined): PageRead[] {
   const listed = isObject(answer) && Array.isArray(answer.pages) ? answer.pages : [];
@@ -105,6 +108,22 @@ export function pagesOfAnswer(answer: unknown, window: PageRange | undefined): P
     });
   }
   if (window === undefined) return [...byPage.values()].sort((a, b) => a.page - b.page);
+  const answered = [...byPage.keys()];
+  const size = window.to - window.from + 1;
+  if (
+    window.from > 1 &&
+    answered.length > 0 &&
+    answered.every((page) => page <= size) &&
+    !answered.some((page) => page >= window.from && page <= window.to)
+  ) {
+    const shifted = new Map<number, PageRead>();
+    for (const [page, read] of byPage) {
+      const at = page + window.from - 1;
+      shifted.set(at, { ...read, page: at });
+    }
+    byPage.clear();
+    for (const [page, read] of shifted) byPage.set(page, read);
+  }
   const other = (page: number): PageRead => ({
     page,
     kind: 'other',
@@ -119,43 +138,73 @@ export function pagesOfAnswer(answer: unknown, window: PageRange | undefined): P
   return out;
 }
 
+/** How many windows `categorize` asks the model about at once. */
+export const WINDOWS_AT_ONCE = 4;
+
 /**
  * Pages sorted: AI reads each file in windows of at most 20 pages (`categorize-pages`, a page
  * range of the file the platform cuts) — a photo whole — and answers, per page, its kind (note,
- * lab, cover, other), its patient, its visit date and its page of the visit.
+ * lab, cover, other), its patient, its visit date and its page of the visit. `WINDOWS_AT_ONCE`
+ * windows are asked at a time; no window starts once the run's deadline is nearer than one model
+ * call's wait (`DEFAULT_MODEL_TIMEOUT_MS`), and the run stops in `WORDS_V2.tooLong`.
  */
 export const categorize: Step = async (context) => {
-  const { state, platform } = context;
-  const reads: FileRead[] = [];
-  for (const file of filesOf(state.files)) {
+  const { state, platform, request } = context;
+  const files = filesOf(state.files);
+  const asks: { file: number; window: PageRange | undefined; pdf: boolean }[] = [];
+  files.forEach((file, at) => {
     const pdf = file.contentType === 'application/pdf';
     const windows: (PageRange | undefined)[] =
       !pdf || file.pages === 0 ? [undefined] : windowsOf(file.pages);
-    const pages: PageRead[] = [];
-    for (const window of windows) {
+    for (const window of windows) asks.push({ file: at, window, pdf });
+  });
+  const answers: PageRead[][] = [];
+  let next = 0;
+  let stop: { sentence: string; kind: string } | undefined;
+  const worker = async (): Promise<void> => {
+    while (stop === undefined && next < asks.length) {
+      if (Date.parse(request.deadline) - Date.now() < DEFAULT_MODEL_TIMEOUT_MS) {
+        stop = { sentence: WORDS_V2.tooLong, kind: 'too_long' };
+        return;
+      }
+      const at = next;
+      next += 1;
+      const { file, window, pdf } = asks[at]!;
       const span = window ?? { from: 1, to: pdf ? 'the last' : 1 };
-      const asked = await settle(context, () =>
-        platform.callModel(
-          prompt('categorize-pages'),
-          { from: span.from, to: span.to },
-          {
-            models: MODELS,
-            artifactId: file.artifactId,
-            ...(window === undefined || !pdf ? {} : { pages: window }),
-          },
-        ),
-      );
-      if (!asked.ok) return failed(asked.sentence, asked.kind);
+      let asked;
+      try {
+        asked = await settle(context, () =>
+          platform.callModel(
+            prompt('categorize-pages'),
+            { from: span.from, to: span.to },
+            {
+              models: MODELS,
+              artifactId: files[file]!.artifactId,
+              ...(window === undefined || !pdf ? {} : { pages: window }),
+            },
+          ),
+        );
+      } catch (error) {
+        stop ??= { sentence: '', kind: 'thrown' };
+        throw error;
+      }
+      if (!asked.ok) {
+        stop ??= { sentence: asked.sentence, kind: asked.kind };
+        return;
+      }
       const read = readJsonCompletion(asked.value);
-      pages.push(...pagesOfAnswer(read, window ?? (pdf ? undefined : { from: 1, to: 1 })));
+      answers[at] = pagesOfAnswer(read, window ?? (pdf ? undefined : { from: 1, to: 1 }));
     }
-    reads.push({
-      artifactId: file.artifactId,
-      contentType: file.contentType,
-      sha256: file.sha256,
-      pages,
-    });
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(WINDOWS_AT_ONCE, asks.length) }, worker));
+  if (stop !== undefined) return failed(stop.sentence, stop.kind);
+  const reads: FileRead[] = files.map((file) => ({
+    artifactId: file.artifactId,
+    contentType: file.contentType,
+    sha256: file.sha256,
+    pages: [],
+  }));
+  asks.forEach((ask, at) => reads[ask.file]!.pages.push(...answers[at]!));
   return { outcome: 'ok', summary: 'Pages sorted', state: { ...state, reads } };
 };
 
