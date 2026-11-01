@@ -258,3 +258,19 @@ test('a throw after the synthesis writes no unverified line: the lines are gaps'
   assert.ok(!r.calls.some((c) => c.label === 'skeptic'));
   assert.equal(render(r.runDir, r.result).code, 0);
 });
+
+test("the ICD-10 pilot's lessons reach the prompts: four targets, a pick list in full, one-sentence quotes", async () => {
+  const { calls } = await run(normal);
+  const frame = calls.find((c) => c.label === 'frame')!.prompt;
+  assert.ok(frame.includes('at most four a lens'), 'the frame gives a lens at most four targets');
+  const practice = calls.find((c) => c.label === 'practice lens')!.prompt;
+  assert.ok(
+    practice.includes('the full official list, its source, its count and the rule'),
+    'the practice lens researches every pick list in full',
+  );
+  for (const lens of ['practice', 'rules', 'vendors', 'streamlining']) {
+    const prompt = calls.find((c) => c.label === `${lens} lens`)!.prompt;
+    assert.ok(prompt.includes('one exact sentence from that page copied character for character'));
+    assert.ok(prompt.includes('Skip a very long page'), `${lens}: small pages over long ones`);
+  }
+});

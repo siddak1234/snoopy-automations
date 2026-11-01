@@ -27,6 +27,13 @@ gate after each (A2: "programmatic checks"). The script numbers each finding `<l
 the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
 and a line stays only when every id it cites is confirmed and every verdict for the line says
 supported (any other verdict beside them is a gap); a throw before the skeptic's gate finishes writes no line of the brief, each one a gap.
+From the ICD-10 pilot (Round 21): the practice lens researches every list a person picks from (a
+setup choice, a run choice) as the full official list, with its source and its count (F1: "These
+are not all specialties that use icd10 codes. Your research was not sufficient." — six specialties
+were chosen by the session); the frame gives a lens at most four targets, so it fits its call
+budget, a quote is one exact sentence copied character for character, and a very long page is
+skipped for a small specific one (pass 1's vendors lens: every finding dropped as a paraphrase or
+out of calls; passes 2–4 needed).
 Its `researcher` agent is the kit's ([.claude/agents/researcher.md](../../agents/researcher.md),
 byte for byte `snoopy-backend/.claude/agents/researcher.md`, installed by `claude-install`):
 without it every lens fails.
@@ -42,12 +49,13 @@ without it every lens fails.
    so only the write runs again. A second mismatch: tell the owner research.json could not be
    written, with the result's gaps; no spec is written.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
-4. Show the owner, in 10 lines or fewer, how the work is done today, what an expert checks, which
+4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work is done today, what an expert checks, which
    vendors serve it and which we have, what the first version automates and leaves to a person,
    and what was not found; then the gaps and every not-researched default. A default no confirmed
    source carries, whatever its kind, is "a person decides" unless the owner keeps its proposal.
-   Record the owner's yes or corrections verbatim, with the time. No spec is written from a brief
-   the owner has not approved.
+   The owner approves the three in one approval ([SKILL.md](SKILL.md), stage 2); record the owner's
+   yes or corrections verbatim, with the time. Nothing is registered from a brief the owner has not
+   approved.
 
 If the vendors lens finds a vendor no provider file declares, tell the owner the check's answer is
 now "a new vendor" (stage 1). The approved brief is copied beside the spec as

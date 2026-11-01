@@ -33,7 +33,9 @@ privacy, a customer's file, the words, and the steps' logic.
 | 8 Failures          | each failure's exact words, whether the run stops, and the field or the code that decides it                                                                                                                                                                                                                                                                  |
 | 9 Tests (CI)        | one test per row, made-up inputs only, each shown to fail without its code                                                                                                                                                                                                                                                                                    |
 
-Also: no customer data in the diff; no word of the spec changed without a dated note at its top
+Also: every limit the spec sets is checked against the data it limits, with the count written
+beside it, and a limit without its count is a finding (the ICD-10 pilot: the 60-candidate cap left
+40,646 of 74,719 codes never offerable (the flow's second review)); no customer data in the diff; no word of the spec changed without a dated note at its top
 (Round 19, the flow's review, finding 2); the repository README links the spec's sections and never
 restates them (Round 19, the flow's review, finding 9). No platform change inside the flow: every
 block, page part, control and provider operation is in `contract/schemas/` and

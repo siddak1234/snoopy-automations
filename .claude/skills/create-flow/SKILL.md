@@ -46,21 +46,21 @@ says go for each step that publishes or touches production.
      capability, trigger, department or icon (the platform's ADR-0048 decision 12), or a vendor no
      file can describe. Nothing of the flow is built.
 
-   Then list at most five decisions, each with a recommended default — only what the idea leaves
-   open and changes the build (a field's choices, file types, who may act, what a result shows).
+   From the ICD-10 pilot (Round 21; F1–F4 are the owner's TestFlight build 32 feedback, 2026-10-29): when no department fits the domain exactly, say so and offer a new department as a platform change; never pick the nearest (F2: "The flow is under healthcare not compliance" — the session chose Compliance). An idea that names an integration (a live intake, a write-back) gets its research and its round planned here, in [templates/order.md](templates/order.md)'s list, never only a "next version" row (F4: "Integrations for step 1. Your review after completion of approving it should automatically go into the ehr system."). Each gap the menu leaves is shown as "workaround with today's blocks" beside "a new block (platform round)", for the owner to pick (the owner rejected the setup switches and the one approval per run (2026-10-28 ~21:05Z), which reworked the spec).
+
+   Then list at most five decisions, each with a recommended default — only what the idea leaves open and changes the build (a field's choices, file types, who may act, what a result shows). Two are always asked: who uses the flow (their role), and whether a run is one item or a batch (F3: "Is the visit as a patient uploading or doctor. It should be a batch i shiuld upload as a doctor").
    Record the owner's answers verbatim, with the time, in the session's memory.
 
-   **1b. Research** (the session; the owner says yes or corrects), in [research-stage.md](research-stage.md): the `flow-research` workflow (four `researcher` lenses, one synthesis, one skeptic), its result's checksum checked by `research-render.mjs`, the brief shown to the owner. No spec is written from a stopped run or a brief the owner has not approved.
+   **1b. Research** (the session; the owner says yes or corrects), in [research-stage.md](research-stage.md): the `flow-research` workflow (four `researcher` lenses, one synthesis, one skeptic), its result's checksum checked by `research-render.mjs`, the brief shown to the owner at stage 2. No spec is written from a stopped run, and nothing is registered from a brief the owner has not approved.
 
 2. **The spec and the words list** (the session; the owner approves). Copy the spec template to
    `snoopy-automations/automations/<name>/README.md` and [templates/words.md](templates/words.md)
-   beside it as `words.md`; fill both from the idea, the answers and the approved brief (`research.md`: the Domain section, a source id on every domain fact). Nothing the idea does not say:
+   beside it as `words.md`; fill both from the idea, the answers and the brief (`research.md`: the Domain section, a source id on every domain fact). Nothing the idea does not say:
    each gap is a section 11 question with its default; a provider the platform has not goes in
    section 10, never written as if it existed. The words list is every word either client shows,
    one set for both (two clients built from one plan wrote different refusals for the same screen:
    Round 19, the website's review, finding 9). Check every word against the plain-words rules: the fewest questions, nothing a connected app knows, titles only, no jargon;
-   "flow" and "department", never "automation", "team" or "project". Show the owner the words as the
-   screens read them; write the date and the owner's words at the spec's top. **Nothing is
+   "flow" and "department", never "automation", "team" or "project". Show the owner the brief, the screens and the words together, as screens, for one approval (the ICD-10 pilot: six approval rounds; the words waited 3 h 14 min); write the date and the owner's words at the spec's top. **Nothing is
    registered before this**: a registered manifest is immutable (a change is v2). A word changed
    after the approval goes back to the owner with a dated note at the spec's top
    (Round 19, the flow's review, finding 2).
@@ -82,9 +82,7 @@ says go for each step that publishes or touches production.
 5. **One review** (one `reviewer`, run by the workflow as the lane ends) against
    [templates/review.md](templates/review.md), its fixed checklist; CI's review rows answer what a
    machine can. Six fixes or fewer are made by hand; more go back to the lane once.
-6. **The merge** (the session prepares each step; the owner merges): in the order of
-   [templates/order.md](templates/order.md) — the provider file's pull request first when there is
-   one, then the automations pull request — written out for the owner with each pull request's link once its
+6. **The merge** (the session prepares each step; the owner merges): in the order of [templates/order.md](templates/order.md), which lists every pull request up front from stage 1, a flow's SDK change as its own pull request first (the ICD-10 pilot: the SDK half had to be split out (#65 before #66)) — the provider file's pull request first when there is one, then the automations pull request — written out for the owner with each pull request's link once its
    required check is green on the head, and its hold for the pilot. The merge is the deploy: the
    session reads the Deploy job's summary and the platform's Flow CD run; no pin or release follows.
 7. **The screens** (the session; the owner's phone): once deployed, the website and the app read as
@@ -99,8 +97,8 @@ says go for each step that publishes or touches production.
 
 ## Stop when
 
-- The owner has not approved the research brief, or research.json failed its checksum twice: no spec is written.
-- The owner has not approved the words: nothing is registered.
+- research.json failed its checksum twice: no spec is written.
+- The owner has not approved the brief, the screens and the words: nothing is registered.
 - The idea needs a new block, page part, question form or target, or anything else the menu does not offer but a provider file: a platform change, never built inside a flow.
 - A new vendor or operation needs its provider file, and the owner has not done its console steps or said to build it.
 - A step needs an edit outside the flow's lane: that is a finding, not an edit.

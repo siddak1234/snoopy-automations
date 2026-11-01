@@ -34,8 +34,7 @@ const MAX_FINDINGS = 12;
 const NEED = { frame: 10_000, lenses: 60_000, synthesis: 30_000, skeptic: 30_000, write: 20_000 };
 const PERSON = 'a person decides'; // O1: "escalate to human intervention"
 const gaps = [];
-let gapsLogged = false;
-let stopped = '';
+let [gapsLogged, stopped] = [false, ''];
 /** A gap goes to research.json and the result; after the gap log has run, it is logged at once. */
 const gap = (text) => (gaps.push(text), gapsLogged && log(`gap: ${text}`));
 /** A stop is logged where it happens and joined to any earlier one, never overwritten. */
@@ -45,10 +44,11 @@ function stop(why) {
 }
 
 // Each lens's brief: "an objective, an output format, guidance on the tools and sources to use, and
-// clear task boundaries" (A1). [objective, sources, not its job]
+// clear task boundaries" (A1). [objective, sources, not its job]. A pick list in full, four targets
+// a lens, one-sentence quotes, small pages: the ICD-10 pilot's evidence, research-stage.md "The run".
 const LENS = {
   practice: [
-    "how the people who do this work judge it: the expert's criteria, their order and weight; what separates expert judgement from novice; the usual judgement errors",
+    "how the people who do this work judge it: the expert's criteria, their order and weight; what separates expert judgement from novice; the usual judgement errors; every list a person picks from (a setup choice, a run choice): the full official list, its source, its count and the rule that selects its entries, never a sample",
     "professional bodies, practitioner standards and guides, recognised experts' published method (T2), the regulator where it sets the criteria (T1)",
     'laws and formats (rules); vendors and their APIs (vendors); the process steps, timings and hand-offs (streamlining)',
   ],
@@ -182,7 +182,7 @@ try {
   const framePrompt = (extra) =>
     `${extra}Frame the research for the flow "${name}". Do no research and open no web page. ${task} The platform check: ${JSON.stringify(platform ?? '')}. ` +
     `ownerWords: copy, word for word, the owner's own sentence that names the job, the decision the flow helps make, and what a good result is; an empty string where the owner did not say it — never your words. ` +
-    `Size: simple (one kind of document, one decision) or broad. questions: for each lens, the questions this idea raises — everything you would otherwise assume about the job goes here as a question. The lenses: ${lensList}.`;
+    `Size: simple (one kind of document, one decision) or broad. questions: for each lens, the questions this idea raises, at most four a lens, the ones that decide the build first, so a lens fits its tool calls — everything you would otherwise assume about the job goes here as a question. The lenses: ${lensList}.`;
   const frame = stopped
     ? null
     : await once(
@@ -219,7 +219,7 @@ try {
         ? `The practice lens found these (leads only: re-open any you build on and cite your own fetch): ${JSON.stringify(leads.map(({ claim, url }) => ({ claim, url })))}. `
         : '') +
       `At most ${cap} tool calls and ${MAX_FINDINGS} findings. Search short and broad, then narrow; prefer T1 (regulator, statute, standards body, the vendor's own docs, our repos by path:line) and T2 (professional bodies, practitioner standards, named experts); T3 only reporting on those; T4 (SEO pages, forums, AI-written pages) never cited. ` +
-      `Each finding: one claim, the URL you fetched, the exact words from that page, its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${backend === undefined ? `${automations} is` : `${automations} and ${backend} are`} read-only. ${DATA}`;
+      `Skip a very long page (a whole code set, a full manual) for a small specific one. Each finding: one claim, the URL you fetched, one exact sentence from that page copied character for character (a paraphrase is dropped), its tier and publisher. Use only what you fetched in this task, never memory; a figure, a price or a limit with no page is "not found". ${backend === undefined ? `${automations} is` : `${automations} and ${backend} are`} read-only. ${DATA}`;
     const lensOpts = (lens) => opts('Lenses', `${lens} lens`, 'researcher', FINDINGS);
     const runLens = (lens, leads = null) =>
       once(

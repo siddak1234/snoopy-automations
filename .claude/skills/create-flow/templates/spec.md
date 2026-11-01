@@ -7,7 +7,10 @@ in section 11 · **Built in:** <PR link, once built>
 Every limit below is the platform's: `snoopy-automations/contract/schemas/automation-manifest.json` and
 `snoopy-automations/contract/schemas/automation-run-result.json`, and the rules beyond them in `snoopy-automations/contract/README.md`,
 "What the platform refuses beyond the schema".
-Nothing here is a customer's data: this repository is public.
+Nothing here is a customer's data: this repository is public. Every limit this spec sets (a cap, a
+count, a size) is checked against the data it limits, with the count written beside it (the
+ICD-10 pilot: the 60-candidate cap left 40,646 of 74,719 codes never offerable (the flow's second
+review)).
 
 ## Domain (from research.md)
 
@@ -26,20 +29,21 @@ brief does not carry is not written here.
 
 ## 1. What it is
 
-| Field      | Value | Limit                                                                                                                                                                                                                                                                 |
-| ---------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name       |       | 80 characters; the document, then the job ("Invoice Processing", "Resume Screening")                                                                                                                                                                                  |
-| One line   |       | 200 characters: what it does, in a person's words                                                                                                                                                                                                                     |
-| Department |       | one of HR, Accounting, Finance, Legal, Compliance, Data, Operations, Sales, Marketing, Customer Support, IT, Engineering, Product, Procurement, Administration, Research; the flow joins it                                                                           |
-| Icon       |       | the menu lists no icons yet (`contract/schemas/platform-menu.json`): leave it blank. The manifest's required `display.icon` keeps the template's `Sparkles`, and the app draws a placeholder for a name it does not have; a new icon is a platform round (section 10) |
-| Price      |       | US dollars a month, cents at most; 0 unless the owner says                                                                                                                                                                                                            |
+| Field      | Value | Limit                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name       |       | 80 characters; the document, then the job ("Invoice Processing", "Resume Screening")                                                                                                                                                                                                                                                                                                                                           |
+| One line   |       | 200 characters: what it does, in a person's words                                                                                                                                                                                                                                                                                                                                                                              |
+| Department |       | one of HR, Accounting, Finance, Legal, Compliance, Data, Operations, Sales, Marketing, Customer Support, IT, Engineering, Product, Procurement, Administration, Research; the flow joins it. None fits the domain exactly: stage 1 says so and offers a new department, a platform change (section 10), never the nearest (the ICD-10 pilot, F2: "The flow is under healthcare not compliance" — the session chose Compliance) |
+| Icon       |       | the menu lists no icons yet (`contract/schemas/platform-menu.json`): leave it blank. The manifest's required `display.icon` keeps the template's `Sparkles`, and the app draws a placeholder for a name it does not have; a new icon is a platform round (section 10)                                                                                                                                                          |
+| Price      |       | US dollars a month, cents at most; 0 unless the owner says                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## 2. How it starts
 
-| Field   | Value | Limit                                                                                                                                                                                                                                                                          |
-| ------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Trigger |       | manual, schedule (every 60 s to 366 days) or webhook; an event from an integration is not offered yet (section 10)                                                                                                                                                             |
-| Files   |       | the types accepted, a size up to 100 MiB, PDF pages up to 1,000, an image's side up to 20,000 px; or none. The model reads PDF, JPEG and PNG (up to 3,750,000 bytes); another type (a Word file) is read as text by the flow, and its manifest declares no page or pixel limit |
+| Field            | Value | Limit                                                                                                                                                                                                                                                                          |
+| ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Who and how many |       | who uses the flow (their role), and whether a run is one item or a batch: stage 1 always asks (the ICD-10 pilot, F3: "Is the visit as a patient uploading or doctor. It should be a batch i shiuld upload as a doctor")                                                        |
+| Trigger          |       | manual, schedule (every 60 s to 366 days) or webhook; an event from an integration is not offered yet (section 10)                                                                                                                                                             |
+| Files            |       | the types accepted, a size up to 100 MiB, PDF pages up to 1,000, an image's side up to 20,000 px; or none. The model reads PDF, JPEG and PNG (up to 3,750,000 bytes); another type (a Word file) is read as text by the flow, and its manifest declares no page or pixel limit |
 
 Run inputs, asked when a person starts it (at most 16). A file field is never required: the platform
 refuses a required file field (Round 19, the flow's lane).
@@ -93,7 +97,11 @@ AI") says it in the same round (web-privacy-fix.md):
 
 ## 5. Setup questions
 
-The fewest. What a connected integration knows is read from it, never asked.
+The fewest. What a connected integration knows is read from it, never asked. A list a person picks
+from (a setup choice, a run choice) is the full official list the research found: write its source,
+its count and the rule that selects its entries beside it (the ICD-10 pilot, F1: "These are not all
+specialties that use icd10 codes. Your research was not sufficient." — six specialties were chosen
+by the session).
 
 | Section: connections, source, rules or notifications | Key | Title | Description (200) | Control: toggle, money, text, email, resource-picker or connection | Default | Required | Step group |
 | ---------------------------------------------------- | --- | ----- | ----------------- | ------------------------------------------------------------------ | ------- | -------- | ---------- |
