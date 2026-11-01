@@ -1,10 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `d9f7fe2` (snoopy-backend d9f7fe2, re-cited to the merge at
-land: the head of the platform's Round 21 platform round 2 branch, ADR-0048 amendments 3 and 4;
-2026-11-01, "Refreshed 2026-11-01, platform round 2" below; all eleven files `cmp`-equal to
-`d9f7fe2`). Before it, `27c3051` (snoopy-backend 27c3051 (#255), the platform's
+(`snoopy-backend`, private) at commit `10b5fae` (snoopy-backend 10b5fae (#256), the platform's `main` after its #256
+squash-merged Round 21's platform round 2, ADR-0048 amendments 3 and 4; first copied at its branch
+head `d9f7fe2`, all eleven files `cmp`-equal to both; 2026-11-01, "Refreshed 2026-11-01, platform
+round 2" below). Before it, `27c3051` (snoopy-backend 27c3051 (#255), the platform's
 `main` after its #255 squash-merged; first copied at its branch head `3fd5cea`, tree-identical),
 Round 21's select control and review of each change (ADR-0048 amendment 2; 2026-10-28,
 "Refreshed 2026-10-28, the review" below; all nine files `cmp`-equal to `27c3051`). Before it,
@@ -433,9 +433,9 @@ The other five files are byte-identical to `130e513`'s (each checked with `cmp`)
 deployed 2026-10-28 23:26Z, so the live platform accepts a manifest declaring a `select` and a held
 result carrying `decisions`.
 
-Refreshed 2026-11-01, platform round 2, from snoopy-backend d9f7fe2 (re-cited to the merge at
-land), the platform's ADR-0048 amendments 3 and 4 (its BUILD-PLAN 29.4.4). Eleven files now, two
-new and five moved; all eleven `cmp`-equal to `d9f7fe2`:
+Refreshed 2026-11-01, platform round 2, from snoopy-backend 10b5fae (#256; first
+copied at its branch head `d9f7fe2`), the platform's ADR-0048 amendments 3 and 4 (its BUILD-PLAN 29.4.4). Eleven files now, two
+new and five moved; all eleven `cmp`-equal to `10b5fae`:
 
 - `automation-memory-get-request.json` and `automation-memory-put-request.json`, new: a flow's
   memory per workspace, `{key}` and `{key, value}` (a key `^[a-z0-9-]{1,64}$`); the callbacks answer
@@ -473,7 +473,7 @@ section is vendored from the platform's `snoopy-backend/manifests/README.md` (AD
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
 at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, and
 amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
-decision's `group`, the `memory` capability) at `d9f7fe2`, its file paths written from
+decision's `group`, the `memory` capability) at `10b5fae`, its file paths written from
 `snoopy-backend/`.
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:

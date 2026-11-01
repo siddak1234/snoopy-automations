@@ -188,7 +188,7 @@ picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest
 
 **Platform round 2: a bigger dropdown, several files, a grouped review, a public provider, a flow's
 memory and batch intake** (the platform's ADR-0048 amendments 3 and 4, 2026-11-01; `contract/`
-carries them at snoopy-backend d9f7fe2). A `select`'s `options` may be `{value, label, group?}`
+carries them at snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
 objects, up to 1,000 (`SelectOption`; `optionValues`, and `chosenOptions` reads values). A run-input
 `artifact` field with `multiple` puts up to its `maxFiles` (1 to 200, default 50; `RUN_INPUT_LIMITS`,
 `maxFilesOf`) files into ONE run, and `artifactIdsOf(input, key)` reads its list. A held decision may

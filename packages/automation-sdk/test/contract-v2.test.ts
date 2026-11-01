@@ -22,7 +22,7 @@ import { assertValid, schemas, validator } from './published-schemas.js';
 
 /**
  * The platform round 2 shapes (platform ADR-0048 amendments 3 and 4) against the PUBLISHED schemas
- * (`contract/schemas`, vendored at snoopy-backend d9f7fe2): a bigger dropdown's options, a
+ * (`contract/schemas`, vendored at snoopy-backend 10b5fae (#256)): a bigger dropdown's options, a
  * several-file run input, a review's `group` and 400 changes, the memory callbacks, a model
  * request's `pages`, a manifest's `batch`, a batch run's `units` and a child invoke's `unit` — and
  * the SDK's copies of their bounds held to the schema and the menu.
