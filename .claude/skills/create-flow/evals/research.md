@@ -15,8 +15,8 @@ real usage patterns" and A5's "20-50 simple tasks drawn from real failures". Sou
   efficiency. It grades the brief: "grade what the agent produced, not the path it took" (A5).
 - The session also reads the run's transcript: "People testing agents find edge cases that evals
   miss" (A1).
-- The owner's corrections at stage 1b step 4 calibrate the grader: "Use human feedback to calibrate
-  automated scoring" (O3).
+- The owner's corrections at stage 2 (research-stage.md step 4, shown at stage 2) calibrate the
+  grader: "Use human feedback to calibrate automated scoring" (O3).
 
 ## The cases
 

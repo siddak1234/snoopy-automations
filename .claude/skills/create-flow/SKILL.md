@@ -16,11 +16,11 @@ provider, an SDK change next when it needs one, then its own `snoopy-automations
 and one review each; the flow's merge is the deploy (ADR-0047). Here since 2026-10-25 (29.0.5).
 
 **Who does what.** The session runs the stages, writes the brief and the records. One lane agent
-(`builder`, through the `build-round` workflow) builds each pull request in a scratch clone; one
-`reviewer` reads it once against [templates/review.md](templates/review.md). At most three agents
-at once, one heavy gate at a time (the gate lock). The owner approves the brief, the screens and
-the words at once (stage 2), merges every pull request, and says go for each step that publishes
-or touches production.
+(`builder`, through the `build-round` workflow) builds each `snoopy-automations` pull request (the
+SDK's and the flow's) in a scratch clone; one `reviewer` reads it once against
+[templates/review.md](templates/review.md). At most three agents at once, one heavy gate at a time
+(the gate lock). The owner approves the brief, the screens and the words at once (stage 2), merges
+every pull request, and says go for each step that publishes or touches production.
 
 ## Inputs
 
@@ -39,7 +39,7 @@ or touches production.
    its `$defs.emittedBlock`); and the newest filled spec (`automations/*/README.md`) and its
    manifest. **Check the idea against the menu** ([templates/order.md](templates/order.md), "The
    check"): tell the owner in one line — 1, 2 or 3 pull requests, or stop — each listed up front.
-   The department, a named integration, each gap the menu leaves: [spec.md](templates/spec.md) §1, §10.
+   The department and each gap: [spec.md](templates/spec.md) §1, §10; a named integration: order.md.
 
    Then list at most five decisions, each with a recommended default — only what the idea leaves
    open and changes the build (a field's choices, file types, who may act, what a result shows).
@@ -69,7 +69,7 @@ or touches production.
    [templates/provider-pr.md](templates/provider-pr.md) from section 3 — the file with only the
    operations the spec names, the menu re-emitted, every console step for the owner at once — and a
    `snoopy-backend` session builds it on the owner's word. It merges first; the flow's pull request
-   re-pins `contract/` to its merge. One pull request: no stage 3.
+   re-pins `contract/` to its merge. No provider file: no stage 3.
 4. **The build** (one lane agent): this repository's `build-round` workflow
    ([.claude/workflows/build-round.js](../../workflows/build-round.js), by `scriptPath`, the
    platform's byte for byte) with `{ runDir, task, lanes: [{ repo: 'snoopy-automations', clone }] }`

@@ -1,10 +1,11 @@
 # /create-flow stage 1b: Research
 
 The steps of [SKILL.md](SKILL.md)'s stage 1b, between the decisions and the spec. The session runs
-them alone; the owner approves the brief at stage 2, with the screens and the words. The owner's words (2026-10-27): "understanding the use case
-end to end. how it works, the expert ideology and deep expertise in that specific problem. not
-just some random generic. this does not mean complicate flow. something simple, intuitive but
-depth in the research and understanding"; "no assumptions".
+them alone; the owner approves the brief at stage 2, with the screens and the words. The owner's
+words (2026-10-27): "understanding the use case end to end. how it works, the expert ideology and
+deep expertise in that specific problem. not just some random generic. this does not mean
+complicate flow. something simple, intuitive but depth in the research and understanding"; "no
+assumptions".
 
 ## When
 
@@ -50,13 +51,13 @@ without it every lens fails.
    so only the write runs again. A second mismatch: tell the owner research.json could not be
    written, with the result's gaps; no spec is written.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
-4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work is done today, what an expert checks, which
-   vendors serve it and which we have, what the first version automates and leaves to a person,
-   and what was not found; then the gaps and every not-researched default. A default no confirmed
-   source carries, whatever its kind, is "a person decides" unless the owner keeps its proposal.
-   The owner approves the three in one approval ([SKILL.md](SKILL.md), stage 2); record the owner's
-   yes or corrections verbatim, with the time. Nothing is registered from a brief the owner has not
-   approved.
+4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work
+   is done today, what an expert checks, which vendors serve it and which we have, what the first
+   version automates and leaves to a person, and what was not found; then the gaps and every
+   not-researched default. A default no confirmed source carries, whatever its kind, is "a person
+   decides" unless the owner keeps its proposal. The owner approves the three in one approval
+   ([SKILL.md](SKILL.md), stage 2); record the owner's yes or corrections verbatim, with the time.
+   Nothing is registered from a brief the owner has not approved.
 
 If the vendors lens finds a vendor no provider file declares, tell the owner the check's answer is
 now "a new vendor" (stage 1). The approved brief is copied beside the spec as

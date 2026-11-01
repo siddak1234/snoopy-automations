@@ -171,7 +171,7 @@ Each vendor the research's vendors lens found is here with its provider file, or
 
 A gap of the research is written `Unknown — not found (research.md, Gaps)`. A default no confirmed
 source carries, whatever its kind, is "a person decides" unless the owner kept its proposal at
-stage 1b (the owner's words and the time beside it).
+stage 2 (research-stage.md step 4, shown at stage 2; the owner's words and the time beside it).
 
 | Question | Proposed default |
 | -------- | ---------------- |
