@@ -1,10 +1,11 @@
 # /create-flow stage 1b: Research
 
 The steps of [SKILL.md](SKILL.md)'s stage 1b, between the decisions and the spec. The session runs
-them; the owner says yes or corrects. The owner's words (2026-10-27): "understanding the use case
-end to end. how it works, the expert ideology and deep expertise in that specific problem. not
-just some random generic. this does not mean complicate flow. something simple, intuitive but
-depth in the research and understanding"; "no assumptions".
+them alone; the owner approves the brief at stage 2, with the screens and the words. The owner's
+words (2026-10-27): "understanding the use case end to end. how it works, the expert ideology and
+deep expertise in that specific problem. not just some random generic. this does not mean
+complicate flow. something simple, intuitive but depth in the research and understanding"; "no
+assumptions".
 
 ## When
 
@@ -17,16 +18,51 @@ to the spec's section 11 with its default, never a new round of questions.
 
 The Workflow tool, with `scriptPath` set to the clone's `.claude/workflows/flow-research.js` and
 `args` set to `{ runDir, automations, name, idea, answers, platform }` — no backend clone: the
-vendors lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
-is read-only and its files a source too). Inside: the
+adoption lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
+is read-only and its files a source too). It runs two children beside it, each once with
+`workflow({ scriptPath })` inside its try (one level, the harness's limit; a child that fails to
+load stops the run with the failure a gap, and the result keeps its shape): its lens briefs and
+schemas, data in `.claude/workflows/flow-research-tables.js`, and the integrations stage, the
+adoption lens and its researchers, in `.claude/workflows/flow-research-integrations.js`. Inside: the
 owner's words quoted, never researched; four lenses — practice and expert judgement; rules,
-standards and data; vendors and integrations; the streamlining of the process — at most three
-agents at once; one synthesis from the gated findings only; one skeptic that re-opens every cited
+standards and data, the model vendors' rules on our own AI calls included; adoption; the
+streamlining of the process — practice then streamlining, and rules, at once, then the integrations
+stage (adoption, then its researchers); at most three agents at once
+(`MAX_AGENTS`); one synthesis from the gated findings only; one skeptic that re-opens every cited
 page and judges every line, golden case and cited default against the quotes it cites; a code
-gate after each (A2: "programmatic checks"). The script numbers each finding `<lens>-<n>`, never
+gate after each (A2: "programmatic checks").
+
+**The integrations** (the owner's words, 2026-11-01: "integrations and connections to third party
+services is a crucial part in our create flow"). The adoption lens ranks at most five integrations
+the business line uses, by evidence of adoption (market share, surveys, regulator or certification
+data, the vendor's own customer counts), each with its source and its menu status: the provider id
+alone (its schema refuses anything else) and, apart, the menu's path:line, or "to add"; one past five is a gap. research.json keeps that ranking, and research.md gives each
+ranked integration its row while it keeps a confirmed line and its adoption cell is not empty — its adoption lines, else the own quote (a table row's last cell) and publisher of each confirmed `adoption-<n>` finding whose claim names it, never that claim's wording (any other is a Gaps line, "ranked by adoption, not confirmed", in research.md and first in the render's summary of gaps), its "On the menu" cell the provider id only when the menu's `providers`
+list it, else "to add" — research-render.mjs checks it; no finding can quote an absence. After the
+lenses (skipped, one gap, when the token target cannot fit them), one researcher per integration, three at
+once, at most 15 tool calls each (as adoption; A1's 10–15), labels each finding with its part:
+**docs** (the official API, sign-in, events and webhooks, read and write operations, sandbox, rate
+limits, data formats; any MCP server, official or in a known MCP registry; the official SDKs);
+**in practice** (the vendor's own guides and case studies first, then developer forums, the
+official SDK's issues and community posts — T4, rendered "community report"); **cost** (the
+vendor's pricing page, or "not published" as a gap); **constraints and concerns** (access programs,
+contracts such as a business associate agreement, regions, deprecations, lock-in, failure modes).
+The code gate keeps a T4 finding only when an integration researcher labelled it "in practice", and a line keeps a T4 cite
+only in the practice column. The synthesis keys each line by a ranked id, `integration-<k>` (its schema's enum; no ranking, no
+line), and a line naming anything else is a gap; it writes each row's lines and at most one "First to build: X,
+because …" (its schema's `maxItems`) with X's ranked id, rendered only when X is a row, else "a person decides"; research.md renders them as its
+Integrations table. The script numbers each finding `<lens>-<n>`, never
 the model; a finding is confirmed only when every verdict the skeptic gives it says confirmed,
 and a line stays only when every id it cites is confirmed and every verdict for the line says
 supported (any other verdict beside them is a gap); a throw before the skeptic's gate finishes writes no line of the brief, each one a gap.
+From the ICD-10 pilot (Round 21): the practice lens researches every list a person picks from (a
+setup choice, a run choice) as the full official list, with its source and its count (F1: "These
+are not all specialties that use icd10 codes. Your research was not sufficient." — six specialties
+were chosen by the session); a lens gets at most four questions — the frame is told so, and the
+script keeps four after adding its own, first, each one past them a gap — so it fits its call
+budget; a quote is one exact sentence copied character for character, and a very long page is
+skipped for a small specific one (pass 1's vendors lens: every finding dropped as a paraphrase or
+out of calls; passes 2–4 needed).
 Its `researcher` agent is the kit's ([.claude/agents/researcher.md](../../agents/researcher.md),
 byte for byte `snoopy-backend/.claude/agents/researcher.md`, installed by `claude-install`):
 without it every lens fails.
@@ -42,22 +78,23 @@ without it every lens fails.
    so only the write runs again. A second mismatch: tell the owner research.json could not be
    written, with the result's gaps; no spec is written.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
-4. Show the owner, in 10 lines or fewer, how the work is done today, what an expert checks, which
-   vendors serve it and which we have, what the first version automates and leaves to a person,
-   and what was not found; then the gaps and every not-researched default. A default no confirmed
-   source carries, whatever its kind, is "a person decides" unless the owner keeps its proposal.
-   Record the owner's yes or corrections verbatim, with the time. No spec is written from a brief
-   the owner has not approved.
+4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work
+   is done today, what an expert checks, the Integrations rows and the first to build, what the first
+   version automates and leaves to a person, and what was not found; then the gaps (the render's summary, the unconfirmed ranked integrations included) and every
+   not-researched default. A default no confirmed source carries, whatever its kind, is "a person
+   decides" unless the owner keeps its proposal. The owner approves the three in one approval
+   ([SKILL.md](SKILL.md), stage 2); record the owner's yes or corrections verbatim, with the time.
+   Nothing is registered from a brief the owner has not approved.
 
-If the vendors lens finds a vendor no provider file declares, tell the owner the check's answer is
-now "a new vendor" (stage 1). The approved brief is copied beside the spec as
+If an Integrations row the flow uses says "to add", tell the owner the check's answer is now "a
+new vendor" (stage 1): a provider file, or a platform round when no file can describe it. The approved brief is copied beside the spec as
 `automations/<name>/research.md`: sources and invented examples only, never a customer's data
 (this repository is public). Each pilot failure joins the research evals,
 [evals/research.md](evals/research.md), at stage 8.
 
 ## Sources
 
-The tags this stage, `.claude/workflows/flow-research.js`, [evals/research.md](evals/research.md)
+The tags this stage, `.claude/workflows/flow-research.js` and its two children, [evals/research.md](evals/research.md)
 and the templates cite (every page fetched 2026-10-27, every quote found on it):
 
 | Tag                 | Source                                                                                                                                                |

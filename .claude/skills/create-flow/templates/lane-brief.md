@@ -1,11 +1,13 @@
 # Brief — snoopy-automations lane: <the flow> (Round <n>)
 
-The fixed parts of the flow's brief (`/create-flow` v4: one builder, one review, one pull request);
+The fixed parts of a lane's brief (`/create-flow` v4: one builder and one review a pull request);
 the `build-round` workflow's design stage fills the angle brackets and writes the Build section, and
 the workflow hands the brief to its lane and its reviewer by path, at
 `<runDir>/brief-snoopy-automations.md`. A new vendor's provider
 file is the session's own `snoopy-backend` lane before it (order.md, step 1): one
-`providers/<id>.json`, its test and the records, no schema and no client change.
+`providers/<id>.json`, its test and the records, no schema and no client change. An SDK change is
+its own lane and pull request from this brief, naming only `packages/automation-sdk/`, built and
+merged before the flow's lane starts (order.md, step 2).
 
 Clone: `<scratch>/clones/snoopy-automations`, branch `round-<n>/<topic>` from `origin/main` at
 `<sha>`. Node 22 in every shell: `export PATH=$HOME/.nvm/versions/node/v22.23.2/bin:$PATH`.
@@ -67,7 +69,10 @@ brief and the diff, nothing else, so this line is how the checklist reaches it.
 
 ## Docs and records — in the same commit
 
-`docs/docs-map.json` says which doc each change needs; `npm run check:docs` passes. The repository
+`docs/docs-map.json` says which doc each change needs; `npm run check:docs` passes. A document
+never names a branch-only file as a path: once the branch is squash-merged the path is gone and
+`main` turns red (the ICD-10 pilot: #85 and #67 turned main red after the squash merge; #86 and #68
+fixed it). The repository
 README links the spec's sections and never restates them (Round 19, the flow's review, finding 9).
 
 ## Gate and finish
