@@ -22,7 +22,8 @@ import { LIVE_FLOWS } from '../scripts/review-rows.js';
  * manifests declare.
  *
  * - every step the code can report is declared by a manifest the container
- *   serves — in its `pipeline`, or in its `items.pipeline` for the item run — and every
+ *   serves — in its `pipeline`, its `items.pipeline` for the item run, or its `batch.pipeline`
+ *   for the batch run — and every
  *   declared step is implemented — the platform refuses an undeclared step with 422 and
  *   does not store it;
  * - every capability a prompt uses is in `requiredCapabilities` of every served
@@ -35,6 +36,9 @@ import { LIVE_FLOWS } from '../scripts/review-rows.js';
  * - every Dockerfile copies exactly one `manifests/<id>.v<n>.json`, whether or not
  *   `SERVED_VERSIONS` is exported, and it is the one version the code serves: one image per
  *   version, and the one manifest the platform's Flow CD reads for that image (its ADR-0047 §4.2);
+ * - every `manifests/*.json`, as committed (pretty-printed, its whitespace counted), is at most the
+ *   menu's `limits.manifest.bytes` (`contract/schemas/platform-menu.json`) — the platform's Flow CD
+ *   refuses a bigger one before its validator runs (its §12.1 #319);
  * - every automation, and the template, runs the SDK's shared failure drill in its
  *   `automations/<id>/test/drill.test.ts` (Round 21, D2.5) — but the two live flows (`LIVE_FLOWS`), built before
  *   `defineFlow`, until their after-pilot versions remove the exemption.
@@ -50,6 +54,21 @@ const automationsRoot = join(repositoryRoot, 'automations');
 const manifestsRoot = join(repositoryRoot, 'manifests');
 const templateRoot = join(repositoryRoot, 'templates', 'automation');
 const schemasRoot = join(repositoryRoot, 'contract', 'schemas');
+
+/** The menu's `limits.manifest.bytes`: the most bytes of a committed manifest the platform takes. */
+const MANIFEST_BYTES = (
+  JSON.parse(readFileSync(join(schemasRoot, 'platform-menu.json'), 'utf8')) as {
+    limits: { manifest: { bytes: number } };
+  }
+).limits.manifest.bytes;
+
+/** Why a manifest of `bytes` bytes as committed is refused, naming the limit; undefined when it is not. */
+function manifestBytesProblem(file: string, bytes: number, limit: number): string | undefined {
+  return bytes > limit
+    ? `${file} is ${bytes} bytes as committed, over the menu's limits.manifest.bytes (${limit}): ` +
+        "the platform's Flow CD refuses it before its validator"
+    : undefined;
+}
 
 interface AutomationModule {
   TEMPLATE_ID: string;
@@ -84,12 +103,19 @@ function assertConforms(
   manifests: readonly Manifest[],
   label: string,
 ): void {
-  // A version's steps: its runs' `pipeline` and, for a flow with items, its item run's
-  // `items.pipeline` (platform ADR-0046) — each reported by the code, each declared.
+  // A version's steps: its runs' `pipeline`, for a flow with items its item run's
+  // `items.pipeline` (platform ADR-0046), and for a flow with a batch its batch run's
+  // `batch.pipeline` (ADR-0048 amendment 4) — each reported by the code, each declared.
   const declared = new Map(
     manifests.map((manifest) => [
       manifest.version,
-      new Set([...manifest.pipeline, ...(manifest.items?.pipeline ?? [])].map((s) => s.id)),
+      new Set(
+        [
+          ...manifest.pipeline,
+          ...(manifest.items?.pipeline ?? []),
+          ...(manifest.batch?.pipeline ?? []),
+        ].map((s) => s.id),
+      ),
     ]),
   );
   for (const stepId of automation.steps) {
@@ -253,4 +279,28 @@ test('the template automation conforms to its example manifest, which validates 
     const parsed: unknown = JSON.parse(readFileSync(join(templateRoot, file), 'utf8'));
     assert.ok(validate(parsed), `templates/automation/${file}: ${ajv.errorsText(validate.errors)}`);
   }
+});
+
+test("every manifest, as committed, is at most the menu's limits.manifest.bytes", () => {
+  assert.ok(Number.isInteger(MANIFEST_BYTES) && MANIFEST_BYTES > 0, 'the menu publishes the limit');
+  const files = readdirSync(manifestsRoot).filter((name) => name.endsWith('.json'));
+  assert.ok(files.length > 0, 'manifests/ holds no manifest');
+  for (const file of files) {
+    const bytes = readFileSync(join(manifestsRoot, file)).length;
+    assert.equal(manifestBytesProblem(`manifests/${file}`, bytes, MANIFEST_BYTES), undefined);
+  }
+});
+
+test('a manifest one byte over the limit is refused, naming the limit; one at the limit is taken', () => {
+  assert.equal(
+    manifestBytesProblem('manifests/x.v1.json', MANIFEST_BYTES, MANIFEST_BYTES),
+    undefined,
+  );
+  assert.match(
+    manifestBytesProblem('manifests/x.v1.json', MANIFEST_BYTES + 1, MANIFEST_BYTES) ?? '',
+    new RegExp(
+      `^manifests/x\\.v1\\.json is ${MANIFEST_BYTES + 1} bytes as committed, over the menu's limits\\.manifest\\.bytes \\(${MANIFEST_BYTES}\\)`,
+      'u',
+    ),
+  );
 });

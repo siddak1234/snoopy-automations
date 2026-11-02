@@ -4,7 +4,10 @@
 //   1 sound map: docs paths exist, code globs match, every top-level folder covered
 //     (plus the line limits: router 150, folder CLAUDE.md 60, SKILL.md 120);
 //   2 range: --base, else $DOCS_BASE, else `git merge-base origin/main HEAD`;
-//   3 a commit with `Docs-Unchanged: <reason, 12+ chars>` triggers no rule;
+//   3 a commit with `Docs-Unchanged: <reason, 12+ chars>` triggers no rule; nor does a
+//     Dependabot-authored commit (`<id>+dependabot[bot]@users.noreply.github.com`) whose
+//     every path is a bump path (BUMP_PATHS: workflows, package.json, package-lock.json,
+//     Dockerfile, compose.yml, compose.vendors.yml); any other commit is checked as now;
 //   4 each rule whose code changed needs its docs changed in the range (generated
 //     files never count); a `*` in a rule's docs path is filled with what the code
 //     glob's first `*` matched, so `automations/*/src/**` → `automations/*/README.md`
@@ -22,6 +25,9 @@ import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const LIMITS = { router: 150, folder: 60, skill: 120 };
+/** Check 3's Dependabot exemption: its author, and the only paths its commit may touch. */
+const DEPENDABOT = /^\d+\+dependabot\[bot\]@users\.noreply\.github\.com$/u;
+const BUMP_PATHS = /^(?:\.github\/workflows\/[^/]+\.ya?ml|package\.json|package-lock\.json|Dockerfile|compose\.yml|compose\.vendors\.yml)$/u;
 const CODE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|ya?ml|sh)$|(?:^|\/)Dockerfile$/u;
 const FILE =
   /\.(?:ts|tsx|mts|cts|mjs|cjs|js|jsx|json|ya?ml|md|sql|css|sh|toml|txt|html|pem|png|svg|hcl|crt|prisma|example)$|(?:^|\/)(?:Caddyfile|Dockerfile|Makefile|Procfile)$/u;
@@ -260,6 +266,8 @@ export function checkRange(root, map, commits) {
       problems.push({ check: 'trailer', file: c.slice(0, 12), message: `Docs-Unchanged reason "${short}" is under 12 characters`, fix: 'say why no doc changes, in 12+ characters' });
     }
     if (reasons.length && short === undefined) continue;
+    const bump = DEPENDABOT.test(git(root, 'log', '-1', '--format=%ae', c).trim());
+    if (bump && files.length > 0 && files.every((f) => BUMP_PATHS.test(f))) continue;
     files.filter((f) => !generated.has(f) && !any(map.ignore, f)).forEach((f) => triggering.add(f));
   }
   for (const rule of map.rules ?? []) {

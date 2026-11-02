@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.autom8x.dev/schemas/automation-memory-put-request.json",
+  "title": "AutomationMemoryPutRequest",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9-]{1,64}$"
+    },
+    "value": {}
+  },
+  "required": [
+    "key",
+    "value"
+  ],
+  "additionalProperties": false
+}

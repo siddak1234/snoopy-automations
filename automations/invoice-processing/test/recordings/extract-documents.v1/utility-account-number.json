@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "eb2c6cd84e9a8626885ef9041f463994d3e9eb533b5b5fb1c98d8dc8a4190cbe",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"bill\",\"pagesMissing\":false,\"vendorName\":\"Example County Water District\",\"vendorAddress\":\"1 Reservoir Drive\",\"vendorCity\":\"Anytown, MN 55000\",\"storeNumber\":\"\",\"documentNumber\":\"W-260915\",\"numberLabel\":\"Invoice no.\",\"references\":[{\"label\":\"ACCOUNT NUMBER\",\"value\":\"0081-2276-554\"},{\"label\":\"Meter no.\",\"value\":\"55-10294\"}],\"documentDate\":\"2026-09-15\",\"documentTime\":\"\",\"dueDate\":\"2026-10-05\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":67.77,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"utilities_and_phone\",\"lineItems\":[{\"description\":\"Water, 6,200 gal\",\"quantity\":null,\"unitPrice\":null,\"amount\":31.62},{\"description\":\"Sewer\",\"quantity\":null,\"unitPrice\":null,\"amount\":27.40},{\"description\":\"Stormwater fee\",\"quantity\":null,\"unitPrice\":null,\"amount\":8.75}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

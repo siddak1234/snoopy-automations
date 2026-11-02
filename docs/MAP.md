@@ -32,7 +32,7 @@
 - `npm run map`: `node scripts/kit/map.mjs`
 - `npm run review-rows`: `tsx scripts/review-rows.ts`
 - `npm run scaffold`: `node scripts/scaffold.mjs`
-- `npm run test`: `tsx --test "test/**/*.test.ts" "templates/automation/test/**/*.test.ts" && npm …`
+- `npm run test`: `tsx --test --test-reporter=tap "test/**/*.test.ts" "templates/automation/test/*…`
 - `npm run typecheck`: `tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.…`
 - `npm run verify`: `npm run format:check && npm run check:docs && npm run map -- --check && node sc…`
 
@@ -41,13 +41,13 @@
 ### Automations
 
 - `automations/candidate-reviewer/` (`@autom8x/candidate-reviewer`): Resume Screening (v2; Candidate Reviewer at v1): reads a job description once into the job's reading, then reads each candidate's resume — … · manifests v1, v2
-- `automations/icd10-code-check/` (`@autom8x/icd10-code-check`): Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now. · manifests v1
+- `automations/icd10-code-check/` (`@autom8x/icd10-code-check`): Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now. · manifests v1, v2
 - `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v6): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v1, v2, v3, v4, v5, v6, v7
 
 ### Packages
 
 - `packages/automation-kit/` (`@autom8x/automation-kit`): A library automations build with: QuickBooks reads and writes through the SDK's provider call, the one cleaning of values read from a docum…
-- `packages/automation-sdk/` (`@autom8x/automation-sdk`): The Autom8x automation SDK: the step runner, prompt modules, the six callbacks, the serving shell, and test doubles. Deliberately depends o…
+- `packages/automation-sdk/` (`@autom8x/automation-sdk`): The Autom8x automation SDK: the step runner, prompt modules, the callbacks, the serving shell, and test doubles. Deliberately depends on no…
 
 ### Template
 
@@ -59,6 +59,8 @@
 - [contract/schemas/automation-invoke-request.json](../contract/schemas/automation-invoke-request.json): AutomationInvokeRequest
 - [contract/schemas/automation-mail-request.json](../contract/schemas/automation-mail-request.json): AutomationMailRequest
 - [contract/schemas/automation-manifest.json](../contract/schemas/automation-manifest.json): AutomationManifest
+- [contract/schemas/automation-memory-get-request.json](../contract/schemas/automation-memory-get-request.json): AutomationMemoryGetRequest
+- [contract/schemas/automation-memory-put-request.json](../contract/schemas/automation-memory-put-request.json): AutomationMemoryPutRequest
 - [contract/schemas/automation-model-request.json](../contract/schemas/automation-model-request.json): AutomationModelRequest
 - [contract/schemas/automation-provider-request.json](../contract/schemas/automation-provider-request.json): AutomationProviderRequest
 - [contract/schemas/automation-run-result.json](../contract/schemas/automation-run-result.json): AutomationRunResult
@@ -72,13 +74,14 @@
 - [scripts/kit/check-docs.mjs](../scripts/kit/check-docs.mjs): D, docs always updated (STANDARD (e)): `npm run check:docs` reads
 - [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
+- [scripts/no-skipped-tests.mjs](../scripts/no-skipped-tests.mjs): `npm run verify`'s test gate (Round 21 hardening, A2): runs `npm test` — or the command it is
 - [scripts/repo-facts.ts](../scripts/repo-facts.ts): What this repository reports about itself, in the shape the platform
 - [scripts/review-rows.ts](../scripts/review-rows.ts): The review checklist's machine-checkable rows (Round 21, R3; `/create-flow`'s
 - [scripts/scaffold.mjs](../scripts/scaffold.mjs): `npm run scaffold -- templateId [--root dir]` (Round 21, R2): everything structural about a
 
 ### Tests
 
-- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, repo, research, review, scaffold, workflow
+- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, no, pins, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 

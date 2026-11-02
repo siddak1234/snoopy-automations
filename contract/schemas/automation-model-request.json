@@ -50,6 +50,24 @@
       "type": "string",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
     },
+    "pages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
     "maxOutputTokens": {
       "type": "integer",
       "minimum": 1,

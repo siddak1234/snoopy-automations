@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # The nightly (.github/workflows/nightly.yml) calls this workflow whole; its schedule lives there
+  # alone (README, "Working here", the nightly).
+  workflow_call:
 
 # This repository is PUBLIC and its files hold no secret of any kind: an automation
 # receives a run-scoped token at runtime and nothing else (platform invariant 3).
@@ -22,13 +25,17 @@ on:
 permissions:
   contents: read
 
+# Each job's timeout-minutes: about twice its longest of 20 green runs (2026-10-26 to 11-02,
+# `gh run view --json jobs`: List 8 s, Verify 153 s, Image 62 s, Publish 93 s, all-green 4 s),
+# rounded up to a minute, 5 at least, so a hung job fails in minutes, not after GitHub's 360.
+# Deploy waits on Flow CD (1030 s at most) and keeps its 90.
 jobs:
   # The automations, read from the tree: every folder under automations/ with a
   # Dockerfile, as a JSON list. Publish takes its matrix from it, so a new automation is
   # built, published and deployed with no edit here. Image takes `images`: on a pull
   # request only the flows whose image inputs changed (scripts/changed-images.mjs, the rule
   # the platform's Flow CD uses; a change under packages/, the root lock or this file builds
-  # them all), and on a push to main every one.
+  # them all), and on a push to main or the nightly every one.
   list:
     name: List
     runs-on: ubuntu-24.04
@@ -79,19 +86,22 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-24.04
+    timeout-minutes: 6
     steps:
       # The whole history, so `npm run check:docs` can read every commit since the
-      # base it is given in DOCS_BASE (the pull request's base branch; `main` on a push).
+      # base it is given in DOCS_BASE (the pull request's base branch; `main` on a push or
+      # the nightly).
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
+      # The exact release `.nvmrc` names, the one every flow image ships (test/pins.test.ts).
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       # --ignore-scripts: a dependency's install script is arbitrary code running
@@ -110,11 +120,19 @@ jobs:
       # and no recovered client data tracked; `test/isolation.test.ts`, no
       # automation depending on another. `test/conformance.test.ts` holds every
       # automation to the manifests it serves. The gate's last step re-emits
-      # docs/repo-facts/snoopy-automations.json.
+      # docs/repo-facts/snoopy-automations.json. A test that skipped or was left todo fails
+      # it: a skip is a check that did not run. The gate's own test step says so
+      # (scripts/no-skipped-tests.mjs), and this step reads the whole log the same way.
       - name: Verify formatting, docs, build, types, and tests
         env:
           DOCS_BASE: origin/${{ github.base_ref || 'main' }}
-        run: npm run verify
+        run: |
+          set -o pipefail
+          npm run verify | tee "$RUNNER_TEMP/verify.log"
+          if grep -qE '^# (skipped|todo) [1-9]' "$RUNNER_TEMP/verify.log"; then
+            echo 'FAIL: a test skipped or was left todo'
+            exit 1
+          fi
 
       # The review checklist's machine-checkable rows (scripts/review-rows.ts; /create-flow's
       # templates/review.md marks them (CI)) for every flow this range touches, written to the
@@ -144,12 +162,14 @@ jobs:
   # registry and never pushes, including on pull requests from forks. The bytes
   # production runs are built, pushed, proven and attested by Publish, below, from
   # the same Dockerfile. The matrix is List's `images`: on a pull request the flows whose
-  # image inputs changed, skipped when none did; on a push every automations/*/Dockerfile.
+  # image inputs changed, skipped when none did; on a push or the nightly every
+  # automations/*/Dockerfile.
   image:
     name: Image
     needs: list
     if: ${{ needs.list.outputs.images != '[]' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -225,6 +245,7 @@ jobs:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [list, verify, image]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -439,10 +460,10 @@ jobs:
   # The one check for the ruleset to require, once it has reported on a pull
   # request and on main. Green only when every job above succeeded — for a matrix
   # job, every one of its builds. Publish and Deploy are push-only by their own
-  # `if`, so on a pull request their "skipped" is allowed, and so is Image's when List
-  # found no flow whose image inputs changed; a skip anywhere else, a failure or a
-  # cancellation is red. A job added above must be named in `needs` too, or this check
-  # never sees it.
+  # `if`, so off a push (a pull request, or the nightly's call) their "skipped" is
+  # allowed, and so is Image's on a pull request when List found no flow whose image
+  # inputs changed; a skip anywhere else, a failure or a cancellation is red. A job
+  # added above must be named in `needs` too, or this check never sees it.
   all-green:
     name: all-green
     if: always()
@@ -461,8 +482,8 @@ jobs:
             case "$result" in
               success) verdict=ok ;;
               skipped)
-                if { [ "$job" = publish ] || [ "$job" = deploy ]; } && [ "$EVENT_NAME" = pull_request ]; then
-                  verdict='ok (push-only job, skipped on a pull request)'
+                if { [ "$job" = publish ] || [ "$job" = deploy ]; } && [ "$EVENT_NAME" != push ]; then
+                  verdict='ok (push-only job, skipped off a push)'
                 elif [ "$job" = image ] && [ "$IMAGES" = '[]' ] && [ "$EVENT_NAME" = pull_request ]; then
                   verdict='ok (no flow whose image inputs changed)'
                 else

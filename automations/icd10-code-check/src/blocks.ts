@@ -47,7 +47,7 @@ export function titleOf(view: Pick<View, 'patient' | 'visitDate'>): string {
 const titled = (view: View, code: string): string => withTitle(code, view.titles);
 
 /** (1) The patient, as read from the note: a row left out when not printed. */
-function patientSection(view: View): SectionBlock {
+export function patientSection(view: View): SectionBlock {
   const values: Record<string, string | null> = {
     ...view.patient,
     visitDate: view.visitDate && dateWords(view.visitDate),

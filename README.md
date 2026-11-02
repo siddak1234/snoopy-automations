@@ -47,7 +47,7 @@ Four rules follow, and the tests enforce them:
 
 ```
 contract/schemas/            the wire contract — JSON Schemas vendored from the platform, and its menu
-packages/automation-sdk/     the step runner, prompt modules, the six callbacks, the serving shell, test doubles
+packages/automation-sdk/     the step runner, prompt modules, the callbacks, the serving shell, test doubles
 packages/automation-kit/     a library automations build with: QuickBooks calls, value cleaning, a QuickBooks simulator
 automations/<name>/          one automation per directory, with its own Dockerfile and lockfile
 templates/automation/        the template directory: a worked flow on defineFlow, tested by the gate, which the scaffold builds from
@@ -185,6 +185,29 @@ request, answers)` from `@autom8x/automation-sdk/testing` answers the review `Re
 last held as the platform does, and refuses answers that miss a change or name another. A setup
 field's `select` control lists `options`, one picked or, with `multiple`, several; a step reads the
 picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest.ts`).
+
+**Platform round 2: a bigger dropdown, several files, a grouped review, a public provider, a flow's
+memory and batch intake** (the platform's ADR-0048 amendments 3 and 4, 2026-11-01; `contract/`
+carries them since snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
+objects, up to 1,000 (`SelectOption`; `optionValues`, and `chosenOptions` reads values). A run-input
+`artifact` field with `multiple` puts up to its `maxFiles` (1 to 200, default 50; `RUN_INPUT_LIMITS`,
+`maxFilesOf`) files into ONE run, and `artifactIdsOf(input, key)` reads its list. A held decision may
+carry a `group` (one line, on every change or none), up to 400 a review (`DECISION_LIMITS`). A
+provider whose auth is `none` (the NPI Registry, `nppes`) is declared in `requiredConnections` like
+any other and is connected in every workspace; a caller naming a parameter its operation fixes is
+refused `fixed_query` (`RecordingPlatform.fixedQuery` rehearses it). A step's `platform.memory.get(key)`
+and `put(key, value)` reach the `memory-get` and `memory-put` callbacks, for a manifest declaring the
+`memory` capability (the SDK's `memory.ts`: a key of 1 to 64 lowercase letters,
+digits and hyphens, a value of at most 64 KiB as JSON, 100 keys a flow and workspace; `null`
+removes); `RecordingPlatform.memory` keeps them as the platform does. A model call may read a page
+range of a PDF, `callModel(prompt, input, { artifactId, pages: { from, to } })`, at most 20 pages
+(`pageRangeProblem`). A manifest's `batch: {pipeline, unitWords}` makes its manual run a batch run
+(`request.batch`): the runner runs `batch.pipeline`, which may not hold, and the result's `units`
+(1 to 500 of `{label, artifacts, data}`, bounded by `boundedUnits` in
+the SDK's `batch.ts`) become one waiting child run each; a child's
+`request.unit` names its label, files (each with an optional page range) and data, and it runs the
+`pipeline`. `unitFixture` builds one for a suite, and the double refuses a page range the file
+cannot give (`pagesRefusal`).
 
 ## A new flow's standards (`defineFlow`)
 
@@ -552,7 +575,7 @@ defineAutomation({
     25.2.22 the Edge relays a model callback for up to 230 seconds — every attempt
     inside the owner's budget, at most 150, and the waits around it — inside the load
     balancer's 250 and this client's 260 (`DEFAULT_MODEL_TIMEOUT_MS`, in every image
-    built since). Before those limits are all live — and whenever the platform's own
+    built since; every other callback's wait is `DEFAULT_CALLBACK_TIMEOUT_MS`, both exported). Before those limits are all live — and whenever the platform's own
     dependencies run a call past them — a model call can reach the container as a 502
     while the platform completes and counts it.
 - **Reported once.** The step's one timeline line carries its final outcome and, when
@@ -599,10 +622,10 @@ Both are live on `defineAutomation`, and their code, prompts and manifests are u
 after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `defineFlow`
 ("Build a flow", below).
 
-- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; on `defineFlow`): its own pull request,
-  after the SDK's review of each change and dropdown of several, brings its folder, whose README is
-  its spec and how the code does it. It waits for the platform round that adds the two (section 10
-  of its spec, PR #255) to merge; `contract/` carries them at that pull request's head.
+- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
+  doctors and coders; on `defineFlow`): its folder's README is its spec and how the code does it.
+  v1 stays served on its own container; the image built here serves v2 alone, on the platform round
+  2 contract (`contract/`, "Platform round 2" above).
 
 ## The kit
 
@@ -692,9 +715,13 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    limit a flow may use, generated by the platform ([contract/README.md](contract/README.md)) — and
    says which it is: **one pull request** here; **two**, when it needs a vendor or an operation the
    menu lacks (one provider file in `snoopy-backend` first, with every console step for the owner at
-   once: `.claude/skills/create-flow/templates/provider-pr.md`); or **stop**, a platform change. It writes the
+   once: `.claude/skills/create-flow/templates/provider-pr.md`); **one more** when it changes the SDK
+   (its own pull request here, first: `.claude/skills/create-flow/templates/order.md`, step 2); or
+   **stop**, a platform change. It writes the
    spec, `automations/<id>/README.md`, and `words.md` for the owner's approval.
-2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7, then
+2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7 — at most the menu's
+   `limits.manifest.bytes` as committed, its whitespace counted (`contract/` carries it since
+   snoopy-backend d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then
    **`npm run scaffold -- <id>`** (`scripts/scaffold.mjs`): the folder from `templates/automation/`,
    its lockfile and the root lock's entry, `automations/<id>/src/automation.ts` on `defineFlow`, one typed stub per
    step (`src/steps/<step>.ts`, "Not built yet"), one prompt stub per capability, one `test.todo` per
@@ -708,8 +735,9 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
 4. **`npm test`**, then `npm run map` and `npm run facts`, then the gate (CLAUDE.md, "Gates and
    push"). Open the pull request: it is the flow's folder, its manifest and three generated files,
    which `.gitattributes` folds. CI's **Review rows** (`scripts/review-rows.ts`) answers the checklist
-   rows a machine can — §3 the menu, §4 the capabilities, §6 the steps, §7 the blocks, §8 the
-   failure words, §9 the tests, the paths and the drill — and a FAIL row fails Verify; a person reads
+   rows a machine can — §3 the menu, §4 the capabilities (the prompts', and `memory` when the code
+   reaches `platform.memory`), §6 the steps (a batch run's too), §7 the blocks, §8 the failure
+   words, §9 the tests, the paths and the drill — and a FAIL row fails Verify; a person reads
    the rest (`.github/pull_request_template.md`). On a pull request, Image builds only the flows whose
    image inputs changed (`scripts/changed-images.mjs`).
 5. **The merge is the deploy** (the platform's ADR-0047): CI's Deploy job starts the platform's Flow
@@ -756,6 +784,34 @@ npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gat
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
 ```
 
-Node 22 or newer. Agent sessions read `CLAUDE.md` first. The committed facts file
+A test that skips or is left todo fails the gate: `scripts/no-skipped-tests.mjs` runs `npm test`
+and reads its TAP for a `# skipped` or `# todo` count above 0, and CI's Verify reads its whole log
+the same way. Every `tsx --test` script names the TAP reporter (`--test-reporter=tap`; a new flow's
+from the template's), and output with no TAP summary (`# tests N`) fails too: Node's default
+reporter is no contract (the script's header). So a flow just scaffolded is red until each §9
+`test.todo` is written.
+
+**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
+— Verify, and every flow's image built, smoke-tested and scanned
+with that night's advisories — and publishes and deploys nothing: `all-green` accepts Publish's and
+Deploy's skip off a push. A red night opens a "Nightly red" issue, or comments on the one it opened
+that is still open (never one someone else opened with that title), from a job that can write issues
+and nothing else. The schedule has a file of its own because GitHub disables a public repository's
+scheduled workflow after 60 days without activity: that stops the nightly alone, never the merge
+gate. Turn it back on with `gh workflow enable nightly.yml`.
+
+**Pinned base images.** Each flow's Dockerfile, and the template's, names one Node release by exact
+tag and multi-arch index digest in one FROM, its first (`AS base`), and every other stage builds
+`FROM base`: Dependabot updates only a Dockerfile's first FROM ([GitHub's docs](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/guidance-for-the-configuration-of-private-registries-for-dependabot),
+Docker). The release is written there alone (any `automations/*/Dockerfile` names it), so the
+bytes CI scanned are the bytes Flow CD ships; `test/pins.test.ts` refuses a FROM by tag alone, a
+second FROM naming an image, and two Dockerfiles that differ. Dependabot's weekly docker
+group (`.github/dependabot.yml`) moves them all in one pull request, which needs no doc (CLAUDE.md,
+"Docs always updated"; no Dockerfile here is in a docs rule); a Node major is moved by hand.
+`.nvmrc` names the same release, and CI installs Node from it (`node-version-file: .nvmrc`), as the
+other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
+until `.nvmrc` moves with it.
+
+Node: the release `.nvmrc` names (`nvm use`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

@@ -18,6 +18,7 @@ import {
   isObject,
   oneLine,
 } from './contract.js';
+import { memoryProblem, type FlowMemory } from './memory.js';
 import { floodClock, floodWaitMs, isFloodRefusal, waitEndsBefore } from './flood.js';
 import { modelRequestProblem } from './model-request.js';
 import { refusalFrom } from './refusals.js';
@@ -42,8 +43,9 @@ import { unanswered, unsent } from './marks.js';
  *
  * Six callbacks to the platform, each carrying the run token — step, result,
  * model, provider, artifact and mail; one listing that is the artifact callback
- * asked without an id; and one fetch that is NOT a callback and carries nothing —
- * the bytes behind a signed link.
+ * asked without an id; the flow's memory, two more callbacks (`memory-get`,
+ * `memory-put`; `memory.ts`); and one fetch that is NOT a callback and carries
+ * nothing — the bytes behind a signed link.
  */
 export interface AutomationPlatform {
   /** Reports progress on one declared step. */
@@ -62,6 +64,8 @@ export interface AutomationPlatform {
   listArtifacts(): Promise<ArtifactListing[]>;
   /** The bytes a reference points at, fetched straight from the store. */
   readArtifactBytes(artifact: ArtifactReference): Promise<Uint8Array>;
+  /** The flow's small values in this workspace; the manifest must declare `memory`. */
+  readonly memory: FlowMemory;
 }
 
 /**
@@ -140,6 +144,32 @@ export class PlatformClient implements AutomationPlatform {
     this.#mailTimeoutMs = options.mailTimeoutMs ?? DEFAULT_MAIL_TIMEOUT_MS;
     this.#deadline = options.deadline;
   }
+
+  /**
+   * The flow's memory (platform ADR-0048 amendment 3, point 6): a key or a value the platform
+   * would answer 400 is refused here, before anything is sent (`memoryProblem`); its 403
+   * `capability_not_declared` and 409 `memory_full` are `CallbackRefusedError`s, as every refusal.
+   */
+  public readonly memory: FlowMemory = {
+    get: async (key) => {
+      const problem = memoryProblem(key);
+      if (problem) throw new Error(problem);
+      const answer = await this.#post('memory-get', { key }, this.#timeoutMs);
+      if (!isObject(answer) || !Object.hasOwn(answer, 'value')) {
+        throw new Error('the memory-get callback did not answer with a value');
+      }
+      return answer.value ?? null;
+    },
+    put: async (key, value) => {
+      const problem = memoryProblem(key, value);
+      if (problem) throw new Error(problem);
+      const answer = await this.#post('memory-put', { key, value: value ?? null }, this.#timeoutMs);
+      if (!isObject(answer) || typeof answer.keys !== 'number') {
+        throw new Error('the memory-put callback did not answer with a count of keys');
+      }
+      return answer.keys;
+    },
+  };
 
   public async reportStep(report: StepReport): Promise<void> {
     // `runId` travels in the body: the platform compares it with the token's run

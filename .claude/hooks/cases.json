@@ -45,5 +45,6 @@
 {"name": "8: malformed JSON", "input": "{not json", "exit": 0},
 {"name": "8: empty stdin", "input": "", "exit": 0},
 {"name": "8: an unknown tool", "input": {"tool_name": "WebFetch", "tool_input": {"url": "https://example.com"}, "cwd": "${REPO}"}, "exit": 0},
-{"name": "8: Bash with no command", "input": {"tool_name": "Bash", "tool_input": {}, "cwd": "${REPO}"}, "exit": 0}
-]
+{"name": "8: Bash with no command", "input": {"tool_name": "Bash", "tool_input": {}, "cwd": "${REPO}"}, "exit": 0},
+{"name": "3: npx eas-cli@<version> build on the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "npx --yes eas-cli@27.2.0 build --platform ios --local"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 2},
+{"name": "3: npx eas-cli@<version> build in a scratch clone is allowed", "input": {"tool_name": "Bash", "tool_input": {"command": "npx --yes eas-cli@27.2.0 build --platform ios --local"}, "cwd": "${SCRATCH}/-proj/sess/scratchpad/snoopy-mobile"}, "exit": 0}]

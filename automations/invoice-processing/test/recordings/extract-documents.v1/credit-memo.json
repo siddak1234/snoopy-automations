@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "91fc4dd34174ec5ff94523c1e5278d8968f70b32255c417c1f4aa1a1aba699cf",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"credit_note\",\"pagesMissing\":false,\"vendorName\":\"Harrowgate Office Supply\",\"vendorAddress\":\"4100 Sample Road\",\"vendorCity\":\"Springfield, IL 62704\",\"storeNumber\":\"\",\"documentNumber\":\"CM-0077\",\"numberLabel\":\"Credit memo #\",\"references\":[{\"label\":\"For invoice\",\"value\":\"HOS-1042\"},{\"label\":\"RMA\",\"value\":\"QZ7CRM\"}],\"documentDate\":\"2026-09-22\",\"documentTime\":\"\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":-213.90,\"tax\":null,\"shipping\":null,\"discount\":10.70,\"total\":-203.20,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"credit_on_account\",\"originalInvoiceNumber\":\"HOS-1042\",\"spendType\":\"office_supplies\",\"lineItems\":[{\"description\":\"Return: Toner cartridge, black, HL-200\",\"quantity\":null,\"unitPrice\":null,\"amount\":-189.00},{\"description\":\"Return: Desk organizer, mesh (RMA QZ7CRM)\",\"quantity\":null,\"unitPrice\":null,\"amount\":-24.90}],\"lineItemCount\":2,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

@@ -21,7 +21,7 @@ privacy, a customer's file, the words, and the steps' logic.
 | Spec section        | Check in the manifest and the code                                                                                                                                                                                                                                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Domain              | every domain fact in sections 4, 8, 9 and 10 and in each prompt resolves to a line of `research.json` the skeptic called supported, on ids it confirmed; no prompt states a domain fact without one; an `our_choice` default states no domain fact; the deciding prompt follows the rubric's criteria and their order; each golden case is a test, and passes |
-| 1 What it is        | `display` name, description, category, icon, `documentWords`; `pricing`                                                                                                                                                                                                                                                                                       |
+| 1 What it is        | `display` name, description, category, icon, `documentWords`; `pricing`; the manifest's bytes as committed at most the menu's `limits.manifest.bytes`, as the spec measured them (Verify's `test/conformance.test.ts` fails a bigger one)                                                                                                                     |
 | 2 How it starts     | `trigger` kind and `input` (keys, titles, descriptions, controls, required); `artifacts` (types, size, and no page or pixel limit when a type is not PDF, JPEG or PNG); `items` (words, fields, file, steps, the reading's schema)                                                                                                                            |
 | 3 Integrations (CI) | `requiredConnections` and each operation the code calls — no other provider, no other operation                                                                                                                                                                                                                                                               |
 | 4 AI steps          | one prompt per row, each naming its capability; `requiredCapabilities` exactly those; the output schemas as written, each with the fields section 8's failures are decided by; the prompt rules the spec states                                                                                                                                               |
@@ -33,10 +33,13 @@ privacy, a customer's file, the words, and the steps' logic.
 | 8 Failures          | each failure's exact words, whether the run stops, and the field or the code that decides it                                                                                                                                                                                                                                                                  |
 | 9 Tests (CI)        | one test per row, made-up inputs only, each shown to fail without its code                                                                                                                                                                                                                                                                                    |
 
-Also: no customer data in the diff; no word of the spec changed without a dated note at its top
-(Round 19, the flow's review, finding 2); the repository README links the spec's sections and never
-restates them (Round 19, the flow's review, finding 9). No platform change inside the flow: every
-block, page part, control and provider operation is in `contract/schemas/` and
-the menu (`contract/schemas/platform-menu.json`; CI's §3 row), and the diff touches no other
-repository; `contract/` is the platform's `main`'s, byte for byte. A new vendor's provider file, when there is one, declares
-exactly the operations the code calls and no secret.
+Also: every limit the spec sets is checked against the data it limits, with the count written
+beside it, and a limit without its count is a finding (the ICD-10 pilot: the 60-candidate cap left
+40,646 of 74,719 codes never offerable (the flow's second review)); no customer data in the diff;
+no word of the spec changed without a dated note at its top (Round 19, the flow's review, finding
+2); the repository README links the spec's sections and never restates them (Round 19, the flow's
+review, finding 9). No platform change inside the flow: every block, page part, control and
+provider operation is in `contract/schemas/` and the menu (`contract/schemas/platform-menu.json`;
+CI's §3 row), and the diff touches no other repository; `contract/` is the platform's `main`'s,
+byte for byte. A new vendor's provider file, when there is one, declares exactly the operations the
+code calls and no secret.

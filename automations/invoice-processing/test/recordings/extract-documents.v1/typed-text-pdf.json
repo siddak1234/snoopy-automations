@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "bae00d161cd9e745d9959103c388547875aee99f00ee8eecfb6f46f446fe85ac",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"invoice\",\"pagesMissing\":false,\"vendorName\":\"Harrowgate Office Supply\",\"vendorAddress\":\"4100 Sample Road\",\"vendorCity\":\"Springfield, IL 62704\",\"storeNumber\":\"\",\"documentNumber\":\"HOS-1042\",\"numberLabel\":\"Invoice #\",\"references\":[{\"label\":\"PO number\",\"value\":\"PO-5521\"}],\"documentDate\":\"2026-09-14\",\"documentTime\":\"\",\"dueDate\":\"2026-10-14\",\"paymentTermsDays\":30,\"currency\":\"USD\",\"subtotal\":370.75,\"tax\":30.59,\"shipping\":12.00,\"discount\":null,\"total\":413.34,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"office_supplies\",\"lineItems\":[{\"description\":\"Copy paper, letter, 10 reams, lot QZ7TYP\",\"quantity\":2,\"unitPrice\":49.50,\"amount\":99.00},{\"description\":\"Toner cartridge, black, HL-200\",\"quantity\":1,\"unitPrice\":189.00,\"amount\":189.00},{\"description\":\"Ballpoint pens, blue, box of 50\",\"quantity\":3,\"unitPrice\":12.75,\"amount\":38.25},{\"description\":\"Sticky notes, 3 x 3 in, 12 pack\",\"quantity\":2,\"unitPrice\":9.80,\"amount\":19.60},{\"description\":\"Desk organizer, mesh\",\"quantity\":1,\"unitPrice\":24.90,\"amount\":24.90}],\"lineItemCount\":5,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

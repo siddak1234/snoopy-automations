@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "232a3fc5ebab60a631aeb454bc8cec63f7c7c7f4a0a124b95ec916163b12d323",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"bill\",\"pagesMissing\":false,\"vendorName\":\"Sample Valley Electric Cooperative\",\"vendorAddress\":\"9 Powerhouse Road\",\"vendorCity\":\"Anytown, KS 66000\",\"storeNumber\":\"\",\"documentNumber\":\"4471-0926\",\"numberLabel\":\"Bill no.\",\"references\":[{\"label\":\"Account no.\",\"value\":\"30-118-9902-7\"},{\"label\":\"Energy saver code\",\"value\":\"QZ7UTB\"}],\"documentDate\":\"2026-09-24\",\"documentTime\":\"\",\"dueDate\":\"2026-10-15\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":140.38,\"tax\":9.12,\"shipping\":null,\"discount\":null,\"total\":149.5,\"amountDue\":207.9,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"utilities_and_phone\",\"lineItems\":[{\"description\":\"Energy charge, 1,042 kWh at 0.1138\",\"quantity\":1042,\"unitPrice\":0.1138,\"amount\":118.58},{\"description\":\"Delivery charge\",\"quantity\":null,\"unitPrice\":null,\"amount\":9.8},{\"description\":\"Customer charge\",\"quantity\":null,\"unitPrice\":null,\"amount\":12.0}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

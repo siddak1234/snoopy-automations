@@ -10,7 +10,13 @@
 # Only this automation's and the SDK's package.json are copied before `npm ci`: npm
 # installs a root lock whose other workspaces are absent from disk, so one
 # automation's image never sees another's files (ADR-0034 §6).
-FROM node:22-alpine AS build
+#
+# The one FROM that names an image, `base`: the same Node by tag and index digest in every flow,
+# and every stage builds FROM it, since Dependabot moves only a Dockerfile's first FROM (README,
+# "Working here", pinned base images).
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
+
+FROM base AS build
 WORKDIR /workspace
 
 COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
@@ -23,7 +29,7 @@ COPY automations/icd10-code-check/src ./automations/icd10-code-check/src
 RUN npm run build --workspace @autom8x/automation-sdk \
   && npm run build --workspace @autom8x/icd10-code-check
 
-FROM node:22-alpine AS production-dependencies
+FROM base AS production-dependencies
 WORKDIR /workspace
 
 # `--install-links` packs the local SDK instead of leaving a symlink to a build
@@ -34,7 +40,7 @@ COPY automations/icd10-code-check/package.json automations/icd10-code-check/pack
 WORKDIR /workspace/automations/icd10-code-check
 RUN npm ci --omit=dev --ignore-scripts --workspaces=false --install-links=true
 
-FROM node:22-alpine AS runtime
+FROM base AS runtime
 RUN apk upgrade --no-cache && apk add --no-cache tini
 ENV NODE_ENV=production
 WORKDIR /app
@@ -53,7 +59,7 @@ COPY --chown=node:node automations/icd10-code-check/assets ./assets
 # The ONE manifest version this image serves: one image per version. The runner runs
 # the pipeline it declares and refuses a run pinned to any other (src/main.ts reads
 # this dir); test/conformance.test.ts holds every Dockerfile to exactly one file.
-COPY --chown=node:node manifests/icd10-code-check.v1.json ./manifests/
+COPY --chown=node:node manifests/icd10-code-check.v2.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

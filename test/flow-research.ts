@@ -6,28 +6,37 @@ import { pathToFileURL } from 'node:url';
 
 /**
  * The stand-in harness for `.claude/workflows/flow-research.js` (/create-flow stage 1b): the
- * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args` and `budget` replaced, the file
- * compiled as the tool runs it (an async function body, its top-level return the result). Its
+ * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args`, `budget` and `workflow` replaced,
+ * the file and its two children (the tables, the integrations stage) compiled as the tool runs
+ * them (async function bodies, each top-level return the result); a child's workflow() throws, as
+ * the tool's does (one level). Its
  * cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
  * (stops, retries and the write).
  */
 
 const root = resolve(import.meta.dirname, '..');
-const source = readFileSync(join(root, '.claude/workflows/flow-research.js'), 'utf8');
+const read = (file: string) => readFileSync(join(root, '.claude/workflows', file), 'utf8');
 const renderUrl = pathToFileURL(join(root, '.claude/skills/create-flow/research-render.mjs')).href;
-const { main: renderMain } = (await import(renderUrl)) as {
+const { main: renderMain, COLUMNS } = (await import(renderUrl)) as {
   main: (argv: string[], write: (text: string) => void) => number;
+  COLUMNS: string[][];
 };
+export { COLUMNS };
 // The stand-ins answer whatever shape each step asks for.
 export type Any = any;
 export type Behave = (label: string, attempt: number, prompt: string, runDir: string) => Any;
 type Body = (...values: unknown[]) => Promise<Any>;
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget'];
+const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget', 'workflow'];
 // The harness's reading: an async function body, `meta` a plain constant, the result returned. This
 // is the syntax check too: `node --check` refuses the top-level return the result travels in.
-export const compile = (): Body =>
-  new AsyncFunction(...GLOBALS, source.replace('export const meta', 'const meta'));
+export const compile = (file = 'flow-research.js'): Body =>
+  new AsyncFunction(...GLOBALS, read(file).replace('export const meta', 'const meta'));
+const WORKFLOWS = '/clones/snoopy-automations/.claude/workflows/';
+const CHILDREN = ['flow-research-tables.js', 'flow-research-integrations.js'];
+const nested = async () => {
+  throw new Error('workflow() inside a child: nesting is one level only');
+};
 const dirs: string[] = [];
 after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
@@ -42,11 +51,26 @@ export const finding = (lens: string, n: number, extra: object = {}) => ({
   publisher: 'A body',
   ...extra,
 });
-export function lensOut(lens: string) {
+export const RANKED = [
+  { name: 'QuickBooks', menu: 'quickbooks', menuAt: 'contract/schemas/platform-menu.json:119' },
+  { name: 'Xero', menu: 'to add', menuAt: '' },
+];
+export function lensOut(lens: string): Any {
+  if (lens.startsWith('integration-'))
+    return {
+      findings: [
+        finding(lens, 1, { part: 'docs' }),
+        finding(lens, 2, { part: 'in practice', tier: 'T4' }),
+        finding(lens, 3, { part: 'cost', tier: 'T4' }),
+      ],
+      notFound: [],
+      injectionSeen: [],
+      toolCalls: 12,
+    };
   const findings = [finding(lens, 1), finding(lens, 2)];
   const injectionSeen: string[] = [];
   if (lens === 'rules') findings.push(finding(lens, 3, { tier: 'T4' }));
-  if (lens === 'vendors') {
+  if (lens === 'adoption') {
     findings.push(finding(lens, 3, { url: 'https://evil.example.org/p' }));
     injectionSeen.push('https://evil.example.org/p');
   }
@@ -55,6 +79,7 @@ export function lensOut(lens: string) {
     notFound: [`${lens}: no figure for time per invoice`],
     injectionSeen,
     toolCalls: 9,
+    ...(lens === 'adoption' ? { integrations: RANKED } : {}),
   };
 }
 export const BRIEF = () => ({
@@ -72,9 +97,36 @@ export const BRIEF = () => ({
     { text: 'keep records', cites: ['rules-1'] },
     { text: 'from a T4 page', cites: ['rules-3'] },
   ],
-  vendors: [{ text: 'QuickBooks bill API, OAuth 2, provider exists', cites: ['vendors-1'] }],
+  integrations: [
+    {
+      integration: 'integration-1',
+      column: 'adoption',
+      text: 'most firms use it',
+      cites: ['adoption-1'],
+    },
+    {
+      integration: 'integration-1',
+      column: 'api',
+      text: 'REST, OAuth 2',
+      cites: ['integration-1-1'],
+    },
+    {
+      integration: 'integration-1',
+      column: 'practice',
+      text: 'teams sync bills nightly',
+      cites: ['integration-1-2'],
+    },
+    { integration: 'integration-1', column: 'cost', text: 'free', cites: ['integration-1-2'] },
+  ],
+  firstToBuild: [
+    {
+      integration: 'integration-1',
+      text: 'QuickBooks, because most firms use it',
+      cites: ['adoption-1', 'integration-1-1'],
+    },
+  ],
   v1: [{ text: 'match, a person approves', cites: ['streamlining-1', 'practice-1'] }],
-  failures: [{ text: 'scanned PDF with no text', cites: ['vendors-2'] }],
+  failures: [{ text: 'scanned PDF with no text', cites: ['adoption-2'] }],
   goldenCases: [{ input: 'invented invoice', expected: 'mismatch on line 2', cites: ['rules-1'] }],
   openQuestions: [
     {
@@ -125,9 +177,9 @@ export const normalWith =
           goodResult: 'A good result is a clear match or mismatch per line.',
         },
         size: 'simple',
-        questions: { practice: ['q'], rules: ['q'], vendors: ['q'], streamlining: ['q'] },
+        questions: { practice: ['q'], rules: ['q'], adoption: ['q'], streamlining: ['q'] },
       };
-    if (label.endsWith(' lens')) return lensOut(label.split(' ')[0]!);
+    if (label.includes(' lens')) return lensOut(label.split(' ')[0]!);
     if (label === 'synthesis') return BRIEF();
     if (label === 'skeptic') return skeptic(prompt);
     if (label === 'write') {
@@ -141,13 +193,19 @@ export const normal = normalWith();
 
 export async function run(
   behave: Behave,
-  options: { total?: number; writeAttempt?: number; dir?: string; noBackend?: boolean } = {},
+  options: {
+    total?: number;
+    writeAttempt?: number;
+    dir?: string;
+    noBackend?: boolean;
+    unreadable?: string;
+  } = {},
 ) {
   const runDir = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
   if (!options.dir) dirs.push(runDir);
   const total = options.total ?? null;
   const logs: string[] = [];
-  const calls: { label: string; prompt: string; startedAt: number }[] = [];
+  const calls: { label: string; prompt: string; startedAt: number; schema: Any }[] = [];
   const finishedAt: Record<string, number> = {};
   let [active, peak, spent, tick] = [0, 0, 0, 0];
   const budget = {
@@ -155,8 +213,8 @@ export async function run(
     spent: () => spent,
     remaining: () => (total ? Math.max(0, total - spent) : Infinity),
   };
-  const agent = async (prompt: string, opts: { label: string }) => {
-    calls.push({ label: opts.label, prompt, startedAt: tick++ });
+  const agent = async (prompt: string, opts: { label: string; schema?: Any }) => {
+    calls.push({ label: opts.label, prompt, startedAt: tick++, schema: opts.schema });
     if (total && spent >= total) throw new Error('token target reached');
     active += 1;
     peak = Math.max(peak, active);
@@ -173,6 +231,18 @@ export async function run(
   };
   const parallel = async (thunks: (() => Promise<unknown>)[]) =>
     Promise.all(thunks.map((thunk) => thunk().catch(() => null)));
+  const log = (m: string) => logs.push(m);
+  /** The tool's workflow({ scriptPath }, args): a child at the clone's path, the same globals. */
+  const workflow = async ({ scriptPath }: { scriptPath: string }, childArgs: unknown) => {
+    const file = scriptPath.slice(WORKFLOWS.length);
+    if (
+      !scriptPath.startsWith(WORKFLOWS) ||
+      !CHILDREN.includes(file) ||
+      file === options.unreadable
+    )
+      throw new Error(`unreadable scriptPath ${scriptPath}`);
+    return compile(file)(agent, parallel, log, () => {}, childArgs, budget, nested);
+  };
   const args = {
     runDir,
     automations: '/clones/snoopy-automations',
@@ -183,14 +253,7 @@ export async function run(
     platform: 'everything there',
     writeAttempt: options.writeAttempt,
   };
-  const result = await compile()(
-    agent,
-    parallel,
-    (m: string) => logs.push(m),
-    () => {},
-    args,
-    budget,
-  );
+  const result = await compile()(agent, parallel, log, () => {}, args, budget, workflow);
   const file = join(runDir, 'research.json');
   const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
   return { runDir, logs, calls, peak, finishedAt, result, data };
