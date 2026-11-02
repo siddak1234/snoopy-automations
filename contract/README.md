@@ -467,10 +467,8 @@ Refreshed 2026-11-02, the manifest byte limit, from snoopy-backend d9297bc (#259
 the platform's `main`, merged and live (the merge is the deploy). One file moved; all eleven are
 `cmp`-equal to `d9297bc` (each copied with `git show d9297bc:schemas/<file>`):
 
-- `platform-menu.json`: `limits.manifest.bytes`, 262144 — the most bytes of a committed manifest
-  the platform's Flow CD takes (its `flow-up`), counted as committed, pretty-printed JSON and its
-  whitespace included; more is refused with "the manifest is over 256 KiB" before the validator
-  runs. Its one home there is `FLOW_MANIFEST_BYTES` in `snoopy-backend/deploy/host-deploy.sh`.
+- `platform-menu.json`: `limits.manifest.bytes`, 262144; what it bounds and the refusal's words are
+  in "What the platform refuses beyond the schema", **Size, before the validator**.
 
 The other ten files are byte-identical to `10b5fae`'s. `test/conformance.test.ts` holds every
 `manifests/*.json`, as committed, to the menu's `limits.manifest.bytes`, read from this copy, and
@@ -487,10 +485,16 @@ enforces these further rules at registration, and its result callback those for 
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
-at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, and
+at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`,
 amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
-decision's `group`, the `memory` capability) at `10b5fae`, its file paths written from
-`snoopy-backend/`.
+decision's `group`, the `memory` capability) at `10b5fae`, and "Size, before the validator" at
+`d9297bc`, its file paths written from `snoopy-backend/`.
+
+**Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
+of the committed file, counted as committed (pretty-printed JSON, its
+whitespace included), and refuses more with "the manifest is over 256 KiB" before the
+validator runs. The one home is `FLOW_MANIFEST_BYTES` in `snoopy-backend/deploy/host-deploy.sh`;
+`schemas/platform-menu.json` publishes it (snoopy-backend §12.1 #319).
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id
