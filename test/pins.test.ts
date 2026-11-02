@@ -103,7 +103,7 @@ test('Dependabot’s docker entry covers every Dockerfile’s folder, in one gro
   );
 });
 
-test('.nvmrc names the exact Node release the images ship, and every setup-node installs it from the file', () => {
+test('.nvmrc names the exact Node release the images ship, every setup-node installs it from the file, and no brief types it', () => {
   const exact = read('.nvmrc').trim();
   assert.match(exact, /^\d+\.\d+\.\d+$/u, `.nvmrc names ${exact}, not one exact release`);
   const { engines } = JSON.parse(read('package.json')) as { engines: { node: string } };
@@ -116,6 +116,19 @@ test('.nvmrc names the exact Node release the images ship, and every setup-node 
     [...new Set(shipped)],
     [exact],
     `.nvmrc names ${exact}; the images ship ${shipped.join(', ')}`,
+  );
+
+  // A brief or a skill that types the release is a second copy that drifts: it points at the file.
+  const typed = (path: string): string[] =>
+    readdirSync(join(repositoryRoot, path), { withFileTypes: true }).flatMap((entry) => {
+      const child = `${path}/${entry.name}`;
+      if (entry.isDirectory()) return typed(child);
+      return /nvm\/versions\/node\/v\d/u.test(read(child)) ? [child] : [];
+    });
+  assert.deepEqual(
+    typed('.claude'),
+    [],
+    'a Node release typed under .claude, not read from .nvmrc',
   );
 
   const workflows = readdirSync(join(repositoryRoot, '.github', 'workflows')).filter((name) =>
