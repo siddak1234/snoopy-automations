@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "662ca665baa4b362763d4ed7b23bc2eb2be05ee757ed04107fe75d626eb37cb6",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"invoice\",\"pagesMissing\":false,\"vendorName\":\"quillfeather-paper.example\",\"vendorAddress\":\"15 Inkwell Court\",\"vendorCity\":\"Brookfield, CT 06804\",\"storeNumber\":\"\",\"documentNumber\":\"QPC-6610\",\"numberLabel\":\"Invoice\",\"references\":[{\"label\":\"Packed by station\",\"value\":\"QZ7INJ\"}],\"documentDate\":\"2026-09-19\",\"documentTime\":\"\",\"dueDate\":\"2026-10-19\",\"paymentTermsDays\":30,\"currency\":\"USD\",\"subtotal\":146.00,\"tax\":9.27,\"shipping\":null,\"discount\":null,\"total\":155.27,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"office_supplies\",\"lineItems\":[{\"description\":\"Kraft mailer boxes 12 x 9 x 4 (100)\",\"quantity\":null,\"unitPrice\":null,\"amount\":86.00},{\"description\":\"Packing tape, clear, 6 rolls\",\"quantity\":null,\"unitPrice\":null,\"amount\":21.60},{\"description\":\"Shipping labels 4 x 6 (500)\",\"quantity\":null,\"unitPrice\":null,\"amount\":38.40}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

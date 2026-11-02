@@ -12,7 +12,13 @@
 # Only this automation's, the SDK's and the kit's package.json are copied before
 # `npm ci`: npm installs a root lock whose other workspaces are absent from disk, so
 # one automation's image never sees another's files.
-FROM node:22-alpine AS build
+#
+# The one FROM that names an image, `base`: the same Node by tag and index digest in every flow,
+# and every stage builds FROM it, since Dependabot moves only a Dockerfile's first FROM (README,
+# "Working here", pinned base images).
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
+
+FROM base AS build
 WORKDIR /workspace
 
 COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
@@ -28,7 +34,7 @@ RUN npm run build --workspace @autom8x/automation-sdk \
   && npm run build --workspace @autom8x/automation-kit \
   && npm run build --workspace @autom8x/invoice-processing
 
-FROM node:22-alpine AS production-dependencies
+FROM base AS production-dependencies
 WORKDIR /workspace
 
 # `--install-links` packs the local SDK and kit instead of leaving symlinks to a build
@@ -41,7 +47,7 @@ COPY automations/invoice-processing/package.json automations/invoice-processing/
 WORKDIR /workspace/automations/invoice-processing
 RUN npm ci --omit=dev --ignore-scripts --workspaces=false --install-links=true
 
-FROM node:22-alpine AS runtime
+FROM base AS runtime
 RUN apk upgrade --no-cache && apk add --no-cache tini
 ENV NODE_ENV=production
 WORKDIR /app

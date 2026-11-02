@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "de20f7ce27d87c5cf7eb2163214b3811c5b9cd350c16360f2be6faf53b8510ef",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"receipt\",\"vendorName\":\"RIDGEWICK FUEL STOP\",\"documentNumber\":\"091842\",\"documentDate\":\"2026-09-21\",\"dueDate\":\"\",\"currency\":\"\",\"total\":49.15,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"6604\",\"refundMethod\":\"not_applicable\",\"spendType\":\"vehicle_and_fuel\",\"uncertainFields\":[]}]}"
+}

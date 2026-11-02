@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "de20f7ce27d87c5cf7eb2163214b3811c5b9cd350c16360f2be6faf53b8510ef",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"RIDGEWICK FUEL STOP\",\"vendorAddress\":\"4400 Highway 9\",\"vendorCity\":\"Anytown, CO 81000\",\"storeNumber\":\"\",\"documentNumber\":\"091842\",\"numberLabel\":\"TRAN #\",\"references\":[{\"label\":\"PUMP\",\"value\":\"04\"},{\"label\":\"AUTH\",\"value\":\"093317\"},{\"label\":\"Loyalty\",\"value\":\"QZ7CRD\"}],\"documentDate\":\"2026-09-21\",\"documentTime\":\"17:36\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":49.15,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"6604\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"vehicle_and_fuel\",\"lineItems\":[{\"description\":\"UNLEADED\",\"quantity\":14.21,\"unitPrice\":3.459,\"amount\":49.15}],\"lineItemCount\":1,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

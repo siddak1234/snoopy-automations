@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "cf0c17137966b2a519733316864249c0dbad4cac71eb4bad8f734f73b568abcf",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"COPPERVANE CAFE\",\"vendorAddress\":\"210 Station Road\",\"vendorCity\":\"Anytown, MI 48000\",\"storeNumber\":\"\",\"documentNumber\":\"771203\",\"numberLabel\":\"REF #\",\"references\":[{\"label\":\"Terminal\",\"value\":\"QZ7SLP\"}],\"documentDate\":\"2026-09-25\",\"documentTime\":\"08:41\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":38.50,\"amountDue\":null,\"tip\":7.00,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"5521\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"meals\",\"lineItems\":[],\"lineItemCount\":0,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "eb2c6cd84e9a8626885ef9041f463994d3e9eb533b5b5fb1c98d8dc8a4190cbe",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"bill\",\"vendorName\":\"Example County Water District\",\"documentNumber\":\"W-260915\",\"documentDate\":\"2026-09-15\",\"dueDate\":\"2026-10-05\",\"currency\":\"\",\"total\":67.77,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"utilities_and_phone\",\"uncertainFields\":[]}]}"
+}

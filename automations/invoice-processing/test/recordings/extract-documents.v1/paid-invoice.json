@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "6444537f059a4dabdd98f9abe96ef509e41b0f347033a5b33c9fa3127604a87e",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"Wrenfield & Pike Bookkeeping\",\"vendorAddress\":\"640 Ledger Lane, Suite 2\",\"vendorCity\":\"Anytown, WV 26000\",\"storeNumber\":\"\",\"documentNumber\":\"LH-2609\",\"numberLabel\":\"Invoice #\",\"references\":[{\"label\":\"check\",\"value\":\"1043\"},{\"label\":\"Engagement file\",\"value\":\"QZ7PAI\"}],\"documentDate\":\"2026-09-30\",\"documentTime\":\"\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":480.00,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":480.00,\"amountDue\":0.00,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"check\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"professional_services\",\"lineItems\":[{\"description\":\"Monthly bookkeeping, September 2026\",\"quantity\":null,\"unitPrice\":null,\"amount\":350.00},{\"description\":\"Quarterly payroll filing, Q3 2026\",\"quantity\":null,\"unitPrice\":null,\"amount\":130.00}],\"lineItemCount\":2,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}
