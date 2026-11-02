@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
@@ -17,12 +18,14 @@ import { SAMPLES, samplePath, sha256 } from './sample-maker/samples.js';
 /**
  * The recordings: for each made-up sample, the answer of an agent that acted as the model —
  * given exactly the prompt's instruction, the user text, the schema and the file, and nothing else
- * (`scripts/recording-request.ts` prints what) — saved verbatim, each read in its own directory:
- * read 1's first part (`extract`) as `test/recordings/extract-documents.v1/<sample>.json`, read 2
- * (`verify-read`, every document the sample holds) as
- * `test/recordings/verify-documents.v1/<sample>.json`. Each sample is recorded twice, by separate
- * agents blind to each other, as the two reads are blind to each other. v2's recordings were made
- * for v2's prompts, which v3 no longer has; v3's are still to be made.
+ * (`automations/invoice-processing/scripts/recording-request.ts` prints what) — saved verbatim,
+ * each read in its own directory: read 1's first part (`extract`) as
+ * `test/recordings/extract-documents.v1/<sample>.json`, read 2 (`verify-read`, every document the
+ * sample holds) as `test/recordings/verify-documents.v1/<sample>.json`. Each sample is recorded twice, by separate
+ * agents blind to each other, as the two reads are blind to each other. All 50 for v3's prompts
+ * were made 2026-11-02 (v2's went with v2's prompts): read 1 by agents on `claude-opus-5-5`, read 2
+ * on `claude-sonnet-5-5`. Each read's directory holds exactly one recording per sample, and a test
+ * over them fails, never skips, when one is missing (`assertEverySampleRecorded`).
  *
  * A recording names what it was made for, and the loader refuses one made for anything else:
  * another prompt id or version, other bytes of the prompt file (a word changed without a new
@@ -152,6 +155,19 @@ export function recordingFiles(read: Read = FIRST_READ): string[] {
   return existsSync(read.directory)
     ? readdirSync(read.directory).filter((file) => file.endsWith('.json'))
     : [];
+}
+
+/**
+ * `read`'s directory holds exactly one recording per sample, and nothing else: a recording missing
+ * fails the test that reads the read, never skips it.
+ */
+export function assertEverySampleRecorded(read: Read = FIRST_READ): void {
+  assert.deepEqual(
+    recordingFiles(read).sort(),
+    SAMPLES.map((sample) => `${sample.name}.json`).sort(),
+    `${relative(process.cwd(), read.directory)} must hold one recording per sample: ` +
+      '`npm run recording-request` prints what each agent is given',
+  );
 }
 
 /** Every recording there is for `read`, each refused unless made for its sample; a file naming no sample is refused too. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { renderPrompt, type JsonObject, type RunResult } from '@autom8x/automation-sdk';
@@ -15,9 +15,9 @@ import {
   FIRST_READ,
   READS,
   SECOND_READ,
+  assertEverySampleRecorded,
   madeFor,
   readRecording,
-  recordingFiles,
   recordingOf,
   recordingRequest,
   recordings,
@@ -29,7 +29,8 @@ import { SAMPLE_ROUTES } from './sample-routes.js';
  * Each sample recorded twice — read 1 (`extract-documents.v1`, its first part) and read 2
  * (`verify-documents.v1`), by separate agents blind to each other, each read in its own directory
  * — and the recorded answers run through the checks, the second read's comparison and the whole
- * run. The tests over recordings run on whatever exist, and are skipped, saying why, while none do.
+ * run. Each test over the recordings first holds its read to one recording per sample: a missing
+ * recording fails it, never skips it.
  */
 
 const [typed] = SAMPLES;
@@ -96,90 +97,81 @@ test("each read-2 request gives the agent what verify-read gives the model — e
   }
 });
 
-const firstFiles = recordingFiles(FIRST_READ);
-const secondFiles = recordingFiles(SECOND_READ);
-const where = (read: typeof FIRST_READ) => relative(process.cwd(), read.directory);
-const NOT_YET = (read: typeof FIRST_READ) =>
-  `no recordings yet in ${where(read)}: scripts/recording-request.ts prints what each agent is given`;
-
 /** A read-1 recording's first document, as v2's checks read it. */
 function firstDocument(text: string): JsonObject | undefined {
   const [document] = partAnswerOf(JSON.parse(text))?.documents ?? [];
   return document === undefined ? undefined : v2AnswerOf(document);
 }
 
-test(
-  "every read-1 recording's first document, run through the checks, takes its sample's route",
-  { skip: firstFiles.length === 0 ? NOT_YET(FIRST_READ) : false },
-  (t) => {
-    for (const { sample, recording } of recordings(FIRST_READ)) {
-      const answer = firstDocument(recording.text);
-      assert.ok(answer, `${sample.name}: the schema`);
-      const [route] = SAMPLE_ROUTES[sample.name]!;
-      if (route === 'kept') {
-        assert.equal(answer.documentType, 'bank_statement', sample.name);
-        continue;
-      }
-      const outcome = check(answer);
-      const got =
-        outcome.outcome === 'failed'
-          ? outcome.rule
-          : (outcome.recordingRule ?? outcome.document.route);
-      if (got !== route) t.diagnostic(`${sample.name}: ${got}, not ${route}`);
-      assert.equal(got, route, sample.name);
+test("every read-1 recording's first document, run through the checks, takes its sample's route", (t) => {
+  assertEverySampleRecorded(FIRST_READ);
+  for (const { sample, recording } of recordings(FIRST_READ)) {
+    const answer = firstDocument(recording.text);
+    assert.ok(answer, `${sample.name}: the schema`);
+    const [route] = SAMPLE_ROUTES[sample.name]!;
+    if (route === 'kept') {
+      assert.equal(answer.documentType, 'bank_statement', sample.name);
+      continue;
     }
-  },
-);
+    const outcome = check(answer);
+    const got =
+      outcome.outcome === 'failed'
+        ? outcome.rule
+        : (outcome.recordingRule ?? outcome.document.route);
+    if (got !== route) t.diagnostic(`${sample.name}: ${got}, not ${route}`);
+    assert.equal(got, route, sample.name);
+  }
+});
 
-test(
-  "every read-2 recording is the schema, and its first document is compared with the sample's expected answer as read 1",
-  { skip: secondFiles.length === 0 ? NOT_YET(SECOND_READ) : false },
-  (t) => {
-    for (const { sample, recording } of recordings(SECOND_READ)) {
-      const answer = verifyAnswerOf(JSON.parse(recording.text));
-      const second = answer?.documents.get(1);
-      assert.ok(second, `${sample.name}: the read-2 schema`);
-      const first = check(sample.answer);
-      if (first.outcome === 'failed') continue;
-      const comparison = compareReads(first.document, second);
-      assert.ok(!JSON.stringify(comparison).includes(sample.marker), sample.name);
-      if (comparison.differences.length > 0) {
-        t.diagnostic(
-          `${sample.name}: ${comparison.differences.map((each) => each.field).join(', ')}`,
-        );
-      }
+test("every read-2 recording is the schema, and its first document is compared with the sample's expected answer as read 1", (t) => {
+  assertEverySampleRecorded(SECOND_READ);
+  for (const { sample, recording } of recordings(SECOND_READ)) {
+    const answer = verifyAnswerOf(JSON.parse(recording.text));
+    const second = answer?.documents.get(1);
+    assert.ok(second, `${sample.name}: the read-2 schema`);
+    const first = check(sample.answer);
+    if (first.outcome === 'failed') continue;
+    const comparison = compareReads(first.document, second);
+    assert.ok(!JSON.stringify(comparison).includes(sample.marker), sample.name);
+    if (comparison.differences.length > 0) {
+      t.diagnostic(
+        `${sample.name}: ${comparison.differences.map((each) => each.field).join(', ')}`,
+      );
     }
-  },
-);
+  }
+});
 
-test(
-  "each sample's two recordings through the whole run: no line, summary or reason carries its marker",
-  {
-    skip:
-      firstFiles.length === 0 || secondFiles.length === 0
-        ? 'no sample has both recordings yet'
-        : false,
-  },
-  async (t) => {
-    for (const sample of SAMPLES) {
-      const [first, second] = [recordingOf(sample, FIRST_READ), recordingOf(sample, SECOND_READ)];
-      if (!first || !second) continue;
-      const run = setUp({ config: QUICKBOOKS, through: 'all' });
-      run.platform.model = reads(JSON.parse(first.text), JSON.parse(second.text));
-      const result: RunResult = await run.run();
-      // What a person reads: each line, and the summary, the approval's reason or the failure.
-      const ending =
-        result.outcome === 'success'
-          ? result.summary
-          : result.outcome === 'held'
-            ? result.held.reason
-            : result.failureReason;
-      const said = JSON.stringify([lines(run.platform), ending]);
-      assert.ok(!said.includes(sample.marker), `${sample.name}: the run's lines and summary`);
-      t.diagnostic(`${sample.name}: ${ending ?? result.outcome}`);
-    }
-  },
-);
+test("each sample's two recordings through the whole run: no line, summary or reason carries its marker", async (t) => {
+  for (const read of READS) assertEverySampleRecorded(read);
+  // A recording is read 1's first part alone: a read that goes on to a next part is not recorded
+  // past it (the double would answer that part again, without end). Only the 300-line sample's
+  // does, and recordings.test.ts holds that part.
+  const readsOn = (text: string) => partAnswerOf(JSON.parse(text))?.nextDocument !== null;
+  assert.deepEqual(
+    SAMPLES.filter((sample) => readsOn(recordingOf(sample, FIRST_READ)!.text)).map(
+      (sample) => sample.name,
+    ),
+    ['long-300-lines'],
+  );
+  for (const sample of SAMPLES) {
+    const [first, second] = [recordingOf(sample, FIRST_READ), recordingOf(sample, SECOND_READ)];
+    assert.ok(first && second, sample.name);
+    if (readsOn(first.text)) continue;
+    const run = setUp({ config: QUICKBOOKS, through: 'all' });
+    run.platform.model = reads(JSON.parse(first.text), JSON.parse(second.text));
+    const result: RunResult = await run.run();
+    // What a person reads: each line, and the summary, the approval's reason or the failure.
+    const ending =
+      result.outcome === 'success'
+        ? result.summary
+        : result.outcome === 'held'
+          ? result.held.reason
+          : result.failureReason;
+    const said = JSON.stringify([lines(run.platform), ending]);
+    assert.ok(!said.includes(sample.marker), `${sample.name}: the run's lines and summary`);
+    t.diagnostic(`${sample.name}: ${ending ?? result.outcome}`);
+  }
+});
 
 test('each recordings directory is kept in git by its placeholder, and holds recordings of samples alone', () => {
   for (const read of READS) {
@@ -189,16 +181,6 @@ test('each recordings directory is kept in git by its placeholder, and holds rec
   }
 });
 
-test(
-  'once recorded, each read holds one recording for every sample',
-  {
-    skip:
-      firstFiles.length === 0 && secondFiles.length === 0
-        ? "v3's recordings are still to be made"
-        : false,
-  },
-  () => {
-    const samples = SAMPLES.map((sample) => `${sample.name}.json`).sort();
-    for (const read of READS) assert.deepEqual(recordingFiles(read).sort(), samples, read.name);
-  },
-);
+test('each read holds exactly one recording for every sample', () => {
+  for (const read of READS) assertEverySampleRecorded(read);
+});
