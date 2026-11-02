@@ -78,7 +78,7 @@ npm run format                                # fix formatting
 
 ## Docs always updated
 
-Every change updates every doc and code comment that describes it, in the same commit, one place each; the others link. [docs/docs-map.json](docs/docs-map.json) maps code to its docs, and `npm run check:docs` (`scripts/kit/check-docs.mjs`, the standard's section (e)) fails when mapped code changes without its doc, a reference stops resolving, or a fact is typed in a second place. A commit that changes no doc on purpose says why in a `Docs-Unchanged: <reason>` trailer; a Dependabot commit whose every path is a bump path (a workflow, the root `package.json` or `package-lock.json`, a root `Dockerfile` or compose file) triggers no rule. The `reviewer` agent reads what a script cannot.
+Every change updates every doc and code comment that describes it, in the same commit, one place each; the others link. [docs/docs-map.json](docs/docs-map.json) maps code to its docs, and `npm run check:docs` (`scripts/kit/check-docs.mjs`, the standard's section (e)) fails when mapped code changes without its doc, a reference stops resolving, or a fact is typed in a second place. A commit that changes no doc on purpose says why in a `Docs-Unchanged: <reason>` trailer; a Dependabot commit touching only bump paths (`scripts/kit/check-docs.mjs`, check 3) triggers no rule. The `reviewer` agent reads what a script cannot.
 
 ## Cleanup
 

@@ -720,8 +720,8 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    **stop**, a platform change. It writes the
    spec, `automations/<id>/README.md`, and `words.md` for the owner's approval.
 2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7 — at most the menu's
-   `limits.manifest.bytes` as committed, its whitespace counted (`contract/` at snoopy-backend
-   d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then
+   `limits.manifest.bytes` as committed, its whitespace counted (`contract/` carries it since
+   snoopy-backend d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then
    **`npm run scaffold -- <id>`** (`scripts/scaffold.mjs`): the folder from `templates/automation/`,
    its lockfile and the root lock's entry, `automations/<id>/src/automation.ts` on `defineFlow`, one typed stub per
    step (`src/steps/<step>.ts`, "Not built yet"), one prompt stub per capability, one `test.todo` per
@@ -791,13 +791,14 @@ from the template's), and output with no TAP summary (`# tests N`) fails too: No
 reporter is no contract (the script's header). So a flow just scaffolded is red until each §9
 `test.todo` is written.
 
-**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night at 09:37 UTC —
-Verify, and every flow's image built, smoke-tested and scanned with that night's advisories — and
-publishes and deploys nothing: `all-green` accepts Publish's and Deploy's skip off a push. A red
-night opens a "Nightly red" issue, or comments on the one it opened that is still open (never one
-someone else opened with that title), from a job that can write issues and nothing else. The schedule has a file of its own because GitHub disables a public
-repository's scheduled workflow after 60 days without activity: that stops the nightly alone,
-never the merge gate. Turn it back on with `gh workflow enable nightly.yml`.
+**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`,
+`.github/workflows/nightly.yml`) — Verify, and every flow's image built, smoke-tested and scanned
+with that night's advisories — and publishes and deploys nothing: `all-green` accepts Publish's and
+Deploy's skip off a push. A red night opens a "Nightly red" issue, or comments on the one it opened
+that is still open (never one someone else opened with that title), from a job that can write issues
+and nothing else. The schedule has a file of its own because GitHub disables a public repository's
+scheduled workflow after 60 days without activity: that stops the nightly alone, never the merge
+gate. Turn it back on with `gh workflow enable nightly.yml`.
 
 **Pinned base images.** Every FROM of every flow's Dockerfile, and the template's, names one Node
 release by exact tag and multi-arch index digest, written there alone (any
