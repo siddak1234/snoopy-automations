@@ -1,0 +1,368 @@
+{
+  "about": "Made-up visit notes (no real patient) as read-note would answer them, each diagnosis with the code the recorded match-codes answer picks. Graded against key.json by the v2 accuracy test.",
+  "notes": [
+    {
+      "id": "n01",
+      "codesOnNote": ["I10"],
+      "diagnoses": [
+        {
+          "statement": "Essential hypertension, controlled on amlodipine",
+          "categories": ["I10"],
+          "pick": "I10"
+        }
+      ]
+    },
+    {
+      "id": "n02",
+      "codesOnNote": ["E11.9"],
+      "diagnoses": [
+        {
+          "statement": "Type 2 diabetes mellitus without complications, A1c 6.8",
+          "categories": ["E11"],
+          "pick": "E11.9"
+        }
+      ]
+    },
+    {
+      "id": "n03",
+      "codesOnNote": ["N18.30"],
+      "diagnoses": [
+        {
+          "statement": "CKD stage 3a, eGFR 52 today",
+          "categories": ["N18"],
+          "pick": "N18.31"
+        }
+      ]
+    },
+    {
+      "id": "n04",
+      "codesOnNote": ["I10", "N18.4"],
+      "diagnoses": [
+        {
+          "statement": "Hypertension, on lisinopril",
+          "categories": ["I10", "I12"],
+          "pick": "I10"
+        },
+        {
+          "statement": "Chronic kidney disease stage 4",
+          "categories": ["N18"],
+          "pick": "N18.4"
+        }
+      ]
+    },
+    {
+      "id": "n05",
+      "codesOnNote": ["E78.5"],
+      "diagnoses": [
+        {
+          "statement": "Hyperlipidemia, on atorvastatin",
+          "categories": ["E78"],
+          "pick": "E78.5"
+        }
+      ]
+    },
+    {
+      "id": "n06",
+      "codesOnNote": ["K21.9"],
+      "diagnoses": [
+        {
+          "statement": "GERD without esophagitis, on omeprazole",
+          "categories": ["K21"],
+          "pick": "K21.9"
+        }
+      ]
+    },
+    {
+      "id": "n07",
+      "codesOnNote": ["J45.909"],
+      "diagnoses": [
+        {
+          "statement": "Mild intermittent asthma, uncomplicated",
+          "categories": ["J45"],
+          "pick": "J45.20"
+        }
+      ]
+    },
+    {
+      "id": "n08",
+      "codesOnNote": ["J44.9"],
+      "diagnoses": [
+        {
+          "statement": "COPD with acute exacerbation, started prednisone",
+          "categories": ["J44"],
+          "pick": "J44.1"
+        }
+      ]
+    },
+    {
+      "id": "n09",
+      "codesOnNote": ["I48.91"],
+      "diagnoses": [
+        {
+          "statement": "Paroxysmal atrial fibrillation, on apixaban",
+          "categories": ["I48"],
+          "pick": "I48.0"
+        }
+      ]
+    },
+    {
+      "id": "n10",
+      "codesOnNote": ["E03.9"],
+      "diagnoses": [
+        {
+          "statement": "Hypothyroidism, on levothyroxine",
+          "categories": ["E03"],
+          "pick": "E03.9"
+        }
+      ]
+    },
+    {
+      "id": "n11",
+      "codesOnNote": ["M54.5"],
+      "diagnoses": [
+        {
+          "statement": "Low back pain, no radiation",
+          "categories": ["M54"],
+          "pick": "M54.50"
+        }
+      ]
+    },
+    {
+      "id": "n12",
+      "codesOnNote": ["F32.1"],
+      "diagnoses": [
+        {
+          "statement": "Major depressive disorder, single episode, moderate",
+          "categories": ["F32"],
+          "pick": "F32.1"
+        }
+      ]
+    },
+    {
+      "id": "n13",
+      "codesOnNote": ["F41.1"],
+      "diagnoses": [
+        {
+          "statement": "Generalized anxiety disorder, on sertraline",
+          "categories": ["F41"],
+          "pick": "F41.1"
+        }
+      ]
+    },
+    {
+      "id": "n14",
+      "codesOnNote": ["E66.01"],
+      "diagnoses": [
+        {
+          "statement": "Morbid obesity due to excess calories",
+          "categories": ["E66"],
+          "pick": "E66.01"
+        }
+      ]
+    },
+    {
+      "id": "n15",
+      "codesOnNote": ["N39.0"],
+      "diagnoses": [
+        {
+          "statement": "Acute cystitis without hematuria",
+          "categories": ["N30"],
+          "pick": "N30.00"
+        }
+      ]
+    },
+    {
+      "id": "n16",
+      "codesOnNote": ["J18.9"],
+      "diagnoses": [
+        {
+          "statement": "Suspected pneumonia, rule out",
+          "categories": ["J18"],
+          "pick": "J18.9",
+          "certainty": "uncertain"
+        },
+        {
+          "statement": "Cough for two weeks",
+          "categories": ["R05"],
+          "pick": "R05.9"
+        }
+      ]
+    },
+    {
+      "id": "n17",
+      "codesOnNote": ["I50.9"],
+      "diagnoses": [
+        {
+          "statement": "Chronic diastolic congestive heart failure, euvolemic",
+          "categories": ["I50"],
+          "pick": "I50.32"
+        }
+      ]
+    },
+    {
+      "id": "n18",
+      "codesOnNote": ["D63.1", "N18.32"],
+      "diagnoses": [
+        {
+          "statement": "Anemia in CKD, Hgb 9.9",
+          "categories": ["D63"],
+          "pick": "D63.1"
+        },
+        {
+          "statement": "CKD stage 3b",
+          "categories": ["N18"],
+          "pick": "N18.32"
+        }
+      ]
+    },
+    {
+      "id": "n19",
+      "codesOnNote": ["N18.6"],
+      "diagnoses": [
+        {
+          "statement": "ESRD on hemodialysis MWF",
+          "categories": ["N18"],
+          "pick": "N18.6"
+        },
+        {
+          "statement": "Dependence on renal dialysis",
+          "categories": ["Z99"],
+          "pick": "Z99.2"
+        }
+      ]
+    },
+    {
+      "id": "n20",
+      "codesOnNote": ["G43.909"],
+      "diagnoses": [
+        {
+          "statement": "Migraine without aura, not intractable",
+          "categories": ["G43"],
+          "pick": "G43.009"
+        }
+      ]
+    },
+    {
+      "id": "n21",
+      "codesOnNote": ["M17.9"],
+      "diagnoses": [
+        {
+          "statement": "Primary osteoarthritis, right knee",
+          "categories": ["M17"],
+          "pick": "M17.11"
+        }
+      ]
+    },
+    {
+      "id": "n22",
+      "codesOnNote": ["E55.9"],
+      "diagnoses": [
+        {
+          "statement": "Vitamin D deficiency, on supplement",
+          "categories": ["E55"],
+          "pick": "E55.9"
+        }
+      ]
+    },
+    {
+      "id": "n23",
+      "codesOnNote": ["N40.0"],
+      "diagnoses": [
+        {
+          "statement": "BPH with lower urinary tract symptoms",
+          "categories": ["N40"],
+          "pick": "N40.1"
+        }
+      ]
+    },
+    {
+      "id": "n24",
+      "codesOnNote": ["J30.2"],
+      "diagnoses": [
+        {
+          "statement": "Allergic rhinitis due to pollen",
+          "categories": ["J30"],
+          "pick": "J30.1"
+        }
+      ]
+    },
+    {
+      "id": "n25",
+      "codesOnNote": ["G47.00"],
+      "diagnoses": [
+        {
+          "statement": "Insomnia, on melatonin",
+          "categories": ["G47"],
+          "pick": "G47.00"
+        }
+      ]
+    },
+    {
+      "id": "n26",
+      "codesOnNote": [],
+      "diagnoses": [
+        {
+          "statement": "Type 2 diabetes with diabetic chronic kidney disease",
+          "categories": ["E11"],
+          "pick": "E11.22"
+        },
+        {
+          "statement": "CKD stage 2",
+          "categories": ["N18"],
+          "pick": "N18.2"
+        }
+      ]
+    },
+    {
+      "id": "n27",
+      "codesOnNote": ["R73.03"],
+      "diagnoses": [
+        {
+          "statement": "Prediabetes, discussed diet",
+          "categories": ["R73"],
+          "pick": "R73.03",
+          "byProvider": false
+        }
+      ]
+    },
+    {
+      "id": "n28",
+      "codesOnNote": ["I10"],
+      "diagnoses": [
+        {
+          "statement": "Hypertension",
+          "categories": ["I10"],
+          "pick": "I10"
+        },
+        {
+          "statement": "History of colon polyps",
+          "categories": ["Z86"],
+          "pick": "Z86.0101",
+          "thisVisit": false
+        }
+      ]
+    },
+    {
+      "id": "n29",
+      "codesOnNote": ["E87.5"],
+      "diagnoses": [
+        {
+          "statement": "Hyperkalemia, K 5.6",
+          "categories": ["E87"],
+          "pick": "E87.5"
+        }
+      ]
+    },
+    {
+      "id": "n30",
+      "codesOnNote": ["M10.9"],
+      "diagnoses": [
+        {
+          "statement": "Idiopathic gout, right foot",
+          "categories": ["M10"],
+          "pick": "M10.071"
+        }
+      ]
+    }
+  ]
+}

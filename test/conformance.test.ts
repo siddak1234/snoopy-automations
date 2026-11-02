@@ -22,7 +22,8 @@ import { LIVE_FLOWS } from '../scripts/review-rows.js';
  * manifests declare.
  *
  * - every step the code can report is declared by a manifest the container
- *   serves — in its `pipeline`, or in its `items.pipeline` for the item run — and every
+ *   serves — in its `pipeline`, its `items.pipeline` for the item run, or its `batch.pipeline`
+ *   for the batch run — and every
  *   declared step is implemented — the platform refuses an undeclared step with 422 and
  *   does not store it;
  * - every capability a prompt uses is in `requiredCapabilities` of every served
@@ -84,12 +85,19 @@ function assertConforms(
   manifests: readonly Manifest[],
   label: string,
 ): void {
-  // A version's steps: its runs' `pipeline` and, for a flow with items, its item run's
-  // `items.pipeline` (platform ADR-0046) — each reported by the code, each declared.
+  // A version's steps: its runs' `pipeline`, for a flow with items its item run's
+  // `items.pipeline` (platform ADR-0046), and for a flow with a batch its batch run's
+  // `batch.pipeline` (ADR-0048 amendment 4) — each reported by the code, each declared.
   const declared = new Map(
     manifests.map((manifest) => [
       manifest.version,
-      new Set([...manifest.pipeline, ...(manifest.items?.pipeline ?? [])].map((s) => s.id)),
+      new Set(
+        [
+          ...manifest.pipeline,
+          ...(manifest.items?.pipeline ?? []),
+          ...(manifest.batch?.pipeline ?? []),
+        ].map((s) => s.id),
+      ),
     ]),
   );
   for (const stepId of automation.steps) {

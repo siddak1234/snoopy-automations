@@ -110,6 +110,31 @@ test('each row fails on its own departure, naming it', () => {
   failing({ 'automations/sample/test/drill.test.ts': '' }, 'Drill', /failureDrill/u);
 });
 
+test("memory is used when the code reaches platform.memory; a batch run's steps are steps too", () => {
+  const withMemory = MANIFEST.replace('["classification"]', '["classification", "memory"]');
+  const batch = JSON.stringify({
+    ...(JSON.parse(withMemory) as object),
+    batch: { pipeline: [{ id: 'sort-pages' }], unitWords: { singular: 'Page', plural: 'Pages' } },
+  });
+  const rows = (files: Record<string, string>) =>
+    Object.fromEntries(
+      rowsFor(flow({ ...GOOD, ...files }), 'sample', [], false).map((r) => [r.row, r.note]),
+    );
+  assert.match(
+    rows({ 'manifests/sample.v1.json': withMemory })['§4 capabilities']!,
+    /memory is declared, not used/u,
+  );
+  const used = { 'automations/sample/src/m.ts': "await platform.memory.get('codes');" };
+  assert.equal(
+    verdicts(flow({ ...GOOD, ...used, 'manifests/sample.v1.json': withMemory }))['§4 capabilities'],
+    'PASS',
+  );
+  assert.match(
+    rows({ ...used, 'manifests/sample.v1.json': batch })['§6 steps']!,
+    /sort-pages has no step in src/u,
+  );
+});
+
 test('a new flow’s pull request touches only its folder, its manifest and generated files', () => {
   const base = flow(GOOD);
   const own = [

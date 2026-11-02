@@ -6,6 +6,7 @@ import {
   type JsonObject,
   type InvokeRequest,
   type Manifest,
+  type Step,
 } from '@autom8x/automation-sdk';
 
 import { doneBlocks, keptBlocks, titleOf } from './blocks.js';
@@ -23,42 +24,87 @@ import { save } from './steps/save.js';
 import { TABLES } from './tables.js';
 import { viewOf } from './view.js';
 import { WORDS } from './words.js';
+import { batchResult, childRequest, visitResult } from './v2/result.js';
+import { categorize, chunk, organize, queue } from './v2/batch-steps.js';
+import {
+  checkVisit,
+  lookUpNpi,
+  matchVisit,
+  rankCodes,
+  readVisit,
+  receiveVisit,
+} from './v2/child-steps.js';
+import { reviewVisit, saveVisit } from './v2/review-steps.js';
 
 /** ICD-10 Code Check, on `defineFlow`: its spec is README.md beside src/. */
 export const TEMPLATE_ID = 'icd10-code-check';
+
+/**
+ * The one version this image serves; its Dockerfile copies only its manifest. v1 stays served by
+ * its own container on its pinned image (the platform's D2), and its code here is unchanged.
+ */
+export const SERVED_VERSIONS: readonly number[] = [2];
 
 export { prompts };
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 /**
- * The flow. `options` are for its suite: the day a run starts and the tables the build holds
- * (`check-note`). Each AI step is run once more on a failure that decided nothing (README,
- * "Retrying a step"): `settle` rethrows while a repeat is left, and never once a model answered.
+ * The flow, for the manifests given: v1's steps and v2's — its batch run's and its visit run's —
+ * each only where a given manifest declares it, so the image (v2 alone) and the suite (both)
+ * build from one list; `match-codes` is v1's on a v1 run and `matchVisit` on a v2 run. `options` are for its suite: the day a run starts and the tables the build
+ * holds (`check-note`, `check-visit`). Each AI step is run once more on a failure that decided
+ * nothing (README, "Retrying a step"): `settle` rethrows while a repeat is left, and never once a
+ * model answered.
  */
 export function define(
   manifests: readonly Manifest[],
   options: Partial<CheckNoteOptions> = {},
 ): Automation {
+  const dated = { today: options.today ?? today, tables: options.tables ?? TABLES };
+  const all: Record<string, Step> = {
+    receive,
+    'read-note': readNote,
+    'check-note': checkNote(dated),
+    'find-codes': findCodes,
+    'match-codes': (context) =>
+      context.request.templateVersion === 1 ? matchCodes(context) : matchVisit(context),
+    'check-codes': checkCodes,
+    decide,
+    save,
+    chunk,
+    categorize,
+    organize,
+    queue,
+    'receive-visit': receiveVisit,
+    'look-up-npi': lookUpNpi,
+    'read-visit': readVisit,
+    'check-visit': checkVisit(dated),
+    'rank-codes': rankCodes,
+    'review-visit': reviewVisit,
+    'save-visit': saveVisit,
+  };
+  const declared = new Set(
+    manifests.flatMap((m) => [...m.pipeline, ...(m.batch?.pipeline ?? [])].map((s) => s.id)),
+  );
+  const retry = {
+    'read-note': { attempts: 2, backoffMs: 10_000 },
+    'match-codes': { attempts: 2, backoffMs: 10_000 },
+    'read-visit': { attempts: 2, backoffMs: 10_000 },
+    categorize: { attempts: 2, backoffMs: 10_000 },
+  };
   return defineFlow({
     templateId: TEMPLATE_ID,
     manifests,
     prompts,
-    steps: {
-      receive,
-      'read-note': readNote,
-      'check-note': checkNote({ today: options.today ?? today, tables: options.tables ?? TABLES }),
-      'find-codes': findCodes,
-      'match-codes': matchCodes,
-      'check-codes': checkCodes,
-      decide,
-      save,
-    },
-    retry: {
-      'read-note': { attempts: 2, backoffMs: 10_000 },
-      'match-codes': { attempts: 2, backoffMs: 10_000 },
-    },
-    result,
+    steps: Object.fromEntries(Object.entries(all).filter(([id]) => declared.has(id))),
+    retry: Object.fromEntries(Object.entries(retry).filter(([id]) => declared.has(id))),
+    result: (state, request) =>
+      request.templateVersion === 1
+        ? result(state, request)
+        : request.batch === true
+          ? batchResult(state)
+          : visitResult(result(state, childRequest(request)), state),
   });
 }
 
