@@ -238,3 +238,14 @@ test('all-green needs every job, and lets only Publish, Deploy and an empty Imag
   );
   assert.match(job('image'), /^ {4}if: \$\{\{ needs\.list\.outputs\.images != '\[\]' \}\}$/mu);
 });
+
+test('Verify fails when a test skipped or was left todo, reading the whole log', () => {
+  const verify = steps(job('verify')).find((step) => /^name: Verify formatting/u.test(step));
+  assert.ok(verify !== undefined, 'the Verify step');
+  assert.match(verify, /^ {10}set -o pipefail$/mu, 'a red verify stays red through tee');
+  assert.match(verify, /^ {10}npm run verify \| tee "\$RUNNER_TEMP\/verify\.log"$/mu);
+  assert.match(
+    verify,
+    /^ {10}if grep -qE '\^# \(skipped\|todo\) \[1-9\]' "\$RUNNER_TEMP\/verify\.log"; then\n {12}echo '[^'\n]+'\n {12}exit 1$/mu,
+  );
+});

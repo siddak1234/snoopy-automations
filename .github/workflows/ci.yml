@@ -110,11 +110,19 @@ jobs:
       # and no recovered client data tracked; `test/isolation.test.ts`, no
       # automation depending on another. `test/conformance.test.ts` holds every
       # automation to the manifests it serves. The gate's last step re-emits
-      # docs/repo-facts/snoopy-automations.json.
+      # docs/repo-facts/snoopy-automations.json. A test that skipped or was left todo fails
+      # it: a skip is a check that did not run. The gate's own test step says so
+      # (scripts/no-skipped-tests.mjs), and this step reads the whole log the same way.
       - name: Verify formatting, docs, build, types, and tests
         env:
           DOCS_BASE: origin/${{ github.base_ref || 'main' }}
-        run: npm run verify
+        run: |
+          set -o pipefail
+          npm run verify | tee "$RUNNER_TEMP/verify.log"
+          if grep -qE '^# (skipped|todo) [1-9]' "$RUNNER_TEMP/verify.log"; then
+            echo 'FAIL: a test skipped or was left todo'
+            exit 1
+          fi
 
       # The review checklist's machine-checkable rows (scripts/review-rows.ts; /create-flow's
       # templates/review.md marks them (CI)) for every flow this range touches, written to the

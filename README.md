@@ -782,6 +782,10 @@ npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gat
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
 ```
 
+A test that skips or is left todo fails the gate: `scripts/no-skipped-tests.mjs` runs `npm test`
+and reads its TAP for a `# skipped` or `# todo` count above 0, and CI's Verify reads its whole log
+the same way. So a flow just scaffolded is red until each §9 `test.todo` is written.
+
 Node 22 or newer. Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

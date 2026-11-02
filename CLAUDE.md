@@ -65,7 +65,7 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 
 ```bash
 npm ci --ignore-scripts                       # install exactly what CI audited
-npm run verify                                # format:check → check:docs → map --check → reference audit → build → typecheck → test → repo facts
+npm run verify                                # format:check → check:docs → map --check → reference audit → build → typecheck → test (none skipped or todo) → repo facts
 npm audit --omit=dev --audit-level=high       # CI's blocking audit, which verify skips
 npm run facts                                 # after adding or removing files
 npm run map                                   # after adding a file under a glob docs/docs-map.json lists

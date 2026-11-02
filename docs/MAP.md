@@ -74,13 +74,14 @@
 - [scripts/kit/check-docs.mjs](../scripts/kit/check-docs.mjs): D, docs always updated (STANDARD (e)): `npm run check:docs` reads
 - [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
+- [scripts/no-skipped-tests.mjs](../scripts/no-skipped-tests.mjs): `npm run verify`'s test gate (Round 21 hardening, A2): runs `npm test` — or the command it is
 - [scripts/repo-facts.ts](../scripts/repo-facts.ts): What this repository reports about itself, in the shape the platform
 - [scripts/review-rows.ts](../scripts/review-rows.ts): The review checklist's machine-checkable rows (Round 21, R3; `/create-flow`'s
 - [scripts/scaffold.mjs](../scripts/scaffold.mjs): `npm run scaffold -- templateId [--root dir]` (Round 21, R2): everything structural about a
 
 ### Tests
 
-- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, repo, research, review, scaffold, workflow
+- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, no, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 
