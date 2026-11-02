@@ -283,10 +283,10 @@ the loader refuses one made for another prompt or version, or other prompt or sa
 All 50 for v3's prompts were made 2026-11-02 — read 1 by agents on `claude-opus-5-5`, read 2 on
 `claude-sonnet-5-5`, each given only its read's request and the document under a neutral file
 name. Each directory must hold exactly one recording per sample: a missing one fails the tests
-over them, never skips them. The tests over them run each pair — but the 300-line sample's, whose
-read 1 goes on past its one recorded part — through steps 1–8 with the model answering as recorded, check-document,
-read 2's comparison and decide (the vendor matched, nothing found): the sample's marker reaches
-no line, sentence, reason or saved data. `automations/invoice-processing/test/planted-marker.test.ts` plants each marker in
+over them, never skips them. The tests over them run each pair through steps 1–8 with the model
+answering as recorded (the 300-line sample's read 1 goes on past its one recorded part, and the
+part after it is answered as done), check-document, read 2's comparison and decide (the vendor
+matched, nothing found): the sample's marker reaches no line, sentence, reason or saved data. `automations/invoice-processing/test/planted-marker.test.ts` plants each marker in
 every field the code reads but never passes on — read 1's currency, card digits, dates and
 listed references (not a statement's, which are carried), read 2's currency, card digits and
 dates — on every path, held and straight through — and `automations/invoice-processing/test/writes-marker.test.ts` takes each

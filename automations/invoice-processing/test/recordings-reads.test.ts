@@ -3,14 +3,28 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { renderPrompt, type JsonObject, type RunResult } from '@autom8x/automation-sdk';
+import {
+  renderPrompt,
+  type JsonObject,
+  type ModelRequest,
+  type RunResult,
+} from '@autom8x/automation-sdk';
 
 import { VERIFY_DOCUMENTS_V1 } from '../src/prompts.js';
 import { compareReads } from '../src/reads/compare.js';
 import { partAnswerOf, v2AnswerOf } from '../src/run/answer.js';
 import { VERIFY_TASK, verifyAnswerOf } from '../src/run/verify.js';
 import { check } from './check-world.js';
-import { QUICKBOOKS, lines, reads, secondAnswer, setUp, verifyAnswer } from './fixtures.js';
+import {
+  QUICKBOOKS,
+  completion,
+  isSecondRead,
+  lines,
+  reads,
+  secondAnswer,
+  setUp,
+  verifyAnswer,
+} from './fixtures.js';
 import {
   FIRST_READ,
   READS,
@@ -141,11 +155,39 @@ test("every read-2 recording is the schema, and its first document is compared w
   }
 });
 
+/**
+ * The model as recorded: read 1's first part and read 2 as their recordings say, and any part of
+ * read 1 after the first answered as done (nextDocument 0, nothing more listed) — a recording is
+ * the first part alone, and answering it again would move the reading on without end. `later`
+ * counts those parts; one asked after the done one is refused, so a reading that does not end
+ * stops here.
+ */
+function asRecorded(first: JsonObject, second: JsonObject) {
+  const recorded = reads(first, second);
+  const double = {
+    later: 0,
+    model: (call: ModelRequest, model: string) => {
+      if (isSecondRead(call) || (call.input.fromDocument === 1 && call.input.fromLine === 1)) {
+        return recorded(call, model);
+      }
+      double.later += 1;
+      if (double.later > 1) return Promise.reject(new Error('a part asked after the done one'));
+      const done = {
+        documentCount: first.documentCount,
+        documents: [],
+        nextDocument: 0,
+        nextLine: 0,
+      };
+      return Promise.resolve(completion(model, done));
+    },
+  };
+  return double;
+}
+
 test("each sample's two recordings through the whole run: no line, summary or reason carries its marker", async (t) => {
   for (const read of READS) assertEverySampleRecorded(read);
-  // A recording is read 1's first part alone: a read that goes on to a next part is not recorded
-  // past it (the double would answer that part again, without end). Only the 300-line sample's
-  // does, and recordings.test.ts holds that part.
+  // Only the 300-line sample's read 1 goes on past its recorded part; the double answers the
+  // next part as done, so it runs through steps 1–8 like the others.
   const readsOn = (text: string) => partAnswerOf(JSON.parse(text))?.nextDocument !== null;
   assert.deepEqual(
     SAMPLES.filter((sample) => readsOn(recordingOf(sample, FIRST_READ)!.text)).map(
@@ -153,13 +195,16 @@ test("each sample's two recordings through the whole run: no line, summary or re
     ),
     ['long-300-lines'],
   );
+  const ran: string[] = [];
   for (const sample of SAMPLES) {
     const [first, second] = [recordingOf(sample, FIRST_READ), recordingOf(sample, SECOND_READ)];
     assert.ok(first && second, sample.name);
-    if (readsOn(first.text)) continue;
     const run = setUp({ config: QUICKBOOKS, through: 'all' });
-    run.platform.model = reads(JSON.parse(first.text), JSON.parse(second.text));
+    const double = asRecorded(JSON.parse(first.text), JSON.parse(second.text));
+    run.platform.model = double.model;
     const result: RunResult = await run.run();
+    // The 300-line sample's reading asks one part more, answered as done, and ends there.
+    assert.equal(double.later, readsOn(first.text) ? 1 : 0, `${sample.name}: the parts asked`);
     // What a person reads: each line, and the summary, the approval's reason or the failure.
     const ending =
       result.outcome === 'success'
@@ -170,7 +215,13 @@ test("each sample's two recordings through the whole run: no line, summary or re
     const said = JSON.stringify([lines(run.platform), ending]);
     assert.ok(!said.includes(sample.marker), `${sample.name}: the run's lines and summary`);
     t.diagnostic(`${sample.name}: ${ending ?? result.outcome}`);
+    ran.push(sample.name);
   }
+  assert.deepEqual(
+    ran,
+    SAMPLES.map((sample) => sample.name),
+    'every sample ran whole',
+  );
 });
 
 test('each recordings directory is kept in git by its placeholder, and holds recordings of samples alone', () => {
