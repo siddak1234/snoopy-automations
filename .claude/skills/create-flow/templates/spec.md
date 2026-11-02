@@ -5,8 +5,8 @@ spec, every word both clients show · **Research:** `research.md` beside this sp
 in section 11 · **Built in:** <PR link, once built>
 
 Every limit below is the platform's: `snoopy-automations/contract/schemas/automation-manifest.json` and
-`snoopy-automations/contract/schemas/automation-run-result.json`, and the rules beyond them in `snoopy-automations/contract/README.md`,
-"What the platform refuses beyond the schema".
+`snoopy-automations/contract/schemas/automation-run-result.json`, the menu's `limits` (`snoopy-automations/contract/schemas/platform-menu.json`),
+and the rules beyond them in `snoopy-automations/contract/README.md`, "What the platform refuses beyond the schema".
 Nothing here is a customer's data: this repository is public. Every limit this spec sets (a cap, a
 count, a size) is checked against the data it limits, with the count written beside it (the
 ICD-10 pilot: the 60-candidate cap left 40,646 of 74,719 codes never offerable (the flow's second
@@ -36,6 +36,7 @@ brief does not carry is not written here.
 | Department |       | one of HR, Accounting, Finance, Legal, Compliance, Data, Operations, Sales, Marketing, Customer Support, IT, Engineering, Product, Procurement, Administration, Research; the flow joins it. None fits the domain exactly: stage 1 says so and offers a new department, a platform change (section 10), never the nearest (the ICD-10 pilot, F2: "The flow is under healthcare not compliance" — the session chose Compliance) |
 | Icon       |       | the menu lists no icons yet (`contract/schemas/platform-menu.json`): leave it blank. The manifest's required `display.icon` keeps the template's `Sparkles`, and the app draws a placeholder for a name it does not have; a new icon is a platform round (section 10)                                                                                                                                                          |
 | Price      |       | US dollars a month, cents at most; 0 unless the owner says                                                                                                                                                                                                                                                                                                                                                                     |
+| Manifest   |       | its bytes as committed (pretty-printed, whitespace counted), at most the menu's `limits.manifest.bytes` (`contract/schemas/platform-menu.json`): the platform's Flow CD refuses a bigger one before its validator, and Verify's `test/conformance.test.ts` fails it. Written measured once the manifest is (a long `select` or many fields grow it: the ICD-10 pilot's v2 is 130,072 bytes)                                    |
 
 ## 2. How it starts
 

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "test": "tsx --test \"test/**/*.test.ts\"",
+    "test": "tsx --test --test-reporter=tap \"test/**/*.test.ts\"",
     "start": "node dist/main.js",
     "samples": "tsx scripts/make-samples.ts",
     "recording-request": "tsx scripts/recording-request.ts"

@@ -71,11 +71,12 @@ function repo(files) {
   git(dir, 'commit', '-q', '-m', 'base');
   return dir;
 }
-function commit(dir, files, message = 'change') {
+function commit(dir, files, message = 'change', author) {
   write(dir, files);
   git(dir, 'add', '-A');
-  git(dir, 'commit', '-q', '--allow-empty', '-m', message);
+  git(dir, 'commit', '-q', '--allow-empty', '-m', message, ...(author ? ['--author', author] : []));
 }
+const DEPENDABOT = 'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>';
 const linesOf = (n) => `${Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n')}\n`;
 
 describe('guard (STANDARD (h) rows 1–8)', () => {
@@ -231,6 +232,9 @@ describe('check-docs (STANDARD (e))', () => {
     { name: 'a valid trailer passes', commits: [[{ 'src/a.mjs': '// a2\n' }, 'refactor\n\nDocs-Unchanged: renames a local; nothing a doc says changes']], exit: 0 },
     { name: 'an empty trailer reason fails', commits: [[{ 'src/a.mjs': '// a2\n' }, 'refactor\n\nDocs-Unchanged:']], exit: 1, out: /under 12 characters/u },
     { name: 'a short trailer reason fails', commits: [[{ 'src/a.mjs': '// a2\n' }, 'refactor\n\nDocs-Unchanged: tiny']], exit: 1, out: /"tiny" is under 12/u },
+    { name: 'a Dependabot bump of workflows, package files, Dockerfile and compose passes', map: { rules: [{ id: 'src', code: ['src/**', '.github/**', 'package.json', 'package-lock.json', 'Dockerfile', 'compose.yml', 'compose.vendors.yml'], docs: ['README.md'] }] }, base: { '.github/workflows/ci.yml': 'on: push\n', 'package.json': '{}\n', 'package-lock.json': '{}\n', Dockerfile: 'FROM a\n', 'compose.yml': 'services: {}\n', 'compose.vendors.yml': 'services: {}\n' }, commits: [[{ '.github/workflows/ci.yml': 'on: [push]\n', 'package.json': '{ }\n', 'package-lock.json': '{ }\n', Dockerfile: 'FROM b\n', 'compose.yml': 'services: { }\n', 'compose.vendors.yml': 'services: { }\n' }, 'build(deps): bump', DEPENDABOT]], exit: 0 },
+    { name: 'the same bump by another author fails', map: { rules: [{ id: 'src', code: ['src/**', '.github/**', 'package.json'], docs: ['README.md'] }] }, base: { '.github/workflows/ci.yml': 'on: push\n', 'package.json': '{}\n' }, commits: [[{ '.github/workflows/ci.yml': 'on: [push]\n', 'package.json': '{ }\n' }, 'build(deps): bump', 'Someone <1+someone@users.noreply.github.com>']], exit: 1, out: /rule src/u },
+    { name: 'a Dependabot commit touching a .ts file fails', map: { rules: [{ id: 'src', code: ['src/**', 'package.json'], docs: ['README.md'] }] }, base: { 'package.json': '{}\n' }, commits: [[{ 'package.json': '{ }\n', 'src/b.ts': 'export {};\n' }, 'build(deps): bump', DEPENDABOT]], exit: 1, out: /rule src/u },
     { name: 'only a generated file fails', commits: [[{ 'src/a.mjs': '// a2\n', 'docs/MAP.md': 'y\n' }]], exit: 1, out: /rule src/u },
     { name: 'an empty range passes', commits: [], exit: 0 },
     { name: 'no base fails', commits: [[withDocs({ 'src/a.mjs': '// a2\n' })]], args: [], exit: 1, out: /fetch origin main \(CI: fetch-depth: 0\)/u },
@@ -259,7 +263,7 @@ describe('check-docs (STANDARD (e))', () => {
     test(c.name, () => {
       const dir = repo({ ...BASE, ...(c.map ? { 'docs/docs-map.json': JSON.stringify({ ...MAP, ...c.map }) } : {}), ...(c.base ?? {}) });
       const base = git(dir, 'rev-parse', 'HEAD');
-      for (const [files, message] of c.commits) commit(dir, files, message);
+      for (const [files, message, author] of c.commits) commit(dir, files, message, author);
       const args = c.args ?? ['--base', base];
       const r = node('scripts/kit/check-docs.mjs', args, { cwd: dir, env: quietEnv({ DOCS_BASE: c.env ? base : '' }) });
       assert.equal(r.status, c.exit, r.stdout + r.stderr);

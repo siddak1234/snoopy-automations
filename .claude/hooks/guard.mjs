@@ -241,10 +241,12 @@ function buildDir(b, args, cwd, ctx) {
   }
   const words = b === 'npx' ? args.slice(subcommand(args, ['-p', '--package']).at) : [b, ...args];
   const [tool, ...rest] = words;
+  // `npx eas-cli@27.2.0 build` names the package with its version; a scoped name keeps its `@`.
+  const pkg = base(tool ?? '').replace(/(?<=.)@[^/@]*$/u, '');
   const first = subcommand(rest, DOCKER_VALUED).sub;
   const built =
-    (['expo'].includes(base(tool)) && first === 'export') ||
-    (['next', 'eas', 'eas-cli'].includes(base(tool)) && first === 'build') ||
+    (['expo'].includes(pkg) && first === 'export') ||
+    (['next', 'eas', 'eas-cli'].includes(pkg) && first === 'build') ||
     (base(tool) === 'pod' && first === 'install') ||
     base(tool) === 'xcodebuild' ||
     (base(tool) === 'docker' && (first === 'build' || ((first === 'buildx' || first === 'image') && rest.includes('build')) || (first === 'compose' && rest.includes('up')))) ||

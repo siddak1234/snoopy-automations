@@ -1,0 +1,61 @@
+name: Nightly
+
+# CI every night on main (Round 21 hardening, NIGHT-8): ci.yml whole — Verify, and every flow's
+# image built, smoke-tested and scanned against that night's advisories — with nothing published
+# or deployed: Publish and Deploy run on a push to main alone, and all-green accepts their skip
+# off a push. A red night opens an issue (Nightly red, below).
+#
+# The schedule lives in this file, never in ci.yml; why, and how to turn it back on: README,
+# "Working here", the nightly.
+on:
+  schedule:
+    - cron: '37 9 * * *'
+  # The same run by hand, to prove a change to this file without waiting for the night.
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # The permissions are the ceiling GitHub requires of a call: it refuses one whose called jobs
+  # ask for more than the caller grants, whether or not they run. Publish's (packages, id-token and
+  # attestations write) reach Publish alone, which never runs off a push; every other called job
+  # keeps ci.yml's contents: read, Deploy none. No secret is passed. No timeout-minutes: GitHub
+  # allows none on a call; each of ci.yml's jobs carries its own.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+  # A red night opens an issue, or comments on the one still open, so it is read rather than lost
+  # in an email. Its token writes issues and nothing else; it checks nothing out and runs no code
+  # of this repository. The lookup lists only the issues this token's app opened: a stranger's
+  # issue titled "Nightly red" is never commented on. `gh issue list --author` matches the bot
+  # as `github-actions[bot]`; `app/github-actions` matches nothing there (gh 2.86.0).
+  report:
+    name: Nightly red
+    needs: ci
+    if: always() && needs.ci.result != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the Nightly red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.ci.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="The nightly CI run ended $RESULT: $RUN_URL"
+          number="$(gh issue list --state open --author 'github-actions[bot]' --limit 200 \
+            --json number,title --jq 'map(select(.title == "Nightly red")) | .[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title 'Nightly red' --body "$body"
+          fi

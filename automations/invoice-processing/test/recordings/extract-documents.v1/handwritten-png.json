@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "3ce84791a7562d98a3432753fb1a120e1ac9826e7f2e655b930468a39dbe5fed",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"invoice\",\"pagesMissing\":false,\"vendorName\":\"NORTHGATE MOWER REPAIR\",\"vendorAddress\":\"18 HILL RD\",\"vendorCity\":\"MILLBROOK NY 12545\",\"storeNumber\":\"\",\"documentNumber\":\"0417\",\"numberLabel\":\"INVOICE NO.\",\"references\":[],\"documentDate\":\"2026-09-03\",\"documentTime\":\"\",\"dueDate\":\"\",\"paymentTermsDays\":15,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":155.50,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"repairs_and_maintenance\",\"lineItems\":[{\"description\":\"TUNE-UP, RIDING MOWER QZ7HND\",\"quantity\":null,\"unitPrice\":null,\"amount\":95.00},{\"description\":\"NEW BLADES (2)\",\"quantity\":2,\"unitPrice\":null,\"amount\":38.00},{\"description\":\"OIL + FILTER\",\"quantity\":null,\"unitPrice\":null,\"amount\":22.50}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

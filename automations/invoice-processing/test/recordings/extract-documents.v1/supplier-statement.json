@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "8bffaf10d2cc6bde50319aa21dc8599cbe2a7e6fa0b7d95f8b5e01068f2f89fc",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"supplier_statement\",\"pagesMissing\":false,\"vendorName\":\"Harrowgate Office Supply\",\"vendorAddress\":\"4100 Sample Road\",\"vendorCity\":\"Springfield, IL 62704\",\"storeNumber\":\"\",\"documentNumber\":\"ST-2609-118\",\"numberLabel\":\"Statement no.\",\"references\":[{\"label\":\"Account\",\"value\":\"SB-0042\"},{\"label\":\"Statement run\",\"value\":\"QZ7STM\"}],\"documentDate\":\"2026-09-30\",\"documentTime\":\"\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":686.54,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"other\",\"lineItems\":[],\"lineItemCount\":0,\"lineItemsComplete\":true,\"listedItems\":[{\"reference\":\"Balance forward\",\"amount\":214.20,\"kind\":\"balance_forward\"},{\"reference\":\"HOS-1031\",\"amount\":380.00,\"kind\":\"invoice\"},{\"reference\":\"PMT-5520\",\"amount\":-214.20,\"kind\":\"payment\"},{\"reference\":\"HOS-1042\",\"amount\":413.34,\"kind\":\"invoice\"},{\"reference\":\"CM-0077\",\"amount\":-203.20,\"kind\":\"credit\"},{\"reference\":\"HOS-1050\",\"amount\":96.40,\"kind\":\"invoice\"}],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

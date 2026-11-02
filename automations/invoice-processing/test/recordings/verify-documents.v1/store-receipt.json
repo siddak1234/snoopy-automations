@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "b55426d791fccfc8b75ba70c54cfb2d8181385d21940c8038a5052cde6c9098d",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"receipt\",\"vendorName\":\"Brightquill Office Mart\",\"documentNumber\":\"448190\",\"documentDate\":\"2026-09-29\",\"dueDate\":\"\",\"currency\":\"\",\"total\":103.86,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"2291\",\"refundMethod\":\"not_applicable\",\"spendType\":\"office_supplies\",\"uncertainFields\":[]}]}"
+}

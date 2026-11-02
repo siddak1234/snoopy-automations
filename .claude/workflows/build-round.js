@@ -45,6 +45,11 @@ export const meta = {
 // through pipeline()'s resolved array (a rejected batch drops that whole); a lane with no record is
 // a gap worded "not known: no stage reported", with what to read before any rerun, never a guess.
 //
+// Round 21 (j): land runs the repository's full local gate (LAND_GATES) under the gate lock
+// before any push and records its counts; a design that finds the task is not a build returns
+// `NOT-A-BUILD <path>` and writes no design.done, so no lane runs, the gap is recorded and
+// hygiene still runs.
+//
 // No backend checkout (Round 21, a flow developer with only snoopy-automations): `backend` and
 // `gateLock` are optional. Without `backend` the hygiene stage reports the kit's quick-hygiene
 // facts from the first lane's clone and removes only what this run started; the machine-wide
@@ -68,6 +73,21 @@ const heavy = input.gateLock
   : `Heavy steps (npm ci, verify, a whole test run, Docker, local-ci): if ${INSTALLED_LOCK} ` +
     `exists, they ${between(`node ${INSTALLED_LOCK}`)}; if it does not, run one heavy step at ` +
     `a time in this lane.`;
+/**
+ * Each repository's full local gate, run at land under the gate lock BEFORE any push, its counts
+ * recorded (Round 21, j: the backend's pushed on a gate a lane had not run). Unknown repos: verify.
+ */
+const LAND_GATES = {
+  'snoopy-backend': '`CI=true npm run verify`',
+  snoopy:
+    '`npm run verify`, the change audit (.claude/agents/change-auditor.md) and ' +
+    '`node scripts/audit/record-pass.mjs`',
+  'snoopy-mobile': '`CI=1 npm run verify && npm run audit:dependencies`',
+  'snoopy-automations': '`npm run verify`',
+};
+const landGate = (repo) => LAND_GATES[repo] ?? '`npm run verify`';
+/** A design that finds no build to do returns this, a path after it, and writes no design.done. */
+const NOT_A_BUILD = 'NOT-A-BUILD';
 const VERDICT = {
   type: 'object',
   properties: {
@@ -168,6 +188,7 @@ const review = (lane) =>
   );
 
 let designed = null;
+let notABuild = false;
 /** By lane index: { verdict } once the review stage finishes, plus `landed` once land does. */
 const record = [];
 let hygiene = null;
@@ -177,13 +198,20 @@ try {
   designed = await once('design', (retry) =>
     agent(
       `${retry}Design this round: ${task}. Lanes: ${lanes.map((l) => `${l.repo} at ${l.clone}`).join('; ')}. ` +
-        `Write the plan to ${runDir}/plan.md and one brief per lane to ${runDir}/brief-<repo>.md ` +
+        `First decide whether the task is a build (a change to make). If it is not — a question, ` +
+        `a list, a status read — write no plan, no brief and no design.done: write 2 KB or less ` +
+        `saying why to ${runDir}/design.summary.md and return only \`${NOT_A_BUILD} <that path>\`. ` +
+        `Otherwise write the plan to ${runDir}/plan.md and one brief per lane to ${runDir}/brief-<repo>.md ` +
         `(the files it may open, the tests that must bite, the gate), then ${runDir}/design.done. ` +
         `${summary('design')}`,
       { label: 'design', phase: 'Design', agentType: 'builder', model: 'opus', effort: 'high' },
     ),
   );
-  if (designed) {
+  // A task that is not a build runs no lane; the gap says so and hygiene still runs (Round 21, j).
+  notABuild = typeof designed === 'string' && designed.trim().startsWith(NOT_A_BUILD);
+  if (notABuild) {
+    gaps.push(`design: ${designed.trim()}; the task is not a build, so no lane ran`);
+  } else if (designed) {
     await inBatches(
       lanes,
       async (lane) => ({ lane, built: await build(lane) }),
@@ -213,8 +241,10 @@ try {
           `land ${lane.repo}`,
           (retry) =>
             agent(
-              `${retry}Land ${lane.clone}: the repository's full local gate once, on the committed tree ` +
-                `(snoopy-backend: none here — the Mac runner's local CI runs it on the push), then ` +
+              `${retry}Land ${lane.clone}: BEFORE any push, the repository's full local gate once, ` +
+                `on the committed tree: ${landGate(lane.repo)}. ${heavy} Write the HEAD sha and ` +
+                `the gate's pass, fail and skipped counts in the summary, and push only when it is ` +
+                `green for that same HEAD (a moved HEAD runs it again). Then ` +
                 `a normal push (never --no-verify), one PR whose body ends with ` +
                 `"🤖 Generated with [Claude Code](https://claude.com/claude-code)", then the required ` +
                 `check. Mark it ready only when it is green on the head. ${summary(`land-${lane.repo}`)}`,
@@ -274,7 +304,8 @@ lanes.forEach((lane, i) => {
   const read =
     `read \`git -C ${lane.clone} status -sb\` and \`gh pr list --head ` +
     `"$(git -C ${lane.clone} branch --show-current)" --state all\` before any rerun`;
-  if (designed && !item) gaps.push(`${lane.repo}: not known: no stage reported; ${read}`);
+  if (designed && !notABuild && !item)
+    gaps.push(`${lane.repo}: not known: no stage reported; ${read}`);
   else if (item?.verdict?.verdict === 'PASS' && item.landed === undefined)
     gaps.push(`${lane.repo}: land not known: no stage reported after its PASS; ${read}`);
   log(`${lane.repo}: ${item?.verdict?.verdict ?? 'no verdict'}, landed ${item?.landed ?? 'no'}`);

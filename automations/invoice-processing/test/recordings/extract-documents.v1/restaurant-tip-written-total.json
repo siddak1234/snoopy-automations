@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "11142429515836d085e62779702a5771e0a1d81d7ae0461174dc33be7fbd5709",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"Juniperwick Bistro\",\"vendorAddress\":\"75 Orchard Lane\",\"vendorCity\":\"Anytown, NY 12000\",\"storeNumber\":\"\",\"documentNumber\":\"0451\",\"numberLabel\":\"Order #\",\"references\":[{\"label\":\"Table\",\"value\":\"12\"},{\"label\":\"Table survey\",\"value\":\"QZ7RTW\"}],\"documentDate\":\"2026-09-19\",\"documentTime\":\"13:22\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":42.00,\"tax\":3.47,\"shipping\":null,\"discount\":null,\"total\":54.47,\"amountDue\":null,\"tip\":9.00,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"8812\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"meals\",\"lineItems\":[{\"description\":\"Grilled salmon\",\"quantity\":null,\"unitPrice\":null,\"amount\":24.00},{\"description\":\"Mushroom risotto\",\"quantity\":null,\"unitPrice\":null,\"amount\":18.00}],\"lineItemCount\":2,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

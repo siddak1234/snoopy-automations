@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "bae00d161cd9e745d9959103c388547875aee99f00ee8eecfb6f46f446fe85ac",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"invoice\",\"vendorName\":\"Harrowgate Office Supply\",\"documentNumber\":\"HOS-1042\",\"documentDate\":\"2026-09-14\",\"dueDate\":\"2026-10-14\",\"currency\":\"USD\",\"total\":413.34,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"office_supplies\",\"uncertainFields\":[]}]}"
+}

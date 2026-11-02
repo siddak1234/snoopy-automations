@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "228f10abbf38ce6d8279e2bb73ed3e9fb4a52de65a25ce3706dda4594a022065",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"Bramblewick Market\",\"vendorAddress\":\"18 Bramble Street\",\"vendorCity\":\"Anytown, PA 19000\",\"storeNumber\":\"\",\"documentNumber\":\"20714\",\"numberLabel\":\"Receipt #\",\"references\":[{\"label\":\"Lane\",\"value\":\"4\"},{\"label\":\"cashier\",\"value\":\"11\"},{\"label\":\"Rewards card\",\"value\":\"QZ7CBK\"}],\"documentDate\":\"2026-09-26\",\"documentTime\":\"08:12\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":76.87,\"tax\":0.00,\"shipping\":null,\"discount\":null,\"total\":76.87,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":true,\"paymentMethod\":\"card\",\"cardLast4\":\"7731\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"materials\",\"lineItems\":[{\"description\":\"Flour, all-purpose, 25 lb\",\"quantity\":null,\"unitPrice\":null,\"amount\":18.99},{\"description\":\"Sugar, granulated, 10 lb\",\"quantity\":null,\"unitPrice\":null,\"amount\":11.49},{\"description\":\"Butter, unsalted, 4 lb\",\"quantity\":null,\"unitPrice\":null,\"amount\":17.96},{\"description\":\"Eggs, large, 5 dozen\",\"quantity\":null,\"unitPrice\":null,\"amount\":15.45},{\"description\":\"Vanilla extract, 16 oz\",\"quantity\":null,\"unitPrice\":null,\"amount\":12.98}],\"lineItemCount\":5,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

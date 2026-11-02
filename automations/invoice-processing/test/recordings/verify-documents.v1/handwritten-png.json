@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "3ce84791a7562d98a3432753fb1a120e1ac9826e7f2e655b930468a39dbe5fed",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"invoice\",\"vendorName\":\"Northgate Mower Repair\",\"documentNumber\":\"0417\",\"documentDate\":\"2026-09-03\",\"dueDate\":\"\",\"currency\":\"\",\"total\":155.5,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"repairs_and_maintenance\",\"uncertainFields\":[]}]}"
+}

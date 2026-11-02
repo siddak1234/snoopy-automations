@@ -113,7 +113,12 @@ test('scaffold writes a frame that typechecks, passes its own tests and the gate
   assert.equal(todos.match(/test\.todo\(/gu)?.length, 2, 'one per §9 row');
 
   run(bin('tsc'), ['--noEmit', '-p', 'tsconfig.test.json'], flow);
-  const tests = run(bin('tsx'), ['--test', 'test/spec.test.ts', 'test/drill.test.ts'], flow);
+  // TAP by name, never the runner's default (Node 23+ prints spec off a TTY), as every test script does.
+  const tests = run(
+    bin('tsx'),
+    ['--test', '--test-reporter=tap', 'test/spec.test.ts', 'test/drill.test.ts'],
+    flow,
+  );
   assert.match(tests, /# pass 1\n/u, tests);
   assert.match(tests, /# todo 2\n/u, tests);
   assert.match(tests, /# fail 0\n/u, tests);

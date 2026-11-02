@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "188606586675c97b331dcfcf747895711ac8e7f3e0e136b73487d32c5bc62f69",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"invoice\",\"pagesMissing\":false,\"vendorName\":\"Bluefinch Print & Sign\",\"vendorAddress\":\"9 Market Row\",\"vendorCity\":\"Fairview, TX 75069\",\"storeNumber\":\"\",\"documentNumber\":\"BPS-2207\",\"numberLabel\":\"Invoice\",\"references\":[],\"documentDate\":\"2026-09-03\",\"documentTime\":\"\",\"dueDate\":\"2026-10-03\",\"paymentTermsDays\":30,\"currency\":\"\",\"subtotal\":278.5,\"tax\":22.98,\"shipping\":null,\"discount\":null,\"total\":301.48,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"advertising\",\"lineItems\":[{\"description\":\"Vinyl banner 3 x 8 ft, full color, QZ7PHO\",\"quantity\":null,\"unitPrice\":null,\"amount\":128.0},{\"description\":\"Business cards, 500, matte\",\"quantity\":null,\"unitPrice\":null,\"amount\":64.0},{\"description\":\"A-frame sign insert, 2 sided\",\"quantity\":null,\"unitPrice\":null,\"amount\":86.5}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

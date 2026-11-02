@@ -264,7 +264,8 @@
       "mediaTypeLength": 255,
       "artifactBytes": 104857600,
       "pdfPages": 1000,
-      "imageSidePixels": 20000
+      "imageSidePixels": 20000,
+      "bytes": 262144
     },
     "runInput": {
       "filesPerSelection": 200,

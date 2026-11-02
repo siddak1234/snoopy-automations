@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "6444537f059a4dabdd98f9abe96ef509e41b0f347033a5b33c9fa3127604a87e",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"receipt\",\"vendorName\":\"Wrenfield & Pike Bookkeeping\",\"documentNumber\":\"LH-2609\",\"documentDate\":\"2026-09-30\",\"dueDate\":\"\",\"currency\":\"\",\"total\":480.00,\"amountDue\":0,\"cashBackPrinted\":false,\"paymentMethod\":\"check\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"professional_services\",\"uncertainFields\":[]}]}"
+}

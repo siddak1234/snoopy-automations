@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "8bffaf10d2cc6bde50319aa21dc8599cbe2a7e6fa0b7d95f8b5e01068f2f89fc",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"supplier_statement\",\"vendorName\":\"Harrowgate Office Supply\",\"documentNumber\":\"ST-2609-118\",\"documentDate\":\"2026-09-30\",\"dueDate\":\"\",\"currency\":\"\",\"total\":686.54,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[]}]}"
+}

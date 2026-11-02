@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "082a5f452fe231ceeceb70569e31fd77fd71ca54f48bd9bd697a6513235f11b3",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"invoice\",\"vendorName\":\"Pinecrest Janitorial Services\",\"documentNumber\":\"PJS-0388\",\"documentDate\":\"2026-09-22\",\"dueDate\":\"\",\"currency\":\"\",\"total\":1115.55,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"other\",\"uncertainFields\":[]}]}"
+}

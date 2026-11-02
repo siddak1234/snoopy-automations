@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "feb75bd74bbfae23cc5fdb3956fd1c58ba69b34ddcfae73f15e5aaf11d9e4644",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"credit_note\",\"pagesMissing\":false,\"vendorName\":\"Tidewell Hardware\",\"vendorAddress\":\"501 Harbor Street\",\"vendorCity\":\"Portside, ME 04101\",\"storeNumber\":\"\",\"documentNumber\":\"R-6603\",\"numberLabel\":\"Return #\",\"references\":[{\"label\":\"Orig rcpt\",\"value\":\"55120\"},{\"label\":\"Return code\",\"value\":\"QZ7RFD\"}],\"documentDate\":\"2026-10-02\",\"documentTime\":\"10:05\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":-22.48,\"tax\":-1.24,\"shipping\":null,\"discount\":null,\"total\":-23.72,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"4417\",\"refundMethod\":\"refund_to_card\",\"originalInvoiceNumber\":\"55120\",\"spendType\":\"materials\",\"lineItems\":[{\"description\":\"Hose nozzle, 8 pattern\",\"quantity\":null,\"unitPrice\":null,\"amount\":-9.49},{\"description\":\"Work gloves, large\",\"quantity\":null,\"unitPrice\":null,\"amount\":-12.99}],\"lineItemCount\":2,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

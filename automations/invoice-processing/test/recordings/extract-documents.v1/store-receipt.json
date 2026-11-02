@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "b55426d791fccfc8b75ba70c54cfb2d8181385d21940c8038a5052cde6c9098d",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"Brightquill Office Mart\",\"vendorAddress\":\"220 Commerce Way\",\"vendorCity\":\"Anytown, MN 56000\",\"storeNumber\":\"0214\",\"documentNumber\":\"448190\",\"numberLabel\":\"Trans #\",\"references\":[{\"label\":\"Register\",\"value\":\"3\"},{\"label\":\"AUTH\",\"value\":\"004512\"},{\"label\":\"Rewards\",\"value\":\"QZ7STR\"}],\"documentDate\":\"2026-09-29\",\"documentTime\":\"11:04\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":97.52,\"tax\":6.34,\"shipping\":null,\"discount\":null,\"total\":103.86,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"2291\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"office_supplies\",\"lineItems\":[{\"description\":\"Printer paper, case\",\"quantity\":null,\"unitPrice\":null,\"amount\":52.99},{\"description\":\"Gel pens, black 12pk\",\"quantity\":null,\"unitPrice\":null,\"amount\":11.49},{\"description\":\"Shipping labels 120ct\",\"quantity\":null,\"unitPrice\":null,\"amount\":18.75},{\"description\":\"Stapler, desktop\",\"quantity\":null,\"unitPrice\":null,\"amount\":14.29}],\"lineItemCount\":4,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

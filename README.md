@@ -188,7 +188,7 @@ picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest
 
 **Platform round 2: a bigger dropdown, several files, a grouped review, a public provider, a flow's
 memory and batch intake** (the platform's ADR-0048 amendments 3 and 4, 2026-11-01; `contract/`
-carries them at snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
+carries them since snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
 objects, up to 1,000 (`SelectOption`; `optionValues`, and `chosenOptions` reads values). A run-input
 `artifact` field with `multiple` puts up to its `maxFiles` (1 to 200, default 50; `RUN_INPUT_LIMITS`,
 `maxFilesOf`) files into ONE run, and `artifactIdsOf(input, key)` reads its list. A held decision may
@@ -719,7 +719,9 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    (its own pull request here, first: `.claude/skills/create-flow/templates/order.md`, step 2); or
    **stop**, a platform change. It writes the
    spec, `automations/<id>/README.md`, and `words.md` for the owner's approval.
-2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7, then
+2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7 — at most the menu's
+   `limits.manifest.bytes` as committed, its whitespace counted (`contract/` carries it since
+   snoopy-backend d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then
    **`npm run scaffold -- <id>`** (`scripts/scaffold.mjs`): the folder from `templates/automation/`,
    its lockfile and the root lock's entry, `automations/<id>/src/automation.ts` on `defineFlow`, one typed stub per
    step (`src/steps/<step>.ts`, "Not built yet"), one prompt stub per capability, one `test.todo` per
@@ -782,6 +784,34 @@ npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gat
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
 ```
 
-Node 22 or newer. Agent sessions read `CLAUDE.md` first. The committed facts file
+A test that skips or is left todo fails the gate: `scripts/no-skipped-tests.mjs` runs `npm test`
+and reads its TAP for a `# skipped` or `# todo` count above 0, and CI's Verify reads its whole log
+the same way. Every `tsx --test` script names the TAP reporter (`--test-reporter=tap`; a new flow's
+from the template's), and output with no TAP summary (`# tests N`) fails too: Node's default
+reporter is no contract (the script's header). So a flow just scaffolded is red until each §9
+`test.todo` is written.
+
+**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
+— Verify, and every flow's image built, smoke-tested and scanned
+with that night's advisories — and publishes and deploys nothing: `all-green` accepts Publish's and
+Deploy's skip off a push. A red night opens a "Nightly red" issue, or comments on the one it opened
+that is still open (never one someone else opened with that title), from a job that can write issues
+and nothing else. The schedule has a file of its own because GitHub disables a public repository's
+scheduled workflow after 60 days without activity: that stops the nightly alone, never the merge
+gate. Turn it back on with `gh workflow enable nightly.yml`.
+
+**Pinned base images.** Each flow's Dockerfile, and the template's, names one Node release by exact
+tag and multi-arch index digest in one FROM, its first (`AS base`), and every other stage builds
+`FROM base`: Dependabot updates only a Dockerfile's first FROM ([GitHub's docs](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/guidance-for-the-configuration-of-private-registries-for-dependabot),
+Docker). The release is written there alone (any `automations/*/Dockerfile` names it), so the
+bytes CI scanned are the bytes Flow CD ships; `test/pins.test.ts` refuses a FROM by tag alone, a
+second FROM naming an image, and two Dockerfiles that differ. Dependabot's weekly docker
+group (`.github/dependabot.yml`) moves them all in one pull request, which needs no doc (CLAUDE.md,
+"Docs always updated"; no Dockerfile here is in a docs rule); a Node major is moved by hand.
+`.nvmrc` names the same release, and CI installs Node from it (`node-version-file: .nvmrc`), as the
+other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
+until `.nvmrc` moves with it.
+
+Node: the release `.nvmrc` names (`nvm use`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

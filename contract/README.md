@@ -1,7 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `10b5fae` (snoopy-backend 10b5fae (#256), the platform's `main` after its #256
+(`snoopy-backend`, private) at commit `d9297bc` (snoopy-backend d9297bc (#259), the platform's `main`
+after its #259 squash-merged Round 21's manifest byte limit, its §12.1 #319; all eleven files
+`cmp`-equal to it; 2026-11-02, "Refreshed 2026-11-02, the manifest byte limit" below). Before it,
+`10b5fae` (snoopy-backend 10b5fae (#256), the platform's `main` after its #256
 squash-merged Round 21's platform round 2, ADR-0048 amendments 3 and 4; first copied at its branch
 head `d9f7fe2`, all eleven files `cmp`-equal to both; 2026-11-01, "Refreshed 2026-11-01, platform
 round 2" below). Before it, `27c3051` (snoopy-backend 27c3051 (#255), the platform's
@@ -460,6 +463,17 @@ recording double's answers in `testing-batch.ts` — held to these schemas and t
 the SDK's `contract-v2.test.ts`. A flow pulls these in only after the platform's
 merge and both clients ship (amendment 3's "Keeps").
 
+Refreshed 2026-11-02, the manifest byte limit, from snoopy-backend d9297bc (#259, its §12.1 #319),
+the platform's `main`, merged and live (the merge is the deploy). One file moved; all eleven are
+`cmp`-equal to `d9297bc` (each copied with `git show d9297bc:schemas/<file>`):
+
+- `platform-menu.json`: `limits.manifest.bytes`, 262144; what it bounds and the refusal's words are
+  in "What the platform refuses beyond the schema", **Size, before the validator**.
+
+The other ten files are byte-identical to `10b5fae`'s. `test/conformance.test.ts` holds every
+`manifests/*.json`, as committed, to the menu's `limits.manifest.bytes`, read from this copy, and
+`/create-flow`'s spec and review templates name the limit.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -471,10 +485,16 @@ enforces these further rules at registration, and its result callback those for 
 blocks, quoted in its own refusal words so a refusal is read here before it is received. This
 section is vendored from the platform's `snoopy-backend/manifests/README.md` (ADR-0020 §2); bounds
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
-at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`, and
+at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`,
 amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
-decision's `group`, the `memory` capability) at `10b5fae`, its file paths written from
-`snoopy-backend/`.
+decision's `group`, the `memory` capability) at `10b5fae`, and "Size, before the validator" at
+`d9297bc`, its file paths written from `snoopy-backend/`.
+
+**Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
+of the committed file, counted as committed (pretty-printed JSON, its
+whitespace included), and refuses more with "the manifest is over 256 KiB" before the
+validator runs. The one home is `FLOW_MANIFEST_BYTES` in `snoopy-backend/deploy/host-deploy.sh`;
+`schemas/platform-menu.json` publishes it (snoopy-backend §12.1 #319).
 
 **Identifiers** — `templateId`, `requiredConnections[].providerId`, `pipeline[].id`:
 "must be lowercase letters, digits, and hyphens, starting with a letter", within the id

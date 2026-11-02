@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "187da1e4ca576bbb04c56830c50a8b66132215f6c58763e6771f410a36b3bc0b",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"receipt\",\"pagesMissing\":false,\"vendorName\":\"Tidewell Hardware\",\"vendorAddress\":\"501 Harbor Street\",\"vendorCity\":\"Portside, ME 04101\",\"storeNumber\":\"\",\"documentNumber\":\"55120\",\"numberLabel\":\"Receipt #\",\"references\":[{\"label\":\"Register\",\"value\":\"2\"},{\"label\":\"cashier\",\"value\":\"07\"}],\"documentDate\":\"2026-09-27\",\"documentTime\":\"14:32\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":57.47,\"tax\":3.16,\"shipping\":null,\"discount\":null,\"total\":60.63,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"card\",\"cardLast4\":\"4417\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"other\",\"lineItems\":[{\"description\":\"Garden hose, 50 ft\",\"quantity\":null,\"unitPrice\":null,\"amount\":34.99},{\"description\":\"Hose nozzle, 8 pattern\",\"quantity\":null,\"unitPrice\":null,\"amount\":9.49},{\"description\":\"Work gloves, large\",\"quantity\":null,\"unitPrice\":null,\"amount\":12.99}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

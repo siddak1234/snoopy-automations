@@ -113,7 +113,8 @@ Four step groups — Received, Read, Checked, Done — over 22 steps. Each promp
 fields typed with a union, Anthropic's limit for structured outputs: a text not printed is `""`,
 no next part `0`. A PDF may have any number of pages (the page cap dropped, AM1 and AM7; an
 image's 8,000 px kept, the size the models take). v2's recordings were made for v2's prompts and
-are removed with them; v3's are still to be made (`automations/invoice-processing/scripts/recording-request.ts`). The
+were removed with them; v3's 50 were made 2026-11-02 (`automations/invoice-processing/scripts/recording-request.ts`;
+below). The
 platform's Build 21 contract merged as `69b8d97` (`contract/README.md`). What follows describes
 v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, and v4's above it.
 
@@ -276,14 +277,16 @@ answer, timeline line or reason may carry; `npm run samples` (in the automation)
 again and rewrites a file only when what it draws changes. Each sample is recorded twice, by
 two agents blind to each other: read 1 — an agent acting as the model, given exactly what
 `npm run recording-request` prints for a sample — in
-`test/recordings/extract-document.v1/<sample>.json`, and read 2, given what
-`npm run recording-request -- --read 2` prints, in `test/recordings/verify-document.v1/`;
+`test/recordings/extract-documents.v1/<sample>.json`, and read 2, given what
+`npm run recording-request -- --read 2` prints, in `test/recordings/verify-documents.v1/`;
 the loader refuses one made for another prompt or version, or other prompt or sample bytes.
-All 50 are recorded — read 1 by agents on `claude-opus-5-5`, read 2 on `claude-sonnet-5-5`,
-each given only its read's request and the document under a neutral file name — and the tests
-over them run each pair through steps 1–8 with the model answering as recorded, check-document,
-read 2's comparison and decide (the vendor matched, nothing found): the sample's marker reaches
-no line, sentence, reason or saved data. `automations/invoice-processing/test/planted-marker.test.ts` plants each marker in
+All 50 for v3's prompts were made 2026-11-02 — read 1 by agents on `claude-opus-5-5`, read 2 on
+`claude-sonnet-5-5`, each given only its read's request and the document under a neutral file
+name. Each directory must hold exactly one recording per sample: a missing one fails the tests
+over them, never skips them. The tests over them run each pair through steps 1–8 with the model
+answering as recorded (the 300-line sample's read 1 goes on past its one recorded part, and the
+part after it is answered as done), check-document, read 2's comparison and decide (the vendor
+matched, nothing found): the sample's marker reaches no line, sentence, reason or saved data. `automations/invoice-processing/test/planted-marker.test.ts` plants each marker in
 every field the code reads but never passes on — read 1's currency, card digits, dates and
 listed references (not a statement's, which are carried), read 2's currency, card digits and
 dates — on every path, held and straight through — and `automations/invoice-processing/test/writes-marker.test.ts` takes each
