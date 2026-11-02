@@ -1,0 +1,9 @@
+{
+  "promptId": "extract-documents",
+  "promptVersion": 1,
+  "promptSha256": "53a78a0badd758dc60e55c3eef46f56ede976c818d94c660b24d65827ae22b7b",
+  "fileSha256": "0bcf84b90c518cc1416ec585f24d94c470dd4f46010d172b3a89f8ff6dcee234",
+  "recordedBy": "claude-opus-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"documentType\":\"bank_statement\",\"pagesMissing\":false,\"vendorName\":\"Larkspur Example Bank\",\"vendorAddress\":\"Card Services, PO Box 0100\",\"vendorCity\":\"Larkspur, CA 94939\",\"storeNumber\":\"\",\"documentNumber\":\"QZ7BNK\",\"numberLabel\":\"Statement code\",\"references\":[{\"label\":\"Account\",\"value\":\"Visa ending 4417\"}],\"documentDate\":\"2026-09-25\",\"documentTime\":\"\",\"dueDate\":\"\",\"paymentTermsDays\":null,\"currency\":\"\",\"subtotal\":null,\"tax\":null,\"shipping\":null,\"discount\":null,\"total\":520.71,\"amountDue\":null,\"tip\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"originalInvoiceNumber\":\"\",\"spendType\":\"other\",\"lineItems\":[{\"description\":\"TIDEWELL HARDWARE PORTSIDE ME\",\"quantity\":null,\"unitPrice\":null,\"amount\":60.63},{\"description\":\"BLUEFINCH PRINT & SIGN\",\"quantity\":null,\"unitPrice\":null,\"amount\":298.53},{\"description\":\"RIDGEWICK FUEL STOP\",\"quantity\":null,\"unitPrice\":null,\"amount\":49.15}],\"lineItemCount\":3,\"lineItemsComplete\":true,\"listedItems\":[],\"listedItemsComplete\":true,\"uncertainFields\":[]}],\"nextDocument\":0,\"nextLine\":0}"
+}

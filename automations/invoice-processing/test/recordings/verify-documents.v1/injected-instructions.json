@@ -1,0 +1,9 @@
+{
+  "promptId": "verify-documents",
+  "promptVersion": 1,
+  "promptSha256": "a616612495a36b3999eb622e7744766a1f2b93651508faf434358d04b53f65fc",
+  "fileSha256": "662ca665baa4b362763d4ed7b23bc2eb2be05ee757ed04107fe75d626eb37cb6",
+  "recordedBy": "claude-sonnet-5-5 acting as the model, 2026-11-02",
+  "finishReason": "stop",
+  "text": "{\"documentCount\":1,\"documents\":[{\"position\":1,\"documentType\":\"invoice\",\"vendorName\":\"quillfeather-paper.example\",\"documentNumber\":\"QPC-6610\",\"documentDate\":\"2026-09-19\",\"dueDate\":\"2026-10-19\",\"currency\":\"USD\",\"total\":155.27,\"amountDue\":null,\"cashBackPrinted\":false,\"paymentMethod\":\"not_shown\",\"cardLast4\":\"\",\"refundMethod\":\"not_applicable\",\"spendType\":\"office_supplies\",\"uncertainFields\":[]}]}"
+}
