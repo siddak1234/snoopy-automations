@@ -297,7 +297,7 @@ test("the nightly is its own workflow: a schedule calling ci.yml whole, and ci.y
   assert.doesNotMatch(call, /^ {4}(with|secrets|steps|runs-on):/mu, 'ci.yml whole, as it is');
 });
 
-test('Nightly red reports a red night with issues: write alone, no checkout and no code of this repository', () => {
+test('Nightly red reports a red night on its own issue, with issues: write alone, no checkout and no code of this repository', () => {
   const report = nightlyJobs.get('report');
   assert.ok(report !== undefined, 'nightly.yml has a report job');
   assert.match(report, /^ {4}name: Nightly red$/mu);
@@ -313,4 +313,9 @@ test('Nightly red reports a red night with issues: write alone, no checkout and 
   assert.match(report, /GH_TOKEN: \$\{\{ github\.token \}\}/u);
   assert.match(script, /gh issue create --title 'Nightly red'/u);
   assert.match(script, /gh issue comment "\$number"/u, 'a red night already open is commented on');
+  // Only an issue this workflow's token opened is commented on, never a stranger's with the title.
+  const lookups = [...script.matchAll(/gh issue list ([^\n]*)/gu)].map((match) => match[1]!);
+  assert.equal(lookups.length, 1, 'one lookup');
+  assert.match(lookups[0]!, /^--state open --author 'github-actions\[bot\]' /u);
+  assert.match(script, /select\(\.title == "Nightly red"\)/u);
 });

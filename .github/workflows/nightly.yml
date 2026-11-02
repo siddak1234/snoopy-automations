@@ -32,7 +32,9 @@ jobs:
 
   # A red night opens an issue, or comments on the one still open, so it is read rather than lost
   # in an email. Its token writes issues and nothing else; it checks nothing out and runs no code
-  # of this repository.
+  # of this repository. The lookup lists only the issues this token's app opened: a stranger's
+  # issue titled "Nightly red" is never commented on. `gh issue list --author` matches the bot
+  # as `github-actions[bot]`; `app/github-actions` matches nothing there (gh 2.86.0).
   report:
     name: Nightly red
     needs: ci
@@ -50,8 +52,8 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           body="The nightly CI run ended $RESULT: $RUN_URL"
-          number="$(gh issue list --state open --limit 200 --json number,title \
-            --jq 'map(select(.title == "Nightly red")) | .[0].number // empty')"
+          number="$(gh issue list --state open --author 'github-actions[bot]' --limit 200 \
+            --json number,title --jq 'map(select(.title == "Nightly red")) | .[0].number // empty')"
           if [ -n "$number" ]; then
             gh issue comment "$number" --body "$body"
           else
