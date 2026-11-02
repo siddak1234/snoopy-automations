@@ -58,6 +58,35 @@ test('the script fails a run that skipped or left a test todo, naming the count,
   }
   // A red run stays red with its own status.
   assert.equal(run(clean, 3).status, 3);
+  // A command that cannot start is red, 1, not the status of the close that follows the error.
+  const unstarted = spawnSync(process.execPath, [script, 'no-such-command-a2'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(unstarted.status, 1, unstarted.stderr);
+  assert.match(unstarted.stderr, /no-such-command-a2 could not start/u);
+});
+
+test('a slow reader gets the whole output, a refusal’s too: the script never calls process.exit', () => {
+  // 1 MiB, then a skipped count. The reader waits a second before it reads, so the script's
+  // writes queue behind a full pipe; process.exit would drop them (a pipe is written
+  // asynchronously on macOS).
+  const tail = `\n${clean.replace('# skipped 0', '# skipped 1')}`;
+  const program = `process.stdout.write('x'.repeat(${2 ** 20}) + ${JSON.stringify(tail)})`;
+  const piped = spawnSync(
+    '/bin/sh',
+    [
+      '-c',
+      '{ "$0" "$1" "$0" -e "$2"; echo "status $?" >&2; } | { sleep 1; wc -c; }',
+      process.execPath,
+      script,
+      program,
+    ],
+    { cwd: repositoryRoot, encoding: 'utf8', timeout: 60_000 },
+  );
+  assert.equal(Number(piped.stdout.trim()), 2 ** 20 + Buffer.byteLength(tail), piped.stderr);
+  assert.match(piped.stderr, /a test did not run \(skipped 1\)/u);
+  assert.match(piped.stderr, /^status 1$/mu);
 });
 
 /** The same run as `clean`, as Node's spec reporter prints it, with one test skipped. */

@@ -29,25 +29,32 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     process.stdout.write(chunk);
     output += chunk;
   });
+  // Every outcome sets process.exitCode and returns, never process.exit: Node then exits once
+  // stdout has drained, so piped output is never cut.
+  let started = true;
   child.on('error', (error) => {
+    started = false;
     console.error(`no-skipped-tests: ${command} could not start: ${error.message}`);
-    process.exit(1);
+    process.exitCode = 1;
   });
   child.on('close', (code, signal) => {
+    if (!started) return;
     if (code !== 0) {
       if (signal) console.error(`no-skipped-tests: ${command} was killed by ${signal}`);
-      process.exit(code ?? 1);
+      process.exitCode = code ?? 1;
+      return;
     }
     if (!summarized(output)) {
       console.error(
         'no-skipped-tests: no TAP summary (`# tests N`) in the output, so no count can be read: run each `tsx --test` with --test-reporter=tap',
       );
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     const found = unrun(output);
     if (found) {
       console.error(`no-skipped-tests: a test did not run (${found}): make it run, or remove it`);
-      process.exit(1);
+      process.exitCode = 1;
     }
   });
 }
