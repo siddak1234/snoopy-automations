@@ -10,9 +10,9 @@ import { test } from 'node:test';
  * with no GITHUB_TOKEN permission and no code of this repository; Publish attesting each
  * digest after both scans and before the tag, and holding the attestation permissions
  * alone; every matrix List's, never typed by hand; every action pinned by SHA;
- * all-green seeing every job; and the nightly, its own workflow calling ci.yml whole, a red
- * night reported by a job that can write issues alone (Round 21 hardening, NIGHT-8). The text is
- * read block by block, with no YAML library.
+ * all-green seeing every job; every job but a call held to a time limit; and the nightly, its own
+ * workflow calling ci.yml whole, a red night reported by a job that can write issues alone (Round
+ * 21 hardening, NIGHT-8). The text is read block by block, with no YAML library.
  */
 
 const workflowsRoot = resolve(import.meta.dirname, '..', '.github', 'workflows');
@@ -249,6 +249,19 @@ test('all-green needs every job, and lets only Publish and Deploy skip off a pus
     /elif \[ "\$job" = image \] && \[ "\$IMAGES" = '\[\]' \] && \[ "\$EVENT_NAME" = pull_request \]; then/u,
   );
   assert.match(job('image'), /^ {4}if: \$\{\{ needs\.list\.outputs\.images != '\[\]' \}\}$/mu);
+});
+
+test('every job has a time limit but the nightly’s call to ci.yml, which GitHub allows none', () => {
+  let calls = 0;
+  for (const file of workflowFiles) {
+    for (const [id, block] of jobs(read(file))) {
+      const call = /^ {4}uses: /mu.test(block);
+      if (call) calls += 1;
+      const limit = /^ {4}timeout-minutes: [1-9]\d*$/mu.test(block);
+      assert.equal(limit, !call, `${file}:${id} ${call ? 'is a call' : 'has no time limit'}`);
+    }
+  }
+  assert.equal(calls, 1, 'the nightly’s call');
 });
 
 test('Verify fails when a test skipped or was left todo, reading the whole log', () => {

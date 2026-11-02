@@ -25,6 +25,10 @@ on:
 permissions:
   contents: read
 
+# Each job's timeout-minutes: about twice its longest of 20 green runs (2026-10-26 to 11-02,
+# `gh run view --json jobs`: List 8 s, Verify 153 s, Image 62 s, Publish 93 s, all-green 4 s),
+# rounded up to a minute, 5 at least, so a hung job fails in minutes, not after GitHub's 360.
+# Deploy waits on Flow CD (1030 s at most) and keeps its 90.
 jobs:
   # The automations, read from the tree: every folder under automations/ with a
   # Dockerfile, as a JSON list. Publish takes its matrix from it, so a new automation is
@@ -82,6 +86,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-24.04
+    timeout-minutes: 6
     steps:
       # The whole history, so `npm run check:docs` can read every commit since the
       # base it is given in DOCS_BASE (the pull request's base branch; `main` on a push or
@@ -164,6 +169,7 @@ jobs:
     needs: list
     if: ${{ needs.list.outputs.images != '[]' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -239,6 +245,7 @@ jobs:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [list, verify, image]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
