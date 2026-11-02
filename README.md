@@ -791,8 +791,8 @@ from the template's), and output with no TAP summary (`# tests N`) fails too: No
 reporter is no contract (the script's header). So a flow just scaffolded is red until each §9
 `test.todo` is written.
 
-**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`,
-`.github/workflows/nightly.yml`) — Verify, and every flow's image built, smoke-tested and scanned
+**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
+— Verify, and every flow's image built, smoke-tested and scanned
 with that night's advisories — and publishes and deploys nothing: `all-green` accepts Publish's and
 Deploy's skip off a push. A red night opens a "Nightly red" issue, or comments on the one it opened
 that is still open (never one someone else opened with that title), from a job that can write issues

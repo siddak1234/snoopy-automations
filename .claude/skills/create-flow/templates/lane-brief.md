@@ -10,7 +10,7 @@ its own lane and pull request from this brief, naming only `packages/automation-
 merged before the flow's lane starts (order.md, step 2).
 
 Clone: `<scratch>/clones/snoopy-automations`, branch `round-<n>/<topic>` from `origin/main` at
-`<sha>`. Node: the release `.nvmrc` names, in every shell (`export PATH=$HOME/.nvm/versions/node/v$(cat .nvmrc)/bin:$PATH`).
+`<sha>`. Node: the release `.nvmrc` names, in every shell, after `cd` into the clone (`export PATH=$HOME/.nvm/versions/node/v$(cat .nvmrc)/bin:$PATH`; outside the clone `.nvmrc` is not found).
 
 Read first: CLAUDE.md, docs/MAP.md, the `new-automation-version` skill; then the spec,
 `automations/<name>/README.md`, the words list and the research brief beside it
