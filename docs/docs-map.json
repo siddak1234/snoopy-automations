@@ -2,7 +2,7 @@
   "version": 1,
   "repo": "snoopy-automations",
   "generated": ["docs/MAP.md", "docs/repo-facts/snoopy-automations.json"],
-  "ignore": ["**/*.test.ts", "**/test/**"],
+  "ignore": ["**/*.test.ts", "**/test/**", "templates/automation/Dockerfile"],
   "unmapped": {
     "docs": "the documents themselves: records, the generated map and the repo-facts file"
   },

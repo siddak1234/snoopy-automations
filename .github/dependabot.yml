@@ -8,8 +8,9 @@
 # (`group-by` groups version updates only). A major that must not move is
 # `ignore`d below rather than left to be closed by hand at each run.
 #
-# The Docker entry's glob matches only the shipping automations' folders, each with its
-# Dockerfile; a folder without one would only produce a failed update run.
+# The Docker entry's directories are the folders with a Dockerfile — the automations' glob and the
+# template, which a new flow's scaffold copies; a folder without one would only produce a failed
+# update run.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -46,12 +47,16 @@ updates:
   # BUILD-PLAN 25.4.11, 2026-10-22).
 
   # Every automation's base image in one pull request (`group-by: dependency-name` across
-  # `directories`): invoice-processing (Round 17, its BUILD-PLAN 25.4.1) and candidate-reviewer
-  # (Round 19, Phase 28) build FROM the same image, and a new automation's folder joins by the
-  # glob. A Node major stays the platform's deliberate move.
+  # `directories`): every flow and the template build FROM the same image, and a new automation's
+  # folder joins by the glob. Each FROM names it by exact tag and index digest
+  # (`node:22.23.4-alpine@sha256:…`, Round 21 hardening), so nothing moves by itself: this pull
+  # request moves them all, and test/pins.test.ts fails one that leaves a FROM behind. The
+  # template's Dockerfile, like every flow's, is in no docs rule (docs/docs-map.json `ignore`),
+  # so the bump needs no doc. A Node major stays the platform's deliberate move.
   - package-ecosystem: docker
     directories:
       - /automations/*
+      - /templates/automation
     schedule:
       interval: weekly
     open-pull-requests-limit: 1

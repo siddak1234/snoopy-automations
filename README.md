@@ -794,6 +794,12 @@ issues and nothing else. The schedule has a file of its own because GitHub disab
 repository's scheduled workflow after 60 days without activity: that stops the nightly alone,
 never the merge gate. Turn it back on with `gh workflow enable nightly.yml`.
 
+**Pinned base images.** Every FROM of every flow's Dockerfile, and the template's, names one Node
+release by exact tag and multi-arch index digest (`node:22.23.4-alpine@sha256:fe4f6d74…`), so the
+bytes CI scanned are the bytes Flow CD ships; `test/pins.test.ts` refuses a FROM by tag alone and
+two that differ. Dependabot's weekly docker group (`.github/dependabot.yml`) moves them all in one
+pull request; a Node major is moved by hand.
+
 Node 22 or newer. Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

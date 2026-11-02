@@ -10,7 +10,10 @@
 # Only this automation's and the SDK's package.json are copied before `npm ci`: npm
 # installs a root lock whose other workspaces are absent from disk, so one
 # automation's image never sees another's files (ADR-0034 §6).
-FROM node:22-alpine AS build
+#
+# Every FROM names the same Node by tag and index digest, in every flow (README, "Working
+# here"); Dependabot's weekly docker group moves them together.
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS build
 WORKDIR /workspace
 
 COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
@@ -23,7 +26,7 @@ COPY automations/candidate-reviewer/src ./automations/candidate-reviewer/src
 RUN npm run build --workspace @autom8x/automation-sdk \
   && npm run build --workspace @autom8x/candidate-reviewer
 
-FROM node:22-alpine AS production-dependencies
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS production-dependencies
 WORKDIR /workspace
 
 # `--install-links` packs the local SDK instead of leaving a symlink to a build
@@ -34,7 +37,7 @@ COPY automations/candidate-reviewer/package.json automations/candidate-reviewer/
 WORKDIR /workspace/automations/candidate-reviewer
 RUN npm ci --omit=dev --ignore-scripts --workspaces=false --install-links=true
 
-FROM node:22-alpine AS runtime
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 RUN apk upgrade --no-cache && apk add --no-cache tini
 ENV NODE_ENV=production
 WORKDIR /app
