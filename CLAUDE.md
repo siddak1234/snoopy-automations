@@ -8,7 +8,7 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 
 **A flow developer:** this repository is all you need — no backend checkout. Run `/create-flow`, then follow [README.md](README.md#build-a-flow) ("Build a flow"); what a flow may use is the menu, `contract/schemas/platform-menu.json`. Steps 1–3 below are the owner's platform sessions only.
 
-**Limits:** every limit a flow works within — a manifest's, a model answer's token cap, the slot's CPU and memory, the versions served — is the menu's `limits`, read from the platform; never restate one here.
+**Limits:** every limit a flow works within — a manifest's (its bytes as committed too, `limits.manifest.bytes`: `test/conformance.test.ts`, and `/create-flow`'s spec and review templates), a model answer's token cap, the slot's CPU and memory, the versions served — is the menu's `limits`, read from the platform; never restate one here.
 
 1. `/add-dir ../snoopy-backend` — **read only.** It holds the governance documents for every repository; editing it from here breaks rule 1.
 2. Grep `snoopy-backend/docs/platform/AUTOM8X-MASTER-PLAN.md` for **§0 STATUS**: it names the open round and repository. **If it does not name `snoopy-automations`, you are in the wrong repo.** Say so and stop.

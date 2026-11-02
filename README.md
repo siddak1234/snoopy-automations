@@ -719,7 +719,9 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    (its own pull request here, first: `.claude/skills/create-flow/templates/order.md`, step 2); or
    **stop**, a platform change. It writes the
    spec, `automations/<id>/README.md`, and `words.md` for the owner's approval.
-2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7, then
+2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7 — at most the menu's
+   `limits.manifest.bytes` as committed, its whitespace counted (`contract/` at snoopy-backend
+   d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then
    **`npm run scaffold -- <id>`** (`scripts/scaffold.mjs`): the folder from `templates/automation/`,
    its lockfile and the root lock's entry, `automations/<id>/src/automation.ts` on `defineFlow`, one typed stub per
    step (`src/steps/<step>.ts`, "Not built yet"), one prompt stub per capability, one `test.todo` per
