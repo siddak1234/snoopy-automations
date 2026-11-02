@@ -786,6 +786,14 @@ A test that skips or is left todo fails the gate: `scripts/no-skipped-tests.mjs`
 and reads its TAP for a `# skipped` or `# todo` count above 0, and CI's Verify reads its whole log
 the same way. So a flow just scaffolded is red until each §9 `test.todo` is written.
 
+**The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night at 09:37 UTC —
+Verify, and every flow's image built, smoke-tested and scanned with that night's advisories — and
+publishes and deploys nothing: `all-green` accepts Publish's and Deploy's skip off a push. A red
+night opens a "Nightly red" issue, or comments on the one still open, from a job that can write
+issues and nothing else. The schedule has a file of its own because GitHub disables a public
+repository's scheduled workflow after 60 days without activity: that stops the nightly alone,
+never the merge gate. Turn it back on with `gh workflow enable nightly.yml`.
+
 Node 22 or newer. Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

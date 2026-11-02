@@ -9,8 +9,10 @@ import { test } from 'node:test';
  * DISPATCH_APP_KEY, read by Deploy alone; Deploy only on a push to main, in `production`,
  * with no GITHUB_TOKEN permission and no code of this repository; Publish attesting each
  * digest after both scans and before the tag, and holding the attestation permissions
- * alone; every matrix List's, never typed by hand; every action pinned by SHA; and
- * all-green seeing every job. The text is read block by block, with no YAML library.
+ * alone; every matrix List's, never typed by hand; every action pinned by SHA;
+ * all-green seeing every job; and the nightly, its own workflow calling ci.yml whole, a red
+ * night reported by a job that can write issues alone (Round 21 hardening, NIGHT-8). The text is
+ * read block by block, with no YAML library.
  */
 
 const workflowsRoot = resolve(import.meta.dirname, '..', '.github', 'workflows');
@@ -150,7 +152,7 @@ test('Publish attests each digest after both scans and before the tag', () => {
   assert.match(attest, /push-to-registry: true/u);
 });
 
-test('id-token, attestations and packages write are Publish’s alone', () => {
+test('id-token, attestations and packages write are Publish’s alone, and the nightly’s call grants them only as its ceiling', () => {
   assert.match(
     code(ci.split(/^jobs:\s*$/mu)[0]!),
     /^permissions:\n {2}contents: read\n(?! )/mu,
@@ -163,9 +165,17 @@ test('id-token, attestations and packages write are Publish’s alone', () => {
       `${file} grants write-all or read-all`,
     );
     for (const [id, block] of jobs(read(file))) {
+      // GitHub refuses a call whose called jobs ask for more than the caller grants, so the
+      // nightly's call to ci.yml grants Publish's; the call runs nothing of its own.
+      const call = file === 'nightly.yml' && id === 'ci';
+      if (call) assert.match(block, /^ {4}uses: \.\/\.github\/workflows\/ci\.yml$/mu);
       for (const permission of ['id-token', 'attestations', 'packages']) {
         const writes = new RegExp(`^\\s+${permission}: write$`, 'mu').test(block);
-        assert.equal(writes, file === 'ci.yml' && id === 'publish', `${file}:${id} ${permission}`);
+        assert.equal(
+          writes,
+          (file === 'ci.yml' && id === 'publish') || call,
+          `${file}:${id} ${permission}`,
+        );
       }
     }
   }
@@ -207,6 +217,8 @@ test('every action is pinned by a full commit SHA', () => {
     for (const line of read(file).split('\n')) {
       const uses = /^\s*-?\s*uses:\s*(.*)$/u.exec(line);
       if (!uses) continue;
+      // The nightly's call to ci.yml is this repository's own file at the same commit.
+      if (file === 'nightly.yml' && uses[1] === './.github/workflows/ci.yml') continue;
       count += 1;
       assert.match(
         uses[1]!,
@@ -218,7 +230,7 @@ test('every action is pinned by a full commit SHA', () => {
   assert.ok(count > 0);
 });
 
-test('all-green needs every job, and lets only Publish, Deploy and an empty Image skip on a pull request', () => {
+test('all-green needs every job, and lets only Publish and Deploy skip off a push and an empty Image on a pull request', () => {
   const allGreen = job('all-green');
   const needs = /^ {4}needs: \[([^\]]*)\]$/mu.exec(allGreen)?.[1]?.split(/,\s*/u);
   assert.deepEqual(
@@ -229,7 +241,7 @@ test('all-green needs every job, and lets only Publish, Deploy and an empty Imag
   assert.match(allGreen, /^ {4}if: always\(\)$/mu);
   assert.match(
     allGreen,
-    /if \{ \[ "\$job" = publish \] \|\| \[ "\$job" = deploy \]; \} && \[ "\$EVENT_NAME" = pull_request \]; then/u,
+    /if \{ \[ "\$job" = publish \] \|\| \[ "\$job" = deploy \]; \} && \[ "\$EVENT_NAME" != push \]; then\n {18}verdict='ok \(push-only job, skipped off a push\)'$/mu,
   );
   // Image may skip only on a pull request whose List found no flow to build.
   assert.match(
@@ -248,4 +260,44 @@ test('Verify fails when a test skipped or was left todo, reading the whole log',
     verify,
     /^ {10}if grep -qE '\^# \(skipped\|todo\) \[1-9\]' "\$RUNNER_TEMP\/verify\.log"; then\n {12}echo '[^'\n]+'\n {12}exit 1$/mu,
   );
+});
+
+const nightly = read('nightly.yml');
+const nightlyJobs = jobs(nightly);
+
+test("the nightly is its own workflow: a schedule calling ci.yml whole, and ci.yml carries no schedule (GitHub's 60-day rule)", () => {
+  const triggers = (text: string) =>
+    code(text.split(/^jobs:\s*$/mu)[0]!).split(/^permissions:/mu)[0]!;
+  assert.match(triggers(nightly), /^ {2}schedule:\n {4}- cron: '[0-9*,/ -]+'$/mu);
+  assert.doesNotMatch(
+    triggers(nightly),
+    /^ {2}(push|pull_request):/mu,
+    'the nightly is not a gate',
+  );
+  assert.match(code(nightly), /^permissions: \{\}$/mu, 'no permission by default');
+  // A disabled schedule stops only nightly.yml; the merge gate has none to lose.
+  assert.match(triggers(ci), /^ {2}workflow_call:$/mu);
+  assert.doesNotMatch(triggers(ci), /^ {2}schedule:/mu);
+  assert.deepEqual([...nightlyJobs.keys()], ['ci', 'report']);
+  const call = nightlyJobs.get('ci')!;
+  assert.match(call, /^ {4}uses: \.\/\.github\/workflows\/ci\.yml$/mu);
+  assert.doesNotMatch(call, /^ {4}(with|secrets|steps|runs-on):/mu, 'ci.yml whole, as it is');
+});
+
+test('Nightly red reports a red night with issues: write alone, no checkout and no code of this repository', () => {
+  const report = nightlyJobs.get('report');
+  assert.ok(report !== undefined, 'nightly.yml has a report job');
+  assert.match(report, /^ {4}name: Nightly red$/mu);
+  assert.match(report, /^ {4}needs: ci$/mu);
+  assert.match(report, /^ {4}if: always\(\) && needs\.ci\.result != 'success'$/mu);
+  assert.match(report, /^ {4}runs-on: ubuntu-[0-9.]+$/mu);
+  assert.match(report, /^ {4}permissions:\n {6}issues: write\n(?! {6})/mu, 'issues: write alone');
+  assert.doesNotMatch(report, /\buses:/u, 'no checkout, no action');
+  const [script] = steps(report).map((step) => step.split(/^ {8}run: \|\s*$/mu)[1]);
+  assert.ok(script !== undefined, 'one run script');
+  assert.doesNotMatch(script, /\$\{\{/u, 'values reach the script only through env');
+  assert.doesNotMatch(script, /(^|[\s;|&(])(npm|npx|node|tsx|bash|sh|source)\s|\.\//mu);
+  assert.match(report, /GH_TOKEN: \$\{\{ github\.token \}\}/u);
+  assert.match(script, /gh issue create --title 'Nightly red'/u);
+  assert.match(script, /gh issue comment "\$number"/u, 'a red night already open is commented on');
 });
