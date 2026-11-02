@@ -800,10 +800,12 @@ and nothing else. The schedule has a file of its own because GitHub disables a p
 scheduled workflow after 60 days without activity: that stops the nightly alone, never the merge
 gate. Turn it back on with `gh workflow enable nightly.yml`.
 
-**Pinned base images.** Every FROM of every flow's Dockerfile, and the template's, names one Node
-release by exact tag and multi-arch index digest, written there alone (any
-`automations/*/Dockerfile` names it), so the bytes CI scanned are the bytes Flow CD ships;
-`test/pins.test.ts` refuses a FROM by tag alone and two that differ. Dependabot's weekly docker
+**Pinned base images.** Each flow's Dockerfile, and the template's, names one Node release by exact
+tag and multi-arch index digest in one FROM, its first (`AS base`), and every other stage builds
+`FROM base`: Dependabot updates only a Dockerfile's first FROM ([GitHub's docs](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/guidance-for-the-configuration-of-private-registries-for-dependabot),
+Docker). The release is written there alone (any `automations/*/Dockerfile` names it), so the
+bytes CI scanned are the bytes Flow CD ships; `test/pins.test.ts` refuses a FROM by tag alone, a
+second FROM naming an image, and two Dockerfiles that differ. Dependabot's weekly docker
 group (`.github/dependabot.yml`) moves them all in one pull request, which needs no doc (CLAUDE.md,
 "Docs always updated"; no Dockerfile here is in a docs rule); a Node major is moved by hand.
 `.nvmrc` names the same release, and CI installs Node from it (`node-version-file: .nvmrc`), as the
