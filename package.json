@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.test.json && npm run typecheck --workspaces --if-present",
-    "test": "tsx --test \"test/**/*.test.ts\" \"templates/automation/test/**/*.test.ts\" && npm test --workspaces --if-present",
+    "test": "tsx --test --test-reporter=tap \"test/**/*.test.ts\" \"templates/automation/test/**/*.test.ts\" && npm test --workspaces --if-present",
     "facts": "tsx scripts/repo-facts.ts",
     "check:docs": "node scripts/kit/check-docs.mjs",
     "map": "node scripts/kit/map.mjs",

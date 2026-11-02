@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "test": "tsx --test \"test/**/*.test.ts\""
+    "test": "tsx --test --test-reporter=tap \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "@autom8x/automation-sdk": "file:../automation-sdk"

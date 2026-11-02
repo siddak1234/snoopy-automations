@@ -32,7 +32,7 @@
 - `npm run map`: `node scripts/kit/map.mjs`
 - `npm run review-rows`: `tsx scripts/review-rows.ts`
 - `npm run scaffold`: `node scripts/scaffold.mjs`
-- `npm run test`: `tsx --test "test/**/*.test.ts" "templates/automation/test/**/*.test.ts" && npm …`
+- `npm run test`: `tsx --test --test-reporter=tap "test/**/*.test.ts" "templates/automation/test/*…`
 - `npm run typecheck`: `tsc --noEmit -p tsconfig.json && tsc --noEmit -p templates/automation/tsconfig.…`
 - `npm run verify`: `npm run format:check && npm run check:docs && npm run map -- --check && node sc…`
 
