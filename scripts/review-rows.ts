@@ -38,6 +38,7 @@ interface ManifestShape {
   requiredConnections?: { providerId: string }[];
   pipeline?: { id: string; kicker?: string }[];
   items?: { pipeline?: { id: string }[] };
+  batch?: { pipeline?: { id: string }[] };
 }
 
 export const readMenu = (base = root): Menu =>
@@ -202,6 +203,9 @@ export function rowsFor(base: string, id: string, changed: readonly string[], is
       .filter((file) => file.endsWith('.json'))
       .map((file) => (JSON.parse(read(file)) as { capability: string }).capability),
   );
+  // `memory` (ADR-0048 amendment 3) is the platform's, not a prompt's: used when the code reaches
+  // `platform.memory`.
+  if (/\.memory\.(?:get|put)\(/u.test(src)) used.add('memory');
   const declared = new Set(latest.requiredCapabilities ?? []);
   rows.push(
     row(
@@ -214,7 +218,11 @@ export function rowsFor(base: string, id: string, changed: readonly string[], is
     ),
   );
   const pipeline = latest.pipeline ?? [];
-  const ids = [...pipeline, ...(latest.items?.pipeline ?? [])].map((step) => step.id);
+  const ids = [
+    ...pipeline,
+    ...(latest.items?.pipeline ?? []),
+    ...(latest.batch?.pipeline ?? []),
+  ].map((step) => step.id);
   const named = (text: string, step: string) =>
     new RegExp(`(?<![a-z0-9-])${step}(?![a-z0-9-])`, 'u').test(text);
   rows.push(

@@ -69,7 +69,9 @@ test('section 2: a manual start with one visit note, PDF, JPEG or PNG, within it
 
 test("section 4: the capabilities are the prompts', each prompt one row", () => {
   assert.deepEqual(manifest.requiredCapabilities, ['document-extraction', 'classification']);
-  assert.deepEqual(prompts.map((p) => [p.id, p.capability]).sort(), [
+  // v2's prompts (version 2, the spec's v2 section) aside: v1 sends these two.
+  const v1 = prompts.filter((p) => p.version === 1);
+  assert.deepEqual(v1.map((p) => [p.id, p.capability]).sort(), [
     ['match-codes', 'classification'],
     ['read-note', 'document-extraction'],
   ]);

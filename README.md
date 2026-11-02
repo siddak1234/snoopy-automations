@@ -622,10 +622,10 @@ Both are live on `defineAutomation`, and their code, prompts and manifests are u
 after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `defineFlow`
 ("Build a flow", below).
 
-- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; on `defineFlow`): its own pull request,
-  after the SDK's review of each change and dropdown of several, brings its folder, whose README is
-  its spec and how the code does it. It waits for the platform round that adds the two (section 10
-  of its spec, PR #255) to merge; `contract/` carries them at that pull request's head.
+- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
+  doctors and coders; on `defineFlow`): its folder's README is its spec and how the code does it.
+  v1 stays served on its own container; the image built here serves v2 alone, on the platform round
+  2 contract (`contract/`, "Platform round 2" above).
 
 ## The kit
 
@@ -733,8 +733,9 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
 4. **`npm test`**, then `npm run map` and `npm run facts`, then the gate (CLAUDE.md, "Gates and
    push"). Open the pull request: it is the flow's folder, its manifest and three generated files,
    which `.gitattributes` folds. CI's **Review rows** (`scripts/review-rows.ts`) answers the checklist
-   rows a machine can — §3 the menu, §4 the capabilities, §6 the steps, §7 the blocks, §8 the
-   failure words, §9 the tests, the paths and the drill — and a FAIL row fails Verify; a person reads
+   rows a machine can — §3 the menu, §4 the capabilities (the prompts', and `memory` when the code
+   reaches `platform.memory`), §6 the steps (a batch run's too), §7 the blocks, §8 the failure
+   words, §9 the tests, the paths and the drill — and a FAIL row fails Verify; a person reads
    the rest (`.github/pull_request_template.md`). On a pull request, Image builds only the flows whose
    image inputs changed (`scripts/changed-images.mjs`).
 5. **The merge is the deploy** (the platform's ADR-0047): CI's Deploy job starts the platform's Flow
