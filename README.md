@@ -188,7 +188,7 @@ picks with `chosenOptions(config, field)` (`packages/automation-sdk/src/manifest
 
 **Platform round 2: a bigger dropdown, several files, a grouped review, a public provider, a flow's
 memory and batch intake** (the platform's ADR-0048 amendments 3 and 4, 2026-11-01; `contract/`
-carries them at snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
+carries them since snoopy-backend 10b5fae (#256)). A `select`'s `options` may be `{value, label, group?}`
 objects, up to 1,000 (`SelectOption`; `optionValues`, and `chosenOptions` reads values). A run-input
 `artifact` field with `multiple` puts up to its `maxFiles` (1 to 200, default 50; `RUN_INPUT_LIMITS`,
 `maxFilesOf`) files into ONE run, and `artifactIdsOf(input, key)` reads its list. A held decision may
@@ -797,13 +797,14 @@ repository's scheduled workflow after 60 days without activity: that stops the n
 never the merge gate. Turn it back on with `gh workflow enable nightly.yml`.
 
 **Pinned base images.** Every FROM of every flow's Dockerfile, and the template's, names one Node
-release by exact tag and multi-arch index digest (`node:22.23.4-alpine@sha256:fe4f6d74…`), so the
-bytes CI scanned are the bytes Flow CD ships; `test/pins.test.ts` refuses a FROM by tag alone and
-two that differ. Dependabot's weekly docker group (`.github/dependabot.yml`) moves them all in one
-pull request, which needs no doc (CLAUDE.md, "Docs always updated"; no Dockerfile here is in a
-docs rule); a Node major is moved by hand. `.nvmrc` names the same release (22.23.4), and CI
-installs Node from it (`node-version-file: .nvmrc`), as the other repositories do; no bot reads
-it, so when a bump moves the release, that pull request is red until `.nvmrc` moves with it.
+release by exact tag and multi-arch index digest, written there alone (any
+`automations/*/Dockerfile` names it), so the bytes CI scanned are the bytes Flow CD ships;
+`test/pins.test.ts` refuses a FROM by tag alone and two that differ. Dependabot's weekly docker
+group (`.github/dependabot.yml`) moves them all in one pull request, which needs no doc (CLAUDE.md,
+"Docs always updated"; no Dockerfile here is in a docs rule); a Node major is moved by hand.
+`.nvmrc` names the same release, and CI installs Node from it (`node-version-file: .nvmrc`), as the
+other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
+until `.nvmrc` moves with it.
 
 Node: the release `.nvmrc` names (`nvm use`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run

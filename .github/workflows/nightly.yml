@@ -5,9 +5,8 @@ name: Nightly
 # or deployed: Publish and Deploy run on a push to main alone, and all-green accepts their skip
 # off a push. A red night opens an issue (Nightly red, below).
 #
-# The schedule lives in this file, never in ci.yml: GitHub disables a public repository's
-# scheduled workflow after 60 days without activity, and that must never stop the merge gate.
-# Disabled, it is turned back on with `gh workflow enable nightly.yml` (README, "Working here").
+# The schedule lives in this file, never in ci.yml; why, and how to turn it back on: README,
+# "Working here", the nightly.
 on:
   schedule:
     - cron: '37 9 * * *'

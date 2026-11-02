@@ -5,9 +5,8 @@ on:
     branches: [main]
   push:
     branches: [main]
-  # The nightly (.github/workflows/nightly.yml) calls this workflow whole. Its schedule lives there,
-  # never here: GitHub disables a public repository's scheduled workflow after 60 days without
-  # activity, and that must never switch off the merge gate.
+  # The nightly (.github/workflows/nightly.yml) calls this workflow whole; its schedule lives there
+  # alone (README, "Working here", the nightly).
   workflow_call:
 
 # This repository is PUBLIC and its files hold no secret of any kind: an automation
