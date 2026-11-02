@@ -93,10 +93,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # The exact release `.nvmrc` names, the one every flow image ships (test/pins.test.ts).
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       # --ignore-scripts: a dependency's install script is arbitrary code running

@@ -50,9 +50,10 @@ updates:
   # `directories`): every flow and the template build FROM the same image, and a new automation's
   # folder joins by the glob. Each FROM names it by exact tag and index digest
   # (`node:22.23.4-alpine@sha256:…`, Round 21 hardening), so nothing moves by itself: this pull
-  # request moves them all, and test/pins.test.ts fails one that leaves a FROM behind. The
-  # template's Dockerfile, like every flow's, is in no docs rule (docs/docs-map.json `ignore`),
-  # so the bump needs no doc. A Node major stays the platform's deliberate move.
+  # request moves them all, and test/pins.test.ts fails one that leaves a FROM behind, or
+  # `.nvmrc` (moved by hand in that pull request when the release moves). The template's
+  # Dockerfile, like every flow's, is in no docs rule (docs/docs-map.json `ignore`), so the bump
+  # needs no doc. A Node major stays the platform's deliberate move.
   - package-ecosystem: docker
     directories:
       - /automations/*

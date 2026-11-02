@@ -8,6 +8,8 @@ import { test } from 'node:test';
  * built FROM one Node release named by exact tag and multi-arch index digest, the same in every
  * stage of every Dockerfile, so the bytes CI scanned are the bytes Flow CD ships until
  * Dependabot's weekly docker group moves them all in one pull request (.github/dependabot.yml).
+ * `.nvmrc` names that same release, and every workflow installs Node from it, as in the other
+ * repositories, so CI and a developer's nvm run what the images ship.
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -99,4 +101,36 @@ test('Dependabot’s docker entry covers every Dockerfile’s folder, in one gro
     /^ {6}- dependency-name: node\n {8}update-types: \['version-update:semver-major'\]$/mu,
     'a Node major is never moved by the bot',
   );
+});
+
+test('.nvmrc names the exact Node release the images ship, and every setup-node installs it from the file', () => {
+  const exact = read('.nvmrc').trim();
+  assert.match(exact, /^\d+\.\d+\.\d+$/u, `.nvmrc names ${exact}, not one exact release`);
+  const { engines } = JSON.parse(read('package.json')) as { engines: { node: string } };
+  assert.equal(engines.node, `>=${exact.split('.')[0]}`, 'its major is the one engines declares');
+  // Moved by hand with the image: a bump of the FROM is red here until `.nvmrc` moves with it.
+  const shipped = bases(dockerfiles.map((path) => ({ path, text: read(path) }))).map(
+    ([, image]) => /^node:(\d+\.\d+\.\d+)-/u.exec(image)?.[1],
+  );
+  assert.deepEqual(
+    [...new Set(shipped)],
+    [exact],
+    `.nvmrc names ${exact}; the images ship ${shipped.join(', ')}`,
+  );
+
+  const workflows = readdirSync(join(repositoryRoot, '.github', 'workflows')).filter((name) =>
+    /\.ya?ml$/u.test(name),
+  );
+  let setups = 0;
+  for (const name of workflows) {
+    const text = read(`.github/workflows/${name}`);
+    for (const step of text
+      .split(/^ {6}- /mu)
+      .filter((each) => /uses: actions\/setup-node@/u.test(each))) {
+      setups += 1;
+      assert.match(step, /^ {10}node-version-file: \.nvmrc$/mu, `${name}: setup-node reads .nvmrc`);
+      assert.doesNotMatch(step, /^ {10}node-version:/mu, `${name}: no Node typed beside it`);
+    }
+  }
+  assert.ok(setups >= 1, 'CI sets up Node');
 });
