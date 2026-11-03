@@ -135,6 +135,7 @@ clears them).
 owner's TestFlight build 34 feedback; the spec's "v3" says what each line serves). Every word of
 sections 1–4 that v3 does not replace stays.
 
-| Where                    | The words                      | Whose                  |
-| ------------------------ | ------------------------------ | ---------------------- |
-| Setup, the section names | NPI · Specialty · Integrations | the session's, from F3 |
+| Where                                                                  | The words                      | Whose                  |
+| ---------------------------------------------------------------------- | ------------------------------ | ---------------------- |
+| Setup, the section names                                               | NPI · Specialty · Integrations | the session's, from F3 |
+| Setup, the NPI box's example (its placeholder, in place of "Optional") | 10 digits, e.g. 1234567893     | the session's, from F2 |
