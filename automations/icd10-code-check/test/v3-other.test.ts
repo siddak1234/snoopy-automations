@@ -11,6 +11,7 @@ import {
   type StepContext,
 } from '@autom8x/automation-sdk';
 
+import { wordsIn } from '../src/candidates.js';
 import { ACCEPTED_KEY, EXAMPLES_KEY } from '../src/v2/memory.js';
 import { reviewVisit } from '../src/v2/review-steps.js';
 import { WORDS_V3 } from '../src/v2/words.js';
@@ -20,21 +21,23 @@ import { reviewChild, runChild, type ChildRan } from './v2-fixtures.js';
 
 /**
  * v3's "Other code" (the spec's "v3", row 3; the platform's amendment 5): each Change offers up to
- * 3 other codes from its diagnosis's own choice list, kept at match time and counted in the held
- * result's body bound; the answer `other` makes that code final, and the clinic learns it as an
- * accepted example and the suggestion as a denied one. v2 offers none.
+ * 3 other codes from its diagnosis's own choice list, the closest first (its match's category, then
+ * its family, then the words shared, then the list's order) and none unrelated, kept at match time
+ * and counted in the held result's body bound; the answer `other` makes that code final, and the
+ * clinic learns it as an accepted example and the suggestion as a denied one. v2 offers none.
  */
 
+const ckd = 'Chronic kidney disease stage 3a (3b last year), eGFR 52 today';
 const note = reading(
   ['I10', 'N18.30'],
   [
     { statement: 'Hypertension', categories: ['I10'] },
-    { statement: 'CKD stage 3a, eGFR 52 today', categories: ['N18'] },
+    { statement: ckd, categories: ['N18'] },
     { statement: 'Type 2 diabetes with hyperglycemia', categories: ['E11'] },
   ],
 );
 const picks = {
-  'CKD stage 3a': { code: 'N18.31' },
+  'stage 3a': { code: 'N18.31' },
   'Type 2 diabetes': { code: 'E11.65' },
 };
 const { codes } = loadTable('2027-oct');
@@ -58,7 +61,7 @@ function listSent(ran: ChildRan, statement: string): string[] {
   return sent.find((d) => d.statement === statement)!.candidates.map((c) => c.code);
 }
 
-test("each Change offers up to 3 other codes from its own diagnosis's list, kept at match time; an Add, and v2, none", async () => {
+test('the CKD 3a change offers N18.32 first, then other N18 codes, nothing outside chapter N, never N18.31 or N18.30; an Add, and v2, none', async () => {
   const v3 = await runChild(note, picks, { version: 3 });
   const decisions = heldOf(v3).decisions as HeldDecision[];
   assert.deepEqual(
@@ -69,13 +72,29 @@ test("each Change offers up to 3 other codes from its own diagnosis's list, kept
       ['v1-a1', 'Add E11.65'],
     ],
   );
-  const list = listSent(v3, 'CKD stage 3a, eGFR 52 today');
-  const expected = list.filter((code) => !['N18.31', 'I10', 'N18.30'].includes(code)).slice(0, 3);
-  assert.equal(expected.length, 3);
+  const list = listSent(v3, ckd);
+  const at = (code: string) => (list.includes(code) ? list.indexOf(code) : Infinity);
+  assert.ok(
+    Math.max(at('H66.20'), at('I27.9')) < at('N28.9') && at('N28.9') < Infinity,
+    'its list holds otitis media (H66.20) and a pulmonary code (I27.9), each sharing a word, ahead of N28.9',
+  );
+  const offered = (decisions[1]!.options ?? []).map((option) => option.value);
+  assert.equal(offered[0], 'N18.32', 'its own category first, N18.32 the first');
+  assert.ok(
+    offered.indexOf('N18.9') === 1 && offered.every((code) => code.startsWith('N')),
+    'then the other N18 code, and nothing from outside chapter N',
+  );
+  assert.ok(
+    !offered.includes('N18.31') && !offered.includes('N18.30'),
+    'not its match or the chart’s',
+  );
   assert.deepEqual(
     decisions[1]!.options,
-    expected.map((code) => ({ value: code, label: `${code} · ${codes[code]}` })),
-    'the first 3 of its list but its match and the note’s codes, each "{code} · {title}"',
+    ['N18.32', 'N18.9', 'N28.9'].map((code) => ({
+      value: code,
+      label: `${code} · ${codes[code]}`,
+    })),
+    'its category, then its family ahead of the codes sharing only a word, each "{code} · {title}"',
   );
   assert.equal(
     decisions[0]!.options,
@@ -99,6 +118,28 @@ test("each Change offers up to 3 other codes from its own diagnosis's list, kept
     'v2 offers none',
   );
   assert.equal((heldOf(v2).state as JsonObject).others, undefined);
+});
+
+test("a diagnosis whose list holds only unrelated codes, none of its match's category and none sharing a word, offers none", async () => {
+  const statement = 'CKD, eGFR 52 today';
+  const lone = reading(['N18.30'], [{ statement, categories: ['N18'] }]);
+  const v3 = await runChild(lone, { CKD: { code: 'N18.9' } }, { version: 3 });
+  const decisions = heldOf(v3).decisions as HeldDecision[];
+  assert.deepEqual(
+    decisions.map((d) => [d.id, d.label]),
+    [['v1-n1', 'N18.30 → N18.9']],
+  );
+  const rest = listSent(v3, statement).filter((code) => code !== 'N18.9');
+  assert.ok(rest.includes('H66.20') && rest.includes('I27.9'), 'its list holds other codes');
+  const said = wordsIn(statement);
+  assert.ok(
+    rest.every(
+      (code) => !code.startsWith('N18') && [...wordsIn(codes[code]!)].every((w) => !said.has(w)),
+    ),
+    'none of them related',
+  );
+  assert.equal(decisions[0]!.options, undefined, 'no options');
+  assert.deepEqual((heldOf(v3).state as JsonObject).others, {}, 'none kept');
 });
 
 test('the answer other makes that code final, "Changed to {code}"; the clinic learns it accepted and the suggestion denied; edited counted', async () => {
