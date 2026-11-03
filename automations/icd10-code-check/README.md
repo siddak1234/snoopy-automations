@@ -404,7 +404,8 @@ is "{n} codes · {c} to review".
 ## v2 (2026-11-01)
 
 **Status:** built beside v1, which stays served on its own container and pinned image, its
-manifest, steps, prompts and assets unchanged; this image serves v2 alone (`SERVED_VERSIONS`).
+manifest, steps, prompts and assets unchanged; this image served v2 alone until v3
+(`SERVED_VERSIONS`; "v3" below).
 The owner's go, 2026-11-01 ~04:45Z: "continue and complete. A-g. i want to test right after on the
 app. no assumptions." — after the nine screens; and ~06:15Z, "A. Full pipeline now (Recommended)":
 chunk, categorize, organize, queue per unit, check. **Words:** `words.md`, section 4; its lines not
