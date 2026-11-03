@@ -47,4 +47,8 @@
 {"name": "8: an unknown tool", "input": {"tool_name": "WebFetch", "tool_input": {"url": "https://example.com"}, "cwd": "${REPO}"}, "exit": 0},
 {"name": "8: Bash with no command", "input": {"tool_name": "Bash", "tool_input": {}, "cwd": "${REPO}"}, "exit": 0},
 {"name": "3: npx eas-cli@<version> build on the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "npx --yes eas-cli@27.2.0 build --platform ios --local"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 2},
+{"name": "3: npm run release:ios on the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "npm run release:ios -- --local"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 2},
+{"name": "3: npm run release:ios in iCloud Drive", "input": {"tool_name": "Bash", "tool_input": {"command": "caffeinate -i npm run release:ios"}, "cwd": "${HOME}/Library/Mobile Documents/com~apple~CloudDocs/app"}, "exit": 2},
+{"name": "3: npm --prefix <Desktop app> run release:ios", "input": {"tool_name": "Bash", "tool_input": {"command": "npm --prefix ~/Desktop/app run release:ios"}, "cwd": "${SCRATCH}/-proj/sess/scratchpad"}, "exit": 2},
+{"name": "3: npm run release:ios in a scratch clone is allowed", "input": {"tool_name": "Bash", "tool_input": {"command": "npm run release:ios -- --local"}, "cwd": "${SCRATCH}/-proj/sess/scratchpad/snoopy-mobile"}, "exit": 0},
 {"name": "3: npx eas-cli@<version> build in a scratch clone is allowed", "input": {"tool_name": "Bash", "tool_input": {"command": "npx --yes eas-cli@27.2.0 build --platform ios --local"}, "cwd": "${SCRATCH}/-proj/sess/scratchpad/snoopy-mobile"}, "exit": 0}]

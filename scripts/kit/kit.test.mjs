@@ -26,6 +26,7 @@ export const KIT_FILES = [
   '.claude/hooks/session-start.mjs',
   '.claude/hooks/stop-check.mjs',
   '.claude/hooks/lib/quick-hygiene.mjs',
+  '.claude/hooks/lib/shell-words.mjs',
   '.claude/hooks/cases.json',
   '.claude/agents/explorer.md',
   '.claude/agents/reviewer.md',
@@ -108,6 +109,15 @@ describe('guard (STANDARD (h) rows 1–8)', () => {
   test('rm -rf inside the git toplevel passes; leaving it, or a sibling sharing its prefix, is blocked', () => {
     const rm = (command) => decide({ tool_name: 'Bash', tool_input: { command }, cwd: '/srv/autom8x-repo/app' }, { HOME: values.HOME, toplevel: () => '/srv/autom8x-repo' }).exit;
     assert.deepEqual(['rm -rf node_modules', 'rm -rf ../dist', 'rm -rf ../../', 'rm -rf /srv/autom8x-repo-other'].map(rm), [0, 0, 2, 2]);
+  });
+
+  // Row 3 reads the package.json script an `npm run` names, where it runs, only in the zone.
+  test('an npm script whose own text runs eas build is a build on the Desktop; another script is not', () => {
+    const home = join(TMP, 'home');
+    const app = join(home, 'Desktop/app');
+    write(app, { 'package.json': JSON.stringify({ scripts: { ship: 'npx eas-cli@27.2.0 build --platform ios', lint: 'expo lint' } }) });
+    const run = (command) => decide({ tool_name: 'Bash', tool_input: { command }, cwd: app }, { HOME: home }).exit;
+    assert.deepEqual(['npm run ship', 'npm run lint', 'npm run missing'].map(run), [2, 0, 0]);
   });
 
   test('cases.json holds 3 or more rows for each row of the table', () => {
@@ -352,11 +362,13 @@ describe('check-docs (STANDARD (e))', () => {
 });
 
 describe('the kit itself', () => {
-  test('every kit file names its own canonical path on its marker line', () => {
+  test('every kit file names its own canonical path on its marker line, in 400 lines or fewer', () => {
     for (const file of KIT_FILES) {
-      const head = readFileSync(at(file), 'utf8').split('\n').slice(0, 8).join('\n');
-      const m = /autom8x-kit v1 — canonical: [\w-]+\/([^\s"]+)/u.exec(head);
+      const text = readFileSync(at(file), 'utf8');
+      const m = /autom8x-kit v1 — canonical: [\w-]+\/([^\s"]+)/u.exec(text.split('\n').slice(0, 8).join('\n'));
       assert.equal(m?.[1], file, file);
+      // snoopy-automations' architecture test holds every .claude/ file to 400 lines.
+      assert.ok(text.trimEnd().split('\n').length <= 400, `${file} is over 400 lines`);
     }
   });
 
