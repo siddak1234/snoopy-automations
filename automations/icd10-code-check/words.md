@@ -132,10 +132,13 @@ clears them).
 ## 5. v3 (2026-11-03)
 
 **Dated 2026-11-03: these words await the owner's approval** (the session's Stage 1 spec, from the
-owner's TestFlight build 34 feedback; the spec's "v3" says what each line serves). Every word of
+owner's TestFlight build 34 feedback and decision 4; the spec's "v3" says what each line serves). Every word of
 sections 1–4 that v3 does not replace stays.
 
-| Where                                                                  | The words                      | Whose                  |
-| ---------------------------------------------------------------------- | ------------------------------ | ---------------------- |
-| Setup, the section names                                               | NPI · Specialty · Integrations | the session's, from F3 |
-| Setup, the NPI box's example (its placeholder, in place of "Optional") | 10 digits, e.g. 1234567893     | the session's, from F2 |
+| Where                                                                            | The words                                                                                                                                                      | Whose                                |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Setup, the section names                                                         | NPI · Specialty · Integrations                                                                                                                                 | the session's, from F3               |
+| Setup, the NPI box's example (its placeholder, in place of "Optional")           | 10 digits, e.g. 1234567893                                                                                                                                     | the session's, from F2               |
+| The review, each Change's other codes (the clients' "Other code" list)           | {code} · {title}, or the code alone past 120 characters                                                                                                        | the session's, from item 4           |
+| The codes table after the review, a Change answered with another code (column 2) | Changed to {code}                                                                                                                                              | the Stage 1 spec's S1-B3 words       |
+| The summary and the badge after the review                                       | {n} codes · {a} accepted · {d} denied, and {a} accepted · {d} denied: a change answered with another code counted in {a}, as the platform's run page counts it | v1's words, the count the platform's |

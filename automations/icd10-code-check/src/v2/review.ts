@@ -2,16 +2,18 @@ import {
   BLOCK_LIMITS,
   DECISION_LIMITS,
   boundedBlocks,
-  type DecisionAnswer,
+  type DecisionOption,
   type EmittedBlock,
   type EmittedLeaf,
   type HeldDecision,
+  type JsonObject,
 } from '@autom8x/automation-sdk';
 
 import { patientSection, titleOf, type View } from '../blocks.js';
 import type { Row } from '../checks.js';
 import { DECIDED, cleanQuote, suggestionOf, withTitle } from '../decisions.js';
 import { VERDICTS, WORDS } from '../words.js';
+import type { OtherCode } from './child-steps.js';
 import { WORDS_V2 } from './words.js';
 
 /**
@@ -167,26 +169,60 @@ const decisionId = (rowId: string): string => `v1-${rowId}`;
 /** One offered change with its visit's title, the platform v2's `group`. */
 export type GroupedDecision = HeldDecision & { group: string };
 
-/** Every change of the visit: its id, label, why and group (the visit's title). */
-export function visitDecisions(view: View): GroupedDecision[] {
+/** A v3 run's other codes by diagnosis (`otherCodes`, kept at match time); none on v1 and v2. */
+export const otherCodesOf = (state: JsonObject): Readonly<Record<string, OtherCode[]>> =>
+  (state.others ?? {}) as Record<string, OtherCode[]>;
+
+/** The title of each of a v3 run's other codes, so a picked one is entered with its title. */
+export const otherTitles = (state: JsonObject): Record<string, string> =>
+  Object.fromEntries(
+    Object.values(otherCodesOf(state))
+      .flat()
+      .filter(({ title }) => title !== '')
+      .map(({ code, title }) => [code, title]),
+  );
+
+/**
+ * A Change's "Other code" choices (v3, README "v3" row 3): its diagnosis's other codes, kept at
+ * match time, but its own code and its suggestion; each "{code} · {title}", or the code alone when
+ * that passes the option's bound (never cut). None for an Add, a Remove or a Move up.
+ */
+function optionsOf(r: Row, others: Readonly<Record<string, OtherCode[]>>): DecisionOption[] {
+  if (r.verdict !== 'change' || r.from === undefined) return [];
+  return (others[String(r.from)] ?? [])
+    .filter(({ code }) => code !== r.code && code !== r.suggested)
+    .map(({ code, title }) => {
+      const full = withTitle(code, title === '' ? {} : { [code]: title });
+      return { value: code, label: full.length <= DECISION_LIMITS.option ? full : code };
+    });
+}
+
+/**
+ * Every change of the visit: its id, label, why and group (the visit's title); on a v3 run each
+ * Change its other codes (`options`, `optionsOf`).
+ */
+export function visitDecisions(
+  view: View,
+  others: Readonly<Record<string, OtherCode[]>> = {},
+): GroupedDecision[] {
   const group = titleOf(view);
   return view.rows
     .filter((r) => DECIDED.has(r.verdict))
     .map((r): GroupedDecision => {
       const detail = whyDetail(r, view.titles, view.tableName);
+      const options = optionsOf(r, others);
       return {
         id: decisionId(r.id),
         label: decisionLabel(r),
         ...(detail === undefined ? {} : { detail }),
         group,
+        ...(options.length === 0 ? {} : { options }),
       };
     });
 }
 
-/** The run's answers by the visit's rows' own ids: what v1's `finalCodes` reads. */
-export const rowAnswers = (
-  answers: ReadonlyMap<string, DecisionAnswer>,
-): Map<string, DecisionAnswer> =>
+/** The run's answers (or the other codes picked) by the visit's rows' own ids: what v1's `finalCodes` reads. */
+export const rowAnswers = <T>(answers: ReadonlyMap<string, T>): Map<string, T> =>
   new Map(
     [...answers]
       .filter(([id]) => id.startsWith(decisionId('')))
@@ -296,8 +332,9 @@ export function fitsBlocks(blocks: readonly EmittedBlock[]): boolean {
  */
 export function visitReview(
   view: View,
+  others: Readonly<Record<string, OtherCode[]>> = {},
 ): { blocks: EmittedBlock[]; decisions: GroupedDecision[] } | { stop: string } {
-  const decisions = visitDecisions(view);
+  const decisions = visitDecisions(view, others);
   const blocks = visitBlocks(view);
   return fitsBlocks(blocks) ? { blocks, decisions } : { stop: WORDS_V2.tooManyCodes };
 }

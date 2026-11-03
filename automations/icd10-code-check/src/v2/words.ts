@@ -39,12 +39,15 @@ export const WORDS_V2 = {
 } as const;
 
 /**
- * v3's own words (`words.md`, section 5, awaiting the owner): the setup's sections (F3) and the NPI
- * box's example (F2). Every word of v2 stays (`WORDS_V2`, `words.ts`).
+ * v3's own words (`words.md`, section 5, awaiting the owner): the setup's sections (F3), the NPI
+ * box's example (F2) and a change answered with another code (item 4). Every word of v2 stays
+ * (`WORDS_V2`, `words.ts`).
  */
 export const WORDS_V3 = {
   /** The setup's sections, in order (F3); the EHR connection joins "Integrations" in Stage 2. */
   sections: { npi: 'NPI', specialty: 'Specialty', integrations: 'Integrations' },
   /** The NPI box's placeholder in place of "Optional" (F2): a valid NPI (`v3-manifest.test.ts`). */
   npiExample: '10 digits, e.g. 1234567893',
+  /** A Change answered with another code, in the codes table's verdict column (item 4, S1-B3). */
+  changedTo: (code: string) => `Changed to ${code}`,
 } as const;

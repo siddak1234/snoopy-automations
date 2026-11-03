@@ -2,6 +2,7 @@ import {
   answersOf,
   boundedBlocks,
   defineFlow,
+  othersOf,
   type Automation,
   type JsonObject,
   type InvokeRequest,
@@ -34,6 +35,7 @@ import {
   readVisit,
   receiveVisit,
 } from './v2/child-steps.js';
+import { otherTitles } from './v2/review.js';
 import { reviewVisit, saveVisit } from './v2/review-steps.js';
 
 /** ICD-10 Code Check, on `defineFlow`: its spec is README.md beside src/. */
@@ -111,21 +113,29 @@ export function define(
   });
 }
 
-/** What a run gives (the spec, section 7): its title, summary, blocks and output; never `documents`. */
+/**
+ * What a run gives (the spec, section 7): its title, summary, blocks and output; never `documents`.
+ * On v3, another code picked in a change's place counts with the accepted (`doneBlocks`) and is
+ * entered with its title (`otherTitles`).
+ */
 function result(state: JsonObject, request: InvokeRequest) {
-  const view = viewOf(state);
+  const read = viewOf(state);
+  const view = { ...read, titles: { ...otherTitles(state), ...read.titles } };
   const reading = readingOf(state.reading);
   const answers = answersOf(request);
+  const others = othersOf(request);
   const reviewed = view.rows.some((r) => DECIDED.has(r.verdict));
   const codes = Array.isArray(state.finalCodes) ? (state.finalCodes as string[]) : [];
-  const accepted = [...answers.values()].filter((answer) => answer === 'accepted').length;
+  const accepted = [...answers.values()].filter((answer) => answer !== 'denied').length;
   const n = view.rows.length;
   const summary = reviewed
     ? WORDS.summaryDone(n, accepted, answers.size - accepted)
     : view.asks.length === 0
       ? WORDS.summaryKept(n)
       : WORDS.summaryHeld(n, view.asks.length);
-  const blocks = boundedBlocks(reviewed ? doneBlocks(view, answers, codes) : keptBlocks(view));
+  const blocks = boundedBlocks(
+    reviewed ? doneBlocks(view, answers, codes, others) : keptBlocks(view),
+  );
   return {
     title: titleOf(view),
     summary,

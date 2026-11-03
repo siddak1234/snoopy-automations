@@ -1,7 +1,7 @@
 import type { BatchUnit, EmittedBlock, InvokeRequest, JsonObject } from '@autom8x/automation-sdk';
 
 import { auditOf, boundedAudit } from './audit.js';
-import { visitAnswers } from './review-steps.js';
+import { visitAnswers, visitOthers } from './review-steps.js';
 import { WORDS_V2 } from './words.js';
 
 /**
@@ -33,12 +33,16 @@ export function batchResult(state: JsonObject) {
   };
 }
 
-/** The invoke with its review's answers named by the visit's rows' own ids, as v1's result reads them. */
+/**
+ * The invoke with its review's answers named by the visit's rows' own ids, as v1's result reads
+ * them: each a decision, or (v3) the other code picked in its change's place.
+ */
 export function childRequest(request: InvokeRequest): InvokeRequest {
   const continuation = request.continuation;
   if (continuation?.decisions === undefined) return request;
-  const decisions = [...visitAnswers(request)].flatMap(([id, decision]) =>
-    decision === 'other' ? [] : [{ id, decision }],
+  const others = visitOthers(request);
+  const decisions = [...visitAnswers(request)].map(([id, decision]) =>
+    decision === 'other' ? { id, other: others.get(id) ?? '' } : { id, decision },
   );
   return { ...request, continuation: { ...continuation, decisions } };
 }
@@ -46,14 +50,16 @@ export function childRequest(request: InvokeRequest): InvokeRequest {
 /**
  * A visit's output with its AI calls' audit records (`boundedAudit`) and its measures: the
  * diagnoses, those settled with no AI, sent and kept by gate B, the clinic's examples used and
- * saved, each verdict's count, and the changes accepted and denied.
+ * saved, each verdict's count, and the changes accepted and denied — and on v3, which keeps other
+ * codes (`state.others`), those answered with another code, `edited`, the third live measure.
  */
 export function visitResult<R extends { output: JsonObject }>(done: R, state: JsonObject): R {
   const verdicts = (done.output.verdicts ?? []) as { verdict: string }[];
-  const decided = (done.output.decisions ?? []) as { accepted: boolean }[];
+  const decided = (done.output.decisions ?? []) as { accepted: boolean; other?: string }[];
   const counts: Record<string, number> = {};
   for (const { verdict } of verdicts) counts[verdict] = (counts[verdict] ?? 0) + 1;
   const accepted = decided.filter((d) => d.accepted).length;
+  const edited = decided.filter((d) => d.other !== undefined).length;
   return {
     ...done,
     output: {
@@ -63,7 +69,8 @@ export function visitResult<R extends { output: JsonObject }>(done: R, state: Js
         ...((state.measures ?? {}) as JsonObject),
         verdicts: counts,
         accepted,
-        denied: decided.length - accepted,
+        denied: decided.length - accepted - edited,
+        ...(state.others === undefined ? {} : { edited }),
       },
     },
   };
