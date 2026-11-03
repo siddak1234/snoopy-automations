@@ -37,3 +37,12 @@ export const WORDS_V2 = {
     join: ' · ',
   },
 } as const;
+
+/**
+ * v3's own words (`words.md`, section 5, awaiting the owner): the setup's sections (F3). Every
+ * word of v2 stays (`WORDS_V2`, `words.ts`).
+ */
+export const WORDS_V3 = {
+  /** The setup's sections, in order (F3); the EHR connection joins "Integrations" in Stage 2. */
+  sections: { npi: 'NPI', specialty: 'Specialty', integrations: 'Integrations' },
+} as const;
