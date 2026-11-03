@@ -1,4 +1,5 @@
 import {
+  DECISION_LIMITS,
   failed,
   held,
   settle,
@@ -246,15 +247,45 @@ export const rankCodes: Step = async (context) => {
 export const DIAGNOSES_A_CALL = 8;
 export const CALLS_AT_ONCE = 3;
 
+/** A code a v3 change offers in its place ("Other code"), with its title from the visit's table. */
+export interface OtherCode {
+  code: string;
+  title: string;
+}
+
+/**
+ * v3's "Other code" (README, "v3", row 3), kept at match time, since the choice lists are dropped
+ * after it: for each diagnosis matched, the first codes of its own list (ranked as `rank-codes`
+ * ranked them) that are neither its match nor on the note, at most the platform's 3 a change
+ * (`DECISION_LIMITS.options`), each with its title; a diagnosis with none left out.
+ */
+export function otherCodes(
+  lists: readonly string[][],
+  matches: Readonly<Record<string, { code: string }>>,
+  onNote: ReadonlySet<string>,
+  codes: Readonly<Record<string, string>>,
+): Record<string, OtherCode[]> {
+  return Object.fromEntries(
+    Object.entries(matches).flatMap(([index, match]) => {
+      const others = (lists[Number(index)] ?? [])
+        .filter((code) => code !== match.code && !onNote.has(code))
+        .slice(0, DECISION_LIMITS.options)
+        .map((code) => ({ code, title: codes[code] ?? '' }));
+      return others.length === 0 ? [] : [[index, others]];
+    }),
+  );
+}
+
 /**
  * Codes matched (v2): v1's `match-codes` on the diagnoses the lookup did not settle, in calls of
  * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent,
  * for each diagnosis, at most `EXAMPLES_SENT` of the clinic's examples of its families that
  * `rank-codes` read, in the order read, after the prompt's own, their ids in its audit record — and
- * every pick held to gate B (`gateB`), examples or not. The run's counts go to `measures`.
+ * every pick held to gate B (`gateB`), examples or not. The run's counts go to `measures`. On a v3
+ * run, each matched diagnosis's other codes are kept too (`otherCodes`).
  */
 export const matchVisit: Step = async (context) => {
-  const { state } = context;
+  const { state, request } = context;
   const reading = readingOf(state.reading);
   const { codes } = loadTable(state.table as TableId);
   const lists = Array.isArray(state.candidates) ? (state.candidates as string[][]) : [];
@@ -319,12 +350,16 @@ export const matchVisit: Step = async (context) => {
   if (stop !== undefined) return failed(stop.sentence, stop.kind);
   const { candidates: _c, settled: _s, examples: _e, ...rest } = state;
   const used = new Set(audit.flatMap((r) => r.examples));
+  const onNote = new Set(reading.codesOnNote.map(normalCode));
+  const others =
+    request.templateVersion >= 3 ? { others: otherCodes(lists, matches, onNote, codes) } : {};
   return {
     outcome: 'ok',
     summary: 'Codes matched',
     state: {
       ...rest,
       matches,
+      ...others,
       audit: [...auditOf(state), ...audit].map((r) => ({ ...r })),
       measures: {
         diagnoses: reading.diagnoses.length,
