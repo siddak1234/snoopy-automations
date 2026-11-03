@@ -128,3 +128,13 @@ owner's short words (2026-11-03, item 5: "Recommended"). A check only an ask or 
 descriptions are the manifest's, the session's. The learning toggle is on by default: an owner or
 admin, who edits the setup, turns it off to clear the clinic's examples (the next visit's save
 clears them).
+
+## 5. v3 (2026-11-03)
+
+**Dated 2026-11-03: these words await the owner's approval** (the session's Stage 1 spec, from the
+owner's TestFlight build 34 feedback; the spec's "v3" says what each line serves). Every word of
+sections 1–4 that v3 does not replace stays.
+
+| Where                    | The words                      | Whose                  |
+| ------------------------ | ------------------------------ | ---------------------- |
+| Setup, the section names | NPI · Specialty · Integrations | the session's, from F3 |
