@@ -32,6 +32,7 @@ import { lookUp, loadIndex } from './lookup.js';
 import {
   ACCEPTED_KEY,
   EXAMPLES_KEY,
+  EXAMPLES_SENT,
   acceptedOf,
   examplesFor,
   examplesOf,
@@ -247,10 +248,10 @@ export const CALLS_AT_ONCE = 3;
 
 /**
  * Codes matched (v2): v1's `match-codes` on the diagnoses the lookup did not settle, in calls of
- * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent the
- * clinic's examples of its families that `rank-codes` read, after the prompt's own, their ids in
- * its audit record — and every pick held to gate B (`gateB`), examples or not. The run's counts go
- * to `measures`.
+ * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent,
+ * for each diagnosis, at most `EXAMPLES_SENT` of the clinic's examples of its families that
+ * `rank-codes` read, in the order read, after the prompt's own, their ids in its audit record — and
+ * every pick held to gate B (`gateB`), examples or not. The run's counts go to `measures`.
  */
 export const matchVisit: Step = async (context) => {
   const { state } = context;
@@ -281,13 +282,17 @@ export const matchVisit: Step = async (context) => {
   let stop: { sentence: string; kind: string } | undefined;
   await atOnce(calls.length, CALLS_AT_ONCE, async (at) => {
     const call = calls[at]!;
-    const families = new Set(
-      call.flatMap((input) => [
-        ...reading.diagnoses[input.diagnosis]!.categories,
-        input.candidates[0]!.code.slice(0, 3),
-      ]),
+    // Each diagnosis its first `EXAMPLES_SENT` of its families' examples, in the order read.
+    const chosen = new Set(
+      call.flatMap((input) => {
+        const families = new Set([
+          ...reading.diagnoses[input.diagnosis]!.categories,
+          input.candidates[0]!.code.slice(0, 3),
+        ]);
+        return examples.filter((e) => families.has(e.code.slice(0, 3))).slice(0, EXAMPLES_SENT);
+      }),
     );
-    const clinic = examples.filter((e) => families.has(e.code.slice(0, 3)));
+    const clinic = examples.filter((e) => chosen.has(e));
     const asked = await askModel(
       context,
       prompt('match-codes', 2),
