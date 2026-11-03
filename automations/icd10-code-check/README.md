@@ -546,8 +546,9 @@ v3's "Other code" ships.
 serves v3 alone (`SERVED_VERSIONS`), and v1 and v2 stay served on their own containers and pinned
 images until the owner retires them. **Words:** `words.md`, section 5, **awaiting the owner's
 approval**; every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
-amendment 5, vendored in `contract/` at snoopy-backend 7ae5d92, its branch head): a manifest's
-`setupSections`, a text field's `example`, a held change's `options` and the answer `{id, other}`
+amendment 5, vendored in `contract/` at snoopy-backend 0973082 (#265), the
+platform's `main` after Stage 1 merged): a manifest's `setupSections`, a text field's `example`, a held
+change's `options` and the answer `{id, other}`
 (the SDK's `othersOf`). Its pull request merges only after the platform's Stage 1 pull request is merged and
 deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words.
 
