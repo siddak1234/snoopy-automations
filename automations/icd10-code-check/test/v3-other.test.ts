@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 import {
   RESULT_BODY_LIMIT_BYTES,
+  type EmittedBlock,
   type HeldDecision,
   type JsonObject,
   type RunResult,
@@ -189,4 +190,59 @@ test("the other codes are counted in the held result's body bound: past it none 
   assert.ok(body(tight, pad(at - Math.floor(extra / 2))) <= RESULT_BODY_LIMIT_BYTES);
   const roomy = await review(pad(at - extra - 1));
   assert.equal((roomy.decisions[1]!.options ?? []).length, 3, 'within it, offered');
+});
+
+test('past the bound the held state keeps no other codes either, so a visit just past it with them keeps its blocks; no edited measure', async () => {
+  const v3 = await runChild(note, picks, { version: 3 });
+  const state = heldOf(v3).state as JsonObject;
+  const { others: _others, ...lean } = state;
+  const review = async (kept: JsonObject) =>
+    (await reviewVisit({ state: kept } as unknown as StepContext)) as unknown as {
+      reason: string;
+      state: JsonObject;
+      decisions: HeldDecision[];
+      blocks: EmittedBlock[];
+    };
+  const plain = await review(state);
+  const without = plain.decisions.map(({ options: _o, ...d }) => d);
+  // The held result as the runner sends it (`held.stepId`, its reason, state and decisions).
+  const sent = (
+    r: { reason: string; blocks: EmittedBlock[] },
+    kept: JsonObject,
+    decisions: unknown,
+  ) => ({
+    outcome: 'held' as const,
+    held: { stepId: 'review-visit', reason: r.reason, state: kept, decisions },
+    blocks: r.blocks,
+  });
+  const bytes = (body: object) =>
+    Buffer.byteLength(JSON.stringify({ runId: '00000000-0000-4000-8000-000000000000', ...body }));
+  const gap = bytes(sent(plain, state, without)) - bytes(sent(plain, lean, without));
+  assert.ok(gap > 0, 'the kept other codes take room');
+  // Padding that leaves room for the review held without its other codes, but not with them.
+  const pad = (from: JsonObject, n: number) => ({ ...from, padding: 'x'.repeat(n) });
+  const n =
+    RESULT_BODY_LIMIT_BYTES - bytes(sent(plain, pad(lean, 0), without)) - Math.floor(gap / 2);
+  assert.ok(bytes(sent(plain, pad(lean, n), without)) <= RESULT_BODY_LIMIT_BYTES);
+  assert.ok(bytes(sent(plain, pad(state, n), without)) > RESULT_BODY_LIMIT_BYTES);
+  const tight = await review(pad(state, n));
+  assert.ok(
+    tight.decisions.every((d) => d.options === undefined),
+    'none offered',
+  );
+  assert.equal(tight.state.others, undefined, 'none kept');
+  await v3.platform.reportResult(
+    v3.request.runId,
+    sent(tight, tight.state, tight.decisions) as RunResult,
+  );
+  const held = v3.platform.results.at(-1)!.result as Extract<RunResult, { outcome: 'held' }>;
+  assert.deepEqual(held.blocks, tight.blocks, 'the review keeps its blocks');
+  const ran = await reviewChild(
+    v3,
+    { 'v1-n1': 'accepted', 'v1-n2': 'accepted', 'v1-a1': 'denied' },
+    note,
+  );
+  const measures = done(ran).output!.measures as JsonObject;
+  assert.deepEqual([measures.accepted, measures.denied], [2, 1]);
+  assert.equal('edited' in measures, false, 'no other code was offered, so none is counted');
 });

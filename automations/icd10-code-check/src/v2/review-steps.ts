@@ -71,7 +71,8 @@ function heldFits(
 /**
  * Ready to save? Codes that match go through; each change waits for your review, grouped. On a
  * v3 run each Change offers its other codes, while the held result with them fits the platform's
- * body bound (`heldFits`); past it, none is offered and each change is accepted or denied, as on v2.
+ * body bound (`heldFits`); past it, none is offered, the held state keeps none either, and each
+ * change is accepted or denied, as on v2.
  */
 export const reviewVisit: Step = ({ state }) => {
   const view = viewOf(state);
@@ -82,14 +83,16 @@ export const reviewVisit: Step = ({ state }) => {
   }
   const blocks = boundedBlocks(review.blocks);
   const heldReason = WORDS.held(review.decisions.length);
-  const decisions = heldFits(state, heldReason, review.decisions, blocks)
+  const fits = heldFits(state, heldReason, review.decisions, blocks);
+  const { others: _others, ...lean } = state;
+  const decisions = fits
     ? review.decisions
     : review.decisions.map(({ options: _options, ...decision }) => decision);
   return Promise.resolve(
     held({
       summary: WORDS.summaryHeld(view.rows.length, review.decisions.length),
       heldReason,
-      state,
+      state: fits ? state : lean,
       decisions,
       ...(blocks === undefined ? {} : { blocks }),
     }),
