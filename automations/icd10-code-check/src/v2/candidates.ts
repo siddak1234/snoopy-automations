@@ -7,13 +7,23 @@ import type { Diagnosis } from '../reading.js';
 import type { CodeTable } from '../tables.js';
 
 /**
+ * The one word-overlap score of v2's choices: for a diagnosis's statement, how many words
+ * (`wordsIn`) a code's title shares with it. `rankCandidates` ranks a diagnosis's codes by it, and
+ * v3's `otherCodes` (`child-steps.ts`) the other codes it keeps.
+ */
+export function sharedWords(statement: string, codes: CodeTable): (code: string) => number {
+  const said = wordsIn(statement);
+  return (code) => [...wordsIn(codes[code] ?? '')].filter((word) => said.has(word)).length;
+}
+
+/**
  * v2's candidates (the spec, "v2", F1): every flag-1 code of the visit's table under a diagnosis's
  * categories, never limited — v1's 60 left 40,646 of the table's codes never offerable — with the
  * clinic's preference families first, then the codes the clinic accepted before (its memory,
  * `remembered`, the most accepted first), then, inside each part, v1's rank: the words its title
- * shares with the statement, then the shorter codes, then the table's order. The specialties are
- * NUCC codes (`automations/icd10-code-check/assets/v2/specialties.json`); their families are
- * `automations/icd10-code-check/assets/v2/preferences.json`'s, built by
+ * shares with the statement (`sharedWords`), then the shorter codes, then the table's order.
+ * The specialties are NUCC codes (`automations/icd10-code-check/assets/v2/specialties.json`);
+ * their families are `automations/icd10-code-check/assets/v2/preferences.json`'s, built by
  * `automations/icd10-code-check/scripts/build-v2-assets.ts`. Which NUCC codes a run uses — the
  * setup's picks, else the NPI's taxonomies read at run time — is `specialtiesForRun`; v1's
  * `find-codes` still uses v1's six specialties.
@@ -25,9 +35,7 @@ export function rankCandidates(
   remembered: Readonly<Record<string, number>> = {},
 ): string[] {
   const categories = new Set(diagnosis.categories);
-  const said = wordsIn(diagnosis.statement);
-  const shared = (code: string) =>
-    [...wordsIn(codes[code] ?? '')].filter((word) => said.has(word)).length;
+  const shared = sharedWords(diagnosis.statement, codes);
   return Object.keys(codes)
     .filter((code) => categories.has(code.slice(0, 3)))
     .map((code, order) => ({
