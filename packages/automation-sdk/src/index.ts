@@ -180,8 +180,20 @@ export type { SettleKind, Settled } from './settle.js';
 export { FLOW_WORDS, notSentLine } from './words.js';
 export type { FlowWord } from './words.js';
 export { PART_PATTERN, held, idempotencyKeyFor, partKey } from './steps.js';
-export { DECISION_LIMITS, answersOf, boundedDecisions, isContinuationDecisions } from './review.js';
-export type { ContinuationDecision, DecisionAnswer, HeldDecision, HeldPart } from './review.js';
+export {
+  DECISION_LIMITS,
+  answersOf,
+  boundedDecisions,
+  isContinuationDecisions,
+  othersOf,
+} from './review.js';
+export type {
+  ContinuationDecision,
+  DecisionAnswer,
+  DecisionOption,
+  HeldDecision,
+  HeldPart,
+} from './review.js';
 export type {
   Automation,
   AutomationDefinition,

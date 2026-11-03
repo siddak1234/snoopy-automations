@@ -496,7 +496,9 @@ Refreshed 2026-11-03, Stage 1, from the head of the platform's branch `round-21/
 The other seven files are byte-identical to `d9297bc`'s. The SDK follows: the `links` block
 (`block-types.ts`, `blocks.ts`, `BLOCK_LIMITS.linksItems`), held to these schemas by
 `packages/automation-sdk/test/blocks.test.ts` with the platform's `emitted-all-twelve` fixture as
-of `7ae5d92` (a `links` block added, its name kept) copied in. Until the platform's branch merges,
+of `7ae5d92` (a `links` block added, its name kept) copied in; and a change's `options` and the
+answer `{id, other}` (`review.ts`: `DecisionOption`, `boundedDecisions`, `othersOf`;
+`answerReview`), held to them by `packages/automation-sdk/test/contract-review.test.ts`. Until the platform's branch merges,
 is deployed and both clients draw these, no served flow sends them; a flow that does waits for
 that merge, and this copy is re-pinned to it first.
 
