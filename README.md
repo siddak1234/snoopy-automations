@@ -154,11 +154,13 @@ startup an item step with no code and an id declared in both pipelines; `itemFix
 `declaredItemSteps` in `@autom8x/automation-sdk/testing` build an item for a suite and read a
 manifest's item steps.
 
-**What a person reads, as blocks** (the platform's ADR-0048, Round 21, and its amendment 1, block
-set v2). A success's `result`, or a `held()` step, may return `blocks` of the twelve types an
+**What a person reads, as blocks** (the platform's ADR-0048, Round 21, its amendment 1, block
+set v2, and its amendment 5). A success's `result`, or a `held()` step, may return `blocks` of the thirteen types an
 automation may send — text, metric, badge, table, list, section, file (one of the job's uploads),
-link, timeline, image (one of the job's files, drawn as a picture), chart (bar or line) and group
-(one card of drop-down sections) — which the platform draws in the order sent, in the `result` part
+link, timeline, image (one of the job's files, drawn as a picture), chart (bar or line), group
+(one card of drop-down sections) and links (1 to 8 buttons, each a label, a url and an optional
+`brand`, `LINK_BRANDS`; an `http://` url is sent as given and the platform upgrades it to
+`https://`) — which the platform draws in the order sent, in the `result` part
 of the run's page (on an item run, as the item's reading). The manifest's `display.pages` orders the
 page's parts (`PAGE_PARTS`; the item page's `scores` is opt-in); a flow that declares none is drawn
 in today's order. An image's file is drawn inline only when its upload declares a page or pixel

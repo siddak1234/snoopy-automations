@@ -1,8 +1,9 @@
 /**
- * What a person reads of a run, as blocks (platform ADR-0048, Round 21, and its amendment 1, block
- * set v2; the run result's `blocks` in `automation-run-result.json`, its `$defs.emittedBlock`): a
- * success or a held result may send up to 60 of the twelve types an automation may send — text,
- * metric, badge, table, list, section, file, link, timeline, image, chart, group. Never
+ * What a person reads of a run, as blocks (platform ADR-0048, Round 21, its amendment 1, block
+ * set v2, and its amendment 5, `links`; the run result's `blocks` in `automation-run-result.json`,
+ * its `$defs.emittedBlock`): a success or a held result may send up to 60 of the thirteen types an
+ * automation may send — text, metric, badge, table, list, section, file, link, timeline, image,
+ * chart, group, links. Never
  * `questions` and never `open`, which are the platform's; a file and an image by its artifact id.
  * The platform keeps them with the run, draws them in the `result` part of the run's page in the
  * order sent (on an item run, as the item's reading), and refuses the result whole when one breaks
@@ -25,12 +26,15 @@ export const EMITTED_BLOCK_TYPES = [
   'image',
   'chart',
   'group',
+  'links',
 ] as const;
 /** A chart's two kinds (amendment 1, point 3). */
 export const CHART_KINDS = ['bar', 'line'] as const;
 export const BLOCK_TONES = ['neutral', 'success', 'warning', 'error'] as const;
 export const TEXT_STYLES = ['body', 'strong', 'muted', 'label'] as const;
 export const TABLE_ALIGNS = ['start', 'end'] as const;
+/** Whose logo a `links` button draws (amendment 5): each client bundles the five; `site` a globe. */
+export const LINK_BRANDS = ['linkedin', 'github', 'huggingface', 'x', 'site'] as const;
 export const TIMELINE_STATES = [
   'waiting',
   'working',
@@ -47,6 +51,7 @@ export type BlockTone = (typeof BLOCK_TONES)[number];
 export type TextStyle = (typeof TEXT_STYLES)[number];
 export type TableAlign = (typeof TABLE_ALIGNS)[number];
 export type TimelineState = (typeof TIMELINE_STATES)[number];
+export type LinkBrand = (typeof LINK_BRANDS)[number];
 
 export interface BlockBadge {
   readonly text: string;
@@ -128,6 +133,20 @@ export interface LinkBlock {
   readonly url: string;
 }
 
+/**
+ * 1 to 8 buttons, drawn full width one under another, each its brand's logo and its label (1 to
+ * 40, one line) — amendment 5. A `url` may be sent `http://`: the platform upgrades it to
+ * `https://`, and draws every one as `https:`.
+ */
+export interface LinksBlock {
+  readonly type: 'links';
+  readonly items: readonly {
+    readonly label: string;
+    readonly url: string;
+    readonly brand?: LinkBrand;
+  }[];
+}
+
 export interface TimelineBlock {
   readonly type: 'timeline';
   readonly items: readonly {
@@ -171,6 +190,7 @@ export type EmittedLeaf =
   | ListBlock
   | EmittedFileBlock
   | LinkBlock
+  | LinksBlock
   | TimelineBlock
   | EmittedImageBlock
   | EmittedChartBlock;

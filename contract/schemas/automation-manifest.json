@@ -350,6 +350,11 @@
               "notifications"
             ]
           },
+          "sectionId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
+          },
           "key": {
             "type": "string",
             "pattern": "^[a-z][A-Za-z0-9]*$",
@@ -364,6 +369,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "example": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
           },
           "control": {
             "enum": [
@@ -447,6 +457,31 @@
           },
           "multiple": {
             "type": "boolean"
+          }
+        }
+      }
+    },
+    "setupSections": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
           }
         }
       }

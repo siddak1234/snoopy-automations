@@ -1,7 +1,10 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `d9297bc` (snoopy-backend d9297bc (#259), the platform's `main`
+(`snoopy-backend`, private) at commit `7ae5d92` (the head of the platform's branch
+`round-21/stage-1-platform`, Round 21's Stage 1 contract, ADR-0048 amendment 5, not yet merged; all
+eleven files `cmp`-equal to it; 2026-11-03, "Refreshed 2026-11-03, Stage 1" below). Before it,
+`d9297bc` (snoopy-backend d9297bc (#259), the platform's `main`
 after its #259 squash-merged Round 21's manifest byte limit, its §12.1 #319; all eleven files
 `cmp`-equal to it; 2026-11-02, "Refreshed 2026-11-02, the manifest byte limit" below). Before it,
 `10b5fae` (snoopy-backend 10b5fae (#256), the platform's `main` after its #256
@@ -474,6 +477,29 @@ The other ten files are byte-identical to `10b5fae`'s. `test/conformance.test.ts
 `manifests/*.json`, as committed, to the menu's `limits.manifest.bytes`, read from this copy, and
 `/create-flow`'s spec and review templates name the limit.
 
+Refreshed 2026-11-03, Stage 1, from the head of the platform's branch `round-21/stage-1-platform`,
+`7ae5d92` (its ADR-0048 amendment 5; not yet merged, so not live). Four files moved; all eleven are
+`cmp`-equal to `7ae5d92` (each copied from a snapshot clone at that commit):
+
+- `automation-manifest.json`: a setup field's `example` (1 to 40 characters, a text box's
+  placeholder in place of "Optional") and `sectionId`; the manifest's `setupSections`, 2 to 6
+  `{id, title}` (a title of 1 to 40), in place of the four fixed sections when declared.
+- `automation-run-result.json`: the block `links` (1 to 8 `{label, url, brand?}`, a label of 1 to
+  40, a url `http://` or `https://`, a brand one of `linkedin`, `github`, `huggingface`, `x`,
+  `site`), at the top level and in a section; a held decision's `options`, 1 to 3 `{value, label}`
+  of 1 to 120 characters each.
+- `automation-invoke-request.json`: each of `continuation.decisions` is `{id, decision}` or
+  `{id, other}`, `other` 1 to 120 characters — one of its change's offered values.
+- `platform-menu.json`: the block type `links`, and `limits.manifest.setupExample` (40),
+  `setupSections` (6) and `setupSectionTitle` (40).
+
+The other seven files are byte-identical to `d9297bc`'s. The SDK follows: the `links` block
+(`block-types.ts`, `blocks.ts`, `BLOCK_LIMITS.linksItems`), held to these schemas by
+`packages/automation-sdk/test/blocks.test.ts` with the platform's `emitted-all-twelve` fixture as
+of `7ae5d92` (a `links` block added, its name kept) copied in. Until the platform's branch merges,
+is deployed and both clients draw these, no served flow sends them; a flow that does waits for
+that merge, and this copy is re-pinned to it first.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -487,8 +513,9 @@ section is vendored from the platform's `snoopy-backend/manifests/README.md` (AD
 named as "N" are its `LIMITS`. "A flow's pages" and "A result's blocks" are copied from its README
 at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`" at `27c3051`,
 amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
-decision's `group`, the `memory` capability) at `10b5fae`, and "Size, before the validator" at
-`d9297bc`, its file paths written from `snoopy-backend/`.
+decision's `group`, the `memory` capability) at `10b5fae`, "Size, before the validator" at
+`d9297bc`, and amendment 5's words (`setup[]`'s `example` and `setupSections`, the `links` block, a
+decision's `options` and an `other` answer) at `7ae5d92`, its file paths written from `snoopy-backend/`.
 
 **Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
 of the committed file, counted as committed (pretty-printed JSON, its
@@ -538,7 +565,15 @@ be printable ASCII characters"; `label` and `group` within their `LIMITS`; `grou
 every option or on none". Its default names values, never labels: "must be one of the field's
 options", or with `multiple` "must be a list of the field's options", "must not name an option
 more than once" and "must name at least 1 option". A saved value takes the same words, and a
-required one saved as `[]` "is required by the manifest".
+required one saved as `[]` "is required by the manifest". An `example` (ADR-0048 Amendment
+5, a text box's placeholder) is within `LIMITS.setupExample` and "is only meaningful on a
+'text' control". **`setupSections`** (Amendment 5), optional, are checked both ways:
+declared, they "must declare at least 2 sections", at most `LIMITS.setupSections`, each
+`{id, title}` — another key "is not a property", an `id` "is declared more than once"
+refused, a `title` within `LIMITS.setupSectionTitle` — and one no field names "holds no
+setting"; every field then "needs a sectionId when setupSections are declared" and its
+`sectionId` "must name a declared section". Undeclared, a field's `sectionId` "is only
+meaningful when setupSections are declared", and the fields keep today's four sections.
 
 **`trigger`** — `connection` "is only meaningful when kind is 'provider-event'";
 `everySeconds` "is only meaningful when kind is 'schedule'" and must lie within the
@@ -668,7 +703,7 @@ of its sections and their blocks), "must hold at most 20 images in all" (those i
 a group's section counted) and "must be at most 98304 bytes as JSON" (96 KiB of UTF-8). A block, a
 section's block, a group's section, a row, an item, a point, a column or a badge "must be an
 object"; a `type` "must be one of: text, metric, badge, table, list, section, file, link, timeline,
-image, chart, group" (image, chart and group since the switch, ADR-0048 amendment 1, point 9); a
+image, chart, group, links" (image, chart and group since the switch, ADR-0048 amendment 1, point 9; links since amendment 5); a
 `type` of `questions`, at any depth, and a key `questions` or `open` on any object "is the
 platform's"; a section's block whose `type` is a section "must not be a section: sections are one
 level deep", and one whose `type` is a group "must not be a group: groups are top level only"; any
@@ -681,7 +716,11 @@ line"; `points` "must list 1 to 24" on a bar and "must list 2 to 60" on a line, 
 text?}` with a `label` and a `text` of 1 to 40; a `value` "must be a finite number", "must be at
 most 1e15 in size" and, on a bar, "must not be below 0 on a bar chart". **A group** is `{type, title,
 sections}`, top level only: `sections` "must list 1 to 12", each one "must be a section" and is held
-as a top-level section is (1 to 40 leaves, an image or a chart among them). Lists, each "must list N to M": a section's `blocks` 1 to 40, a
+as a top-level section is (1 to 40 leaves, an image or a chart among them). **A links block**
+(amendment 5) is `{type, items}`: `items` "must list 1 to 8", each `{label, url, brand?}` with a
+`label` of 1 to 40 on one line, a `brand` that "must be one of: linkedin, github, huggingface, x,
+site", and a `url` held as any url is, except that it may be `http://` — "must be an http or https
+URL" — which the platform upgrades to `https://`. Lists, each "must list N to M": a section's `blocks` 1 to 40, a
 metric's `items` 1 to 4, a table's `columns` 2 to 3 and `rows` 1 to 200, a list's `items` 0 to 100
 and a timeline's `items` 1 to 50; a row's `cells` "must hold N cells, one per column". Strings
 "must be 1 to N characters": a text's `text` 2,000 and a list item's `text` 600, line breaks kept;
@@ -711,9 +750,13 @@ lowercase letters, digits and hyphens, starting with a letter" and one "is liste
 is refused; `label` "must be 1 to 120 characters", `detail` "must be 1 to 200 characters" and
 `group` (amendment 3, the heading a client draws the change under, in the order sent) "must be 1
 to 120 characters", each one line with nothing shaped like a tag; a `group` "must be on every
-change or on none". The decision route then takes one answer per change:
-"decisions must answer every change once". The SDK's `boundedDecisions` holds a flow's list to
-these before sending (`packages/automation-sdk/src/review.ts`).
+change or on none". A change may offer `options` (amendment 5, values a person may pick in its
+place): they "must list 1 to 3", each `{value, label}` — another key "is not an accepted field" —
+each "must be 1 to 120 characters" on one line, and a `value` "is listed more than once" is
+refused. The decision route then takes one answer per change:
+"decisions must answer every change once"; each answer "must hold exactly one of decision and
+other", and an `other` names one of its change's offered values (`unofferedOther`). The SDK's
+`boundedDecisions` holds a flow's list to these before sending (`packages/automation-sdk/src/review.ts`).
 
 **Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
 scopes per connection each "must contain at most N entries".
