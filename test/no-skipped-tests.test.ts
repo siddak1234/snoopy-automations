@@ -8,13 +8,15 @@ import { pathToFileURL } from 'node:url';
 /**
  * No silent skips (Round 21 hardening, A2): `npm run verify` runs the tests through
  * `scripts/no-skipped-tests.mjs`, which fails when any suite's TAP counts a skipped or todo test
- * above 0, as CI's Verify step reads the whole log (test/workflow-policy.test.ts), and when the
- * output holds no TAP summary at all: every `tsx --test` script names the TAP reporter.
+ * above 0, as CI's Verify step reads the whole log (test/workflow-policy.test.ts), and when any
+ * suite — the root's or a workspace's, each read on its own — holds no TAP summary: every
+ * `tsx --test` script names the TAP reporter.
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const script = join(repositoryRoot, 'scripts', 'no-skipped-tests.mjs');
-const { summarized, unrun } = (await import(pathToFileURL(script).href)) as {
+const { suites, summarized, unrun } = (await import(pathToFileURL(script).href)) as {
+  suites: (output: string) => string[];
   summarized: (output: string) => boolean;
   unrun: (tap: string) => string | undefined;
 };
@@ -69,8 +71,10 @@ test('the script fails a run that skipped or left a test todo, naming the count,
 
 test('a slow reader gets the whole output, a refusal’s too: the script never calls process.exit', () => {
   // 1 MiB, then a skipped count. The reader waits a second before it reads, so the script's
-  // writes queue behind a full pipe; process.exit would drop them (a pipe is written
-  // asynchronously on macOS).
+  // writes queue behind a full pipe; process.exit would drop them. A pipe is written
+  // asynchronously on Linux as on macOS, so this bites on CI's Ubuntu too: with process.exit in
+  // the refusal, Node 22.23.4 on Linux (node:22-alpine, 2026-11-03) delivered 65,536 of
+  // 1,048,640 bytes, as macOS does.
   const tail = `\n${clean.replace('# skipped 0', '# skipped 1')}`;
   const program = `process.stdout.write('x'.repeat(${2 ** 20}) + ${JSON.stringify(tail)})`;
   const piped = spawnSync(
@@ -98,6 +102,27 @@ test('spec output is refused, a skip in it included: it holds no TAP summary to 
   const refused = run(spec);
   assert.equal(refused.status, 1, 'ℹ skipped 1 is not read as clean');
   assert.match(refused.stderr, /no TAP summary \(`# tests N`\)/u);
+});
+
+/** npm's banner before a script it runs, as `npm test` prints it to stdout. */
+const banner = (name: string) =>
+  `\n> ${name} test\n> tsx --test --test-reporter=tap "test/**/*.test.ts"\n\n`;
+
+test('each suite is read on its own: one workspace printing spec among TAP ones is refused, by name', () => {
+  const tapOnly = `${banner('root@1.0.0')}${clean}${banner('@autom8x/a@0.1.0')}${clean}`;
+  assert.deepEqual(
+    suites(tapOnly).map((suite) => suite.split('\n')[0]),
+    ['> root@1.0.0 test', '> @autom8x/a@0.1.0 test'],
+  );
+  assert.deepEqual(suites(clean), [clean], 'no banner: one suite');
+  const passed = run(tapOnly);
+  assert.equal(passed.status, 0, passed.stderr);
+  // The whole output holds a summary, the root's, but the workspace's suite has none.
+  const mixed = `${tapOnly}${banner('@autom8x/b@0.1.0')}${spec}`;
+  assert.equal(summarized(mixed), true);
+  const refused = run(mixed);
+  assert.equal(refused.status, 1, 'ℹ skipped 1 in a workspace is not read as clean');
+  assert.match(refused.stderr, /no TAP summary \(`# tests N`\) in > @autom8x\/b@0\.1\.0 test,/u);
 });
 
 test('output with no summary at all is refused: a run whose counts cannot be read is no proof', () => {
