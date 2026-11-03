@@ -10,6 +10,7 @@ import {
 } from '@autom8x/automation-sdk';
 
 import { gateB, type MatchInput } from '../candidates.js';
+import { inFamily } from '../families.js';
 import { prompt } from '../prompts.js';
 import { readingOf, withoutPatient, type Reading } from '../reading.js';
 import {
@@ -18,6 +19,7 @@ import {
   normalCode,
   pickTable,
   realDate,
+  type CodeTable,
   type TableId,
 } from '../tables.js';
 import { askModel, atOnce, auditOf, type AuditRecord } from './audit.js';
@@ -26,6 +28,7 @@ import {
   loadPreferences,
   preferredFamilies,
   rankCandidates,
+  sharedWords,
   specialtiesForRun,
   taxonomiesOf,
 } from './candidates.js';
@@ -255,22 +258,41 @@ export interface OtherCode {
 
 /**
  * v3's "Other code" (README, "v3", row 3), kept at match time, since the choice lists are dropped
- * after it: for each diagnosis matched, the first codes of its own list (ranked as `rank-codes`
- * ranked them) that are neither its match nor on the note, at most the platform's 3 a change
+ * after it: for each diagnosis matched, the codes of its own list that are neither its match nor on
+ * the note, ranked: the match's 3-character category first, then its family (the `preferred` ones
+ * holding it), then the words a title shares with the statement (`sharedWords`), then list order.
+ * A code with neither the category nor a shared word is left out; at most the platform's 3 a change
  * (`DECISION_LIMITS.options`), each with its title; a diagnosis with none left out.
  */
 export function otherCodes(
   lists: readonly string[][],
   matches: Readonly<Record<string, { code: string }>>,
   onNote: ReadonlySet<string>,
-  codes: Readonly<Record<string, string>>,
+  codes: CodeTable,
+  statements: readonly string[],
+  preferred: readonly string[],
 ): Record<string, OtherCode[]> {
   return Object.fromEntries(
     Object.entries(matches).flatMap(([index, match]) => {
+      const category = match.code.slice(0, 3);
+      const family = preferred.filter((one) => inFamily(match.code, [one]));
+      const shared = sharedWords(statements[Number(index)] ?? '', codes);
       const others = (lists[Number(index)] ?? [])
         .filter((code) => code !== match.code && !onNote.has(code))
+        .map((code, order) => ({
+          code,
+          order,
+          same: Number(code.slice(0, 3) === category),
+          family: Number(inFamily(code, family)),
+          shared: shared(code),
+        }))
+        .filter((one) => one.same === 1 || one.shared > 0)
+        .sort(
+          (a, b) =>
+            b.same - a.same || b.family - a.family || b.shared - a.shared || a.order - b.order,
+        )
         .slice(0, DECISION_LIMITS.options)
-        .map((code) => ({ code, title: codes[code] ?? '' }));
+        .map(({ code }) => ({ code, title: codes[code] ?? '' }));
       return others.length === 0 ? [] : [[index, others]];
     }),
   );
@@ -282,7 +304,7 @@ export function otherCodes(
  * for each diagnosis, at most `EXAMPLES_SENT` of the clinic's examples of its families that
  * `rank-codes` read, in the order read, after the prompt's own, their ids in its audit record — and
  * every pick held to gate B (`gateB`), examples or not. The run's counts go to `measures`. On a v3
- * run, each matched diagnosis's other codes are kept too (`otherCodes`).
+ * run, each matched diagnosis's related other codes are kept too, closest first (`otherCodes`).
  */
 export const matchVisit: Step = async (context) => {
   const { state, request } = context;
@@ -351,8 +373,12 @@ export const matchVisit: Step = async (context) => {
   const { candidates: _c, settled: _s, examples: _e, ...rest } = state;
   const used = new Set(audit.flatMap((r) => r.examples));
   const onNote = new Set(reading.codesOnNote.map(normalCode));
+  const statements = reading.diagnoses.map((diagnosis) => diagnosis.statement);
+  const preferred = preferredFamilies(nucc(state), loadPreferences());
   const others =
-    request.templateVersion >= 3 ? { others: otherCodes(lists, matches, onNote, codes) } : {};
+    request.templateVersion >= 3
+      ? { others: otherCodes(lists, matches, onNote, codes, statements, preferred) }
+      : {};
   return {
     outcome: 'ok',
     summary: 'Codes matched',
