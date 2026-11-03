@@ -51,6 +51,7 @@
       "key": "npi",
       "title": "NPI",
       "description": "Fills your specialties when none are picked. Optional.",
+      "example": "10 digits, e.g. 1234567893",
       "control": "text",
       "required": false,
       "group": "check"

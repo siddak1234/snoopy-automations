@@ -546,19 +546,21 @@ serves v3 alone (`SERVED_VERSIONS`), and v1 and v2 stay served on their own cont
 images until the owner retires them. **Words:** `words.md`, section 5, **awaiting the owner's
 approval**; every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
 amendment 5, vendored in `contract/` at snoopy-backend 7ae5d92, its branch head): a manifest's
-`setupSections`. Its pull request merges only after the platform's Stage 1 pull request is merged and
+`setupSections` and a text field's `example`. Its pull request merges only after the platform's Stage 1 pull request is merged and
 deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words.
 
 **What moved it** — TestFlight build 34 feedback, 2026-11-02, the owner's words:
 
 | Id  | The words                                                                                                                        |
 | --- | -------------------------------------------------------------------------------------------------------------------------------- |
+| F2  | "What is the npi? What do we type in. Maybe add an example one rather than optional in the text field."                          |
 | F3  | "Currently its 1 settings but we need to split this out. 1. Npi 2 specialty 3 connectors/integrations with the toggle for learn" |
 
 **The changes** (v3 keeps every v2 word and behaviour otherwise):
 
-| #   | Change                                                                                                                                                                                           | From | Built                                                    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | -------------------------------------------------------- |
-| 1   | The setup in three numbered sections (`setupSections`): NPI (the NPI's field), Specialty (the specialties) and Integrations (the Learn toggle). The EHR connection joins Integrations in Stage 2 | F3   | the manifest; `WORDS_V3.sections`; `v3-manifest.test.ts` |
+| #   | Change                                                                                                                                                                                                                                                                             | From | Built                                                      |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------- |
+| 1   | The setup in three numbered sections (`setupSections`): NPI (the NPI's field), Specialty (the specialties) and Integrations (the Learn toggle). The EHR connection joins Integrations in Stage 2                                                                                   | F3   | the manifest; `WORDS_V3.sections`; `v3-manifest.test.ts`   |
+| 2   | The NPI's box shows an example in place of "Optional" (its `example`, the clients' placeholder): "10 digits, e.g. 1234567893". 1234567893 is a valid NPI by CMS's check digit (the Luhn formula over the prefix 80840 and its ten digits), proven in the test; its line stays v2's | F2   | the manifest; `WORDS_V3.npiExample`; `v3-manifest.test.ts` |
 
 **Open, for a person:** section 5's words wait for the owner.
