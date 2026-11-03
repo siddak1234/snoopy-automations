@@ -70,16 +70,31 @@ export function titleDifference(
 }
 
 /**
- * The rule a decision's why names, per check (the spec's v2 section, row 8): G3 in the owner's
- * screen's words; every other check, until a person words its rule, v1's reason sentence (`REASONS`,
- * `words.md` section 4 and README "Open, for a person").
+ * The rule a decision's why names, per check a decision carries (the spec's v2 section, row 8;
+ * `words.md` section 4): G3 in the owner's screen's words, the others the owner's short words
+ * (2026-11-03, item 5); G1's names the visit's table, L3's the code moved up. A check only an ask
+ * or a Keep carries (G2, G5, G6, K3, T1) has none here: an ask keeps its sentence (`REASONS`).
  */
-export const RULES_V2: Readonly<Record<string, string>> = {
+export const RULES_V2: Readonly<
+  Record<string, string | ((at: { code: string; table: string }) => string)>
+> = {
+  G1: ({ table }) => `complete code from the ${table} table`,
   G3: 'most specific code the note shows',
+  G4: 'uncertain diagnosis: code the sign or symptom',
+  G7: 'code what the note supports',
+  K1: 'N18.6 takes no stage code',
+  K2: 'dialysis: add Z99.2',
+  L1: 'blood pressure + kidney disease: I12, then the stage',
+  L2: 'blood pressure + heart + kidney: I13',
+  L3: ({ code }) => `${code} before the kidney stage`,
 };
 
-/** A row's rule: its first check's in `RULES_V2`, else its reason; none for a Keep. */
-const ruleOf = (r: Row): string | null => RULES_V2[r.check.split(',')[0]!.trim()] ?? r.reason;
+/** A row's rule: its first check's in `RULES_V2`, with its code and the visit's table, else its reason; none for a Keep. */
+function ruleOf(r: Row, table: string): string | null {
+  const rule = RULES_V2[r.check.split(',')[0]!.trim()];
+  if (rule === undefined) return r.reason;
+  return typeof rule === 'string' ? rule : rule({ code: r.code, table });
+}
 
 /** The first words of `words` whose line, built by `build`, fits `room`: "…" marks a cut; none fits, undefined. */
 function wordsWithin(
@@ -100,9 +115,13 @@ function wordsWithin(
  * 'Difference: "{words only in the first}" vs "{words only in the second}"' (a Change whose titles
  * differ), then 'From the note: "{quote}"', then 'Rule: {the check's rule}' (`ruleOf`), joined by
  * " · ". Past the bound the rule is dropped first, then the quote shortened by whole words, then
- * the difference; never cut mid-word.
+ * the difference; never cut mid-word. `table` is the visit's table's name, G1's rule's.
  */
-export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): string | undefined {
+export function whyDetail(
+  r: Row,
+  titles: Readonly<Record<string, string>>,
+  table: string,
+): string | undefined {
   const W = WORDS_V2.why;
   const room = DECISION_LIMITS.detail;
   const join = (parts: (string | undefined)[]) =>
@@ -120,7 +139,7 @@ export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): str
       : W.difference(first.join(' '), second.join(' '));
   const quote = r.quote === null ? '' : cleanQuote(r.quote);
   const fromNote = quote === '' ? undefined : W.fromNote(quote);
-  const rule = ruleOf(r);
+  const rule = ruleOf(r, table);
   const ruled = rule === null ? undefined : W.rule(rule);
   const full = join([difference, fromNote, ruled]);
   if (full.length <= room) return full === '' ? undefined : full;
@@ -154,7 +173,7 @@ export function visitDecisions(view: View): GroupedDecision[] {
   return view.rows
     .filter((r) => DECIDED.has(r.verdict))
     .map((r): GroupedDecision => {
-      const detail = whyDetail(r, view.titles);
+      const detail = whyDetail(r, view.titles, view.tableName);
       return {
         id: decisionId(r.id),
         label: decisionLabel(r),
