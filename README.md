@@ -636,9 +636,10 @@ after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `
 ("Build a flow", below).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
-  doctors and coders; on `defineFlow`): its folder's README is its spec and how the code does it.
-  v1 stays served on its own container; the image built here serves v2 alone, on the platform round
-  2 contract (`contract/`, "Platform round 2" above).
+  doctors and coders; v3; v2 and v3 on `defineFlow`): its folder's README is its spec and how the
+  code does it. v1 and v2 stay served on their own containers; the image built here serves v3 alone
+  (its setup in sections and a change's "Other code", the folder README's "v3"), on the Stage 1
+  contract (`contract/`, "Stage 1" above).
 
 ## The kit
 
