@@ -3,8 +3,8 @@ import type { Fetch, RunDetail } from '../scripts/live-eval/client.js';
 /**
  * A fake of the live platform for `npm run live-eval`'s suite (the owner's Q4: "CI never calls a
  * model"): the workspace API's routes the eval calls — the subscription, an upload and its
- * completion, a run and its read, a job and its read — and the store's signed URL. Each run's page
- * is `pageOf(filename)`, the file the run was given, by its upload's name.
+ * completion, a run and its read, a job, its read and its archive — and the store's signed URL.
+ * Each run's page is `pageOf(filename)`, the file the run was given, by its upload's name.
  */
 
 export interface FakeOptions {
@@ -12,6 +12,10 @@ export interface FakeOptions {
   readonly version: number;
   readonly config?: Record<string, unknown>;
   readonly status?: string;
+  /** What the job's read ends as: `ready` unless said. */
+  readonly itemStatus?: string;
+  /** The archive's answer: 200 unless said (403 for a member). */
+  readonly archiveStatus?: number;
   /** The page a run of this file ends with. */
   readonly pageOf: (
     filename: string,
@@ -74,7 +78,17 @@ export function fakePlatform(options: FakeOptions) {
       return Promise.resolve(json({ item: { id: 'item-1', status: 'reading' } }, 201));
     }
     if (method === 'GET' && path === '/items/item-1') {
-      return Promise.resolve(json({ item: { id: 'item-1', status: 'ready' } }));
+      return Promise.resolve(
+        json({ item: { id: 'item-1', status: options.itemStatus ?? 'ready' } }),
+      );
+    }
+    if (method === 'POST' && path === '/items/item-1/archive') {
+      const status = options.archiveStatus ?? 200;
+      return Promise.resolve(
+        status === 200
+          ? json({ item: { id: 'item-1', status: 'ready', archivedAt: '2026-11-04T12:00:00Z' } })
+          : json({ status, details: { requiredRole: 'admin' } }, status),
+      );
     }
     if (method === 'POST' && path === '/runs') {
       const artifact = Object.values(input.input as Record<string, string>)[0] ?? '';

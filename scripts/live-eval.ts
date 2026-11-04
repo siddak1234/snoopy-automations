@@ -4,14 +4,17 @@
 // uploaded, run and read as a person's app does — and compares each run's key fields with its
 // recording, field by field: it passes only when every key field of every sample matches, and
 // prints each difference for the owner. `--record` makes the recordings from the live runs instead.
-// The test workspace's session is read from the environment at run time (`ENV`), never written;
-// CI never runs it (it refuses when `CI` is set), and the suite runs it against a fake platform.
+// A flow with items makes its job first and archives it when the pass ends. The test workspace's
+// session is read from the environment at run time (`ENV`), never written; CI never runs it (it
+// refuses when `CI` is set), and the suite runs it against a fake platform.
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
   EvalError,
+  archiveItem,
   endedRun,
+  makeItem,
   readSubscription,
   readyItem,
   startRun,
@@ -131,19 +134,37 @@ export async function main(
     const itemId =
       profile.job === undefined
         ? undefined
-        : await readyItem(
+        : await makeItem(
             live,
             subscriptionId,
             profile.job.fields,
             await upload(live, subscriptionId, profile.job.file()),
           );
-    return await runSamples(profile, live, subscriptionId, itemId, record, io);
+    try {
+      if (itemId !== undefined) await readyItem(live, itemId);
+      return await runSamples(profile, live, subscriptionId, itemId, record, io);
+    } finally {
+      if (itemId !== undefined) await archived(live, itemId, io);
+    }
   } catch (error) {
     if (error instanceof EvalError) {
       io.write(`live eval stopped: ${error.message}`);
       return 2;
     }
     throw error;
+  }
+}
+
+/**
+ * The pass's job archived once the pass ends — passed, failed or stopped — so no eval job stays in
+ * the flow's list; one the platform does not archive is named in a line, the pass's exit kept.
+ */
+async function archived(live: Live, itemId: string, io: Io): Promise<void> {
+  try {
+    await archiveItem(live, itemId);
+  } catch (error) {
+    const why = error instanceof EvalError ? error.message : 'no answer read';
+    io.write(`the job ${itemId} was not archived (${why}); it stays in the flow's list`);
   }
 }
 

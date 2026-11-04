@@ -11,14 +11,14 @@ import { SAMPLES } from '../automations/invoice-processing/test/sample-maker/sam
 import { ENV, main, type Io } from '../scripts/live-eval.js';
 import { PROFILES, type Profile } from '../scripts/live-eval/profiles.js';
 import { CANDIDATES } from '../scripts/live-eval/resumes.js';
-import { ENV_FOR, fakePlatform, type FakeOptions } from './live-eval-fake.js';
+import { API, ENV_FOR, WORKSPACE, fakePlatform, type FakeOptions } from './live-eval-fake.js';
 
 /**
  * `npm run live-eval` (Round 21, Stage 2, the owner's Q4), against a fake platform — CI never calls
  * a model: 25 invented samples through the platform's public API, each run's key fields compared
  * with its recording field by field, every difference printed, a pass only when all match; the
- * recording mode; and what it refuses before anything runs. The session never reaches a line, a
- * recording or the store.
+ * recording mode; the job a pass makes, archived when it ends; and what it refuses before anything
+ * runs. The session never reaches a line, a recording or the store.
  */
 
 const INVOICE = PROFILES['invoice-processing']!;
@@ -51,6 +51,15 @@ async function evaluate(
   };
   const code = await main(argv, env, io);
   return { code, lines, sent: platform.sent };
+}
+
+/** The calls that archived the job, and whether each came after every run was started. */
+function archivesOf(sent: readonly { method: string; url: string }[]) {
+  const lastRun = sent.map((call) => call.url.endsWith('/runs')).lastIndexOf(true);
+  return sent
+    .map((call, at) => ({ call, at }))
+    .filter(({ call }) => call.method === 'POST' && call.url.endsWith('/archive'))
+    .map(({ call, at }) => ({ url: call.url, afterRuns: at > lastRun }));
 }
 
 /** The documents a run of each sample shows, as the agents' first read gives them: by file name. */
@@ -92,6 +101,7 @@ test("Invoice Processing: 25 samples, each run's supplier, number and total matc
     sent.filter((call) => call.method === 'POST' && call.url.endsWith('/runs')).length,
     25,
   );
+  assert.deepEqual(archivesOf(sent), [], 'no job made, none archived');
 });
 
 test('a key field that differs fails the eval, exit 1, and prints the sample, the field and both values', async () => {
@@ -132,6 +142,14 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
     const items = recorded.sent.filter((call) => call.url.endsWith('/items'));
     assert.equal(items.length, 1, 'the job, once, before any candidate');
     assert.deepEqual(JSON.parse(items[0]!.body!).fields, RESUMES.job!.fields);
+    assert.deepEqual(
+      archivesOf(recorded.sent),
+      [{ url: `${API}/v1/workspaces/${WORKSPACE}/items/item-1/archive`, afterRuns: true }],
+      'the job archived once, when the pass ends',
+    );
+    const archive = recorded.sent.find((call) => call.url.endsWith('/archive'))!;
+    assert.match(archive.headers['idempotency-key']!, /^live-eval-[0-9a-f-]{36}$/u);
+    assert.equal(archive.body, undefined, 'its body empty');
     const files = readdirSync(folder).sort();
     assert.equal(files.length, 25);
     const first = JSON.parse(readFileSync(join(folder, files[0]!), 'utf8'));
@@ -165,6 +183,64 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
         "candidate-07: the run failed: The AI's answer couldn't be used. Try a clearer file.",
       ),
       failing.lines.join('\n'),
+    );
+    assert.equal(archivesOf(failing.sent).length, 1, 'a failed pass archives its job too');
+  } finally {
+    done();
+  }
+});
+
+test("Resume Screening's job is archived however the pass ends: stopped by a run that never ends, or by a job whose file failed; an archive refused is a line, the pass's exit kept", async () => {
+  const { profile, done } = scratch(RESUMES);
+  try {
+    const profiles = { 'candidate-reviewer': profile };
+    const page = (filename: string) => {
+      const candidate = CANDIDATES.find((each) => `${each.sample}.docx` === filename)!;
+      return { run: { title: candidate.name }, sections: [] };
+    };
+    const fake = { templateId: 'candidate-reviewer', version: 3, pageOf: page };
+
+    const stopped = await evaluate(
+      ['candidate-reviewer', '--record'],
+      {
+        ...fake,
+        pageOf: (filename) =>
+          filename === 'candidate-03.docx' ? { run: { status: 'running' } } : page(filename),
+      },
+      profiles,
+    );
+    assert.equal(stopped.code, 2, stopped.lines.join('\n'));
+    assert.match(
+      stopped.lines.at(-1)!,
+      /^live eval stopped: run run-\d+ had not ended after 600 s$/u,
+    );
+    assert.deepEqual(
+      archivesOf(stopped.sent).map((each) => each.afterRuns),
+      [true],
+      'archived once, after the pass stopped',
+    );
+
+    const unread = await evaluate(
+      ['candidate-reviewer', '--record'],
+      { ...fake, itemStatus: 'failed' },
+      profiles,
+    );
+    assert.equal(unread.code, 2);
+    assert.equal(unread.lines.at(-1), 'live eval stopped: the job could not be made from its file');
+    assert.equal(unread.sent.filter((call) => call.url.endsWith('/runs')).length, 0);
+    assert.equal(archivesOf(unread.sent).length, 1, 'a job whose file failed is archived too');
+
+    const refused = await evaluate(
+      ['candidate-reviewer', '--record'],
+      { ...fake, archiveStatus: 403 },
+      profiles,
+    );
+    assert.equal(refused.code, 0, refused.lines.join('\n'));
+    assert.ok(
+      refused.lines.includes(
+        "the job item-1 was not archived (POST /items/item-1/archive answered 403); it stays in the flow's list",
+      ),
+      refused.lines.join('\n'),
     );
   } finally {
     done();

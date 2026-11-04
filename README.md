@@ -507,13 +507,19 @@ read as the run reads it.
   `AUTOM8X_EVAL_WORKSPACE_ID` and `AUTOM8X_EVAL_SUBSCRIPTION_ID` — and never committed. The
   subscription must be the flow's, live, on the version the eval is for (Invoice Processing v8,
   Resume Screening v3), and Invoice Processing's on "None": the eval never writes to QuickBooks.
-  Resume Screening's job is made first, once a run, from an invented job description. Anything else
-  stops it, exit 2, before a run.
+  Resume Screening's job is made first, once a run, from an invented job description, and archived
+  when the pass ends, passed, failed or stopped (`POST /items/{id}/archive`; its runs stay), so no
+  eval job stays in the flow's list; one the platform does not archive is named in a line. Anything
+  else stops it, exit 2, before a run.
 - **The samples are invented**: Invoice Processing's 25 made-up files (`test/samples/`), Resume
   Screening's 25 made-up people, each a Word resume built byte-stable by the eval
   (`scripts/live-eval/resumes.ts`), at example.com with phones in 555-0100 to 555-0199. Never a real
   person's.
-- **What it costs**: 25 runs, each one to a few paid AI calls, on the test workspace's plan.
+- **What it costs, and what it sends**: 25 runs, each one to a few paid AI calls, on the test
+  workspace's plan. Each run is activity, so the platform emails it to the workspace's owners and
+  admins, the person who started it and the flow's extra addresses, one message per address (its
+  OpenAPI's `readFlowEmailRecipients`), and pushes it: about 25 emails a pass to each address. The
+  job's own read is neither.
 - **CI never runs it**: it refuses when `CI` is set, and `test/live-eval.test.ts` runs it against a
   fake platform (`test/live-eval-fake.ts`).
 

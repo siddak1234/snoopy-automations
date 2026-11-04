@@ -1,8 +1,9 @@
 // The live platform as `npm run live-eval` reaches it (Round 21, Stage 2, the owner's Q4): the
 // public API a person's app uses, in one test workspace, under that workspace's session — read from
 // the environment at run time, sent only in the Authorization header, and never printed, logged or
-// written. The file goes straight to the store's signed URL, as the app's does. Every call is
-// injected (`fetch`, `sleep`), so the suite runs it against a fake platform: CI never calls a model.
+// written. The file goes straight to the store's signed URL, as the app's does. A job the eval
+// makes is archived when its pass ends (`archiveItem`). Every call is injected (`fetch`, `sleep`),
+// so the suite runs it against a fake platform: CI never calls a model.
 import { randomUUID } from 'node:crypto';
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -175,8 +176,8 @@ export async function endedRun(live: Live, runId: string): Promise<RunDetail> {
   }
 }
 
-/** An item made from a file (a job, for a flow with items), once its file is read: its id. */
-export async function readyItem(
+/** An item made from a file (a job, for a flow with items): its id, before its file is read. */
+export async function makeItem(
   live: Live,
   subscriptionId: string,
   fields: Record<string, string>,
@@ -189,15 +190,24 @@ export async function readyItem(
     { fields, file: artifactId },
     true,
   );
+  return made.item.id;
+}
+
+/** Waits until the item's file is read; an `EvalError` when it failed or past `runTimeoutMs`. */
+export async function readyItem(live: Live, itemId: string): Promise<void> {
   for (let waited = 0; ; waited += live.pollMs) {
-    const { item } = await call<{ item: { status: string } }>(
-      live,
-      'GET',
-      `/items/${made.item.id}`,
-    );
-    if (item.status === 'ready') return made.item.id;
+    const { item } = await call<{ item: { status: string } }>(live, 'GET', `/items/${itemId}`);
+    if (item.status === 'ready') return;
     if (item.status === 'failed') throw new EvalError('the job could not be made from its file');
     if (waited >= live.runTimeoutMs) throw new EvalError('the job was not ready in time');
     await live.sleep(live.pollMs);
   }
+}
+
+/**
+ * The item archived (`archiveItem`, owners and admins): it leaves the flow's list and takes no new
+ * run; its runs and their results stay. Idempotent, with an empty body.
+ */
+export async function archiveItem(live: Live, itemId: string): Promise<void> {
+  await call<{ item: { id: string } }>(live, 'POST', `/items/${itemId}/archive`, undefined, true);
 }
