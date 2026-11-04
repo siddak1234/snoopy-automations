@@ -1,8 +1,8 @@
 import { cardDigits, cleanCurrency, cleanText, parseDate } from '@autom8x/automation-kit/values';
 import { RUN_DOCUMENT_TIME_PATTERN, decimalOf } from '@autom8x/automation-sdk';
 
-import type { DocumentAnswer } from './answer.js';
-import type { DocumentRead } from './state.js';
+import { quotesOf, type DocumentAnswer } from './answer.js';
+import type { DocumentRead, ReadQuotes } from './state.js';
 
 /**
  * What a document's result carries of its read (`RunDocument`, the platform's ADR-0039; the
@@ -52,8 +52,20 @@ function linesComplete(answer: DocumentAnswer): boolean {
   return answer.lineItemsComplete && answer.lineItems.length >= answer.lineItemCount;
 }
 
+/** The exact words of the read (v8, Q1), each cleaned as text; undefined when it gave none. */
+function readQuotesOf(answer: DocumentAnswer): ReadQuotes | undefined {
+  const quotes = quotesOf(answer);
+  if (quotes === undefined) return undefined;
+  return {
+    supplier: cleanText(quotes.vendorName),
+    number: cleanText(quotes.documentNumber),
+    total: cleanText(quotes.total),
+  };
+}
+
 export function documentReadOf(answer: DocumentAnswer): DocumentRead {
   const currency = cleanCurrency(answer.currency);
+  const quotes = readQuotesOf(answer);
   const card = cardDigits(answer.cardLast4);
   const references = answer.references.flatMap((reference) => {
     const label = cleanText(reference.label);
@@ -89,13 +101,14 @@ export function documentReadOf(answer: DocumentAnswer): DocumentRead {
       cardLast4: card.kind === 'digits' ? card.digits : null,
     },
     spendType: answer.spendType,
+    ...(quotes === undefined ? {} : { quotes }),
   };
 }
 
 /**
  * A document read in two parts, one: the first part's fields, the lines of both in order, complete
  * only when both are — the continuing part repeats the fields and lists the lines from where the
- * first stopped (`prompts/extract-documents.v1.json`, rule 1).
+ * first stopped (`automations/invoice-processing/prompts/extract-documents.v1.json`, rule 1).
  */
 export function joinedAnswer(first: DocumentAnswer, rest: DocumentAnswer): DocumentAnswer {
   return {

@@ -6,12 +6,12 @@ import { test } from 'node:test';
 import { loadPrompts } from '@autom8x/automation-sdk';
 
 import { LISTED_KINDS, PAYMENT_METHODS, REFUND_METHODS } from '../src/document.js';
-import { EXTRACT_DOCUMENTS_V1, VERIFY_DOCUMENTS_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENTS_V1, EXTRACT_DOCUMENTS_V2, VERIFY_DOCUMENTS_V1 } from '../src/prompts.js';
 import { READ_TYPES } from '../src/run/answer.js';
 import { SPEND_TYPES } from '../src/spend-types.js';
 
 /**
- * `prompts/extract-documents.v1.json` (the session's spec, B2, as the owner's AM1, AM7 and AM8
+ * `automations/invoice-processing/prompts/extract-documents.v1.json` (the session's spec, B2, as the owner's AM1, AM7 and AM8
  * change it): every document in the file, one part at a time — the part's place and size its only
  * words from outside the file — each document v2's fields and what v3 adds (the seller's place, the
  * time, the number's label and every other reference, each line's words, quantity and unit price),
@@ -91,10 +91,11 @@ const DOCUMENT_FIELDS = [
   'uncertainFields',
 ];
 
-test('two prompt files load and pass the platform keyword check: read 1 and read 2, by capability, naming no model', () => {
-  const [extract, verify, ...others] = loadPrompts(PROMPTS);
-  assert.deepEqual(others, [], "two prompt files: read 1's and read 2's");
+test("three prompt files load and pass the platform keyword check: read 1's two versions and read 2, by capability, naming no model", () => {
+  const [extract, extractV2, verify, ...others] = loadPrompts(PROMPTS);
+  assert.deepEqual(others, [], "three prompt files: read 1's v1 and v2, and read 2's");
   assert.deepEqual(extract, EXTRACT_DOCUMENTS_V1);
+  assert.deepEqual(extractV2, EXTRACT_DOCUMENTS_V2);
   assert.deepEqual(verify, VERIFY_DOCUMENTS_V1);
   assert.deepEqual(
     [extract?.id, extract?.version, extract?.capability],
@@ -104,7 +105,11 @@ test('two prompt files load and pass the platform keyword check: read 1 and read
     [verify?.id, verify?.version, verify?.capability],
     ['verify-documents', 1, 'document-extraction'],
   );
-  for (const file of ['extract-documents.v1.json', 'verify-documents.v1.json']) {
+  for (const file of [
+    'extract-documents.v1.json',
+    'extract-documents.v2.json',
+    'verify-documents.v1.json',
+  ]) {
     const raw = JSON.parse(readFileSync(join(PROMPTS, file), 'utf8')) as object;
     assert.deepEqual(Object.keys(raw), ['id', 'version', 'capability', 'template', 'outputSchema']);
   }
@@ -230,4 +235,30 @@ test("read 2: blind — its one placeholder the documents' places; read 1's fiel
   for (const name of ['lineItems', 'listedItems', 'references', 'numberLabel', 'nextDocument']) {
     assert.ok(!template.includes(name), name);
   }
+});
+
+test("read 1's v2 (v8, the owner's Q1): v1's 18 rules and fields, and rule 19's exact words for the seller, the number and the total — required, closed, plain text", () => {
+  const v1 = EXTRACT_DOCUMENTS_V1;
+  const v2 = EXTRACT_DOCUMENTS_V2;
+  assert.deepEqual([v2.id, v2.version, v2.capability], ['extract-documents', 2, v1.capability]);
+  const added = v2.template.slice(v1.template.length);
+  assert.ok(v2.template.startsWith(v1.template), "v1's instruction, word for word");
+  assert.match(
+    added,
+    /^\n19\. quotes gives, for vendorName, documentNumber and total, the exact words printed/u,
+  );
+  const documentOf = (schema: unknown) =>
+    (schema as Schema).properties?.documents?.items ?? ({} as Schema);
+  const first = documentOf(v1.outputSchema);
+  const second = documentOf(v2.outputSchema);
+  const { quotes, ...rest } = second.properties ?? {};
+  assert.deepEqual(rest, first.properties, "v1's fields, each unchanged");
+  assert.deepEqual(second.required, [...(first.required ?? []), 'quotes']);
+  assert.ok(quotes);
+  assertClosed(quotes);
+  assert.deepEqual(quotes.required, ['vendorName', 'documentNumber', 'total']);
+  for (const name of quotes.required ?? []) {
+    assert.equal(quotes.properties?.[name]?.type, 'string', `${name}: plain text, never null`);
+  }
+  assert.deepEqual(nullableOf(v2.outputSchema as Schema), nullableOf(v1.outputSchema as Schema));
 });

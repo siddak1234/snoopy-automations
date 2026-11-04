@@ -173,7 +173,7 @@ export {
 export type { PromptModule } from './prompt.js';
 export type { RetryPolicy } from './retry.js';
 export { defineAutomation } from './runner.js';
-export { defineFlow, quotesIn } from './flow.js';
+export { defineFlow, quotesIn, reaskingOnce } from './flow.js';
 export type { FlowDefinition } from './flow.js';
 export { failed, optionalConnection, settle } from './settle.js';
 export type { SettleKind, Settled } from './settle.js';

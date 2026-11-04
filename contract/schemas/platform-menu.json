@@ -79,6 +79,9 @@
     "summarization",
     "memory"
   ],
+  "dataProtections": [
+    "hipaa"
+  ],
   "connectionKinds": [
     "required",
     "optional"
@@ -86,9 +89,63 @@
   "providerAuthTypes": [
     "oauth2",
     "api-key",
-    "none"
+    "none",
+    "smart-backend"
   ],
   "providers": [
+    {
+      "id": "ehr-fhir",
+      "displayName": "EHR",
+      "auth": "smart-backend",
+      "scopes": [
+        "system/DocumentReference.read",
+        "system/Binary.read",
+        "system/Encounter.read",
+        "system/Condition.read"
+      ],
+      "operations": [
+        {
+          "name": "binary.read",
+          "method": "GET",
+          "scopes": [
+            "system/Binary.read"
+          ]
+        },
+        {
+          "name": "capability.read",
+          "method": "GET",
+          "scopes": []
+        },
+        {
+          "name": "conditions.search",
+          "method": "GET",
+          "scopes": [
+            "system/Condition.read"
+          ]
+        },
+        {
+          "name": "encounter.read",
+          "method": "GET",
+          "scopes": [
+            "system/Encounter.read"
+          ]
+        },
+        {
+          "name": "notes.read",
+          "method": "GET",
+          "scopes": [
+            "system/DocumentReference.read"
+          ]
+        },
+        {
+          "name": "notes.search",
+          "method": "GET",
+          "scopes": [
+            "system/DocumentReference.read"
+          ]
+        }
+      ]
+    },
     {
       "id": "google",
       "displayName": "Google",

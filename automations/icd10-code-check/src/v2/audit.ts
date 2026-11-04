@@ -8,7 +8,7 @@ import {
   type StepContext,
 } from '@autom8x/automation-sdk';
 
-import { MODELS } from '../models.js';
+import { modelsFor } from '../models.js';
 
 /**
  * The audit record of each AI call (the owner's audit fixes, 2026-11-01), kept in the run's state
@@ -47,7 +47,8 @@ export function boundedAudit(records: readonly AuditRecord[]): AuditRecord[] {
 
 /**
  * One AI call, settled (`settle`), its answer read as JSON, and its audit record with an empty
- * gate for the step to fill.
+ * gate for the step to fill. A health version's call names no models (`modelsFor`, v4): the
+ * platform's BAA gateway serves it from its own list, and the record names the model that served.
  */
 export async function askModel(
   context: StepContext,
@@ -57,7 +58,10 @@ export async function askModel(
   examples: string[] = [],
 ) {
   const asked = await settle(context, () =>
-    context.platform.callModel(prompt, input, { models: MODELS, ...options }),
+    context.platform.callModel(prompt, input, {
+      ...modelsFor(context.request.templateVersion),
+      ...options,
+    }),
   );
   if (!asked.ok) return asked;
   const { model, finishReason, usage } = asked.value;

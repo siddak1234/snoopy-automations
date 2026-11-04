@@ -1,17 +1,23 @@
 import { QuickBooksSimulator } from '@autom8x/automation-kit/testing';
-import { defineAutomation, type InvokeRequest, type JsonObject } from '@autom8x/automation-sdk';
+import {
+  defineAutomation,
+  type InvokeRequest,
+  type JsonObject,
+  type PromptModule,
+} from '@autom8x/automation-sdk';
 import { RecordingPlatform, invokeFixture, refusalFixture } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID } from '../src/automation.js';
 import { chartOf, type ChartState } from '../src/chart.js';
-import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENTS_V2 } from '../src/prompts.js';
 import { extract } from '../src/run/extract.js';
 import { FILE_ID, completion, pdf } from './fixtures.js';
 
 /**
  * `extract` alone, on the SDK's runner: a first step seeds the state the steps before it
  * leave, then `extract` runs, and the result hands the whole state back — the one place a
- * suite can read what the step kept of each document's read.
+ * suite can read what the step kept of each document's read. It sends v8's prompt,
+ * extract-documents v2, unless given another (v1's, for the answers recorded for it).
  */
 
 /** The simulator's made-up company's chart, as `find-accounts` keeps it. */
@@ -39,7 +45,10 @@ export const SEEDED_STATE: JsonObject = {
   chart: CHART as unknown as JsonObject,
 };
 
-export function extractWorld(seeded: JsonObject = SEEDED_STATE) {
+export function extractWorld(
+  seeded: JsonObject = SEEDED_STATE,
+  prompt: PromptModule = EXTRACT_DOCUMENTS_V2,
+) {
   const automation = defineAutomation({
     templateId: TEMPLATE_ID,
     manifests: [
@@ -50,10 +59,10 @@ export function extractWorld(seeded: JsonObject = SEEDED_STATE) {
         pipeline: [{ id: 'seed' }, { id: 'extract' }],
       },
     ],
-    prompts: [EXTRACT_DOCUMENTS_V1],
+    prompts: [prompt],
     steps: {
       seed: () => Promise.resolve({ outcome: 'ok', summary: 'Seeded', state: seeded }),
-      extract: extract(EXTRACT_DOCUMENTS_V1),
+      extract: extract(prompt),
     },
     result: (state) => ({ output: state }),
   });

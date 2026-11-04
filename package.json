@@ -23,6 +23,7 @@
     "map": "node scripts/kit/map.mjs",
     "scaffold": "node scripts/scaffold.mjs",
     "review-rows": "tsx scripts/review-rows.ts",
+    "live-eval": "tsx scripts/live-eval.ts",
     "verify": "npm run format:check && npm run check:docs && npm run map -- --check && node scripts/audit-doc-references.mjs && npm run build && npm run typecheck && node scripts/no-skipped-tests.mjs && tsx scripts/repo-facts.ts --gate verify"
   },
   "devDependencies": {

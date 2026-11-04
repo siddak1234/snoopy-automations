@@ -211,11 +211,6 @@ test("the second read's own refusals hold the run, each its word: unusable, filt
   const cases: [string, Answering][] = [
     [
       'answer_unusable',
-      (_call, model) => Promise.resolve(completion(model, { ...secondAnswer(bill()), extra: 1 })),
-    ],
-    ['answer_unusable', (_call, model) => Promise.resolve(completion(model, 'not JSON'))],
-    [
-      'answer_unusable',
       (_call, model) => Promise.resolve(completion(model, '{"documentType":', 'length')),
     ],
     [
@@ -232,6 +227,25 @@ test("the second read's own refusals hold the run, each its word: unusable, filt
     const world = verifyWorld({ first: bill(), answer });
     assert.equal(await notMade(world), reason, reason);
     assert.equal(world.platform.modelCalls.length, 1, `${reason}: made once, never again`);
+  }
+});
+
+test('Q2 (v8): a second read off its schema or not JSON, asked once more and off it again, ends the run "The AI\'s answer couldn\'t be used": no hold', async () => {
+  const answers: Answering[] = [
+    (_call, model) => Promise.resolve(completion(model, { ...secondAnswer(bill()), extra: 1 })),
+    (_call, model) => Promise.resolve(completion(model, 'not JSON')),
+  ];
+  for (const answer of answers) {
+    const world = verifyWorld({ first: bill(), answer });
+    assert.deepEqual(await world.run(), {
+      outcome: 'failed',
+      failureReason: RUN_FAILS.ai_unusable,
+    });
+    assert.equal(world.platform.modelCalls.length, 2, 'asked once more, never a third time');
+    assert.match(
+      world.platform.modelCalls[1]!.prompt,
+      /Your last answer did not match the schema/u,
+    );
   }
 });
 

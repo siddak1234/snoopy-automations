@@ -9,3 +9,16 @@ export const MODELS: readonly string[] = [
   'anthropic/claude-haiku-4.5',
   'google/gemini-3.1-flash-lite',
 ];
+
+/**
+ * The versions whose manifest says `dataProtection: 'hipaa'` (v4; README, "v4"): their runs carry
+ * health data, so the platform sends their model calls only to its BAA gateway, which refuses an
+ * automation's own `models` (the platform's ADR-0049, C2). Their calls name none, and the
+ * platform's HIPAA default list serves them; a version still served on OpenRouter keeps `MODELS`.
+ * `automations/icd10-code-check/test/v4-manifest.test.ts` holds this list to the manifests.
+ */
+export const HEALTH_VERSIONS: readonly number[] = [4];
+
+/** The models a call of a run on `version` names: none on a health version, else `MODELS`. */
+export const modelsFor = (version: number): { models?: readonly string[] } =>
+  HEALTH_VERSIONS.includes(version) ? {} : { models: MODELS };

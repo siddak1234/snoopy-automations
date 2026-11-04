@@ -11,14 +11,15 @@ import { join, relative, resolve } from 'node:path';
  * prints one table per flow — §3 the menu, §4 the capabilities, §6 the steps, §7 the blocks, §8
  * the failure words, §9 the tests, Paths, Drill — appends it to `--summary` (CI's
  * `$GITHUB_STEP_SUMMARY`) and exits 1 on any FAIL. Without `--base` it reads every flow. The two
- * live flows are exempt from the rows the new standards add (§7, §8, §9, Drill) until their
- * after-pilot versions, the exemption `test/conformance.test.ts` names. `test/menu.test.ts` holds
+ * live flows are exempt from the rows the new standards add (§7, §8, §9, Drill) while they stay on
+ * `defineAutomation` — their after-pilot versions too (Invoice Processing v8, Resume Screening v3,
+ * which take Q2's re-ask alone) — the exemption `test/conformance.test.ts` names. `test/menu.test.ts` holds
  * the menu half (B2.4) on the whole tree, and `test/review-rows.test.ts` each row.
  */
 
 export const root = resolve(import.meta.dirname, '..');
 export const MENU_PATH = 'contract/schemas/platform-menu.json';
-/** The flows built before `defineFlow`, exempt from its rows until their after-pilot versions. */
+/** The flows built before `defineFlow`, exempt from its rows while they stay on `defineAutomation`. */
 export const LIVE_FLOWS: ReadonlySet<string> = new Set([
   'invoice-processing',
   'candidate-reviewer',
@@ -191,7 +192,7 @@ export function rowsFor(base: string, id: string, changed: readonly string[], is
   const exempt = (name: string): Row => ({
     row: name,
     verdict: 'EXEMPT',
-    note: 'a live flow, until its after-pilot version',
+    note: 'a live flow, while it stays on defineAutomation',
   });
   const src = textOf(base, id, 'src');
   const tests = textOf(base, id, 'test');

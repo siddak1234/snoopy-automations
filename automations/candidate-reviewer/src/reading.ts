@@ -76,10 +76,10 @@ const LINE = 600;
 const SHORT = 200;
 const LIST = 60;
 /**
- * The most links a resume keeps: what Contact shows beside the email, phone and location
+ * The most links a resume keeps: what Contact shows beside the name (v3), email, phone and location
  * (`candidateSections`), so the platform's 40 rows a section never cut one.
  */
-const LINKS = RUN_SECTION_LIMITS.entries - 3;
+const LINKS = RUN_SECTION_LIMITS.entries - 4;
 
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

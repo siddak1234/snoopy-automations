@@ -7,7 +7,7 @@ import { loadPrompts, type PromptModule } from '@autom8x/automation-sdk';
  * the image beside `dist/` by the Dockerfile, loaded once when the container starts and
  * registered with the runner, which sends only a registered module. Any change to a word of
  * a prompt file is a new version, a new image and new recordings (the owner's design of
- * 2026-10-10); `test/recordings.ts` refuses a recording made for another version or bytes.
+ * 2026-10-10); `automations/invoice-processing/test/recordings.ts` refuses a recording made for another version or bytes.
  */
 export const PROMPTS: readonly PromptModule[] = loadPrompts(
   fileURLToPath(new URL('../prompts/', import.meta.url)),
@@ -20,6 +20,12 @@ export const PROMPTS: readonly PromptModule[] = loadPrompts(
  * price (the session's spec, B2, as the owner's AM1, AM7 and AM8 change it).
  */
 export const EXTRACT_DOCUMENTS_V1: PromptModule = promptOf('extract-documents', 1);
+
+/**
+ * `extract`'s since v8: v1's, with each document's exact words for its seller, number and total
+ * (`quotes`, rule 19; the owner's Q1). v1 stays for its recordings (`automations/invoice-processing/test/recordings.ts`).
+ */
+export const EXTRACT_DOCUMENTS_V2: PromptModule = promptOf('extract-documents', 2);
 
 /**
  * `verify-read`'s (v3): v2's second read of 13 fields and `uncertainFields`, for the documents the

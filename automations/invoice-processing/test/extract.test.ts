@@ -9,7 +9,7 @@ import {
 } from '@autom8x/automation-sdk';
 import { NO_ANSWER } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENTS_V2 } from '../src/prompts.js';
 import { partAnswerOf, v2AnswerOf, type DocumentAnswer } from '../src/run/answer.js';
 import { partInput } from '../src/run/extract.js';
 import { MODELS } from '../src/run/model-refusals.js';
@@ -51,13 +51,13 @@ function documentOf(answer: JsonObject): DocumentAnswer {
   return document;
 }
 
-test("it sends one model request: the registered extract-documents v1, the part's numbers, MODELS and the run's file, nothing else; a second read only on a problem", async () => {
+test("it sends one model request: the registered extract-documents v2 (v8's), the part's numbers, MODELS and the run's file, nothing else; a second read only on a problem", async () => {
   const world = setUp({ config: { ...QUICKBOOKS, holdAboveAmount: 0 } });
   assert.equal((await world.run()).outcome, 'success');
   const [first, ...rest] = world.platform.modelCalls;
   const input = partInput({ document: 1, line: 1 }, 0);
   assert.deepEqual(first, {
-    ...renderPrompt(EXTRACT_DOCUMENTS_V1, input),
+    ...renderPrompt(EXTRACT_DOCUMENTS_V2, input),
     models: ['anthropic/claude-haiku-4.5', 'google/gemini-3.1-flash-lite'],
     artifactId: FILE_ID,
   });

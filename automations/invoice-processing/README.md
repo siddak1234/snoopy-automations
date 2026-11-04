@@ -3,8 +3,9 @@
 This flow was built before `/create-flow`'s specs, so this file is its build's record: moved here
 from the repository README in Round 21, so a change to the flow's code, prompts or manifests asks
 for this file in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules). It
-is one of the two live flows on `defineAutomation`, exempt from the new flows' standards until its
-after-pilot version, v8 ([the repository README](../../README.md#build-a-flow)).
+is one of the two live flows on `defineAutomation`, exempt from the new flows' standards; its
+after-pilot version, v8, stays on it and takes Q2's re-ask alone ([the repository
+README](../../README.md#a-new-flows-standards-defineflow)).
 
 `invoice-processing` — shown to people as **Invoice Processing** since v2, as **Bills &
 Receipts** in v1 — reads every bill, invoice, receipt, credit note, statement and other
@@ -13,14 +14,40 @@ in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN
 25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
 of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v7, the version this code serves** (Round 18, the platform's BUILD-PLAN 27.3.2; the owner,
+**v8, the version this code serves** (Round 21, Stage 2; the owner's Q1 and Q2 of 2026-11-03,
+"continue with recommended"). Its manifest is v7's but for its version and its own container
+(`-v8`); the image serves v8 alone (its Dockerfile copies only `manifests/invoice-processing.v8.json`),
+and v1 to v7 stay registered and immutable, each held to its sha256
+(`automations/invoice-processing/test/manifest.test.ts`, `versions.test.ts`). **Words:** NEW,
+awaiting the owner's approval: "Supplier, exact words", "Number, exact words" and "Total, exact
+words" (Q1, below). Q2's sentence is the one the owner's Q2 recommended; every other word is v7's.
+Two changes, both in the code:
+
+- **Q1, the exact words.** The first read sends `extract-documents` v2: v1's 18 rules and fields
+  and rule 19, each document's `quotes` — the exact words printed for its seller, its number and its
+  total, character for character (`$1,234.56`, where the value is `1234.56`). Each shows as a detail
+  line under the document's values, first among its lines: "Supplier, exact words", "Number, exact
+  words" and "Total, exact words", the words in double quotes, cut at the platform's 200 characters
+  with the quote marks kept (`quoteLines` in `src/run/documents.ts`, `exactWords` in
+  `src/run/words.ts`); a value with no words gets no line. A PDF or a photo gives this flow no text,
+  so the words are never checked against the file: a person reads them against it. The verify read
+  is unchanged. v1 stays loaded for its recordings, which v8's suite answers with each document's
+  printed values as its words (`quotesFor` in `test/answers.ts`).
+- **Q2, an unusable answer.** Each model call's answer off its schema is asked once more with the
+  same registered prompt and the SDK's fault line naming the schema's path and rule
+  (`reaskingOnce`, wrapped around every run by `reasking` in `src/automation.ts`). A second miss ends
+  the run "The AI's answer couldn't be used. Try a clearer file." (`RUN_FAILS.ai_unusable`, the SDK's
+  own sentence), at the first read and at the second alike: no hold, no document saved. One to three
+  more paid AI calls a miss. An answer cut off at the smallest part, and one the platform passed but
+  this flow's own guard refuses, still end "The document can't be read. Try a clearer photo." (v7's).
+
+**v7** (Round 18, the platform's BUILD-PLAN 27.3.2; the owner,
 2026-10-21: "invoice is invoice processing specific"). v7 is v6 whose manifest names its documents —
 `display.documentWords`, "Invoice" and "Invoices" — so the website, the app and the run package head
 each document "Invoice 1 of 3" from the flow's own words, and any other flow "Document 1 of 3"; its
 code is v6's. `automations/invoice-processing/test/manifest.test.ts` holds that v7 is v6 but for its
-version, its own container and those words; the image serves v7 alone (its Dockerfile copies only
-`manifests/invoice-processing.v7.json`); v1 to v6 stay registered and immutable, each held to its
-sha256.
+version, its own container and those words; its image served v7 alone until v8; v1 to v6 stay
+registered and immutable, each held to its sha256.
 
 **v6** (Build 24; the owner's build 23 feedback of 2026-10-20, F15 and
 F16). v6's results also say, for each document, the uploaded file it came from (`source.file` — a run

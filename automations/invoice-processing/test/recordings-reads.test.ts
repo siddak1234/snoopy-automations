@@ -20,6 +20,7 @@ import {
   completion,
   isSecondRead,
   lines,
+  quotesFor,
   reads,
   secondAnswer,
   setUp,
@@ -162,7 +163,16 @@ test("every read-2 recording is the schema, and its first document is compared w
  * counts those parts; one asked after the done one is refused, so a reading that does not end
  * stops here.
  */
-function asRecorded(first: JsonObject, second: JsonObject) {
+function asRecorded(recordedFirst: JsonObject, second: JsonObject) {
+  // v8 sends extract-documents v2, which adds each document's exact words; the recordings are
+  // v1's, so each document's are its printed values (`quotesFor`).
+  const first: JsonObject = {
+    ...recordedFirst,
+    documents: (recordedFirst.documents as JsonObject[]).map((document) => ({
+      ...document,
+      quotes: quotesFor(document),
+    })),
+  };
   const recorded = reads(first, second);
   const double = {
     later: 0,

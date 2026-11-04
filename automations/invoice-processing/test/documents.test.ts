@@ -5,6 +5,9 @@ import { PROVIDER_REFUSALS } from '@autom8x/automation-kit/testing';
 import { idempotencyKeyFor, type JsonObject, type RunResult } from '@autom8x/automation-sdk';
 
 import { UNCONFIRMED_LINE } from '../src/quickbooks-path.js';
+import { partAnswerOf } from '../src/run/answer.js';
+import { documentReadOf } from '../src/run/document-read.js';
+import { QUOTE_LABELS, exactWords } from '../src/run/words.js';
 
 import {
   HARROWGATE,
@@ -16,7 +19,7 @@ import {
   keysOf,
   statuses,
 } from './documents-world.js';
-import { FILE_ID, NONE, lines } from './fixtures.js';
+import { FILE_ID, NONE, lines, partAnswer } from './fixtures.js';
 import { assertOutputValid } from './output-schema.js';
 
 /**
@@ -246,4 +249,42 @@ test('every document keeps its own number: a bill is recorded with it as its Doc
   const [bills] = [world.simulator.company.bills];
   assert.equal(bills[0]?.DocNumber, 'HOS-1042', "the record carries the document's own number");
   assert.equal(document?.recordedIn?.recordType, 'bill');
+});
+
+test("v8 (the owner's Q1): each document's exact words for its seller, number and total, first among its lines, as printed; none for a value with no words", async () => {
+  const quotes = (documentNumber: string) => ({
+    vendorName: "LOWE'S HOME CENTERS, LLC",
+    documentNumber,
+    total: '$17.19',
+  });
+  const world = await documentsRun({
+    config: NONE,
+    documents: [
+      { ...LOWES, quotes: quotes('48291') },
+      { ...TIDEWELL, quotes: quotes('') },
+    ],
+  });
+  const [lowes, tidewell] = documentsOf(world.result);
+  assert.deepEqual(lowes?.details, [
+    { label: 'Supplier, exact words', value: '"LOWE\'S HOME CENTERS, LLC"' },
+    { label: 'Number, exact words', value: '"48291"' },
+    { label: 'Total, exact words', value: '"$17.19"' },
+    { label: 'Category', value: 'Materials' },
+  ]);
+  assert.equal(lowes?.vendor.name, "Lowe's", 'the value stays the read one');
+  assert.deepEqual(
+    tidewell?.details.map((line) => line.label).slice(0, 2),
+    [QUOTE_LABELS.supplier, QUOTE_LABELS.total],
+    'no number line: no words',
+  );
+});
+
+test("v8: a read with no exact words — v1's prompt — keeps none; a long text is cut whole within the 200 characters, its quotes kept", () => {
+  const [read] = partAnswerOf(partAnswer([{ ...LOWES, quotes: undefined }]))?.documents ?? [];
+  assert.ok(read);
+  assert.equal('quotes' in documentReadOf(read), false);
+  const long = exactWords('x'.repeat(300));
+  assert.equal(long.length, 200);
+  assert.ok(long.startsWith('"x') && long.endsWith('…"'));
+  assert.equal(exactWords('$17.19'), '"$17.19"');
 });

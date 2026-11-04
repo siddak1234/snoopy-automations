@@ -206,7 +206,7 @@ test("each sample's expected answer passes extract whole, no document ever ends 
     }
 
     // The first steps, on the sample's own measurements, QuickBooks chosen or not — every one
-    // goes on (B4, AM8); then an unusable answer carrying the marker.
+    // goes on (B4, AM8); then an answer off its schema carrying the marker, asked once more (Q2).
     for (const config of [QUICKBOOKS, NONE]) {
       const run = setUp({ file: referenceOf(measure(readFileSync(samplePath(sample)))), config });
       run.platform.model = reads(sample.answer);
@@ -220,7 +220,7 @@ test("each sample's expected answer passes extract whole, no document ever ends 
     const failed = await unusable.run();
     assert.deepEqual(
       failed,
-      { outcome: 'failed', failureReason: RUN_FAILS.unreadable },
+      { outcome: 'failed', failureReason: RUN_FAILS.ai_unusable },
       sample.name,
     );
     assert.ok(!everythingSaid(unusable.platform, failed).includes(sample.marker), sample.name);

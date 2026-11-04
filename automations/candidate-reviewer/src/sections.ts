@@ -1,5 +1,6 @@
 import type { RunSection, RunSectionEntry } from '@autom8x/automation-sdk';
 
+import { quoteLine, type Quotes } from './quotes.js';
 import type { Posting, Resume } from './reading.js';
 import type { Scoring } from './scoring.js';
 import { periodLine } from './years.js';
@@ -13,9 +14,14 @@ import { periodLine } from './years.js';
 const section = (title: string, entries: RunSectionEntry[]): RunSection[] =>
   entries.length === 0 ? [] : [{ title, entries }];
 
-/** A value with what it is beneath it, or nothing when the value is empty. */
-const labelled = (title: string, subtitle: string): RunSectionEntry[] =>
-  title === '' ? [] : [{ title, subtitle }];
+/**
+ * A value with what it is beneath it — and, v3, the exact words it was read from (`quoteLine`) when
+ * they are trusted — or nothing when the value is empty.
+ */
+const labelled = (title: string, subtitle: string, quote?: string): RunSectionEntry[] =>
+  title === ''
+    ? []
+    : [{ title, subtitle, ...(quote === undefined ? {} : { text: quoteLine(quote) }) }];
 
 /** Words joined with " · ", the empty ones left out. */
 const joined = (...parts: string[]) => parts.filter((part) => part !== '').join(' · ');
@@ -50,9 +56,15 @@ const KIND_WORDS = { must_have: 'Must-have', nice_to_have: 'Nice to have' } as c
 /**
  * A candidate as people see them: Contact, Experience, Education, Projects, Certifications,
  * Skills, Languages, then Why this score — each must-have met or missing, each nice-to-have met,
- * and each flag a person should check.
+ * and each flag a person should check. v3: Contact opens with the name, and the name, email and
+ * phone each carry their trusted exact words (`quotes`; the owner's Q1).
  */
-export function candidateSections(resume: Resume, scoring: Scoring, now: Date): RunSection[] {
+export function candidateSections(
+  resume: Resume,
+  scoring: Scoring,
+  now: Date,
+  quotes: Quotes = {},
+): RunSection[] {
   const met = (kind: 'must_have' | 'nice_to_have') =>
     scoring.matches
       .filter((match) => match.kind === kind)
@@ -63,8 +75,9 @@ export function candidateSections(resume: Resume, scoring: Scoring, now: Date): 
       }));
   return [
     ...section('Contact', [
-      ...labelled(resume.email, 'Email'),
-      ...labelled(resume.phone, 'Phone'),
+      ...labelled(resume.name, 'Name', quotes.name),
+      ...labelled(resume.email, 'Email', quotes.email),
+      ...labelled(resume.phone, 'Phone', quotes.phone),
       ...labelled(resume.location, 'Location'),
       ...resume.links.map((link) => ({
         title: link.label === '' ? link.url : link.label,

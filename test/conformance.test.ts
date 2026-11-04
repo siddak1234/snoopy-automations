@@ -41,7 +41,7 @@ import { LIVE_FLOWS } from '../scripts/review-rows.js';
  *   refuses a bigger one before its validator runs (its §12.1 #319);
  * - every automation, and the template, runs the SDK's shared failure drill in its
  *   `automations/<id>/test/drill.test.ts` (Round 21, D2.5) — but the two live flows (`LIVE_FLOWS`), built before
- *   `defineFlow`, until their after-pilot versions remove the exemption.
+ *   `defineFlow`, while they stay on `defineAutomation` (their after-pilot versions too).
  *
  * `defineAutomation` refuses the first two at startup; this test states the rules
  * for the repository and reads each automation's definition the way its `main.ts`

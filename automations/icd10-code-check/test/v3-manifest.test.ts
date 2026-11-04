@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { SERVED_VERSIONS } from '../src/automation.js';
 import { npiOf } from '../src/v2/specialties.js';
 import { WORDS_V2, WORDS_V3 } from '../src/v2/words.js';
 import { flow } from './fixtures.js';
@@ -12,7 +11,7 @@ import { flow } from './fixtures.js';
  * v3's manifest (the spec's "v3"; `words.md` section 5): v2's, word for word, with its setup in
  * three sections — NPI, Specialty, Integrations (TestFlight build 34, F3) — held to the platform's
  * rules for them both ways (ADR-0048 amendment 5; `contract/README.md`, "`setup[]`"), and the NPI
- * box's example, a valid NPI (F2); this image serves v3 alone.
+ * box's example, a valid NPI (F2). The image serves v4 alone (`v4-manifest.test.ts`).
  */
 
 type Json = Record<string, any>;
@@ -40,12 +39,6 @@ test("v3 is v2's manifest, word for word, but its version, its own origin and se
   assert.equal(v3.version, 3);
   assert.equal(v3.service.origin, 'http://icd10-code-check-v3.autom8x.internal:8080');
   assert.equal(v3.service.serviceAccount, 'icd10-code-check-v3@autom8x.iam.gserviceaccount.com');
-});
-
-test('this image serves v3 alone', () => {
-  assert.deepEqual(SERVED_VERSIONS, [3]);
-  const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
-  assert.match(dockerfile, /^COPY --chown=node:node manifests\/icd10-code-check\.v3\.json /mu);
 });
 
 test('F3: the setup in three sections, NPI · Specialty · Integrations, each holding its own setting', () => {

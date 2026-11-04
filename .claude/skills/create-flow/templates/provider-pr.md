@@ -14,8 +14,9 @@ edit), with only the operations section 3 names, each with its scopes:
 | Operation | Method | Path (relative) | Scopes | Why the flow calls it (section 3) |
 | --------- | ------ | --------------- | ------ | --------------------------------- |
 
-- Auth: `oauth2` or `api-key` (a pasted key); plain REST. Anything else no file can describe:
-  `/create-flow` stops (a platform round).
+- Auth: one the platform's engines serve, `smart-backend` (ADR-0050) among them; plain REST
+  (`snoopy-backend/providers/README.md`, "What cannot be a spec"). Anything else no file can
+  describe: `/create-flow` stops (a platform round).
 - Each operation's scopes are a subset of the provider's; every path is relative; no URL of the
   owner's and no secret (`snoopy-backend/providers/README.md`, "The rules").
 - `snoopy-backend/test/provider-conformance.test.ts` passes; the diff touches no `apps/` source (Gate 5's rule).
@@ -27,7 +28,8 @@ the byte check (`snoopy-backend/test/wire-schema-files.test.ts`) passes.
 
 ## The owner's console steps — all at once, before the backend merge
 
-An OAuth2 vendor only; a pasted-key vendor has none (its keys are each workspace's own).
+An OAuth2 vendor only; a pasted-key vendor has none (its keys are each workspace's own). A
+`smart-backend` vendor's key: `snoopy-backend/providers/README.md`, "SMART Backend Services".
 
 1. In the vendor's developer console, create the app and register the redirect URI
    `https://api.autom8x.ai/v1/connections/callback`.
