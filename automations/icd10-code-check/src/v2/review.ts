@@ -2,16 +2,18 @@ import {
   BLOCK_LIMITS,
   DECISION_LIMITS,
   boundedBlocks,
-  type DecisionAnswer,
+  type DecisionOption,
   type EmittedBlock,
   type EmittedLeaf,
   type HeldDecision,
+  type JsonObject,
 } from '@autom8x/automation-sdk';
 
 import { patientSection, titleOf, type View } from '../blocks.js';
 import type { Row } from '../checks.js';
 import { DECIDED, cleanQuote, suggestionOf, withTitle } from '../decisions.js';
 import { VERDICTS, WORDS } from '../words.js';
+import type { OtherCode } from './child-steps.js';
 import { WORDS_V2 } from './words.js';
 
 /**
@@ -70,16 +72,31 @@ export function titleDifference(
 }
 
 /**
- * The rule a decision's why names, per check (the spec's v2 section, row 8): G3 in the owner's
- * screen's words; every other check, until a person words its rule, v1's reason sentence (`REASONS`,
- * `words.md` section 4 and README "Open, for a person").
+ * The rule a decision's why names, per check a decision carries (the spec's v2 section, row 8;
+ * `words.md` section 4): G3 in the owner's screen's words, the others the owner's short words
+ * (2026-11-03, item 5); G1's names the visit's table, L3's the code moved up. A check only an ask
+ * or a Keep carries (G2, G5, G6, K3, T1) has none here: an ask keeps its sentence (`REASONS`).
  */
-export const RULES_V2: Readonly<Record<string, string>> = {
+export const RULES_V2: Readonly<
+  Record<string, string | ((at: { code: string; table: string }) => string)>
+> = {
+  G1: ({ table }) => `complete code from the ${table} table`,
   G3: 'most specific code the note shows',
+  G4: 'uncertain diagnosis: code the sign or symptom',
+  G7: 'code what the note supports',
+  K1: 'N18.6 takes no stage code',
+  K2: 'dialysis: add Z99.2',
+  L1: 'blood pressure + kidney disease: I12, then the stage',
+  L2: 'blood pressure + heart + kidney: I13',
+  L3: ({ code }) => `${code} before the kidney stage`,
 };
 
-/** A row's rule: its first check's in `RULES_V2`, else its reason; none for a Keep. */
-const ruleOf = (r: Row): string | null => RULES_V2[r.check.split(',')[0]!.trim()] ?? r.reason;
+/** A row's rule: its first check's in `RULES_V2`, with its code and the visit's table, else its reason; none for a Keep. */
+function ruleOf(r: Row, table: string): string | null {
+  const rule = RULES_V2[r.check.split(',')[0]!.trim()];
+  if (rule === undefined) return r.reason;
+  return typeof rule === 'string' ? rule : rule({ code: r.code, table });
+}
 
 /** The first words of `words` whose line, built by `build`, fits `room`: "…" marks a cut; none fits, undefined. */
 function wordsWithin(
@@ -100,9 +117,13 @@ function wordsWithin(
  * 'Difference: "{words only in the first}" vs "{words only in the second}"' (a Change whose titles
  * differ), then 'From the note: "{quote}"', then 'Rule: {the check's rule}' (`ruleOf`), joined by
  * " · ". Past the bound the rule is dropped first, then the quote shortened by whole words, then
- * the difference; never cut mid-word.
+ * the difference; never cut mid-word. `table` is the visit's table's name, G1's rule's.
  */
-export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): string | undefined {
+export function whyDetail(
+  r: Row,
+  titles: Readonly<Record<string, string>>,
+  table: string,
+): string | undefined {
   const W = WORDS_V2.why;
   const room = DECISION_LIMITS.detail;
   const join = (parts: (string | undefined)[]) =>
@@ -120,7 +141,7 @@ export function whyDetail(r: Row, titles: Readonly<Record<string, string>>): str
       : W.difference(first.join(' '), second.join(' '));
   const quote = r.quote === null ? '' : cleanQuote(r.quote);
   const fromNote = quote === '' ? undefined : W.fromNote(quote);
-  const rule = ruleOf(r);
+  const rule = ruleOf(r, table);
   const ruled = rule === null ? undefined : W.rule(rule);
   const full = join([difference, fromNote, ruled]);
   if (full.length <= room) return full === '' ? undefined : full;
@@ -148,26 +169,60 @@ const decisionId = (rowId: string): string => `v1-${rowId}`;
 /** One offered change with its visit's title, the platform v2's `group`. */
 export type GroupedDecision = HeldDecision & { group: string };
 
-/** Every change of the visit: its id, label, why and group (the visit's title). */
-export function visitDecisions(view: View): GroupedDecision[] {
+/** A v3 run's other codes by diagnosis (`otherCodes`, kept at match time); none on v1 and v2. */
+export const otherCodesOf = (state: JsonObject): Readonly<Record<string, OtherCode[]>> =>
+  (state.others ?? {}) as Record<string, OtherCode[]>;
+
+/** The title of each of a v3 run's other codes, so a picked one is entered with its title. */
+export const otherTitles = (state: JsonObject): Record<string, string> =>
+  Object.fromEntries(
+    Object.values(otherCodesOf(state))
+      .flat()
+      .filter(({ title }) => title !== '')
+      .map(({ code, title }) => [code, title]),
+  );
+
+/**
+ * A Change's "Other code" choices (v3, README "v3" row 3): its diagnosis's other codes, kept at
+ * match time, but its own code and its suggestion; each "{code} · {title}", or the code alone when
+ * that passes the option's bound (never cut). None for an Add, a Remove or a Move up.
+ */
+function optionsOf(r: Row, others: Readonly<Record<string, OtherCode[]>>): DecisionOption[] {
+  if (r.verdict !== 'change' || r.from === undefined) return [];
+  return (others[String(r.from)] ?? [])
+    .filter(({ code }) => code !== r.code && code !== r.suggested)
+    .map(({ code, title }) => {
+      const full = withTitle(code, title === '' ? {} : { [code]: title });
+      return { value: code, label: full.length <= DECISION_LIMITS.option ? full : code };
+    });
+}
+
+/**
+ * Every change of the visit: its id, label, why and group (the visit's title); on a v3 run each
+ * Change its other codes (`options`, `optionsOf`).
+ */
+export function visitDecisions(
+  view: View,
+  others: Readonly<Record<string, OtherCode[]>> = {},
+): GroupedDecision[] {
   const group = titleOf(view);
   return view.rows
     .filter((r) => DECIDED.has(r.verdict))
     .map((r): GroupedDecision => {
-      const detail = whyDetail(r, view.titles);
+      const detail = whyDetail(r, view.titles, view.tableName);
+      const options = optionsOf(r, others);
       return {
         id: decisionId(r.id),
         label: decisionLabel(r),
         ...(detail === undefined ? {} : { detail }),
         group,
+        ...(options.length === 0 ? {} : { options }),
       };
     });
 }
 
-/** The run's answers by the visit's rows' own ids: what v1's `finalCodes` reads. */
-export const rowAnswers = (
-  answers: ReadonlyMap<string, DecisionAnswer>,
-): Map<string, DecisionAnswer> =>
+/** The run's answers (or the other codes picked) by the visit's rows' own ids: what v1's `finalCodes` reads. */
+export const rowAnswers = <T>(answers: ReadonlyMap<string, T>): Map<string, T> =>
   new Map(
     [...answers]
       .filter(([id]) => id.startsWith(decisionId('')))
@@ -277,8 +332,9 @@ export function fitsBlocks(blocks: readonly EmittedBlock[]): boolean {
  */
 export function visitReview(
   view: View,
+  others: Readonly<Record<string, OtherCode[]>> = {},
 ): { blocks: EmittedBlock[]; decisions: GroupedDecision[] } | { stop: string } {
-  const decisions = visitDecisions(view);
+  const decisions = visitDecisions(view, others);
   const blocks = visitBlocks(view);
   return fitsBlocks(blocks) ? { blocks, decisions } : { stop: WORDS_V2.tooManyCodes };
 }

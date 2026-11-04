@@ -636,9 +636,10 @@ after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `
 ("Build a flow", below).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
-  doctors and coders; on `defineFlow`): its folder's README is its spec and how the code does it.
-  v1 stays served on its own container; the image built here serves v2 alone, on the platform round
-  2 contract (`contract/`, "Platform round 2" above).
+  doctors and coders; v3; v2 and v3 on `defineFlow`): its folder's README is its spec and how the
+  code does it. v1 and v2 stay served on their own containers; the image built here serves v3 alone
+  (its setup in sections and a change's "Other code", the folder README's "v3"), on the Stage 1
+  contract (`contract/`, "Stage 1" above).
 
 ## The kit
 
@@ -800,9 +801,9 @@ npm run facts         # re-emits the facts file without the claim, after adding 
 A test that skips or is left todo fails the gate: `scripts/no-skipped-tests.mjs` runs `npm test`
 and reads its TAP for a `# skipped` or `# todo` count above 0, and CI's Verify reads its whole log
 the same way. Every `tsx --test` script names the TAP reporter (`--test-reporter=tap`; a new flow's
-from the template's), and output with no TAP summary (`# tests N`) fails too: Node's default
-reporter is no contract (the script's header). So a flow just scaffolded is red until each §9
-`test.todo` is written.
+from the template's), and a suite with no TAP summary (`# tests N`) fails too, each suite — the
+root's and each workspace's — read on its own: Node's default reporter is no contract (the
+script's header). So a flow just scaffolded is red until each §9 `test.todo` is written.
 
 **The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
 — Verify, and every flow's image built, smoke-tested and scanned
