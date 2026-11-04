@@ -88,5 +88,16 @@
         "blocks": [{ "type": "text", "text": "Read twice." }]
       }
     ]
+  },
+  {
+    "type": "links",
+    "items": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/jane-doe-example",
+        "brand": "github"
+      },
+      { "label": "Portfolio", "url": "http://jane-doe.example" }
+    ]
   }
 ]

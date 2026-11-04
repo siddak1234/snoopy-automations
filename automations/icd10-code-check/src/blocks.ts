@@ -71,7 +71,10 @@ function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): E
     rows: view.rows.map((r) => {
       const answer = answers?.get(r.id);
       const verdict =
-        answers !== undefined && DECIDED.has(r.verdict) && answer !== undefined
+        answers !== undefined &&
+        DECIDED.has(r.verdict) &&
+        answer !== undefined &&
+        answer !== 'other'
           ? VERDICTS[answer]
           : VERDICTS[r.verdict];
       return { cells: [titled(view, r.code), verdict, suggestedOf(r, view.titles)] };

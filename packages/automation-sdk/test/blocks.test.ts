@@ -8,6 +8,7 @@ import {
   BLOCK_TONES,
   CHART_KINDS,
   EMITTED_BLOCK_TYPES,
+  LINK_BRANDS,
   TABLE_ALIGNS,
   TEXT_STYLES,
   TIMELINE_STATES,
@@ -39,8 +40,9 @@ const published = (name: string): Json =>
 
 /**
  * The platform's fixtures, copied byte for byte: its parity fixtures from its
- * `packages/contracts/fixtures/blocks/`, each `{blocks}`, and its emitted example of all twelve
- * sendable types from its `test/fixtures/`, a bare list.
+ * `packages/contracts/fixtures/blocks/`, each `{blocks}`, and its emitted example of every
+ * sendable type from its `test/fixtures/` (`emitted-all-twelve`, which since amendment 5 holds
+ * `links` too, its name kept), a bare list.
  */
 const fixture = (name: string): Json[] => {
   const read = JSON.parse(
@@ -74,7 +76,7 @@ test("the types, their values and the limits are the published schema's", () => 
     EMITTED_BLOCK_TYPES.filter((type) => type !== 'section' && type !== 'group').sort(),
     'a section holds every type but a section and a group',
   );
-  const { text, metric, badge, table, list, section, file, link, timeline, image, group } =
+  const { text, metric, badge, table, list, section, file, link, timeline, image, group, links } =
     byType as Record<string, Json>;
   const [bar, line] = (defs.emittedBlock.oneOf as Json[]).find((one) => one.oneOf)!.oneOf as Json[];
   assert.deepEqual([bar!.properties.kind.const, line!.properties.kind.const], [...CHART_KINDS]);
@@ -94,10 +96,18 @@ test("the types, their values and the limits are the published schema's", () => 
       titleLength: [section!.title, link!.title, file!.title, item.title].map((x) => x.maxLength),
       lineLength: [row.note, row.cells.items, item.subtitle, list!.empty].map((x) => x.maxLength),
       listTextLength: item.text.maxLength,
-      wordLength: [badge!.text, item.lead, item.value, item.badge.properties.text].map(
-        (x) => x.maxLength,
-      ),
-      urlLength: [link!.url.maxLength, item.url.maxLength],
+      wordLength: [
+        badge!.text,
+        item.lead,
+        item.value,
+        item.badge.properties.text,
+        links!.items.items.properties.label,
+      ].map((x) => x.maxLength),
+      urlLength: [
+        link!.url.maxLength,
+        item.url.maxLength,
+        links!.items.items.properties.url.maxLength,
+      ],
       chartBars: [barPoints!.minItems, barPoints!.maxItems],
       chartPoints: [linePoints!.minItems, linePoints!.maxItems],
       chartValue: [
@@ -111,6 +121,7 @@ test("the types, their values and the limits are the published schema's", () => 
       ),
       altLength: image!.alt.maxLength,
       groupSections: [group!.sections.minItems, group!.sections.maxItems],
+      linksItems: [links!.items.minItems, links!.items.maxItems],
     },
     {
       topLevel: [1, L.topLevel],
@@ -124,20 +135,22 @@ test("the types, their values and the limits are the published schema's", () => 
       titleLength: Array(4).fill(L.titleLength),
       lineLength: Array(4).fill(L.lineLength),
       listTextLength: L.listTextLength,
-      wordLength: Array(4).fill(L.wordLength),
-      urlLength: [L.urlLength, L.urlLength],
+      wordLength: Array(5).fill(L.wordLength),
+      urlLength: Array(3).fill(L.urlLength),
       chartBars: [1, L.chartBars],
       chartPoints: [L.chartPointsMinimum, L.chartPoints],
       chartValue: [0, L.chartValue, -L.chartValue, L.chartValue],
       chartWords: [L.wordLength, L.wordLength],
       altLength: L.altLength,
       groupSections: [1, L.groupSections],
+      linksItems: [1, L.linksItems],
     },
   );
   assert.deepEqual(text!.style.enum, [...TEXT_STYLES]);
   assert.deepEqual(text!.tone.enum, [...BLOCK_TONES]);
   assert.deepEqual(table!.columns.items.properties.align.enum, [...TABLE_ALIGNS]);
   assert.deepEqual(timeline!.items.items.properties.state.enum, [...TIMELINE_STATES]);
+  assert.deepEqual(links!.items.items.properties.brand.enum, [...LINK_BRANDS]);
   assert.equal(file!.fileId.pattern, ARTIFACT_ID_PATTERN.source, "the SDK's artifact-id rule");
   assert.equal(image!.fileId.pattern, ARTIFACT_ID_PATTERN.source, "an image's, the same rule");
 });
@@ -174,7 +187,7 @@ test("the platform's fixtures pass through unchanged; its drawn file is bounded 
   assert.deepEqual(
     Object.fromEntries(counts),
     Object.fromEntries(EMITTED_BLOCK_TYPES.map((type) => [type, type === 'text' ? 2 : 1])),
-    'all twelve: text twice, each other type once',
+    'every type: text twice, each other type once',
   );
   const drawn = fixture('emitted-all-nine');
   assert.deepEqual(

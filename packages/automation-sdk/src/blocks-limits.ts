@@ -46,6 +46,8 @@ export const BLOCK_LIMITS = {
   altLength: 200,
   /** A group's sections: as many as a run's (amendment 1, point 12; its `RUN_SECTION_LIMITS`). */
   groupSections: 12,
+  /** A `links` block's buttons, at most (amendment 5); each label is a word (40). */
+  linksItems: 8,
 } as const;
 
 /** The platform's rule for every string a block carries (its `stringProblem`). */
@@ -56,6 +58,8 @@ const CONTROL = /[\u0001-\u0008\u000b-\u001f\u007f-\u009f]/u;
 const TAG = /<[A-Za-z!/?]/u;
 /** How a url starts, in either case, with no white space: the schema's `pattern`, exactly. */
 const HTTPS = /^[Hh][Tt][Tt][Pp][Ss]:\/\/[^\s]+$/u;
+/** A `links` button's url (amendment 5): `http://` too, which the platform upgrades to `https://`. */
+const HTTP_OR_HTTPS = /^[Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s]+$/u;
 
 const sendable = (value: string, lines: boolean): boolean =>
   !HALF_OR_NUL.test(value) &&
@@ -81,9 +85,11 @@ export function lines(value: unknown, max: number): string | undefined {
  * Whether the platform keeps this url: at most 2,048 characters, `https://` in either case with
  * no white space, nothing a page could misread, and a URL parser reading it as `https:` with a
  * host and no user or password — which a schema cannot say. Never cut: a cut url goes elsewhere.
+ * `upgradable` (a `links` button's, amendment 5) admits `http:` too, as the platform does.
  */
-export function isBlockUrl(value: string): boolean {
-  if (value.length > BLOCK_LIMITS.urlLength || !HTTPS.test(value) || !sendable(value, false)) {
+export function isBlockUrl(value: string, upgradable = false): boolean {
+  const start = upgradable ? HTTP_OR_HTTPS : HTTPS;
+  if (value.length > BLOCK_LIMITS.urlLength || !start.test(value) || !sendable(value, false)) {
     return false;
   }
   let parsed: URL;
@@ -93,15 +99,15 @@ export function isBlockUrl(value: string): boolean {
     return false;
   }
   return (
-    parsed.protocol === 'https:' &&
+    (parsed.protocol === 'https:' || (upgradable && parsed.protocol === 'http:')) &&
     parsed.hostname !== '' &&
     parsed.username === '' &&
     parsed.password === ''
   );
 }
 
-export const url = (value: unknown): string | undefined =>
-  typeof value === 'string' && isBlockUrl(value.trim()) ? value.trim() : undefined;
+export const url = (value: unknown, upgradable = false): string | undefined =>
+  typeof value === 'string' && isBlockUrl(value.trim(), upgradable) ? value.trim() : undefined;
 
 export const oneOf = <T extends string>(values: readonly T[], value: unknown): T | undefined =>
   (values as readonly unknown[]).includes(value) ? (value as T) : undefined;

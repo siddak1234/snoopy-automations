@@ -247,3 +247,44 @@ test('within 96 KiB, a group keeps its first sections that fit, its last one cut
   assert.ok((cut!.blocks[0] as TableBlock).rows.length < rows.length);
   assert.ok(Buffer.byteLength(JSON.stringify([group])) > L.bytes - 700, 'as many rows as fit');
 });
+
+test('links (amendment 5): the first 8 buttons; an http url kept for the platform to upgrade; a button with no label, a url it refuses or no buttons left out', () => {
+  const button = (at: number, extra: Json = {}): Json => ({
+    label: `Link ${at}`,
+    url: `https://example.com/${at}`,
+    ...extra,
+  });
+  const [links, inSection] = sendable(
+    bound([
+      {
+        type: 'links',
+        items: [
+          button(0, { brand: 'github' }),
+          button(1, { url: 'http://jane-doe.example', brand: 'mastodon' }),
+          button(2, { label: '' }),
+          button(3, { url: 'ftp://example.com/a' }),
+          button(4, { url: 'https://user:pass@example.com/' }),
+          button(5, { label: `${'a'.repeat(40)}b` }),
+          ...many(9, (at) => button(10 + at)),
+        ],
+      },
+      section('Profiles', [{ type: 'links', items: [button(0, { brand: 'site' })] }]),
+      { type: 'links', items: [] },
+      { type: 'links', items: [button(0, { url: 'javascript:alert(1)' })] },
+    ]),
+  ) as Json[];
+  assert.equal(links!.items.length, L.linksItems);
+  assert.deepEqual(links!.items[0], button(0, { brand: 'github' }));
+  assert.deepEqual(
+    links!.items[1],
+    { label: 'Link 1', url: 'http://jane-doe.example' },
+    'an http url as sent; an unknown brand left off',
+  );
+  assert.equal(links!.items[2].label, 'a'.repeat(40), 'a label cut whole at 40');
+  assert.deepEqual(links!.items.at(-1), button(14), 'the first 8 kept');
+  assert.deepEqual(
+    inSection!.blocks[0].items,
+    [button(0, { brand: 'site' })],
+    'a leaf in a section',
+  );
+});

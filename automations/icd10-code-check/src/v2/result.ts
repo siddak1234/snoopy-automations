@@ -37,7 +37,9 @@ export function batchResult(state: JsonObject) {
 export function childRequest(request: InvokeRequest): InvokeRequest {
   const continuation = request.continuation;
   if (continuation?.decisions === undefined) return request;
-  const decisions = [...visitAnswers(request)].map(([id, decision]) => ({ id, decision }));
+  const decisions = [...visitAnswers(request)].flatMap(([id, decision]) =>
+    decision === 'other' ? [] : [{ id, decision }],
+  );
   return { ...request, continuation: { ...continuation, decisions } };
 }
 

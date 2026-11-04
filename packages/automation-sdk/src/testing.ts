@@ -61,6 +61,7 @@ import { fixedQueryRefusal, pagesRefusal, RecordingMemory } from './testing-batc
  */
 export { failureDrill, type DrillFixture } from './drill.js';
 export { answerReview } from './review-testing.js';
+export type { ReviewAnswer } from './review-testing.js';
 export { problemFixture, refusalFixture, type ProblemInput } from './problem-fixture.js';
 export { fixedQueryRefusal, pagesRefusal, RecordingMemory, unitFixture } from './testing-batch.js';
 

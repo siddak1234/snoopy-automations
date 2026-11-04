@@ -62,25 +62,49 @@
           "minItems": 1,
           "maxItems": 400,
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "decision"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
-                "maxLength": 64
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "decision"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+                    "maxLength": 64
+                  },
+                  "decision": {
+                    "enum": [
+                      "accepted",
+                      "denied"
+                    ]
+                  }
+                }
               },
-              "decision": {
-                "enum": [
-                  "accepted",
-                  "denied"
-                ]
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "other"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+                    "maxLength": 64
+                  },
+                  "other": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                }
               }
-            }
+            ]
           }
         },
         "state": {

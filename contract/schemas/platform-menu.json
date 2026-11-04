@@ -13,7 +13,8 @@
     "timeline",
     "image",
     "chart",
-    "group"
+    "group",
+    "links"
   ],
   "pageParts": {
     "flow": [
@@ -255,6 +256,9 @@
       "setupOptionValueLength": 64,
       "setupOptionLabelLength": 120,
       "setupOptionGroupLength": 80,
+      "setupExample": 40,
+      "setupSections": 6,
+      "setupSectionTitle": 40,
       "groupTitlesByConnection": 16,
       "scopesPerConnection": 32,
       "maxConcurrentRuns": 1000,

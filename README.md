@@ -154,11 +154,13 @@ startup an item step with no code and an id declared in both pipelines; `itemFix
 `declaredItemSteps` in `@autom8x/automation-sdk/testing` build an item for a suite and read a
 manifest's item steps.
 
-**What a person reads, as blocks** (the platform's ADR-0048, Round 21, and its amendment 1, block
-set v2). A success's `result`, or a `held()` step, may return `blocks` of the twelve types an
+**What a person reads, as blocks** (the platform's ADR-0048, Round 21, its amendment 1, block
+set v2, and its amendment 5). A success's `result`, or a `held()` step, may return `blocks` of the thirteen types an
 automation may send — text, metric, badge, table, list, section, file (one of the job's uploads),
-link, timeline, image (one of the job's files, drawn as a picture), chart (bar or line) and group
-(one card of drop-down sections) — which the platform draws in the order sent, in the `result` part
+link, timeline, image (one of the job's files, drawn as a picture), chart (bar or line), group
+(one card of drop-down sections) and links (1 to 8 buttons, each a label, a url and an optional
+`brand`, `LINK_BRANDS`; an `http://` url is sent as given and the platform upgrades it to
+`https://`) — which the platform draws in the order sent, in the `result` part
 of the run's page (on an item run, as the item's reading). The manifest's `display.pages` orders the
 page's parts (`PAGE_PARTS`; the item page's `scores` is opt-in); a flow that declares none is drawn
 in today's order. An image's file is drawn inline only when its upload declares a page or pixel
@@ -208,6 +210,17 @@ the SDK's `batch.ts`) become one waiting child run each; a child's
 `request.unit` names its label, files (each with an optional page range) and data, and it runs the
 `pipeline`. `unitFixture` builds one for a suite, and the double refuses a page range the file
 cannot give (`pagesRefusal`).
+
+**Stage 1: other values for a change, a setup's sections, a text box's example and links** (the
+platform's ADR-0048 amendment 5; `contract/` carries them at snoopy-backend 0973082 (#265), the platform's `main` after
+Round 21's Stage 1 squash-merged; first copied at its branch's 7ae5d92, `cmp`-equal to both). A held decision may offer `options`, 1 to 3
+`{value, label}` (`DecisionOption`; `DECISION_LIMITS.options` and `.option`, 120 characters),
+values a person may pick in its place: `boundedDecisions` cuts a label whole, and refuses more than
+3, a value it would have to cut (the answer names it) and a value twice. The answer is then
+`{id, other}`: `answersOf(request)` reads it as `'other'` and `othersOf(request)` its value; in a
+suite, `answerReview` takes `{ other: value }` and refuses one its change did not offer, in the
+platform's words. A manifest's `setupSections` and a text field's `example` are drawn by the
+clients from the manifest; an automation reads neither. The `links` block is above.
 
 ## A new flow's standards (`defineFlow`)
 
