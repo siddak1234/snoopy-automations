@@ -29,6 +29,7 @@
 - `npm run facts`: `tsx scripts/repo-facts.ts`
 - `npm run format`: `prettier --write .`
 - `npm run format:check`: `prettier --check .`
+- `npm run live-eval`: `tsx scripts/live-eval.ts`
 - `npm run map`: `node scripts/kit/map.mjs`
 - `npm run review-rows`: `tsx scripts/review-rows.ts`
 - `npm run scaffold`: `node scripts/scaffold.mjs`
@@ -74,6 +75,10 @@
 - [scripts/kit/check-docs.mjs](../scripts/kit/check-docs.mjs): D, docs always updated (STANDARD (e)): `npm run check:docs` reads
 - [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
+- [scripts/live-eval.ts](../scripts/live-eval.ts): `npm run live-eval -- templateId [--record]` (Round 21, Stage 2, the owner's Q4): the command the
+- [scripts/live-eval/client.ts](../scripts/live-eval/client.ts): The live platform as `npm run live-eval` reaches it (Round 21, Stage 2, the owner's Q4): the
+- [scripts/live-eval/profiles.ts](../scripts/live-eval/profiles.ts): What `npm run live-eval` runs for each flow (the owner's Q4): its 25 invented samples, the version
+- [scripts/live-eval/resumes.ts](../scripts/live-eval/resumes.ts): Resume Screening's 25 live-eval samples and their job (the owner's Q4): invented people only —
 - [scripts/no-skipped-tests.mjs](../scripts/no-skipped-tests.mjs): `npm run verify`'s test gate (Round 21 hardening, A2): runs `npm test` — or the command it is
 - [scripts/repo-facts.ts](../scripts/repo-facts.ts): What this repository reports about itself, in the shape the platform
 - [scripts/review-rows.ts](../scripts/review-rows.ts): The review checklist's machine-checkable rows (Round 21, R3; `/create-flow`'s
@@ -81,7 +86,7 @@
 
 ### Tests
 
-- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, manifest, menu, network, no, pins, repo, research, review, scaffold, workflow
+- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, live, manifest, menu, network, no, pins, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 

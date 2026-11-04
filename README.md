@@ -55,6 +55,7 @@ manifests/<name>.v<n>.json   what the platform registers, validated here first a
 scripts/scaffold.mjs         npm run scaffold -- <id>: a new flow's frame from its manifest and spec
 scripts/review-rows.ts       the review checklist's machine rows, posted by CI
 scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from the gate
+scripts/live-eval.ts         npm run live-eval -- <flow> [--record]: a flow's 25 invented samples through the live platform, against their recordings
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
@@ -478,6 +479,41 @@ routing (its 25.2.17–25.2.25) go live with its next platform promotion; `exclu
 (its 25.2.29) and the measured uploads `receive` reads (its 25.2.28) are pull requests not
 yet merged, so until they are promoted the platform answers `excludeModelAuthors` with a 400
 and sends no measurements.
+
+## The live eval (`npm run live-eval`)
+
+The owner's Q4 (2026-11-03, "continue with recommended"): when a flow's prompt version or model
+list changes, the session runs `npm run live-eval -- <invoice-processing|candidate-reviewer>`
+(`scripts/live-eval.ts`; the API calls in `scripts/live-eval/client.ts`, the flows in
+`scripts/live-eval/profiles.ts`). It runs the flow's 25 invented samples through the **live**
+platform — each uploaded, run and read through the public API as a person's app does — in a test
+workspace, on the platform's own model key, one at a time, and compares each run's key fields with
+its recording, field by field: Invoice Processing's supplier, number and total of each document
+(and how many), Resume Screening's name, email and phone. It passes, exit 0, only when every key
+field of every sample matches; it prints each difference — the sample, the field, the recorded and
+the live value — for the owner, and exits 1. A run that fails, or a sample with no recording, is a
+difference. `--record` writes the recordings from the live runs instead, one
+`automations/<flow>/test/live-eval/<sample>.json` each (its file's sha256, the version, when, the
+fields); a recording made for other bytes is refused. Resume Screening's are made first, by the
+session, after its v3 deploys; until Invoice Processing's are recorded live, each of its samples is
+compared with the first read the agents recorded for it (`test/recordings/extract-documents.v1/`),
+read as the run reads it.
+
+- **Where it runs, and on what.** The test workspace's session is read from the environment at run
+  time — `AUTOM8X_EVAL_API_URL` (an https origin, or http on localhost), `AUTOM8X_EVAL_SESSION`
+  (sent only as the bearer to the API, never to the store, a line or a file),
+  `AUTOM8X_EVAL_WORKSPACE_ID` and `AUTOM8X_EVAL_SUBSCRIPTION_ID` — and never committed. The
+  subscription must be the flow's, live, on the version the eval is for (Invoice Processing v8,
+  Resume Screening v3), and Invoice Processing's on "None": the eval never writes to QuickBooks.
+  Resume Screening's job is made first, once a run, from an invented job description. Anything else
+  stops it, exit 2, before a run.
+- **The samples are invented**: Invoice Processing's 25 made-up files (`test/samples/`), Resume
+  Screening's 25 made-up people, each a Word resume built byte-stable by the eval
+  (`scripts/live-eval/resumes.ts`), at example.com with phones in 555-0100 to 555-0199. Never a real
+  person's.
+- **What it costs**: 25 runs, each one to a few paid AI calls, on the test workspace's plan.
+- **CI never runs it**: it refuses when `CI` is set, and `test/live-eval.test.ts` runs it against a
+  fake platform (`test/live-eval-fake.ts`).
 
 ## The Edge's flood valve
 
