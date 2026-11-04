@@ -512,9 +512,11 @@ read as the run reads it.
   eval job stays in the flow's list; one the platform does not archive is named in a line. Anything
   else stops it, exit 2, before a run.
 - **The samples are invented**: Invoice Processing's 25 made-up files (`test/samples/`), Resume
-  Screening's 25 made-up people, each a Word resume built byte-stable by the eval
+  Screening's 25 made-up people, each a Word resume built by the eval
   (`scripts/live-eval/resumes.ts`), at example.com with phones in 555-0100 to 555-0199. Never a real
-  person's.
+  person's. Its bytes, and the sha256 a recording names, are the same on any machine: each entry is
+  deflate's stored blocks, written by the format alone, never by a zlib build (not ZIP's stored
+  method, which the flow's reader refuses); `test/live-eval.test.ts` pins them.
 - **What it costs, and what it sends**: 25 runs, each one to a few paid AI calls, on the test
   workspace's plan. Each run is activity, so the platform emails it to the workspace's owners and
   admins, the person who started it and the flow's extra addresses, one message per address (its

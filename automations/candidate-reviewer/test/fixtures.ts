@@ -234,14 +234,17 @@ export interface ZipEntry {
   inflatedSize?: number;
 }
 
+/** How a deflated entry's stream is written: Node's zlib unless given (the live eval's own blocks). */
+export type Deflate = (data: Uint8Array) => Uint8Array;
+
 /** A ZIP archive built here, by the format's own layout: local entries, the directory, its end. */
-export function zip(entries: readonly ZipEntry[]): Uint8Array {
+export function zip(entries: readonly ZipEntry[], deflate: Deflate = deflateRawSync): Uint8Array {
   const locals: Buffer[] = [];
   const directory: Buffer[] = [];
   let offset = 0;
   for (const entry of entries) {
     const method = entry.method ?? 8;
-    const stored = Buffer.from(method === 8 ? deflateRawSync(entry.data) : entry.data);
+    const stored = Buffer.from(method === 8 ? deflate(entry.data) : entry.data);
     const name = Buffer.from(entry.name, 'utf8');
     const crc = crc32(entry.data);
     const local = Buffer.alloc(30);
@@ -293,11 +296,18 @@ export const partXml = (part: 'hdr' | 'ftr', body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:${part} ${W}>${body}</w:${part}>`;
 
 /** A Word file whose body is these paragraphs, its content types first as Word writes them. */
-export function docx(body: string, document: Partial<ZipEntry> = {}): Uint8Array {
-  return zip([
-    { name: '[Content_Types].xml', data: Buffer.from('<?xml version="1.0"?><Types/>') },
-    { name: 'word/document.xml', data: Buffer.from(documentXml(body), 'utf8'), ...document },
-  ]);
+export function docx(
+  body: string,
+  document: Partial<ZipEntry> = {},
+  deflate?: Deflate,
+): Uint8Array {
+  return zip(
+    [
+      { name: '[Content_Types].xml', data: Buffer.from('<?xml version="1.0"?><Types/>') },
+      { name: 'word/document.xml', data: Buffer.from(documentXml(body), 'utf8'), ...document },
+    ],
+    deflate,
+  );
 }
 
 export const WORD = { contentType: WORD_TYPE } as const;

@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
+import { docxText } from '../automations/candidate-reviewer/src/docx.js';
 import { partAnswerOf } from '../automations/invoice-processing/src/run/answer.js';
 import { documentReadOf } from '../automations/invoice-processing/src/run/document-read.js';
 import { recordingOf } from '../automations/invoice-processing/test/recordings.js';
 import { SAMPLES } from '../automations/invoice-processing/test/sample-maker/samples.js';
 import { ENV, main, type Io } from '../scripts/live-eval.js';
 import { PROFILES, type Profile } from '../scripts/live-eval/profiles.js';
-import { CANDIDATES } from '../scripts/live-eval/resumes.js';
+import { CANDIDATES, sha256 } from '../scripts/live-eval/resumes.js';
 import { API, ENV_FOR, WORKSPACE, fakePlatform, type FakeOptions } from './live-eval-fake.js';
 
 /**
@@ -336,7 +337,27 @@ test("the samples are invented: Resume Screening's 25 people at example.com with
     INVOICE.samples().map((sample) => sample.name),
     SAMPLES.map((sample) => sample.name),
   );
-  // Byte-stable: a recording names its file's sha256.
-  const [one] = RESUMES.samples();
-  assert.deepEqual(one!.file().bytes, one!.file().bytes);
+});
+
+/** The sha256 of the 25 resumes' and the job's sha256s, one a line: what their recordings name. */
+const RESUME_BYTES = 'bfdf1ddcfa28d45afc1a8ab2d7bc567a765c940b01f4ad0a0bbd05fbc69f784b';
+
+test("Resume Screening's Word files are the format's own bytes: each entry deflate's stored blocks, its words in the file as written, the same on every zlib, and the flow's own reader reads each", () => {
+  const files = [...RESUMES.samples().map((sample) => sample.file()), RESUMES.job!.file()];
+  for (const [at, candidate] of CANDIDATES.entries()) {
+    const { bytes } = files[at]!;
+    for (const words of [candidate.name, candidate.email, candidate.phone].filter(Boolean)) {
+      assert.ok(Buffer.from(bytes).includes(words), `${candidate.sample}: "${words}" as written`);
+    }
+    const read = docxText(bytes);
+    assert.ok(read.ok, `${candidate.sample}: ${read.ok ? '' : read.refusal}`);
+    assert.ok(read.text.includes(candidate.name) && read.text.includes(candidate.email));
+  }
+  const job = docxText(files.at(-1)!.bytes);
+  assert.ok(job.ok && job.text.includes('Must have: a CPA license'));
+  assert.equal(
+    sha256(Buffer.from(files.map((file) => sha256(file.bytes)).join('\n'))),
+    RESUME_BYTES,
+    "the samples' bytes moved: their recordings must be made again (--record)",
+  );
 });
