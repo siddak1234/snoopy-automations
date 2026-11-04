@@ -12,7 +12,8 @@ import {
 import { SPEND_TYPES, type SpendType } from '../spend-types.js';
 
 /**
- * The first read's answer as v3 asks for it (`prompts/extract-documents.v1.json`): one part of the
+ * The first read's answer as v3 asks for it (`automations/invoice-processing/prompts/extract-documents.v1.json`; v8's v2 adds each
+ * document's `quotes`): one part of the
  * file — every document from where the part starts, each its own entry with its own seller and its
  * own details — and where the next part starts. The platform holds each answer to the prompt's
  * schema before a step sees it; these guards repeat the types only, never a value's meaning,
@@ -86,6 +87,31 @@ export interface DocumentAnswer {
   }[];
   readonly listedItemsComplete: boolean;
   readonly uncertainFields: readonly string[];
+  /**
+   * v8's exact words (`automations/invoice-processing/prompts/extract-documents.v2.json`, rule 19; the owner's Q1): what the seller,
+   * the number and the total were read from, as printed. Absent from v1's answers, so read only
+   * through `quotesOf`.
+   */
+  readonly quotes?: unknown;
+}
+
+/** The exact words a key value was read from, each as printed; empty when the value is empty. */
+export interface Quotes {
+  readonly vendorName: string;
+  readonly documentNumber: string;
+  readonly total: string;
+}
+
+/** A document's exact words, or undefined when its answer gave none of the three as text. */
+export function quotesOf(document: DocumentAnswer): Quotes | undefined {
+  const { quotes } = document;
+  if (!isObject(quotes)) return undefined;
+  const { vendorName, documentNumber, total } = quotes;
+  return typeof vendorName === 'string' &&
+    typeof documentNumber === 'string' &&
+    typeof total === 'string'
+    ? { vendorName, documentNumber, total }
+    : undefined;
 }
 
 /** One part's answer; where the next part starts is null once everything is read (0 on the wire). */
@@ -246,7 +272,7 @@ const printed = (value: string | null): string | null =>
   value === null || value.trim() === '' ? null : value;
 
 /**
- * One document as v2's checks read an answer (`src/checks/answers.ts`, the 27 fields of v2's
+ * One document as v2's checks read an answer (`automations/invoice-processing/src/checks/answers.ts`, the 27 fields of v2's
  * prompt): the same values, the type as v2 names it, one document counted — the file's count is
  * the read's, never one document's — and each line by its amount, the list complete only when
  * every line the document has was read.

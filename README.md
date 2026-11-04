@@ -55,6 +55,7 @@ manifests/<name>.v<n>.json   what the platform registers, validated here first a
 scripts/scaffold.mjs         npm run scaffold -- <id>: a new flow's frame from its manifest and spec
 scripts/review-rows.ts       the review checklist's machine rows, posted by CI
 scripts/repo-facts.ts        emits docs/repo-facts/snoopy-automations.json from the gate
+scripts/live-eval.ts         npm run live-eval -- <flow> [--record]: a flow's 25 invented samples through the live platform, against their recordings
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
@@ -222,14 +223,26 @@ suite, `answerReview` takes `{ other: value }` and refuses one its change did no
 platform's words. A manifest's `setupSections` and a text field's `example` are drawn by the
 clients from the manifest; an automation reads neither. The `links` block is above.
 
+**Stage 2: health data** (the platform's ADR-0049; `contract/` carries it at snoopy-backend 50a24f7,
+the head of its branch `round-21/stage-2-platform`, #266, not yet merged). What a manifest's optional
+`dataProtection: 'hipaa'` makes the platform do is in
+[contract/README.md](contract/README.md#what-the-platform-refuses-beyond-the-schema),
+"`dataProtection`". Its BAA gateway refuses a call naming its own `models` or `excludeModelAuthors`,
+so such a flow's calls name none (ICD-10 Code Check v4's `modelsFor`). The menu lists
+`dataProtections`, the provider auth type `smart-backend` and the provider `ehr-fhir` (the EHR); no
+flow here calls it yet.
+
 ## A new flow's standards (`defineFlow`)
 
 Every flow built from Round 21 on is defined with `defineFlow` (`packages/automation-sdk/src/flow.ts`):
 `defineAutomation` with the standards on, so every new flow fails, retries and words its failures
 the same way, by reuse rather than by each flow writing its own (the two live flows did: Invoice
 Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and the template use it.
-**The two live flows keep `defineAutomation`, unchanged**, until their after-pilot versions
-(Invoice Processing v8, Resume Screening v3); `defineAutomation`'s behaviour is as before.
+**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8,
+Resume Screening v3) too, with their own failure words and retries; `defineAutomation`'s behaviour is
+as before. Those versions take only Q2's re-ask from `defineFlow`: `reaskingOnce(platform, log)`
+wraps the platform their `execute` is handed, and a second miss reaches their step, which ends the
+run "The AI's answer couldn't be used. Try a clearer file." (below).
 
 - **A throw never reaches a person.** A step that threw until its attempts were spent ends the run
   with the flow's own sentence for that step (`sentences`) or the SDK's (`FLOW_WORDS`,
@@ -283,7 +296,9 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   `unmatchedAnswer`**: an approval carries a decision, never the AI's fields. At any other step — the
   template's `extract` among them — a second miss ends "The AI's answer couldn't be used. Try a
   clearer file.", so no hold is offered whose approval cannot go on. **One to three more paid AI calls**: the platform tries the request's next model on a
-  miss too, each a `runs.model_calls` row against the plan's allowance.
+  miss too, each a `runs.model_calls` row against the plan's allowance. A flow on
+  `defineAutomation` gets the same re-ask, and nothing else of these standards, from
+  `reaskingOnce(platform, log)` (`flow.ts`): the second miss is thrown on to its step.
 - **5d**: a call asks at the owner's cap (the menu's `limits.modelAnswerTokens`) unless the step names a lower
   `maxOutputTokens`, which only a flow's spec sets; one cut off (`truncated`) below the cap is asked
   once more at the cap — **one to three more paid AI calls** — and one cut off at the cap is not
@@ -467,6 +482,49 @@ routing (its 25.2.17–25.2.25) go live with its next platform promotion; `exclu
 yet merged, so until they are promoted the platform answers `excludeModelAuthors` with a 400
 and sends no measurements.
 
+## The live eval (`npm run live-eval`)
+
+The owner's Q4 (2026-11-03, "continue with recommended"): when a flow's prompt version or model
+list changes, the session runs `npm run live-eval -- <invoice-processing|candidate-reviewer>`
+(`scripts/live-eval.ts`; the API calls in `scripts/live-eval/client.ts`, the flows in
+`scripts/live-eval/profiles.ts`). It runs the flow's 25 invented samples through the **live**
+platform — each uploaded, run and read through the public API as a person's app does — in a test
+workspace, on the platform's own model key, one at a time, and compares each run's key fields with
+its recording, field by field: Invoice Processing's supplier, number and total of each document
+(and how many), Resume Screening's name, email and phone. It passes, exit 0, only when every key
+field of every sample matches; it prints each difference — the sample, the field, the recorded and
+the live value — for the owner, and exits 1. A run that fails, or a sample with no recording, is a
+difference. `--record` writes the recordings from the live runs instead, one
+`automations/<flow>/test/live-eval/<sample>.json` each (its file's sha256, the version, when, the
+fields); a recording made for other bytes is refused. Resume Screening's are made first, by the
+session, after its v3 deploys; until Invoice Processing's are recorded live, each of its samples is
+compared with the first read the agents recorded for it (`test/recordings/extract-documents.v1/`),
+read as the run reads it.
+
+- **Where it runs, and on what.** The test workspace's session is read from the environment at run
+  time — `AUTOM8X_EVAL_API_URL` (an https origin, or http on localhost), `AUTOM8X_EVAL_SESSION`
+  (sent only as the bearer to the API, never to the store, a line or a file),
+  `AUTOM8X_EVAL_WORKSPACE_ID` and `AUTOM8X_EVAL_SUBSCRIPTION_ID` — and never committed. The
+  subscription must be the flow's, live, on the version the eval is for (Invoice Processing v8,
+  Resume Screening v3), and Invoice Processing's on "None": the eval never writes to QuickBooks.
+  Resume Screening's job is made first, once a run, from an invented job description, and archived
+  when the pass ends, passed, failed or stopped (`POST /items/{id}/archive`; its runs stay), so no
+  eval job stays in the flow's list; one the platform does not archive is named in a line. Anything
+  else stops it, exit 2, before a run.
+- **The samples are invented**: Invoice Processing's 25 made-up files (`test/samples/`), Resume
+  Screening's 25 made-up people, each a Word resume built by the eval
+  (`scripts/live-eval/resumes.ts`), at example.com with phones in 555-0100 to 555-0199. Never a real
+  person's. Its bytes, and the sha256 a recording names, are the same on any machine: each entry is
+  deflate's stored blocks, written by the format alone, never by a zlib build (not ZIP's stored
+  method, which the flow's reader refuses); `test/live-eval.test.ts` pins them.
+- **What it costs, and what it sends**: 25 runs, each one to a few paid AI calls, on the test
+  workspace's plan. Each run is activity, so the platform emails it to the workspace's owners and
+  admins, the person who started it and the flow's extra addresses, one message per address (its
+  OpenAPI's `readFlowEmailRecipients`), and pushes it: about 25 emails a pass to each address. The
+  job's own read is neither.
+- **CI never runs it**: it refuses when `CI` is set, and `test/live-eval.test.ts` runs it against a
+  fake platform (`test/live-eval-fake.ts`).
+
 ## The Edge's flood valve
 
 Every callback reaches the platform through its Edge, which sheds a flood before it reads
@@ -625,21 +683,20 @@ Each flow's spec and build record is its own README, which a change to its code,
 manifests updates in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules,
 a `*` bound to the flow's id):
 
-- **Invoice Processing**, `invoice-processing` (v7):
+- **Invoice Processing**, `invoice-processing` (v8; each document's exact words, and Q2's re-ask):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
-- **Resume Screening**, `candidate-reviewer` (v2; Candidate Reviewer at v1): its spec,
+- **Resume Screening**, `candidate-reviewer` (v3, the exact words and Q2's re-ask; Candidate Reviewer at v1): its spec,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
-Both are live on `defineAutomation`, and their code, prompts and manifests are unchanged until their
-after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `defineFlow`
-("Build a flow", below).
+Both are live on `defineAutomation`; their after-pilot versions (Invoice Processing v8, Resume
+Screening v3) stay on it, with Q2's re-ask from `reaskingOnce` ("A new flow's standards", above).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
-  doctors and coders; v3; v2 and v3 on `defineFlow`): its folder's README is its spec and how the
-  code does it. v1 and v2 stay served on their own containers; the image built here serves v3 alone
-  (its setup in sections and a change's "Other code", the folder README's "v3"), on the Stage 1
-  contract (`contract/`, "Stage 1" above).
+  doctors and coders; v3; v4; v2 to v4 on `defineFlow`): its folder's README is its spec and how the
+  code does it. v1 to v3 stay served on their own containers; the image built here serves v4 alone
+  (v3 carrying health data, `dataProtection: 'hipaa'`, its calls naming no models; the folder
+  README's "v4"), on the Stage 2 contract (`contract/`, "Stage 2" above).
 
 ## The kit
 

@@ -7,10 +7,12 @@ import {
   type JsonObject,
   type ModelRefusalReason,
   type PromptModule,
+  type Step,
   type StepPlatform,
 } from '@autom8x/automation-sdk';
 
 import type { FileRead } from './file.js';
+import { FAILURES, stops } from './words.js';
 
 /**
  * The prompts this flow ships (the spec's §4): `prompts/*.json` beside `src/` and `dist/`, copied
@@ -24,8 +26,11 @@ export const PROMPTS: readonly PromptModule[] = loadPrompts(
 
 /** The job description's reading (document-extraction): the file, or a Word file's text. */
 export const EXTRACT_POSTING: PromptModule = promptOf('extract-posting', 1);
-/** The resume's reading (document-extraction): the file, or a Word file's text. */
-export const EXTRACT_RESUME: PromptModule = promptOf('extract-resume', 1);
+/**
+ * The resume's reading (document-extraction): the file, or a Word file's text. v3 sends v2: v1's
+ * rules and fields and rule 9, the exact words of the name, email and phone (`quotes.ts`).
+ */
+export const EXTRACT_RESUME: PromptModule = promptOf('extract-resume', 2);
 /** The candidate's score against the job's reading (screening): text only, no file. */
 export const SCORE_CANDIDATE: PromptModule = promptOf('score-candidate', 1);
 
@@ -83,4 +88,28 @@ export async function readDocument(
     if (error instanceof ModelRefusedError && FILE_REFUSALS.has(error.reason)) return undefined;
     throw error;
   }
+}
+
+/**
+ * v3 (the owner's Q2): each step, ended "The AI's answer couldn't be used. Try a clearer file."
+ * (`FAILURES.answerUnusable`) when its model's answer missed its schema twice — asked once more
+ * first by `reaskingOnce` (`automation.ts`), so the refusal that reaches a step is the second miss.
+ * No hold: every step after a model step needs its fields. Any other throw goes on as v2's did.
+ */
+export function endsUnusable(steps: Readonly<Record<string, Step>>): Record<string, Step> {
+  return Object.fromEntries(
+    Object.entries(steps).map(([id, step]): [string, Step] => [
+      id,
+      async (context) => {
+        try {
+          return await step(context);
+        } catch (error) {
+          if (error instanceof ModelRefusedError && error.reason === 'output_schema_mismatch') {
+            return stops(FAILURES.answerUnusable);
+          }
+          throw error;
+        }
+      },
+    ]),
+  );
 }

@@ -1,5 +1,6 @@
 import {
   defineAutomation,
+  reaskingOnce,
   type Automation,
   type InvokeRequest,
   type JsonObject,
@@ -7,14 +8,14 @@ import {
   type RunSection,
 } from '@autom8x/automation-sdk';
 
-import { PROMPTS } from './prompts.js';
+import { PROMPTS, endsUnusable } from './prompts.js';
 import type { Posting } from './reading.js';
 import { postingSections } from './sections.js';
 import { candidateSteps, type Candidate } from './steps/candidate.js';
 import { JOB_STEPS, counted } from './steps/job.js';
 
 /**
- * Resume Screening, v2 of `candidate-reviewer` (the spec:
+ * Resume Screening, v2 and v3 of `candidate-reviewer` (the spec:
  * `automations/candidate-reviewer/README.md`, its words the build's source of truth). A flow with
  * items (the platform's ADR-0046): a job is made once, from its job description — the item run,
  * which reads it into the job's reading — and each candidate's run reads a resume and scores it
@@ -26,8 +27,14 @@ import { JOB_STEPS, counted } from './steps/job.js';
  */
 export const TEMPLATE_ID = 'candidate-reviewer';
 
-/** The one version this image serves; its Dockerfile copies only its manifest. */
-export const SERVED_VERSIONS: readonly number[] = [2];
+/**
+ * The one version this image serves; its Dockerfile copies only its manifest. v3 (Round 21, Stage 2;
+ * the owner's Q1 and Q2 of 2026-11-03) is v2's manifest but for its version and its own container:
+ * the resume's read gives the exact words of the name, email and phone (`quotes.ts`), and an answer
+ * off its schema is asked once more, a second miss ending the run (`endsUnusable`). v2's container
+ * keeps its pinned image until it is retired.
+ */
+export const SERVED_VERSIONS: readonly number[] = [3];
 
 /**
  * The manifests this image serves, of those given: `SERVED_VERSIONS` alone, as Invoice
@@ -52,17 +59,22 @@ export function define(
   manifests: readonly Manifest[],
   now: () => Date = () => new Date(),
 ): Automation {
-  return defineAutomation({
+  const automation = defineAutomation({
     templateId: TEMPLATE_ID,
     manifests: servedManifests(manifests),
     prompts: PROMPTS,
-    steps: { ...JOB_STEPS, ...candidateSteps(now) },
+    steps: endsUnusable({ ...JOB_STEPS, ...candidateSteps(now) }),
     // No step declares a retry. Each model step's call is a vendor call and a ledger row when
     // repeated (the spec's §6: no); `save` makes no callback for a retry to repeat — the
     // platform keeps the candidate from the result, which the SDK sends.
     result: (state, request) =>
       request.readsItem === true ? job(state) : candidate(state, request),
   });
+  // v3 (Q2): an answer off its schema asked once more, with the fault line; one to three more paid calls.
+  return {
+    ...automation,
+    execute: (request, platform) => automation.execute(request, reaskingOnce(platform)),
+  };
 }
 
 /** An item run's result: the job's reading, and the sections "What AI read" shows. */

@@ -10,7 +10,7 @@ import {
 } from '@autom8x/automation-sdk';
 import { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
-import { EXTRACT_DOCUMENTS_V1 } from '../src/prompts.js';
+import { EXTRACT_DOCUMENTS_V2 } from '../src/prompts.js';
 import { partInput } from '../src/run/extract.js';
 import { MODELS } from '../src/run/model-refusals.js';
 import { FILE_ID, completion, pdf } from './fixtures.js';
@@ -23,7 +23,7 @@ import { localServer } from './wire.js';
  */
 
 const REQUEST: ModelRequest = {
-  ...renderPrompt(EXTRACT_DOCUMENTS_V1, partInput({ document: 1, line: 1 }, 0)),
+  ...renderPrompt(EXTRACT_DOCUMENTS_V2, partInput({ document: 1, line: 1 }, 0)),
   models: MODELS,
   artifactId: FILE_ID,
 };

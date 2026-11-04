@@ -12,7 +12,15 @@ import { nextStepOf, payeeNameOf } from '../writes/lines.js';
 import { createdOf, newVendorOf, readSaved, statementOf } from '../writes/saved-state.js';
 import type { ReadType } from './answer.js';
 import type { Entry } from './state.js';
-import { NO_RECORD_FOR, statusText, totalWords, type Outcome, type Summarised } from './words.js';
+import {
+  NO_RECORD_FOR,
+  QUOTE_LABELS,
+  exactWords,
+  statusText,
+  totalWords,
+  type Outcome,
+  type Summarised,
+} from './words.js';
 
 /**
  * Each document as the run's result carries it (`RunDocument`, the platform's ADR-0039): what was
@@ -85,8 +93,30 @@ type Line = readonly [label: string, value: string | null];
 const kept = (lines: readonly Line[]) =>
   lines.flatMap(([label, value]) => (value === null || value === '' ? [] : [{ label, value }]));
 
-/** The lines a person reads beside one document (§3.5), each left out when it has no value. */
+/**
+ * v8's exact words (Q1): the seller's, the number's and the total's, each its own line, first, so
+ * they sit under the values they were read from; none for a value with no words.
+ */
+function quoteLines(entry: Entry): { label: string; value: string }[] {
+  const quotes = entry.read.quotes;
+  if (quotes === undefined) return [];
+  return kept([
+    [QUOTE_LABELS.supplier, quotes.supplier === null ? null : exactWords(quotes.supplier)],
+    [QUOTE_LABELS.number, quotes.number === null ? null : exactWords(quotes.number)],
+    [QUOTE_LABELS.total, quotes.total === null ? null : exactWords(quotes.total)],
+  ]);
+}
+
+/**
+ * The lines a person reads beside one document (§3.5), each left out when it has no value; v8's
+ * exact words first (`quoteLines`).
+ */
 function detailsOf(entry: Entry, outcome: Outcome): { label: string; value: string }[] {
+  return [...quoteLines(entry), ...ownDetailsOf(entry, outcome)];
+}
+
+/** v7's lines beside one document, each left out when it has no value. */
+function ownDetailsOf(entry: Entry, outcome: Outcome): { label: string; value: string }[] {
   const { read } = entry;
   const amount = (value: string | null) => totalWords(value, read.currency);
   const printed: Line[] = [

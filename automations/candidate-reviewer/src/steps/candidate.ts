@@ -8,6 +8,7 @@ import {
 
 import { fileFromState, fileIdOf, fileLine, fileState, readResumeFile } from '../file.js';
 import { EXTRACT_RESUME, MODELS, SCORE_CANDIDATE, readDocument } from '../prompts.js';
+import { quotesFrom, quotesOf, trusted } from '../quotes.js';
 import { postingOf, resumeOf, withFileLinks, type Posting, type Resume } from '../reading.js';
 import { quotesDirection, scoringOf, summaryLine, type Scoring } from '../scoring.js';
 import { candidateSections } from '../sections.js';
@@ -100,7 +101,12 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
         plural(resume.education.length, 'qualification', 'qualifications'),
         plural(resume.skills.length, 'skill', 'skills'),
       ].join(', ')}`,
-      state: { document, resume: resume as unknown as JsonObject },
+      // v3 (Q1): the exact words of the name, email and phone, a Word resume's checked against its text.
+      state: {
+        document,
+        resume: resume as unknown as JsonObject,
+        quotes: trusted(quotesOf(answer), file) as JsonObject,
+      },
     };
   };
 
@@ -140,7 +146,12 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
       score: scoring.score,
       verdict: verdictOf(scoring.score),
       summary: summaryLine(scoring, posting),
-      sections: candidateSections(resume, scoring, now()) as unknown as JsonObject[],
+      sections: candidateSections(
+        resume,
+        scoring,
+        now(),
+        quotesFrom(state.quotes),
+      ) as unknown as JsonObject[],
     };
     return Promise.resolve({
       outcome: 'ok',

@@ -12,7 +12,8 @@ import type { RunFail } from '../words.js';
  * How a refusal of the first read ends the run (v2's `extract`, kept): each a code for the log and
  * one of the spec's sentences (§3.F) — the file could not be opened, the answer cannot be read, AI
  * is busy for now, or the document cannot be read right now: model calls off, out of plan, out of
- * time, a fault on our side. Never the model's text.
+ * time, a fault on our side. Never the model's text. v8 (the owner's Q2): an answer off its schema,
+ * asked once more and off it again, ends "The AI's answer couldn't be used. Try a clearer file."
  */
 
 /**
@@ -27,6 +28,7 @@ export const MODELS: readonly string[] = [
 
 export const EXTRACT_FAILS = {
   answer_unusable: 'unreadable',
+  answer_off_schema: 'ai_unusable',
   content_filtered: 'unreadable',
   plan_without_model_calls: 'ai_unavailable',
   plan_check_unavailable: 'ai_unavailable',
@@ -54,7 +56,8 @@ export type ExtractFail = keyof typeof EXTRACT_FAILS;
  * it gains fails the build here until it is given its sentence.
  */
 const MODEL_REFUSALS: Readonly<Record<ModelRefusalReason, ExtractFail>> = {
-  output_schema_mismatch: 'answer_unusable',
+  // v8 (Q2): asked once more first (`reaskingOnce`, `automation.ts`); this is the second miss.
+  output_schema_mismatch: 'answer_off_schema',
   truncated: 'answer_unusable',
   content_filtered: 'content_filtered',
   over_plan_limit: 'allowance_used',

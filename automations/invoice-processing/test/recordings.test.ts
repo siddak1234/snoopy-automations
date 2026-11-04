@@ -104,7 +104,8 @@ test('every recording is one part extract takes: held to the schema, each docume
       t.diagnostic(`${sample.name}: the reading goes on at document ${part.nextDocument}`);
       continue;
     }
-    const world = extractWorld();
+    // The prompt the recordings were made for: v1, whose answers carry no exact words.
+    const world = extractWorld(undefined, EXTRACT_DOCUMENTS_V1);
     world.platform.model = (_call, model) =>
       Promise.resolve(completion(model, recording.text, recording.finishReason));
     const state = (await world.state()) ?? {};

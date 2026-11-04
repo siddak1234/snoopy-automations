@@ -28,6 +28,7 @@ import {
   define,
   perDocumentSpecs,
   pipelineSteps,
+  reasking,
   servedManifests,
 } from '../src/automation.js';
 import { recoverQuickBooks, withFixedSentences } from '../src/failures.js';
@@ -35,8 +36,8 @@ import { EXPENSE_SEARCH, type ExpenseSearch } from '../src/lookups/expense-searc
 import { reads } from './answers.js';
 
 /**
- * The suite's world: the repository's own v5 manifest — the one this code serves, v3's steps under
- * v4's five groups (v5 renames step 5) — a run started
+ * The suite's world: the repository's own v8 manifest — the one this code serves, v3's steps under
+ * v4's five groups (v5 renames step 5), its model answers off their schema asked once more (Q2) — a run started
  * with one upload and the vendor QuickBooks, QuickBooks behind the platform (the kit's simulator,
  * holding Connections to its rules), a model that reads the file as one document, `GOOD_ANSWER`,
  * or as the documents a test gives — and, asked the second read's prompt, gives each document's 14
@@ -57,6 +58,7 @@ export {
   positionsOf,
   reads,
   completion,
+  quotesFor,
 } from './answers.js';
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
@@ -167,7 +169,7 @@ function automationThrough(
     ),
     result: (state) => ({ output: state }),
   });
-  return withFixedSentences(automation, dependencies.log);
+  return reasking(withFixedSentences(automation, dependencies.log), dependencies.log);
 }
 
 export function setUp(options: SetUp = {}) {

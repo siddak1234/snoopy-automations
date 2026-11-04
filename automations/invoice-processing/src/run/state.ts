@@ -70,6 +70,20 @@ export interface DocumentRead {
   readonly dueDate: string | null;
   readonly payment: RunDocumentPayment;
   readonly spendType: SpendType;
+  /**
+   * v8's exact words (the owner's Q1): what the seller, the number and the total were read from,
+   * as printed, each cleaned as text and null when empty. Shown under the document's values
+   * (`documents.ts`) and never checked: a PDF or a photo gives this flow no text to check them by,
+   * so a person reads them against the file. Absent on a read that gave none.
+   */
+  readonly quotes?: ReadQuotes;
+}
+
+/** The exact words of a document's key values, as `DocumentRead.quotes` keeps them. */
+export interface ReadQuotes {
+  readonly supplier: string | null;
+  readonly number: string | null;
+  readonly total: string | null;
 }
 
 /**

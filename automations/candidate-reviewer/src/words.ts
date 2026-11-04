@@ -1,4 +1,9 @@
-import { truncateText, type RunVerdict, type StepResult } from '@autom8x/automation-sdk';
+import {
+  FLOW_WORDS,
+  truncateText,
+  type RunVerdict,
+  type StepResult,
+} from '@autom8x/automation-sdk';
 
 /**
  * The words a person reads when a run stops — the spec's §8, exactly
@@ -18,6 +23,11 @@ export const FAILURES = {
    * candidate's run only on a job that is ready (its ADR-0046), so this answers a platform fault.
    */
   jobNotRead: "This candidate's job has not been read yet.",
+  /**
+   * v3 (the owner's Q2): a model's answer off its schema, asked once more and off it again — at
+   * any of the three AI steps (`endsUnusable`). The SDK's own sentence; no hold.
+   */
+  answerUnusable: FLOW_WORDS.ai_unusable,
 } as const;
 
 /** A step that stops the run with one of the sentences above, as its line and its reason. */

@@ -305,9 +305,9 @@ test('a link longer than the platform keeps is left out, never cut to another ad
   assert.deepEqual(contactLinks((await run(bytes, WORD.contentType)).sent), MODEL_LINKS);
 });
 
-test("at most the links Contact can show beside the email, phone and location; a PDF's first 200 addresses", async () => {
+test("at most the links Contact can show beside the name, email, phone and location; a PDF's first 200 addresses", async () => {
   const many = Array.from({ length: 45 }, (_, n) => `https://example.com/${n}`);
-  const shown = RUN_SECTION_LIMITS.entries - 3;
+  const shown = RUN_SECTION_LIMITS.entries - 4;
   assert.deepEqual(fileLinks(many), many.slice(0, shown));
   const { sent } = await run(pdf(many.map((url) => annotation(`(${url})`))));
   const contact = sent.sections?.find((each) => each.title === 'Contact')?.entries ?? [];

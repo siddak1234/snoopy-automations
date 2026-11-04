@@ -930,6 +930,11 @@
           }
         }
       }
+    },
+    "dataProtection": {
+      "enum": [
+        "hipaa"
+      ]
     }
   },
   "required": [

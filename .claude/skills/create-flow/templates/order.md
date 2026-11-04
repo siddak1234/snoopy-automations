@@ -21,8 +21,9 @@ The session tells the owner, in one line, which of these the idea is:
 - **1 pull request** (`snoopy-automations`): every block, page part, control, trigger and limit the
   idea needs is in the menu, and so is every integration with every operation it calls;
 - **2 pull requests** (the backend's first): a vendor the menu lacks that a provider file can
-  describe (OAuth2 or a pasted key, plain REST), or a menu provider that lacks one operation, a
-  data-only edit to its file — stage 3, from `provider-pr.md`;
+  describe (`snoopy-backend/providers/README.md`, "What cannot be a spec": `smart-backend`,
+  ADR-0050, among its auth engines), or a menu provider that lacks one operation, a data-only edit
+  to its file — stage 3, from `provider-pr.md`;
 - **one more, the SDK's**, added to either: the flow needs a change to `packages/automation-sdk/`
   (step 2) — up to three pull requests;
 - **stop** (a platform round): a new block, page part, question form, target, control, capability,

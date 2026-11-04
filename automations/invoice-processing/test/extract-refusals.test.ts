@@ -25,6 +25,7 @@ import {
  */
 
 const UNREADABLE = RUN_FAILS.unreadable;
+const UNUSABLE = RUN_FAILS.ai_unusable;
 const BUSY = RUN_FAILS.ai_busy;
 const UNAVAILABLE = RUN_FAILS.ai_unavailable;
 const FILE = RUN_FAILS.file;
@@ -56,16 +57,52 @@ function assertEndsWith(
 
 const refusing = (problem: ProblemInput) => () => Promise.reject(refusalFixture('model', problem));
 
-test('every model off the schema or not JSON: the could-not-be-read sentence', async () => {
-  for (const [label, text, finish] of [
-    ['off the schema', JSON.stringify({ ...GOOD_ANSWER, extra: 1 }), 'stop'],
-    ['not JSON', 'The document total is 461.53', 'stop'],
+test('Q2 (v8): every model off the schema or not JSON, asked once more with the fault line and off it again: "The AI\'s answer couldn\'t be used"', async () => {
+  for (const [label, text, finish, where] of [
+    ['off the schema', JSON.stringify({ ...GOOD_ANSWER, extra: 1 }), 'stop', 'at $'],
+    ['not JSON', 'The document total is 461.53', 'stop', 'at $ (json)'],
   ] as const) {
     const outcome = await ended((model) => Promise.resolve(completion(model, text, finish)));
-    assertEndsWith(outcome, 'answer_unusable', UNREADABLE, label);
-    assert.equal(outcome.world.platform.modelAttempts.length, 2, `${label}: both models tried`);
+    assert.deepEqual(outcome.result, { outcome: 'failed', failureReason: UNUSABLE }, label);
+    assert.deepEqual(outcome.line, ['extract', 'failed', UNUSABLE], label);
+    assert.ok(
+      outcome.world.logs.some(
+        ([, message, fields]) =>
+          message === 'step_failed' && fields?.reason === 'answer_off_schema',
+      ),
+      `${label}: the code in the log`,
+    );
+    const calls = outcome.world.platform.modelCalls;
+    assert.equal(calls.length, 2, `${label}: asked once more, never a third time`);
+    assert.equal(
+      calls[1]?.prompt.startsWith(
+        `${calls[0]?.prompt}\n\nYour last answer did not match the schema ${where}`,
+      ),
+      true,
+      `${label}: the fault line`,
+    );
+    assert.equal(
+      outcome.world.platform.modelAttempts.length,
+      4,
+      `${label}: both models, each time`,
+    );
   }
-  assert.equal(UNREADABLE, "The document can't be read. Try a clearer photo.");
+  assert.equal(UNUSABLE, "The AI's answer couldn't be used. Try a clearer file.");
+});
+
+test('Q2 (v8): the image as `define` builds it asks an answer off its schema once more, then ends the run', async () => {
+  const world = setUp({ through: 'all' });
+  world.platform.model = (_call, model) =>
+    Promise.resolve(completion(model, JSON.stringify({ ...GOOD_ANSWER, extra: 1 })));
+  assert.deepEqual(await world.run(), { outcome: 'failed', failureReason: UNUSABLE });
+  assert.equal(world.platform.modelCalls.length, 2, 'asked once more, never a third time');
+  assert.ok(
+    world.logs.some(
+      ([, message, fields]) =>
+        message === 'model_reasked' && fields?.reason === 'output_schema_mismatch',
+    ),
+    'the re-ask in the log, by its reason',
+  );
 });
 
 test('every model cut off at the cap, at every part size: asked again smaller, then the could-not-be-read sentence', async () => {
@@ -309,7 +346,9 @@ test('an answer a platform should have refused — not JSON, not an object, the 
 test("every sentence is one of the spec's, within the one-line bound; none carries the platform's words or the model's", async () => {
   for (const fail of Object.values(EXTRACT_FAILS)) {
     assert.ok(
-      [UNREADABLE, BUSY, UNAVAILABLE, FILE, RUN_FAILS.none_found].includes(RUN_FAILS[fail]),
+      ([UNREADABLE, BUSY, UNAVAILABLE, FILE, UNUSABLE, RUN_FAILS.none_found] as string[]).includes(
+        RUN_FAILS[fail],
+      ),
       fail,
     );
   }

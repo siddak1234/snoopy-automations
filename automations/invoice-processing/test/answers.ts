@@ -46,7 +46,7 @@ export const GOOD_ANSWER: JsonObject = {
   uncertainFields: [],
 };
 
-/** The texts v3's prompt reads as a string, empty when nothing is printed (`src/run/answer.ts`). */
+/** The texts v3's prompt reads as a string, empty when nothing is printed (`automations/invoice-processing/src/run/answer.ts`). */
 const TEXTS = [
   'vendorName',
   'documentNumber',
@@ -70,7 +70,9 @@ export function asTexts(answer: JsonObject): JsonObject {
 /**
  * One document as v3's prompt reads it, from a v2-shaped answer: the same values, a text not
  * printed an empty string, v2's `other` read as another financial document — v3's own fields
- * empty, each line its amount alone — then `extra`, which may set any of v3's fields.
+ * empty, each line its amount alone — and v8's exact words, none given (empty, as rule 19 lets a
+ * model answer, so a document's lines are v7's), then `extra`, which may set any field, `quotes`
+ * among them.
  */
 export function documentAnswer(
   answer: JsonObject = GOOD_ANSWER,
@@ -97,7 +99,22 @@ export function documentAnswer(
     uncertainFields: (Array.isArray(uncertainFields) ? uncertainFields : []).filter(
       (field) => field !== 'documentCount',
     ),
+    quotes: { vendorName: '', documentNumber: '', total: '' },
     ...extra,
+  };
+}
+
+/**
+ * v8's exact words (`extract-documents` v2, rule 19) for an answer recorded without them: the seller
+ * and the number as read, the total's figure as written — what a model reading a printed value gives.
+ */
+export function quotesFor(document: JsonObject): JsonObject {
+  const words = (value: unknown) =>
+    typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
+  return {
+    vendorName: words(document.vendorName),
+    documentNumber: words(document.documentNumber),
+    total: words(document.total),
   };
 }
 
