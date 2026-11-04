@@ -222,6 +222,13 @@ suite, `answerReview` takes `{ other: value }` and refuses one its change did no
 platform's words. A manifest's `setupSections` and a text field's `example` are drawn by the
 clients from the manifest; an automation reads neither. The `links` block is above.
 
+**Stage 2: health data** (the platform's ADR-0049; `contract/` carries it at snoopy-backend 50a24f7,
+the head of its branch `round-21/stage-2-platform`, #266, not yet merged). A manifest's optional
+`dataProtection: 'hipaa'` says its runs carry health data: the platform sends their model calls only
+to its BAA gateway, which refuses a call naming its own `models` or `excludeModelAuthors`, so such a
+flow's calls name none (ICD-10 Code Check v4's `modelsFor`). The menu lists `dataProtections`, the
+provider auth type `smart-backend` and the provider `ehr-fhir` (the EHR); no flow here calls it yet.
+
 ## A new flow's standards (`defineFlow`)
 
 Every flow built from Round 21 on is defined with `defineFlow` (`packages/automation-sdk/src/flow.ts`):
@@ -636,10 +643,10 @@ after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `
 ("Build a flow", below).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
-  doctors and coders; v3; v2 and v3 on `defineFlow`): its folder's README is its spec and how the
-  code does it. v1 and v2 stay served on their own containers; the image built here serves v3 alone
-  (its setup in sections and a change's "Other code", the folder README's "v3"), on the Stage 1
-  contract (`contract/`, "Stage 1" above).
+  doctors and coders; v3; v4; v2 to v4 on `defineFlow`): its folder's README is its spec and how the
+  code does it. v1 to v3 stay served on their own containers; the image built here serves v4 alone
+  (v3 carrying health data, `dataProtection: 'hipaa'`, its calls naming no models; the folder
+  README's "v4"), on the Stage 2 contract (`contract/`, "Stage 2" above).
 
 ## The kit
 

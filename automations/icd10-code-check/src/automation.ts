@@ -42,12 +42,13 @@ import { reviewVisit, saveVisit } from './v2/review-steps.js';
 export const TEMPLATE_ID = 'icd10-code-check';
 
 /**
- * The one version this image serves; its Dockerfile copies only its manifest. v1 and v2 stay
+ * The one version this image serves; its Dockerfile copies only its manifest. v1 to v3 stay
  * served by their own containers on their pinned images (the platform's D2) until the owner
  * retires them, and their code here is unchanged: v3 is v2's chain with its setup in sections and
- * a change's "Other code" (README, "v3").
+ * a change's "Other code" (README, "v3"); v4 is v3 carrying health data, its calls naming no
+ * models (README, "v4"; `modelsFor`).
  */
-export const SERVED_VERSIONS: readonly number[] = [3];
+export const SERVED_VERSIONS: readonly number[] = [4];
 
 export { prompts };
 
@@ -55,9 +56,9 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 
 /**
  * The flow, for the manifests given: v1's steps and v2's — its batch run's and its visit run's,
- * v3's the same — each only where a given manifest declares it, so the image (v3 alone) and the
- * suite (all three) build from one list; `match-codes` is v1's on a v1 run and `matchVisit` on a
- * v2 or v3 run. `options` are for its suite: the day a run starts and the tables the build
+ * v3's and v4's the same — each only where a given manifest declares it, so the image (v4 alone)
+ * and the suite (all four) build from one list; `match-codes` is v1's on a v1 run and `matchVisit`
+ * on any later run. `options` are for its suite: the day a run starts and the tables the build
  * holds (`check-note`, `check-visit`). Each AI step is run once more on a failure that decided
  * nothing (README, "Retrying a step"): `settle` rethrows while a repeat is left, and never once a
  * model answered.

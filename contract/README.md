@@ -1,9 +1,13 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at snoopy-backend 0973082 (#265), the platform's `main` after its #265
+(`snoopy-backend`, private) at snoopy-backend 50a24f7, the head of its branch
+`round-21/stage-2-platform` (#266, Round 21's Stage 2 contract, ADR-0049 and ADR-0050; not yet
+merged; all eleven files `cmp`-equal to it; 2026-11-04, "Refreshed 2026-11-04, Stage 2" below),
+re-pinned to its merge commit when it lands. Before it, `0973082` (snoopy-backend 0973082 (#265),
+the platform's `main` after its #265
 squash-merged Round 21's Stage 1 contract (ADR-0048 amendment 5; first copied at its branch head
-`7ae5d92`; all eleven files `cmp`-equal to both; 2026-11-04, "Refreshed 2026-11-03, Stage 1" below). Before it,
+`7ae5d92`; all eleven files `cmp`-equal to both; 2026-11-04, "Refreshed 2026-11-03, Stage 1" below)). Before it,
 `d9297bc` (snoopy-backend d9297bc (#259), the platform's `main`
 after its #259 squash-merged Round 21's manifest byte limit, its §12.1 #319; all eleven files
 `cmp`-equal to it; 2026-11-02, "Refreshed 2026-11-02, the manifest byte limit" below). Before it,
@@ -502,6 +506,23 @@ answer `{id, other}` (`review.ts`: `DecisionOption`, `boundedDecisions`, `others
 is deployed and both clients draw these, no served flow sends them; a flow that does waits for
 that merge, and this copy is re-pinned to it first.
 
+Refreshed 2026-11-04, Stage 2, from the head of the platform's branch `round-21/stage-2-platform`,
+`50a24f7` (#266; its ADR-0049, health data, and ADR-0050, the EHR standard; not yet merged, so not
+live). Two files moved; all eleven are `cmp`-equal to `50a24f7` (each copied from a snapshot of
+that commit):
+
+- `automation-manifest.json`: the optional top-level `dataProtection`, one of `hipaa` (its words in
+  "What the platform refuses beyond the schema", below).
+- `platform-menu.json`: `dataProtections` (`hipaa`); the provider auth type `smart-backend`; and the
+  provider `ehr-fhir`, "EHR", `smart-backend`, its operations `binary.read`, `capability.read`,
+  `conditions.search`, `encounter.read`, `notes.read` and `notes.search`, each with its FHIR scope.
+
+The other nine files are byte-identical to `0973082`'s. ICD-10 Code Check v4 declares
+`dataProtection: 'hipaa'`; no flow here calls `ehr-fhir` yet. Until the platform's branch merges
+and is deployed, an older platform registers a manifest declaring the field, ignores it and sends
+its calls to OpenRouter (its `validateManifest` refuses no unknown top-level key), so v4 merges only
+after it.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -517,7 +538,9 @@ at `71d8e1b`, the `select` words in "`setup[]`" and "A held result's `decisions`
 amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `maxFiles`, `batch`, a
 decision's `group`, the `memory` capability) at `10b5fae`, "Size, before the validator" at
 `d9297bc`, and amendment 5's words (`setup[]`'s `example` and `setupSections`, the `links` block, a
-decision's `options` and an `other` answer) at `7ae5d92`, its file paths written from `snoopy-backend/`.
+decision's `options` and an `other` answer) at `7ae5d92`, and `dataProtection`'s at `50a24f7`
+(its registration rule from `snoopy-backend/packages/contracts/src/data-protection.ts`), its file paths written
+from `snoopy-backend/`.
 
 **Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
 of the committed file, counted as committed (pretty-printed JSON, its
@@ -538,6 +561,15 @@ precision".
 **`display.category`** — "must be one of: HR, Accounting, Finance, …" — one of the sixteen team
 kinds, spelt exactly (ADR-0036): a flow added from the catalog goes to the workspace's team of its
 category. The schema says it as an `enum`.
+
+**`dataProtection`** (ADR-0049, C1) — optional; "must be one of: hipaa" (the schema's `enum`,
+`DATA_PROTECTIONS`), in any department. `hipaa` says the flow's runs carry health data: their
+model calls go only to the BAA gateway, their emails and pushes say only that a result is
+ready, and the workspace accepts the health data agreement before the flow is added or run.
+The validator checks its value and nothing more — a stored Healthcare manifest without it,
+ICD-10 Code Check v1–v3, still reads. A NEW version of a Healthcare flow without it is refused
+when it registers: "dataProtection: is required for a Healthcare flow, whose runs carry health
+data".
 
 **`requiredConnections`** — a `providerId` "is declared more than once" is refused; the
 schema's `uniqueItems` compares whole entries, the validator compares `providerId`
