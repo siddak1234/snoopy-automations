@@ -45,7 +45,7 @@ export const WORDS_V2 = {
  */
 export const WORDS_V3 = {
   /** The setup's sections, in order (F3); the EHR connection joins "Integrations" in Stage 2. */
-  sections: { npi: 'NPI', specialty: 'Specialty', integrations: 'Integrations' },
+  setupSections: { npi: 'NPI', specialty: 'Specialty', integrations: 'Integrations' },
   /** The NPI box's placeholder in place of "Optional" (F2): a valid NPI (`v3-manifest.test.ts`). */
   npiExample: '10 digits, e.g. 1234567893',
   /** A Change answered with another code, in the codes table's verdict column (item 4, S1-B3). */

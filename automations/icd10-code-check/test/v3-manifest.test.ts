@@ -49,7 +49,7 @@ test('this image serves v3 alone', () => {
 });
 
 test('F3: the setup in three sections, NPI · Specialty · Integrations, each holding its own setting', () => {
-  const { npi, specialty, integrations } = WORDS_V3.sections;
+  const { npi, specialty, integrations } = WORDS_V3.setupSections;
   assert.deepEqual(v3.setupSections, [
     { id: 'npi', title: npi },
     { id: 'specialty', title: specialty },
