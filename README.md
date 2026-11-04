@@ -212,8 +212,8 @@ the SDK's `batch.ts`) become one waiting child run each; a child's
 cannot give (`pagesRefusal`).
 
 **Stage 1: other values for a change, a setup's sections, a text box's example and links** (the
-platform's ADR-0048 amendment 5; `contract/` carries them at snoopy-backend 7ae5d92, the head of its
-branch `round-21/stage-1-platform`, not yet merged). A held decision may offer `options`, 1 to 3
+platform's ADR-0048 amendment 5; `contract/` carries them at snoopy-backend 0973082 (#265), the platform's `main` after
+Round 21's Stage 1 squash-merged; first copied at its branch's 7ae5d92, `cmp`-equal to both). A held decision may offer `options`, 1 to 3
 `{value, label}` (`DecisionOption`; `DECISION_LIMITS.options` and `.option`, 120 characters),
 values a person may pick in its place: `boundedDecisions` cuts a label whole, and refuses more than
 3, a value it would have to cut (the answer names it) and a value twice. The answer is then

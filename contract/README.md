@@ -1,9 +1,9 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at commit `7ae5d92` (the head of the platform's branch
-`round-21/stage-1-platform`, Round 21's Stage 1 contract, ADR-0048 amendment 5, not yet merged; all
-eleven files `cmp`-equal to it; 2026-11-03, "Refreshed 2026-11-03, Stage 1" below). Before it,
+(`snoopy-backend`, private) at snoopy-backend 0973082 (#265), the platform's `main` after its #265
+squash-merged Round 21's Stage 1 contract (ADR-0048 amendment 5; first copied at its branch head
+`7ae5d92`; all eleven files `cmp`-equal to both; 2026-11-04, "Refreshed 2026-11-03, Stage 1" below). Before it,
 `d9297bc` (snoopy-backend d9297bc (#259), the platform's `main`
 after its #259 squash-merged Round 21's manifest byte limit, its §12.1 #319; all eleven files
 `cmp`-equal to it; 2026-11-02, "Refreshed 2026-11-02, the manifest byte limit" below). Before it,
