@@ -235,8 +235,11 @@ Every flow built from Round 21 on is defined with `defineFlow` (`packages/automa
 `defineAutomation` with the standards on, so every new flow fails, retries and words its failures
 the same way, by reuse rather than by each flow writing its own (the two live flows did: Invoice
 Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and the template use it.
-**The two live flows keep `defineAutomation`, unchanged**, until their after-pilot versions
-(Invoice Processing v8, Resume Screening v3); `defineAutomation`'s behaviour is as before.
+**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8,
+Resume Screening v3) too, with their own failure words and retries; `defineAutomation`'s behaviour is
+as before. Those versions take only Q2's re-ask from `defineFlow`: `reaskingOnce(platform, log)`
+wraps the platform their `execute` is handed, and a second miss reaches their step, which ends the
+run "The AI's answer couldn't be used. Try a clearer file." (below).
 
 - **A throw never reaches a person.** A step that threw until its attempts were spent ends the run
   with the flow's own sentence for that step (`sentences`) or the SDK's (`FLOW_WORDS`,
@@ -290,7 +293,9 @@ Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and t
   `unmatchedAnswer`**: an approval carries a decision, never the AI's fields. At any other step — the
   template's `extract` among them — a second miss ends "The AI's answer couldn't be used. Try a
   clearer file.", so no hold is offered whose approval cannot go on. **One to three more paid AI calls**: the platform tries the request's next model on a
-  miss too, each a `runs.model_calls` row against the plan's allowance.
+  miss too, each a `runs.model_calls` row against the plan's allowance. A flow on
+  `defineAutomation` gets the same re-ask, and nothing else of these standards, from
+  `reaskingOnce(platform, log)` (`flow.ts`): the second miss is thrown on to its step.
 - **5d**: a call asks at the owner's cap (the menu's `limits.modelAnswerTokens`) unless the step names a lower
   `maxOutputTokens`, which only a flow's spec sets; one cut off (`truncated`) below the cap is asked
   once more at the cap — **one to three more paid AI calls** — and one cut off at the cap is not
@@ -638,9 +643,8 @@ a `*` bound to the flow's id):
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
-Both are live on `defineAutomation`, and their code, prompts and manifests are unchanged until their
-after-pilot versions (Invoice Processing v8, Resume Screening v3) move them to `defineFlow`
-("Build a flow", below).
+Both are live on `defineAutomation`; their after-pilot versions (Invoice Processing v8, Resume
+Screening v3) stay on it, with Q2's re-ask from `reaskingOnce` ("A new flow's standards", above).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
   doctors and coders; v3; v4; v2 to v4 on `defineFlow`): its folder's README is its spec and how the
