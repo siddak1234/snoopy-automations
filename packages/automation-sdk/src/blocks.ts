@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import {
   BLOCK_TONES,
   CHART_KINDS,
+  LINK_BRANDS,
   TABLE_ALIGNS,
   TEXT_STYLES,
   TIMELINE_STATES,
@@ -12,6 +13,7 @@ import {
   type EmittedChartBlock,
   type EmittedGroupBlock,
   type EmittedLeaf,
+  type LinksBlock,
   type ListItem,
   type MetricBlock,
   type SectionBlock,
@@ -109,6 +111,16 @@ function listItem(value: unknown): ListItem | undefined {
   });
 }
 
+/** A links button: its label one word's length, its url `http://` or `https://`, a known brand or none. */
+const linksItem = (value: unknown): LinksBlock['items'][number] | undefined => {
+  if (!isObject(value)) return undefined;
+  const label = line(value.label, L.wordLength);
+  const target = url(value.url, true);
+  return label === undefined || target === undefined
+    ? undefined
+    : defined({ label, url: target, brand: oneOf(LINK_BRANDS, value.brand) });
+};
+
 const timelineItem = (value: unknown): TimelineBlock['items'][number] | undefined => {
   if (!isObject(value)) return undefined;
   const title = line(value.title, L.titleLength);
@@ -185,6 +197,10 @@ const LEAVES: Record<EmittedLeaf['type'], (value: JsonObject) => EmittedLeaf | u
     return title === undefined || target === undefined
       ? undefined
       : { type: 'link', title, url: target };
+  },
+  links: (value) => {
+    const items = first(value.items, L.linksItems, linksItem);
+    return items.length === 0 ? undefined : { type: 'links', items };
   },
   timeline: (value) => {
     const items = first(value.items, L.timelineItems, timelineItem);

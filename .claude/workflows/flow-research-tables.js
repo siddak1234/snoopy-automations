@@ -49,7 +49,7 @@ const LENS = {
     "each integration's API, cost and concerns (one researcher each, after you); expert criteria (practice); laws (rules); the process (streamlining)",
   ],
   streamlining: [
-    `today's process end to end (each step: who, what goes in, what comes out, the hand-offs); where the time and the errors go, with figures only from a source; what to automate and what to keep with a person; the simplest pipeline on the twelve blocks (${automations}/contract/schemas/automation-run-result.json); the bad, empty, irrelevant and hostile inputs`,
+    `today's process end to end (each step: who, what goes in, what comes out, the hand-offs); where the time and the errors go, with figures only from a source; what to automate and what to keep with a person; the simplest pipeline on the blocks in ${automations}/contract/README.md, "A result's blocks" (${automations}/contract/schemas/automation-run-result.json); the bad, empty, irrelevant and hostile inputs`,
     'practitioner and professional sources describing the process (T2), studies with figures (T1/T2); our blocks schema by path:line',
     'expert criteria (practice); laws (rules); the integrations in use (adoption)',
   ],
