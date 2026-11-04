@@ -224,11 +224,13 @@ platform's words. A manifest's `setupSections` and a text field's `example` are 
 clients from the manifest; an automation reads neither. The `links` block is above.
 
 **Stage 2: health data** (the platform's ADR-0049; `contract/` carries it at snoopy-backend 50a24f7,
-the head of its branch `round-21/stage-2-platform`, #266, not yet merged). A manifest's optional
-`dataProtection: 'hipaa'` says its runs carry health data: the platform sends their model calls only
-to its BAA gateway, which refuses a call naming its own `models` or `excludeModelAuthors`, so such a
-flow's calls name none (ICD-10 Code Check v4's `modelsFor`). The menu lists `dataProtections`, the
-provider auth type `smart-backend` and the provider `ehr-fhir` (the EHR); no flow here calls it yet.
+the head of its branch `round-21/stage-2-platform`, #266, not yet merged). What a manifest's optional
+`dataProtection: 'hipaa'` makes the platform do is in
+[contract/README.md](contract/README.md#what-the-platform-refuses-beyond-the-schema),
+"`dataProtection`". Its BAA gateway refuses a call naming its own `models` or `excludeModelAuthors`,
+so such a flow's calls name none (ICD-10 Code Check v4's `modelsFor`). The menu lists
+`dataProtections`, the provider auth type `smart-backend` and the provider `ehr-fhir` (the EHR); no
+flow here calls it yet.
 
 ## A new flow's standards (`defineFlow`)
 
