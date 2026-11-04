@@ -18,8 +18,10 @@ of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-
 "continue with recommended"). Its manifest is v7's but for its version and its own container
 (`-v8`); the image serves v8 alone (its Dockerfile copies only `manifests/invoice-processing.v8.json`),
 and v1 to v7 stay registered and immutable, each held to its sha256
-(`automations/invoice-processing/test/manifest.test.ts`, `versions.test.ts`). Two changes, both in
-the code:
+(`automations/invoice-processing/test/manifest.test.ts`, `versions.test.ts`). **Words:** NEW,
+awaiting the owner's approval: "Supplier, exact words", "Number, exact words" and "Total, exact
+words" (Q1, below). Q2's sentence is the one the owner's Q2 recommended; every other word is v7's.
+Two changes, both in the code:
 
 - **Q1, the exact words.** The first read sends `extract-documents` v2: v1's 18 rules and fields
   and rule 19, each document's `quotes` — the exact words printed for its seller, its number and its

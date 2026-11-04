@@ -31,7 +31,8 @@ first); "Why this score" also lists flags, among them "years not shown" and "Tex
 direct the reader: "…"" (§4, §7); the resume field is not marked required (§2: the platform refuses a
 required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). At
 v1, every word on the screens the owner was shown is unchanged; what v2 changed is in the notes
-above.
+above. v3 adds two words, NEW, awaiting the owner's approval: the Contact row "Name" and
+`Exact words: "…"` under the name, the email and the phone (§7).
 
 Every limit below is the platform's: `contract/schemas/automation-manifest.json` and
 `contract/schemas/automation-run-result.json`, and the rules beyond them in `contract/README.md`,
