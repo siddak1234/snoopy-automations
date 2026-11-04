@@ -637,7 +637,7 @@ Each flow's spec and build record is its own README, which a change to its code,
 manifests updates in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules,
 a `*` bound to the flow's id):
 
-- **Invoice Processing**, `invoice-processing` (v7):
+- **Invoice Processing**, `invoice-processing` (v8; each document's exact words, and Q2's re-ask):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
 - **Resume Screening**, `candidate-reviewer` (v2; Candidate Reviewer at v1): its spec,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the

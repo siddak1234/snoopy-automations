@@ -40,7 +40,7 @@ const sha256 = (version: number) =>
   createHash('sha256')
     .update(readFileSync(file(version)))
     .digest('hex');
-const manifest = read(7);
+const manifest = read(8);
 const v4 = read(4);
 const v3 = read(3);
 
@@ -58,11 +58,11 @@ function stepTitle(group: Group, config: JsonObject): string {
   return titled.titles.find((each) => each.providerId === chosen)?.title ?? group.title;
 }
 
-test('v7 is the one version this code serves; v1 to v6 stay registered, byte for byte', () => {
-  assert.deepEqual([...SERVED_VERSIONS], [7]);
+test('v8 is the one version this code serves; v1 to v7 stay registered, byte for byte', () => {
+  assert.deepEqual([...SERVED_VERSIONS], [8]);
   assert.deepEqual(
     manifests.map((each) => each.version),
-    [7],
+    [8],
   );
   assert.deepEqual(
     [1, 2, 3, 4].map(sha256),
@@ -87,9 +87,14 @@ test('v7 is the one version this code serves; v1 to v6 stay registered, byte for
   assert.equal(
     sha256(7),
     '85a85536b46aa199d14c42a7f77a44f0f666e23bb0da4537a413c69c8775afe4',
-    "v7 is these bytes, which the platform's pin change copies",
+    'v7 untouched: a registered version is immutable',
   );
-  assert.equal(manifest.version, 7);
+  assert.equal(
+    sha256(8),
+    '0532983aa1eb5878146a2e8b4884aa9f3f0221ed661e200bbe906016e72b2339',
+    'v8 is these bytes',
+  );
+  assert.equal(manifest.version, 8);
 });
 
 test('the five steps, in order, in their words: Upload invoice · Connect integration · AI processing · Details saved, or QuickBooks updated · Run completed', () => {
@@ -317,10 +322,10 @@ test('the 22 steps, each in its step: its kicker, step, title and description as
   );
 });
 
-test("its own container: v7's origin and service account; the rest of the service v3's", () => {
+test("its own container: v8's origin and service account; the rest of the service v3's", () => {
   assert.deepEqual(manifest.service, {
-    origin: 'http://invoice-processing-v7.autom8x.internal:8080',
-    serviceAccount: 'invoice-processing-v7@autom8x.iam.gserviceaccount.com',
+    origin: 'http://invoice-processing-v8.autom8x.internal:8080',
+    serviceAccount: 'invoice-processing-v8@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,

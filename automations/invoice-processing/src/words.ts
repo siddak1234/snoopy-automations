@@ -1,4 +1,5 @@
 import { formatMoney, shorten } from '@autom8x/automation-kit/values';
+import { FLOW_WORDS } from '@autom8x/automation-sdk';
 
 import type { SpendType } from './spend-types.js';
 
@@ -6,7 +7,7 @@ import type { SpendType } from './spend-types.js';
  * The words a person reads (v2; the spec's §3.E and §3.F, final, and the owner's rule of
  * 2026-10-14: short, plain, no codes — "We dont need the users downloading an app to read an
  * essay"). A sentence carries no reason code and nothing from QuickBooks' or a model's own text;
- * the code goes to the log alone (`src/outcome.ts`).
+ * the code goes to the log alone (`automations/invoice-processing/src/outcome.ts`).
  */
 
 /**
@@ -20,6 +21,8 @@ export const RUN_FAILS = {
   unreadable: "The document can't be read. Try a clearer photo.",
   ai_busy: 'AI is busy. Try again in a minute.',
   ai_unavailable: "The document can't be read right now. Try again.",
+  /** v8 (Q2): an answer off its schema twice, once asked again — the SDK's own sentence. */
+  ai_unusable: FLOW_WORDS.ai_unusable,
   file: "The file couldn't be opened. Add it again.",
   other: 'Something went wrong. Try again.',
 } as const;

@@ -25,6 +25,7 @@ const read = (version: number) =>
     readFileSync(join(manifestsRoot, `invoice-processing.v${version}.json`), 'utf8'),
   ) as Manifest;
 const manifest = read(7);
+const v8 = read(8);
 const v6 = read(6);
 const v5 = read(5);
 const v4 = read(4);
@@ -78,4 +79,16 @@ test('v7 is v6 but for its version, its own container and its words for its docu
   assert.equal((v6.display as { documentWords?: unknown }).documentWords, undefined);
   assert.notEqual(manifest.service.origin, v6.service.origin);
   assert.notEqual(manifest.service.serviceAccount, v6.service.serviceAccount);
+});
+
+test("v8 is v7 but for its version and its own container: its exact words and its re-ask are the code's (the owner's Q1 and Q2)", () => {
+  const without = (each: Manifest) => ({
+    ...each,
+    version: undefined,
+    service: { ...each.service, origin: undefined, serviceAccount: undefined },
+  });
+  assert.deepEqual(without(v8), without(manifest));
+  assert.equal(v8.version, 8);
+  assert.equal(v8.service.origin, 'http://invoice-processing-v8.autom8x.internal:8080');
+  assert.equal(v8.service.serviceAccount, 'invoice-processing-v8@autom8x.iam.gserviceaccount.com');
 });

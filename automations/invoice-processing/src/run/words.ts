@@ -6,7 +6,7 @@ import type { DocumentAnswer, ReadType } from './answer.js';
 /**
  * The words v3 adds (the session's spec of 2026-10-15, §3.5, as the owner's AM1, AM7 and AM8
  * change it): short, plain, no codes — and nothing from a model's or QuickBooks' own text beyond a
- * seller's name and a total, as v2's lines (`src/words.ts`) say them.
+ * seller's name and a total, as v2's lines (`automations/invoice-processing/src/words.ts`) say them.
  */
 
 /** What a document is, inside a line: "Read: receipt from …". */
@@ -37,6 +37,27 @@ export const DOUBTS = {
   /** The first read counted more documents in the file than it could read (S44). */
   more_in_file: 'the file may hold more documents',
 } as const;
+
+/**
+ * v8's exact words (the owner's Q1), each a detail line under the document's values: the label,
+ * and the words as printed in double quotes, cut to the platform's 200 characters with the quote
+ * kept whole (`exactWords`).
+ */
+export const QUOTE_LABELS = {
+  supplier: 'Supplier, exact words',
+  number: 'Number, exact words',
+  total: 'Total, exact words',
+} as const;
+
+/** The most of a printed text a quote line keeps, a cut's "…" included: the platform's 200, less its two quote marks. */
+const QUOTE_TEXT = 198;
+
+/** Words as printed, in double quotes; a longer text cut whole-character with "…". */
+export function exactWords(words: string): string {
+  const shown =
+    [...words].length > QUOTE_TEXT ? `${[...words].slice(0, QUOTE_TEXT - 1).join('')}…` : words;
+  return `"${shown}"`;
+}
 
 /** Two documents in one file with the same seller, date and total: the second waits. */
 export const sameAs = (index: number): string => `same as document ${index}`;

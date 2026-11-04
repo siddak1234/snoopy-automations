@@ -4,6 +4,7 @@ import {
   defineAutomation,
   isObject,
   modelAuthor,
+  reaskingOnce,
   type InvokeRequest,
   type JsonObject,
   type ModelCompletion,
@@ -145,7 +146,8 @@ export function verifyWorld(setUp: VerifySetUp) {
     request,
     seeded,
     document,
-    run: () => automation.execute(request, platform),
+    // As v8's `define` runs it: an answer off its schema asked once more (Q2, `reasking`).
+    run: () => automation.execute(request, reaskingOnce(platform)),
     /** The step's own line. */
     line: () => platform.steps.find((step) => step.stepId === 'verify-read'),
   };

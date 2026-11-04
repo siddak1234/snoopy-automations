@@ -2,6 +2,7 @@ import { systemClock, type Clock } from '@autom8x/automation-kit/quickbooks';
 import {
   defineAutomation,
   jsonLogger,
+  reaskingOnce,
   type Automation,
   type Logger,
   type Manifest,
@@ -12,7 +13,7 @@ import {
 
 import { noteThrows, recoverQuickBooks, withFixedSentences } from './failures.js';
 import { EXPENSE_SEARCH, type ExpenseSearch } from './lookups/expense-search.js';
-import { EXTRACT_DOCUMENTS_V1, VERIFY_DOCUMENTS_V1 } from './prompts.js';
+import { EXTRACT_DOCUMENTS_V1, EXTRACT_DOCUMENTS_V2, VERIFY_DOCUMENTS_V1 } from './prompts.js';
 import { askApproval, confirmCompanyOnce, saveApproved, saveDocuments } from './run/approval.js';
 import { checkDocuments } from './run/check.js';
 import { decide } from './run/decide.js';
@@ -29,14 +30,21 @@ import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing (template `invoice-processing`), version 7 — reads EVERY bill, invoice,
+ * Invoice Processing (template `invoice-processing`), version 8 — v7 with the owner's Q1 and Q2
+ * (2026-11-03, "continue with recommended"): the first read gives each document's exact words for
+ * its seller, number and total (`automations/invoice-processing/prompts/extract-documents.v2.json`), shown as detail lines under
+ * them (`automations/invoice-processing/src/run/documents.ts`); and an answer off its schema is asked once more
+ * (`reaskingOnce`), a second miss ending the run "The AI's answer couldn't be used. Try a clearer
+ * file." Its manifest is v7's but for its version and its own container; THIS code serves v8 alone.
+ *
+ * Version 7 — reads EVERY bill, invoice,
  * receipt, credit note, statement and other financial document in a PDF or photo, each on its own,
  * then saves each one's details, or records or compares it in QuickBooks Online (the platform's
  * BUILD-PLAN 25.4.31–25.4.36; the session's spec of 2026-10-15, §3, as the owner's corrections
  * AM1–AM8 of that evening change it: no limit but size, every financial document goes through,
  * every document carries its numbers). v1 to v5, under their own names, are registered and
- * immutable: their containers keep their pinned images until they are retired, and THIS code serves
- * v7 alone (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v7 (Round 18,
+ * immutable: their containers keep their pinned images until they are retired, and this code served
+ * v7 alone until v8 (`SERVED_VERSIONS`; the platform's D2, one container per manifest version). v7 (Round 18,
  * the platform's BUILD-PLAN 27.3.2) is v6 whose manifest names its documents — `display.documentWords`,
  * "Invoice" and "Invoices" — so the website, the app and the run package say "Invoice 1 of 3" from
  * the flow's own words, and every other flow "Document" (the owner, 2026-10-21: "invoice is invoice
@@ -76,8 +84,8 @@ import { receive } from './steps/receive.js';
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
-/** The manifest versions this code serves: v7 alone. v6's container runs its own image. */
-export const SERVED_VERSIONS = [7] as const;
+/** The manifest versions this code serves: v8 alone. v7's container runs its own image. */
+export const SERVED_VERSIONS = [8] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a
@@ -103,8 +111,16 @@ const MODEL_RETRY: RetryPolicy = { attempts: 2, backoffMs: 10_000, when: 'unsent
  */
 const WRITE_RETRY: RetryPolicy = { attempts: 3, backoffMs: 10_000 };
 
-/** The prompts the steps send, each registered with the runner. */
-export const PROMPTS: readonly PromptModule[] = [EXTRACT_DOCUMENTS_V1, VERIFY_DOCUMENTS_V1];
+/**
+ * The prompts, each registered with the runner: v8's steps send extract-documents v2 and
+ * verify-documents v1; extract-documents v1, the prompt v7's recordings were made for, stays
+ * registered and is never sent (`test/conformance.test.ts`: every prompt file is registered).
+ */
+export const PROMPTS: readonly PromptModule[] = [
+  EXTRACT_DOCUMENTS_V1,
+  EXTRACT_DOCUMENTS_V2,
+  VERIFY_DOCUMENTS_V1,
+];
 
 /**
  * The steps repeated after a transient failure: every QuickBooks read and the file's, the writes,
@@ -137,7 +153,7 @@ export function perDocumentSpecs(clock: Clock, how: ExpenseSearch): Record<strin
 }
 
 /**
- * Every step v7's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
+ * Every step v8's pipeline declares — v3's, unchanged — in its order, each noting what it throws for the run's fixed
  * sentence and logging the reason code it ends with. `expenseSearch` is sandbox S4's answer
  * (`automations/invoice-processing/src/lookups/expense-search.ts`).
  */
@@ -152,7 +168,7 @@ export function pipelineSteps(
   return noteThrows(
     {
       receive,
-      extract: extract(EXTRACT_DOCUMENTS_V1),
+      extract: extract(EXTRACT_DOCUMENTS_V2),
       'check-documents': checkDocuments(clock),
       'verify-read': verifyRead(VERIFY_DOCUMENTS_V1, clock),
       'read-company': onceForAll(readCompany(clock), withOwnCompany),
@@ -186,7 +202,7 @@ export interface Dependencies {
   readonly expenseSearch?: ExpenseSearch;
 }
 
-/** The manifests this code serves, of those given: v7's alone. None is a container that cannot start. */
+/** The manifests this code serves, of those given: v8's alone. None is a container that cannot start. */
 export function servedManifests(manifests: readonly Manifest[]): Manifest[] {
   const served = manifests.filter((manifest) =>
     (SERVED_VERSIONS as readonly number[]).includes(manifest.version),
@@ -206,15 +222,30 @@ export function define(
   const log = dependencies.log ?? jsonLogger(TEMPLATE_ID);
   const clock = dependencies.clock ?? systemClock;
   const expenseSearch = dependencies.expenseSearch ?? EXPENSE_SEARCH;
-  const automation = defineAutomation({
-    templateId: TEMPLATE_ID,
-    manifests: servedManifests(manifests),
-    prompts: PROMPTS,
-    steps: pipelineSteps(clock, expenseSearch, log),
-    retry: RETRY,
-    recover: recoverQuickBooks(log, perDocumentSpecs(clock, expenseSearch)),
-    // Every document, whole; the summary; and the structured output (`automations/invoice-processing/src/run/result.ts`).
-    result: (state, request) => runResult(state, request),
-  });
-  return withFixedSentences(automation, log);
+  const automation = withFixedSentences(
+    defineAutomation({
+      templateId: TEMPLATE_ID,
+      manifests: servedManifests(manifests),
+      prompts: PROMPTS,
+      steps: pipelineSteps(clock, expenseSearch, log),
+      retry: RETRY,
+      recover: recoverQuickBooks(log, perDocumentSpecs(clock, expenseSearch)),
+      // Every document, whole; the summary; and the structured output (`automations/invoice-processing/src/run/result.ts`).
+      result: (state, request) => runResult(state, request),
+    }),
+    log,
+  );
+  return reasking(automation, log);
+}
+
+/**
+ * v8 (the owner's Q2): every model call of a run, its answer off its schema asked once more with
+ * the fault line (`reaskingOnce`); the second miss reaches the step, which ends the run
+ * (`extractRefused`, `verify.ts`). One to three more paid AI calls a miss.
+ */
+export function reasking(automation: Automation, log: Logger): Automation {
+  return {
+    ...automation,
+    execute: (request, platform) => automation.execute(request, reaskingOnce(platform, log)),
+  };
 }

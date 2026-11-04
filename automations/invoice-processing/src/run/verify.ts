@@ -48,7 +48,8 @@ import { DOUBTS } from './words.js';
  *
  * A second read that cannot be made is recorded on each document, and on the QuickBooks path the
  * document holds: "second read not made" (v2's D6). Out of time and a fault on the platform's side
- * fail the run, as v2's; an answer that never came is thrown on unchanged, for the runner's one
+ * fail the run, as v2's, and so, v8 (the owner's Q2), does an answer off its schema once asked again
+ * ("The AI's answer couldn't be used. Try a clearer file."): no hold; an answer that never came is thrown on unchanged, for the runner's one
  * repeat of a call that never reached the platform. That repeat goes on from the call that never
  * left: what the calls before it settled is kept for the run (`secondReads`), so no answered call
  * is sent — and billed — again (Gate 25's R5d).
@@ -89,6 +90,7 @@ export function due(entry: Entry, config: JsonObject): boolean {
 
 /** The ways the second read fails the run (v2's, kept). */
 const FAILS = {
+  answer_off_schema: 'ai_unusable',
   out_of_time: 'ai_unavailable',
   platform_fault: 'ai_unavailable',
   model_account_refused: 'ai_unavailable',
@@ -98,9 +100,14 @@ const FAILS = {
 
 const failed = (reason: keyof typeof FAILS): StepResult => runFails(FAILS[reason], reason);
 
-/** Each typed refusal: a reason it was not made, or a fault on the platform's side (v2's). */
-const REFUSALS: Readonly<Record<ModelRefusalReason, NotMadeReason | 'platform_fault'>> = {
-  output_schema_mismatch: 'answer_unusable',
+/**
+ * Each typed refusal: a reason it was not made, or a fault on the platform's side (v2's) — or, v8
+ * (the owner's Q2), an answer off its schema once asked again (`reaskingOnce`), which ends the run.
+ */
+const REFUSALS: Readonly<
+  Record<ModelRefusalReason, NotMadeReason | 'platform_fault' | 'answer_off_schema'>
+> = {
+  output_schema_mismatch: 'answer_off_schema',
   truncated: 'answer_unusable',
   content_filtered: 'content_filtered',
   over_plan_limit: 'allowance_used',
@@ -118,7 +125,7 @@ const REFUSALS: Readonly<Record<ModelRefusalReason, NotMadeReason | 'platform_fa
 function refusedWith(error: CallbackRefusedError): NotMadeReason | StepResult {
   if (error instanceof ModelRefusedError) {
     const reason = REFUSALS[error.reason];
-    return reason === 'platform_fault' ? failed(reason) : reason;
+    return reason === 'platform_fault' || reason === 'answer_off_schema' ? failed(reason) : reason;
   }
   const { status, code, reason } = error;
   if (status === 429) return failed('busy');
