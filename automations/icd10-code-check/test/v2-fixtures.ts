@@ -5,6 +5,7 @@ import {
   artifactFixture,
   invokeFixture,
   unitFixture,
+  type ReviewAnswer,
 } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define } from '../src/automation.js';
@@ -74,11 +75,14 @@ export const batchRequest = (ids: string[]): InvokeRequest =>
     input: { visitNotes: ids },
   });
 
-/** A visit's child run: its unit's pieces (each two pages of the note; one by default) and its setup. */
-export const childInvoke = (config: JsonObject = {}, pieces = 1): InvokeRequest =>
+/**
+ * A visit's child run: its unit's pieces (each two pages of the note; one by default), its setup
+ * and its version (v2 by default; v3 offers other codes).
+ */
+export const childInvoke = (config: JsonObject = {}, pieces = 1, version = 2): InvokeRequest =>
   invokeFixture({
     templateId: TEMPLATE_ID,
-    templateVersion: 2,
+    templateVersion: version,
     config,
     unit: unitFixture({
       label: 'Jane Doe · Oct 12, 2026',
@@ -102,10 +106,19 @@ const flow = () => define(manifests, { today: () => '2026-10-28' });
 export async function runChild(
   note: JsonObject,
   picks: Picks = {},
-  options: { config?: JsonObject; platform?: RecordingPlatform; pieces?: number } = {},
+  options: {
+    config?: JsonObject;
+    platform?: RecordingPlatform;
+    pieces?: number;
+    version?: number;
+  } = {},
 ): Promise<ChildRan> {
   const platform = options.platform ?? platformFor(note, picks);
-  const request = childInvoke(options.config ?? { specialties: ['207RN0300X'] }, options.pieces);
+  const request = childInvoke(
+    options.config ?? { specialties: ['207RN0300X'] },
+    options.pieces,
+    options.version,
+  );
   const result = await flow().execute(request, platform);
   await platform.reportResult(request.runId, result);
   return { result: platform.results.at(-1)!.result, platform, request };
@@ -114,7 +127,7 @@ export async function runChild(
 /** The review answered and the child continued on a platform keeping the same memory. */
 export async function reviewChild(
   ran: ChildRan,
-  answers: Record<string, 'accepted' | 'denied'>,
+  answers: Record<string, ReviewAnswer>,
   note: JsonObject,
 ): Promise<ChildRan> {
   const next = answerReview(ran.platform, ran.request, answers);

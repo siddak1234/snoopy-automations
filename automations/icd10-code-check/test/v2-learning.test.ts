@@ -7,7 +7,7 @@ import { invokeFixture, unitFixture } from '@autom8x/automation-sdk/testing';
 import { TEMPLATE_ID, define } from '../src/automation.js';
 import { CALLS_AT_ONCE, DIAGNOSES_A_CALL, MAX_CHOICES } from '../src/v2/child-steps.js';
 import { lookUp, loadIndex, termWords } from '../src/v2/lookup.js';
-import { EXAMPLES_KEY, deidentified, examplesOf } from '../src/v2/memory.js';
+import { EXAMPLES_KEY, EXAMPLES_SENT, deidentified, examplesOf } from '../src/v2/memory.js';
 import { loadTable } from '../src/tables.js';
 import { NOTE_ID, manifests, platformFor, reading } from './fixtures.js';
 import { reviewChild, runChild } from './v2-fixtures.js';
@@ -195,6 +195,42 @@ test('L5: with "Learn from this clinic\'s reviews" off, nothing is read or kept,
   const cleared = await reviewChild(again, { 'v1-n1': 'accepted' }, kidney);
   assert.equal(cleared.platform.memory.values.has(EXAMPLES_KEY), false);
   assert.equal((output(cleared.result).measures as JsonObject).examplesCleared, true);
+});
+
+test("at most 3 of the clinic's examples a diagnosis in a match call, in the order read", async () => {
+  const two = reading(
+    [],
+    [
+      { statement: 'CKD stage 3a', categories: ['N18', 'I12'] },
+      { statement: 'Type 2 diabetes mellitus with hyperglycemia', categories: ['E11'] },
+    ],
+  );
+  const of = (family: string, n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${family.toLowerCase()}00000000${i}`,
+      statement: `${family} statement ${'abcd'[i]}`,
+      code: `${family}.9`,
+      verdict: 'accepted' as const,
+    }));
+  const platform = platformFor(two);
+  platform.memory.values.set(EXAMPLES_KEY, {
+    families: { N18: of('N18', 3), I12: of('I12', 3), E11: of('E11', 4) },
+  });
+  const ran = await runChild(two, {}, { platform, config: {} });
+  // Each diagnosis its first 3 (N18's for the first, whose I12 ones would make 6; E11's newest 3).
+  const sent = (matchCalls(platform)[0]!.input.clinicExamples as { statement: string }[]).map(
+    (e) => e.statement,
+  );
+  assert.deepEqual(sent, [
+    'N18 statement a',
+    'N18 statement b',
+    'N18 statement c',
+    'E11 statement a',
+    'E11 statement b',
+    'E11 statement c',
+  ]);
+  assert.equal(EXAMPLES_SENT, 3);
+  assert.equal((output(ran.result).measures as JsonObject).examplesUsed, 6);
 });
 
 test('a visit sharing a page with another patient is read for its patient only', async () => {

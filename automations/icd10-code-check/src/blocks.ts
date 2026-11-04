@@ -8,6 +8,7 @@ import type {
 import type { Ask, Row } from './checks.js';
 import { DECIDED, cleanQuote, labelOf, suggestedOf, withTitle } from './decisions.js';
 import { PATIENT_KEYS, type Patient } from './reading.js';
+import { WORDS_V3 } from './v2/words.js';
 import { VERDICTS, WORDS } from './words.js';
 
 /**
@@ -63,20 +64,26 @@ export function patientSection(view: View): SectionBlock {
   };
 }
 
-/** (3) One row per code: the note's in order, then each to add; after the review, Accepted or Denied. */
-function codeTable(view: View, answers?: ReadonlyMap<string, DecisionAnswer>): EmittedLeaf {
+/**
+ * (3) One row per code: the note's in order, then each to add; after the review, Accepted or
+ * Denied, or (v3) "Changed to {code}" for another code picked in its place.
+ */
+function codeTable(
+  view: View,
+  answers?: ReadonlyMap<string, DecisionAnswer>,
+  others: ReadonlyMap<string, string> = new Map(),
+): EmittedLeaf {
   return {
     type: 'table',
     columns: WORDS.codeColumns.map((title) => ({ title })),
     rows: view.rows.map((r) => {
       const answer = answers?.get(r.id);
       const verdict =
-        answers !== undefined &&
-        DECIDED.has(r.verdict) &&
-        answer !== undefined &&
-        answer !== 'other'
-          ? VERDICTS[answer]
-          : VERDICTS[r.verdict];
+        answers === undefined || !DECIDED.has(r.verdict) || answer === undefined
+          ? VERDICTS[r.verdict]
+          : answer === 'other'
+            ? WORDS_V3.changedTo(others.get(r.id) ?? '')
+            : VERDICTS[answer];
       return { cells: [titled(view, r.code), verdict, suggestedOf(r, view.titles)] };
     }),
   };
@@ -164,13 +171,18 @@ export function keptBlocks(view: View): EmittedBlock[] {
   ];
 }
 
-/** After the review: the answers, the codes to enter, then (1) to (7) with each answer. */
+/**
+ * After the review: the answers, the codes to enter, then (1) to (7) with each answer. Another
+ * code picked in a change's place (v3, `others` by row id) counts with the accepted, as the
+ * platform's run page counts it: the change was taken, with that code.
+ */
 export function doneBlocks(
   view: View,
   answers: ReadonlyMap<string, DecisionAnswer>,
   codes: readonly string[],
+  others: ReadonlyMap<string, string> = new Map(),
 ): EmittedBlock[] {
-  const a = [...answers.values()].filter((answer) => answer === 'accepted').length;
+  const a = [...answers.values()].filter((answer) => answer !== 'denied').length;
   const d = [...answers.values()].filter((answer) => answer === 'denied').length;
   const n = counts(view);
   return [
@@ -195,7 +207,7 @@ export function doneBlocks(
         { label: WORDS.metrics.asks, value: String(n.asks), tone: 'warning' },
       ],
     },
-    codeTable(view, answers),
+    codeTable(view, answers, others),
     ...changeSections(view),
     ...askSection(view),
     ...tail(view),

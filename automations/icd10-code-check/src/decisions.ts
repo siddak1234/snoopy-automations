@@ -63,11 +63,14 @@ export function decisionsOf(
 /**
  * The codes to enter: the note's codes in its order, each accepted change applied — a Change's
  * code in its place, a Remove left out — then each accepted Add; and every accepted code the
- * checks place first (L1, L2, L3) moved before the first kidney disease stage code (N18).
+ * checks place first (L1, L2, L3) moved before the first kidney disease stage code (N18). A
+ * Change answered with another code (v3's "Other code", `others` by row id) puts that code in its
+ * place, where it stands: a check's order is for its own code.
  */
 export function finalCodes(
   rows: readonly Row[],
   answers: ReadonlyMap<string, DecisionAnswer>,
+  others: ReadonlyMap<string, string> = new Map(),
 ): string[] {
   const accepted = (r: Row) => DECIDED.has(r.verdict) && answers.get(r.id) === 'accepted';
   const chart: { code: string; first: boolean }[] = [];
@@ -78,6 +81,8 @@ export function finalCodes(
     } else if (r.verdict === 'remove' && yes) continue;
     else if (r.verdict === 'change' && yes)
       chart.push({ code: r.suggested!, first: r.first === true });
+    else if (r.verdict === 'change' && answers.get(r.id) === 'other' && others.has(r.id))
+      chart.push({ code: others.get(r.id)!, first: false });
     else chart.push({ code: r.code, first: yes && r.first === true });
   }
   const stage = chart.findIndex((entry) => entry.code.startsWith('N18'));

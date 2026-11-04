@@ -45,14 +45,18 @@ export function remember(
  * The clinic's examples (the owner's L1–L5, 2026-11-01): each saved review decision, de-identified
  * — its statement with names, numbers and dates taken out, the code chosen and the verdict — kept
  * under one key by code family (the code's three-character category), newest first. `rank-codes`
- * reads them, `match-codes` sends at most `EXAMPLES_SENT` of a family after the prompt's fixed
+ * reads them, `match-codes` sends at most `EXAMPLES_SENT` a diagnosis after the prompt's fixed
  * examples, never past gate B; `save-visit` writes them, or clears them when the setup's "Learn
  * from this clinic's reviews" is off.
  */
 export const EXAMPLES_KEY = 'clinic-examples';
 
-/** At most this many examples a family are kept, and sent with one call. */
+/** At most this many examples a family are kept. */
 export const EXAMPLES_KEPT = 20;
+/**
+ * At most this many examples are sent with one diagnosis in a match call (the owner, 2026-11-03),
+ * so no more of a family are read.
+ */
 export const EXAMPLES_SENT = 3;
 
 export interface Example {

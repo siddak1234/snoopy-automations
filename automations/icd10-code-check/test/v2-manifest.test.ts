@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { SERVED_VERSIONS } from '../src/automation.js';
 import { specialtyOptions } from '../src/v2/specialties.js';
 import { WORDS_V2 } from '../src/v2/words.js';
 import { flow } from './fixtures.js';
@@ -12,7 +11,8 @@ import { flow } from './fixtures.js';
  * v2's manifest (the spec's v2 section; `words.md` section 4): the Healthcare department; the NPI
  * and the specialties in setup; several visit notes into one batch run; the batch's own steps and
  * its unit's words; the keyless NPI Registry; the flow's memory; four runs at a time. v1's manifest
- * is unchanged (`manifest.test.ts`), and this image serves v2 alone.
+ * is unchanged (`manifest.test.ts`); this image serves v3 since (`v3-manifest.test.ts`), and v2 its
+ * own pinned image.
  */
 
 const root = join(flow, '..', '..');
@@ -23,14 +23,11 @@ const menu = JSON.parse(
   readFileSync(join(root, 'contract', 'schemas', 'platform-menu.json'), 'utf8'),
 ) as { providers: { id: string; auth: string; operations: { name: string }[] }[] };
 
-test('Healthcare, for doctors and coders; this image serves v2 alone, four runs at a time', () => {
+test('Healthcare, for doctors and coders; four runs at a time', () => {
   assert.equal(v2.display.category, 'Healthcare');
   assert.match(v2.display.description, /For doctors and coders\./u);
-  assert.deepEqual(SERVED_VERSIONS, [2]);
   assert.equal(v2.service.maxConcurrentRuns, 4);
   assert.equal(v2.service.origin, 'http://icd10-code-check-v2.autom8x.internal:8080');
-  const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
-  assert.match(dockerfile, /^COPY --chown=node:node manifests\/icd10-code-check\.v2\.json /mu);
 });
 
 test("setup: an optional NPI in the screens' words, and the 695 specialties in 16 groups, several", () => {

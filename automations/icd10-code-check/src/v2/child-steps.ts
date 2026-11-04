@@ -1,4 +1,5 @@
 import {
+  DECISION_LIMITS,
   failed,
   held,
   settle,
@@ -9,6 +10,7 @@ import {
 } from '@autom8x/automation-sdk';
 
 import { gateB, type MatchInput } from '../candidates.js';
+import { inFamily } from '../families.js';
 import { prompt } from '../prompts.js';
 import { readingOf, withoutPatient, type Reading } from '../reading.js';
 import {
@@ -17,6 +19,7 @@ import {
   normalCode,
   pickTable,
   realDate,
+  type CodeTable,
   type TableId,
 } from '../tables.js';
 import { askModel, atOnce, auditOf, type AuditRecord } from './audit.js';
@@ -25,6 +28,7 @@ import {
   loadPreferences,
   preferredFamilies,
   rankCandidates,
+  sharedWords,
   specialtiesForRun,
   taxonomiesOf,
 } from './candidates.js';
@@ -32,6 +36,7 @@ import { lookUp, loadIndex } from './lookup.js';
 import {
   ACCEPTED_KEY,
   EXAMPLES_KEY,
+  EXAMPLES_SENT,
   acceptedOf,
   examplesFor,
   examplesOf,
@@ -245,15 +250,64 @@ export const rankCodes: Step = async (context) => {
 export const DIAGNOSES_A_CALL = 8;
 export const CALLS_AT_ONCE = 3;
 
+/** A code a v3 change offers in its place ("Other code"), with its title from the visit's table. */
+export interface OtherCode {
+  code: string;
+  title: string;
+}
+
+/**
+ * v3's "Other code" (README, "v3", row 3), kept at match time, since the choice lists are dropped
+ * after it: for each diagnosis matched, the codes of its own list that are neither its match nor on
+ * the note, ranked: the match's 3-character category first, then its family (the `preferred` ones
+ * holding it), then the words a title shares with the statement (`sharedWords`), then list order.
+ * A code with neither the category nor a shared word is left out; at most the platform's 3 a change
+ * (`DECISION_LIMITS.options`), each with its title; a diagnosis with none left out.
+ */
+export function otherCodes(
+  lists: readonly string[][],
+  matches: Readonly<Record<string, { code: string }>>,
+  onNote: ReadonlySet<string>,
+  codes: CodeTable,
+  statements: readonly string[],
+  preferred: readonly string[],
+): Record<string, OtherCode[]> {
+  return Object.fromEntries(
+    Object.entries(matches).flatMap(([index, match]) => {
+      const category = match.code.slice(0, 3);
+      const family = preferred.filter((one) => inFamily(match.code, [one]));
+      const shared = sharedWords(statements[Number(index)] ?? '', codes);
+      const others = (lists[Number(index)] ?? [])
+        .filter((code) => code !== match.code && !onNote.has(code))
+        .map((code, order) => ({
+          code,
+          order,
+          same: Number(code.slice(0, 3) === category),
+          family: Number(inFamily(code, family)),
+          shared: shared(code),
+        }))
+        .filter((one) => one.same === 1 || one.shared > 0)
+        .sort(
+          (a, b) =>
+            b.same - a.same || b.family - a.family || b.shared - a.shared || a.order - b.order,
+        )
+        .slice(0, DECISION_LIMITS.options)
+        .map(({ code }) => ({ code, title: codes[code] ?? '' }));
+      return others.length === 0 ? [] : [[index, others]];
+    }),
+  );
+}
+
 /**
  * Codes matched (v2): v1's `match-codes` on the diagnoses the lookup did not settle, in calls of
- * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent the
- * clinic's examples of its families that `rank-codes` read, after the prompt's own, their ids in
- * its audit record — and every pick held to gate B (`gateB`), examples or not. The run's counts go
- * to `measures`.
+ * at most `DIAGNOSES_A_CALL`, `CALLS_AT_ONCE` at a time, with `match-codes` v2 — each call sent,
+ * for each diagnosis, at most `EXAMPLES_SENT` of the clinic's examples of its families that
+ * `rank-codes` read, in the order read, after the prompt's own, their ids in its audit record — and
+ * every pick held to gate B (`gateB`), examples or not. The run's counts go to `measures`. On a v3
+ * run, each matched diagnosis's related other codes are kept too, closest first (`otherCodes`).
  */
 export const matchVisit: Step = async (context) => {
-  const { state } = context;
+  const { state, request } = context;
   const reading = readingOf(state.reading);
   const { codes } = loadTable(state.table as TableId);
   const lists = Array.isArray(state.candidates) ? (state.candidates as string[][]) : [];
@@ -281,13 +335,17 @@ export const matchVisit: Step = async (context) => {
   let stop: { sentence: string; kind: string } | undefined;
   await atOnce(calls.length, CALLS_AT_ONCE, async (at) => {
     const call = calls[at]!;
-    const families = new Set(
-      call.flatMap((input) => [
-        ...reading.diagnoses[input.diagnosis]!.categories,
-        input.candidates[0]!.code.slice(0, 3),
-      ]),
+    // Each diagnosis its first `EXAMPLES_SENT` of its families' examples, in the order read.
+    const chosen = new Set(
+      call.flatMap((input) => {
+        const families = new Set([
+          ...reading.diagnoses[input.diagnosis]!.categories,
+          input.candidates[0]!.code.slice(0, 3),
+        ]);
+        return examples.filter((e) => families.has(e.code.slice(0, 3))).slice(0, EXAMPLES_SENT);
+      }),
     );
-    const clinic = examples.filter((e) => families.has(e.code.slice(0, 3)));
+    const clinic = examples.filter((e) => chosen.has(e));
     const asked = await askModel(
       context,
       prompt('match-codes', 2),
@@ -314,12 +372,20 @@ export const matchVisit: Step = async (context) => {
   if (stop !== undefined) return failed(stop.sentence, stop.kind);
   const { candidates: _c, settled: _s, examples: _e, ...rest } = state;
   const used = new Set(audit.flatMap((r) => r.examples));
+  const onNote = new Set(reading.codesOnNote.map(normalCode));
+  const statements = reading.diagnoses.map((diagnosis) => diagnosis.statement);
+  const preferred = preferredFamilies(nucc(state), loadPreferences());
+  const others =
+    request.templateVersion >= 3
+      ? { others: otherCodes(lists, matches, onNote, codes, statements, preferred) }
+      : {};
   return {
     outcome: 'ok',
     summary: 'Codes matched',
     state: {
       ...rest,
       matches,
+      ...others,
       audit: [...auditOf(state), ...audit].map((r) => ({ ...r })),
       measures: {
         diagnoses: reading.diagnoses.length,

@@ -4,8 +4,8 @@
 // anything it cannot read, including its own errors, exits 0 (fail open).
 // `decide(input, env)` is the whole policy and runs nothing: the only process it
 // may start is `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target.
-// Shell text is tokenised with quotes respected, split on && || ; | & and
-// newlines, heredoc bodies skipped, `cd` tracked per part and wrappers
+// Shell text is tokenised (lib/shell-words.mjs) with quotes respected, split on
+// && || ; | & and newlines, heredoc bodies skipped, `cd` tracked per part and wrappers
 // (`perl -e '… exec @ARGV'`, caffeinate, timeout, env, sudo, bash -c) unwrapped.
 // Cases: cases.json, run by scripts/kit/kit.test.mjs.
 import { spawnSync } from 'node:child_process';
@@ -14,6 +14,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scratchRoot } from './lib/quick-hygiene.mjs';
+import { tokenize } from './lib/shell-words.mjs';
 
 const ALLOW = Object.freeze({ exit: 0, reason: '' });
 const REASONS = {
@@ -24,146 +25,6 @@ const REASONS = {
   5: 'npm run hygiene --execute changes production hosts — the owner runs it; --clean prints the commands',
 };
 const block = (row, detail) => ({ exit: 2, row, reason: `guard #${row}: ${REASONS[row]}${detail ? ` (${detail})` : ''}` });
-
-/** A heredoc's delimiter at `i` (just after `<<`): the tag, `<<-`, and where it ends. */
-function readTag(src, i) {
-  const strip = src[i] === '-';
-  if (strip) i++;
-  while (src[i] === ' ' || src[i] === '\t') i++;
-  let tag = '';
-  while (i < src.length && !/[\s;&|<>()]/u.test(src[i])) {
-    if (src[i] === "'" || src[i] === '"') {
-      const j = src.indexOf(src[i], i + 1);
-      tag += src.slice(i + 1, j < 0 ? src.length : j);
-      i = j < 0 ? src.length : j + 1;
-    } else if (src[i] === '\\') (tag += src[i + 1] ?? ''), (i += 2);
-    else tag += src[i++];
-  }
-  return { tag, strip, next: i };
-}
-
-/** Past the heredoc bodies that start at `i` (just after a newline). */
-function skipBodies(src, i, tags) {
-  while (tags.length) {
-    const { tag, strip } = tags.shift();
-    while (i < src.length) {
-      const nl = src.indexOf('\n', i);
-      const line = src.slice(i, nl < 0 ? src.length : nl);
-      i = nl < 0 ? src.length : nl + 1;
-      if ((strip ? line.replace(/^\t+/u, '') : line) === tag) break;
-    }
-  }
-  return i;
-}
-
-/** The `)` closing a `$(` whose body starts at `i`: quotes, nesting and heredocs respected. */
-function substEnd(src, i) {
-  const tags = [];
-  for (let depth = 0; i < src.length; ) {
-    const c = src[i];
-    if (c === '\\') i += 2;
-    else if (c === "'") i = src.indexOf("'", i + 1) < 0 ? src.length : src.indexOf("'", i + 1) + 1;
-    else if (c === '"') i = quoteEnd(src, i + 1);
-    else if (c === '\n') i = skipBodies(src, i + 1, tags);
-    else if (src.startsWith('<<<', i)) i += 3;
-    else if (src.startsWith('<<', i)) {
-      const t = readTag(src, i + 2);
-      tags.push(t);
-      i = t.next;
-    } else if (src.startsWith('$(', i)) i = substEnd(src, i + 2) + 1;
-    else if (c === '(') (depth++, i++);
-    else if (c === ')') {
-      if (depth === 0) return i;
-      depth--;
-      i++;
-    } else i++;
-  }
-  return src.length;
-}
-
-/** Just past the `"` closing a double-quoted string whose body starts at `i`. */
-function quoteEnd(src, i) {
-  while (i < src.length && src[i] !== '"') {
-    if (src[i] === '\\') i += 2;
-    else if (src.startsWith('$(', i)) i = substEnd(src, i + 2) + 1;
-    else if (src[i] === '`') i = src.indexOf('`', i + 1) < 0 ? src.length : src.indexOf('`', i + 1) + 1;
-    else i++;
-  }
-  return i + 1;
-}
-
-/** Shell text as words and operators; quotes respected, heredoc bodies dropped. */
-export function tokenize(src) {
-  const out = [];
-  const heredocs = [];
-  let word = null;
-  let i = 0;
-  const add = (s) => (word = (word ?? '') + s);
-  const push = () => void (word !== null && out.push({ w: word }), (word = null));
-  const redirect = (op, len) => {
-    if (word !== null && /^\d+$/u.test(word)) word = null; // `2>`: the fd is not a word
-    push();
-    i += len;
-    if (op === '>&' && /[\d-]/u.test(src[i] ?? '')) return void i++; // `2>&1`
-    out.push({ op: op.includes('<') ? '<' : '>' });
-  };
-  while (i < src.length) {
-    const c = src[i];
-    const two = src.slice(i, i + 2);
-    if (c === "'") {
-      const j = src.indexOf("'", i + 1);
-      add(src.slice(i + 1, j < 0 ? src.length : j));
-      i = j < 0 ? src.length : j + 1;
-    } else if (c === '"') {
-      const end = quoteEnd(src, i + 1);
-      add(src.slice(i + 1, end - 1).replace(/\\(["\\$`])/gu, '$1').replace(/\\\n/gu, ''));
-      i = end;
-    } else if (c === '\\') {
-      if (src[i + 1] !== '\n') add(src[i + 1] ?? '');
-      i += 2;
-    } else if (two === '$(' || c === '`') {
-      // A command substitution stays text inside its word.
-      let j = c === '`' ? src.indexOf('`', i + 1) : substEnd(src, i + 2);
-      j = j < 0 ? src.length : j;
-      add(src.slice(i, j + 1));
-      i = j + 1;
-    } else if (c === ' ' || c === '\t' || c === '\r') {
-      push(), i++;
-    } else if (c === '#' && word === null) {
-      while (i < src.length && src[i] !== '\n') i++;
-    } else if (c === '\n') {
-      push();
-      out.push({ op: '\n' });
-      i = skipBodies(src, i + 1, heredocs);
-    } else if (src.startsWith('<<<', i)) {
-      push();
-      out.push({ op: '<' });
-      i += 3;
-    } else if (two === '<<') {
-      push();
-      const t = readTag(src, i + 2);
-      heredocs.push(t);
-      i = t.next;
-    } else if (two === '&&' || two === '||' || two === ';;' || two === '|&') {
-      push();
-      out.push({ op: two === ';;' ? ';' : two[0] === '|' ? '|' : two });
-      i += 2;
-    } else if (two === '>>' || two === '&>' || two === '>&' || two === '>|' || two === '<&') {
-      redirect(two === '>|' ? '>' : two, 2);
-    } else if (c === '>' || c === '<') {
-      redirect(c, 1);
-    } else if (';|&()'.includes(c)) {
-      push();
-      out.push({ op: c });
-      i++;
-    } else {
-      add(c);
-      i++;
-    }
-  }
-  push();
-  return out;
-}
 
 const base = (word) => String(word ?? '').split('/').pop();
 const strictlyUnder = (path, root) => !!root && path.startsWith(`${root.replace(/\/+$/u, '')}/`);
@@ -217,6 +78,28 @@ const GIT_VALUED = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--co
 const NPM_VALUED = ['--prefix', '-w', '--workspace', '--loglevel', '--cache', '--registry', '--userconfig'];
 const NPM_INSTALL = ['ci', 'install', 'i', 'in', 'add', 'isntall', 'clean-install', 'cit', 'it', 'install-test', 'install-clean-test', 'test', 't', 'tst'];
 const DOCKER_VALUED = ['-c', '--config', '--context', '-H', '--host', '-l', '--log-level'];
+const NPM_RUN = ['run', 'run-script', 'rum', 'urn'];
+
+/** Where an npm command runs: its `--prefix`, else the cwd. */
+function npmDir(args, cwd, ctx) {
+  const i = args.findIndex((a) => a === '--prefix' || a.startsWith('--prefix='));
+  if (i < 0) return cwd;
+  return ctx.abs(args[i].includes('=') ? args[i].slice(9) : args[i + 1] ?? '', cwd);
+}
+
+/** The package.json script an `npm run` names and where it runs, read only where `zoned`; else null. */
+function npmScript(args, cwd, ctx, zoned) {
+  const { sub, at } = subcommand(args, NPM_VALUED);
+  const name = subcommand(args.slice(at + 1), []).sub;
+  const dir = NPM_RUN.includes(sub) && name ? npmDir(args, cwd, ctx) : null;
+  if (!dir || !zoned(dir)) return null;
+  try {
+    const text = JSON.parse(readFileSync(`${dir}/package.json`, 'utf8')).scripts?.[name];
+    return typeof text === 'string' ? { dir, text } : null;
+  } catch {
+    return null;
+  }
+}
 
 function pushBypass(args) {
   const { sub, at } = subcommand(args, GIT_VALUED);
@@ -233,11 +116,10 @@ function buildDir(b, args, cwd, ctx) {
   if (b === 'npm') {
     const { sub, at } = subcommand(args, NPM_VALUED);
     const script = subcommand(args.slice(at + 1), []).sub ?? '';
-    const isRun = ['run', 'run-script', 'rum', 'urn'].includes(sub) && /^(?:build|verify)(?::|$)/u.test(script);
+    // `release:ios` builds with EAS through a shell script, so its text cannot say so.
+    const isRun = NPM_RUN.includes(sub) && /^(?:build|verify)(?::|$)|^release:ios$/u.test(script);
     if (!NPM_INSTALL.includes(sub) && !isRun) return null;
-    const i = args.findIndex((a) => a === '--prefix' || a.startsWith('--prefix='));
-    if (i < 0) return cwd;
-    return ctx.abs(args[i].includes('=') ? args[i].slice(9) : args[i + 1] ?? '', cwd);
+    return npmDir(args, cwd, ctx);
   }
   const words = b === 'npx' ? args.slice(subcommand(args, ['-p', '--package']).at) : [b, ...args];
   const [tool, ...rest] = words;
@@ -305,6 +187,9 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
   }
   const dir = buildDir(b, args, cwd, ctx);
   if (dir && (inZone(dir, ctx.desktop) || inZone(dir, ctx.icloud))) return block(3, b);
+  // An npm script whose own text builds (`eas build`, …) is that build.
+  const run = b === 'npm' && depth < 3 ? npmScript(args, cwd, ctx, (p) => inZone(p, ctx.desktop) || inZone(p, ctx.icloud)) : null;
+  if (run && evaluate(run.text, run.dir, ctx, depth + 1).row === 3) return block(3, b);
   const execute = args.some((a) => /^--execute(?:=|$)/u.test(a));
   if (execute && b === 'npm' && ['run', 'run-script'].includes(subcommand(args, NPM_VALUED).sub) && args.includes('hygiene')) return block(5);
   if (execute && b === 'node' && args.some((a) => /(?:^|\/)hygiene\.mjs$/u.test(a))) return block(5);

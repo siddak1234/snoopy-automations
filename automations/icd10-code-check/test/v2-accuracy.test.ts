@@ -11,7 +11,7 @@ import { reviewChild, runChild } from './v2-fixtures.js';
  * choices, the no-AI keep, gate B, the checks and the save — graded on about 30 made-up notes'
  * recorded AI answers (`notes.json` in the tests' accuracy folder: each note as `read-note` would answer it, each
  * diagnosis with the code the recorded `match-codes` answer picks, given only when it is listed)
- * against the draft answer key (`key.json` beside it, awaiting two coders' approval). Every
+ * against the draft answer key (`key.json` beside it, awaiting the clinic's owner's or admin's approval). Every
  * change is accepted, as a coder would who agrees with the key. A score below the key's baseline
  * fails the build.
  */
@@ -26,8 +26,8 @@ const key = JSON.parse(readFileSync(join(folder, 'key.json'), 'utf8')) as {
   answers: Record<string, string[]>;
 };
 
-test('the answer key is a draft until two coders approve it', () => {
-  assert.equal(key.status, "draft — awaiting two coders' approval (CPC and CCS-P)");
+test("the answer key is a draft until the clinic's owner or admin approves it", () => {
+  assert.equal(key.status, "draft — awaiting the clinic's owner's or admin's approval");
   assert.equal(notes.length, Object.keys(key.answers).length);
   assert.ok(notes.length >= 30);
 });

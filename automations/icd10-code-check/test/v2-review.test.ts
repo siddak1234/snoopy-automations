@@ -42,6 +42,8 @@ const TITLES = {
     'Injury of right internal carotid artery, intracranial portion, not elsewhere classified with loss of consciousness greater than 24 hours without return to pre-existing conscious level with patient surviving, subsequent encounter',
 };
 
+const TABLE = '2027';
+
 const row = (fields: Partial<Row> & Pick<Row, 'id' | 'code' | 'verdict'>): Row => ({
   suggested: null,
   check: '',
@@ -112,22 +114,63 @@ test("the titles' difference: the words only one title holds, case aside, in eac
   });
 });
 
-test("the why's rule: G3 in the owner's screen's words, every other check v1's reason until a person words it", () => {
-  assert.deepEqual(RULES_V2, { G3: 'most specific code the note shows' });
-  assert.equal(whyDetail({ ...stage, check: 'G3, L3' }, TITLES)?.endsWith(RULES_V2.G3!), true);
-  assert.equal(whyDetail(remove, TITLES), `Rule: ${REASONS.K1}`);
+test("the why's rule: each check a decision carries, in the owner's short words; an ask's keeps its sentence", () => {
+  // No titles and no quote: the detail is the rule alone.
+  const ruled = (check: string, verdict: Row['verdict'], code = 'N18.4', table = TABLE) =>
+    whyDetail(
+      row({
+        id: 'n1',
+        code,
+        verdict,
+        check,
+        reason: 'v1',
+        suggested: verdict === 'remove' || verdict === 'moveUp' ? null : code,
+      }),
+      {},
+      table,
+    );
+  assert.deepEqual(
+    [
+      ruled('G1', 'change', 'E11', 'April 2026'),
+      ruled('G3, L3', 'change'),
+      ruled('G4', 'change'),
+      ruled('G7', 'add'),
+      ruled('K1', 'remove'),
+      ruled('K2', 'add', 'Z99.2'),
+      ruled('L1', 'change', 'I10'),
+      ruled('L2', 'change', 'I10'),
+      ruled('L3', 'moveUp', 'I12.9'),
+    ],
+    [
+      'Rule: complete code from the April 2026 table',
+      'Rule: most specific code the note shows',
+      'Rule: uncertain diagnosis: code the sign or symptom',
+      'Rule: code what the note supports',
+      'Rule: N18.6 takes no stage code',
+      'Rule: dialysis: add Z99.2',
+      'Rule: blood pressure + kidney disease: I12, then the stage',
+      'Rule: blood pressure + heart + kidney: I13',
+      'Rule: I12.9 before the kidney stage',
+    ],
+  );
+  // Only an ask or a Keep carries these checks: no short rule; an ask shows v1's sentence.
+  for (const check of ['G2', 'G5', 'G6', 'K3', 'T1'])
+    assert.equal(RULES_V2[check], undefined, check);
 });
 
 test("a change's why, in the screens' words: Difference, From the note, Rule, joined by ' · '", () => {
   assert.equal(
-    whyDetail(stage, TITLES),
+    whyDetail(stage, TITLES, TABLE),
     'Difference: "unspecified" vs "3a" · From the note: "CKD stage 3a" · Rule: most specific code the note shows',
   );
   // An Add or a Remove has no second title to compare: the quote and the rule.
-  assert.equal(whyDetail(add, TITLES), `From the note: "CKD stage 3a" · Rule: ${REASONS.G7}`);
-  assert.equal(whyDetail(remove, TITLES), `Rule: ${REASONS.K1}`);
+  assert.equal(
+    whyDetail(add, TITLES, TABLE),
+    'From the note: "CKD stage 3a" · Rule: code what the note supports',
+  );
+  assert.equal(whyDetail(remove, TITLES, TABLE), 'Rule: N18.6 takes no stage code');
   for (const r of [stage, change, add, remove]) {
-    const detail = whyDetail(r, TITLES)!;
+    const detail = whyDetail(r, TITLES, TABLE)!;
     for (const old of ['On the note', 'Suggested', 'Words that differ', 'Only', 'The same words']) {
       assert.ok(!detail.includes(old), `${r.id}: ${old}`);
     }
@@ -136,13 +179,13 @@ test("a change's why, in the screens' words: Difference, From the note, Rule, jo
 
 test('past 200 characters: the rule dropped first, then the quote shortened by whole words', () => {
   // I10 → I12.9: the difference and the quote fit, the rule does not.
-  const noRule = whyDetail(change, TITLES)!;
+  const noRule = whyDetail(change, TITLES, TABLE)!;
   assert.equal(
     noRule,
     'Difference: "Essential primary hypertension" vs "Hypertensive chronic kidney disease with stage 1 through 4 or unspecified" · From the note: "Hypertension and CKD stage 3a."',
   );
   const words = Array.from({ length: 60 }, (_, i) => `word${i}`);
-  const long = whyDetail({ ...stage, quote: words.join(' ') }, TITLES)!;
+  const long = whyDetail({ ...stage, quote: words.join(' ') }, TITLES, TABLE)!;
   assert.ok(long.length <= 200, `${long.length}`);
   assert.ok(!long.includes('Rule:'));
   assert.match(long, /^Difference: "unspecified" vs "3a" · From the note: "(word\d+ )+…"$/u);
@@ -150,7 +193,11 @@ test('past 200 characters: the rule dropped first, then the quote shortened by w
   const kept = /From the note: "(.*) …"$/u.exec(long)![1]!.split(' ');
   assert.deepEqual(kept, words.slice(0, kept.length));
   // A difference that alone passes 200: each side shortened by whole words, within 200.
-  const huge = whyDetail({ ...stage, code: 'S06.816A', suggested: 'I10', quote: 'x' }, TITLES)!;
+  const huge = whyDetail(
+    { ...stage, code: 'S06.816A', suggested: 'I10', quote: 'x' },
+    TITLES,
+    TABLE,
+  )!;
   assert.ok(huge.length <= 200, `${huge.length}`);
   assert.match(huge, /^Difference: "Injury of right .* …" vs "Essential primary hypertension"$/u);
 });
@@ -158,7 +205,7 @@ test('past 200 characters: the rule dropped first, then the quote shortened by w
 const view = (name: string | null, date: string, rows: Row[]): View => ({
   patient: { name, birthDate: null, sex: null, recordNumber: null, provider: null },
   visitDate: date,
-  tableName: '2027',
+  tableName: TABLE,
   rows,
   asks: [],
   titles: TITLES,
@@ -179,7 +226,7 @@ test("decisions: label '{code} → {suggested}', the why as detail, the visit's 
       ['v1-a1', 'Add N18.31', 'Jane Doe · Oct 12, 2026'],
     ],
   );
-  assert.equal(decisions[0]!.detail, whyDetail(stage, TITLES));
+  assert.equal(decisions[0]!.detail, whyDetail(stage, TITLES, TABLE));
   const answers = rowAnswers(
     new Map([
       ['v1-n1', 'accepted'],
@@ -194,6 +241,12 @@ test("decisions: label '{code} → {suggested}', the why as detail, the visit's 
     ],
   );
   assert.deepEqual(finalCodes(visit.rows, answers), ['N18.31', 'I10']);
+});
+
+test("a G1 change's rule names the visit's own table", () => {
+  const g1 = row({ id: 'n1', code: 'E11', verdict: 'change', suggested: 'E11.9', check: 'G1' });
+  const visit = { ...view('Jane Doe', '2026-10-12', [g1]), titles: {}, tableName: '2026' };
+  assert.equal(visitDecisions(visit)[0]!.detail, 'Rule: complete code from the 2026 table');
 });
 
 test('one compact codes table: each code with its full title; a title past the cell bound whole in a list item', () => {

@@ -101,7 +101,14 @@ owner on 2026-11-01 ~18:58Z**, shown as written (question form): "Approve all (R
 | The review, each change (a decision)     | the label: {code} → {suggested} (Add {code}); the group: {patient name} · {visit date}                                                                                                          | the screens                                           |
 | The review, each change's why (detail)   | Difference: "{words only in the first}" vs "{words only in the second}" · From the note: "{quote}" · Rule: {the check's rule}                                                                   | the screens                                           |
 | The why's rule, G3                       | most specific code the note shows                                                                                                                                                               | the screens                                           |
-| The why's rule, every other check        | v1's reason sentence (section 2), until a person words it                                                                                                                                       | the session's                                         |
+| The why's rule, G1                       | complete code from the {table} table (the visit's table: 2026, April 2026 or 2027)                                                                                                              | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, G4                       | uncertain diagnosis: code the sign or symptom                                                                                                                                                   | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, G7                       | code what the note supports                                                                                                                                                                     | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, K1                       | N18.6 takes no stage code                                                                                                                                                                       | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, K2                       | dialysis: add Z99.2                                                                                                                                                                             | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, L1                       | blood pressure + kidney disease: I12, then the stage                                                                                                                                            | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, L2                       | blood pressure + heart + kidney: I13                                                                                                                                                            | the owner's, 2026-11-03 (item 5)                      |
+| The why's rule, L3                       | {code} before the kidney stage                                                                                                                                                                  | the owner's, 2026-11-03 (item 5)                      |
 | The batch run, its summary and its block | {files} files · {pages} pages · {visits} visits · {set aside} set aside; 1 in the singular (1 file · 1 page · 1 visit)                                                                          | the task, the singular the session's                  |
 | The batch's unit words                   | Visit, Visits                                                                                                                                                                                   | the task                                              |
 | A visit's run past the review's limits   | This visit has more codes than one run can review.                                                                                                                                              | the session's, 2026-11-01                             |
@@ -115,8 +122,23 @@ The screens' NPI line read "Fills your specialties. Optional."; the NPI is read 
 platform round sets nothing up from a connected app), so the line says when it fills them. The
 why's labels are the owner's screens' ('Difference: "unspecified" vs "3a"', 'From the note: "CKD
 stage 3a"', 'Rule: most specific code the note shows'); the code says that line exactly for
-N18.30 → N18.31. The screens show one rule, G3's: every other check's rule in their style is for a
-person (the spec's v2 section, "Open"), and until then the why carries v1's reason sentence, which
-differs from the screens' style. The batch's step titles and descriptions are the manifest's, the
-session's. The learning toggle is on by default: an owner or admin, who edits the setup, turns it
-off to clear the clinic's examples (the next visit's save clears them).
+N18.30 → N18.31. The screens show one rule, G3's; every other rule a decision carries is the
+owner's short words (2026-11-03, item 5: "Recommended"). A check only an ask or a Keep carries
+(G2, G5, G6, K3, T1) has none: an ask keeps its sentence (section 2). The batch's step titles and
+descriptions are the manifest's, the session's. The learning toggle is on by default: an owner or
+admin, who edits the setup, turns it off to clear the clinic's examples (the next visit's save
+clears them).
+
+## 5. v3 (2026-11-03)
+
+**Dated 2026-11-03: these words await the owner's approval** (the session's Stage 1 spec, from the
+owner's TestFlight build 34 feedback and decision 4; the spec's "v3" says what each line serves). Every word of
+sections 1–4 that v3 does not replace stays.
+
+| Where                                                                            | The words                                                                                                                                                      | Whose                                |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Setup, the section names                                                         | NPI · Specialty · Integrations                                                                                                                                 | the session's, from F3               |
+| Setup, the NPI box's example (its placeholder, in place of "Optional")           | 10 digits, e.g. 1234567893                                                                                                                                     | the session's, from F2               |
+| The review, each Change's other codes (the clients' "Other code" list)           | {code} · {title}, or the code alone past 120 characters                                                                                                        | the session's, from item 4           |
+| The codes table after the review, a Change answered with another code (column 2) | Changed to {code}                                                                                                                                              | the Stage 1 spec's S1-B3 words       |
+| The summary and the badge after the review                                       | {n} codes · {a} accepted · {d} denied, and {a} accepted · {d} denied: a change answered with another code counted in {a}, as the platform's run page counts it | v1's words, the count the platform's |
