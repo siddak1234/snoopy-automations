@@ -515,7 +515,8 @@ that commit):
   "What the platform refuses beyond the schema", below).
 - `platform-menu.json`: `dataProtections` (`hipaa`); the provider auth type `smart-backend`; and the
   provider `ehr-fhir`, "EHR", `smart-backend`, its operations `binary.read`, `capability.read`,
-  `conditions.search`, `encounter.read`, `notes.read` and `notes.search`, each with its FHIR scope.
+  `conditions.search`, `encounter.read`, `notes.read` and `notes.search`, each but `capability.read`
+  with its FHIR scope.
 
 The other nine files are byte-identical to `0973082`'s. ICD-10 Code Check v4 declares
 `dataProtection: 'hipaa'`; no flow here calls `ehr-fhir` yet. Until the platform's branch merges
