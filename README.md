@@ -639,7 +639,7 @@ a `*` bound to the flow's id):
 
 - **Invoice Processing**, `invoice-processing` (v8; each document's exact words, and Q2's re-ask):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
-- **Resume Screening**, `candidate-reviewer` (v2; Candidate Reviewer at v1): its spec,
+- **Resume Screening**, `candidate-reviewer` (v3, the exact words and Q2's re-ask; Candidate Reviewer at v1): its spec,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
