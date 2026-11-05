@@ -1,5 +1,7 @@
 # Invoice Processing (`invoice-processing`): how it is built
 
+**v8's words approved:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — "Supplier, exact words", "Number, exact words" and "Total, exact words" (v8, below), as shown, no word changed.
+
 This flow was built before `/create-flow`'s specs, so this file is its build's record: moved here
 from the repository README in Round 21, so a change to the flow's code, prompts or manifests asks
 for this file in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules). It
@@ -19,7 +21,7 @@ of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-
 (`-v8`); the image serves v8 alone (its Dockerfile copies only `manifests/invoice-processing.v8.json`),
 and v1 to v7 stay registered and immutable, each held to its sha256
 (`automations/invoice-processing/test/manifest.test.ts`, `versions.test.ts`). **Words:** NEW,
-awaiting the owner's approval: "Supplier, exact words", "Number, exact words" and "Total, exact
+~~awaiting the owner's approval~~ approved 2026-11-04 ("F1. approve"; this file's top): "Supplier, exact words", "Number, exact words" and "Total, exact
 words" (Q1, below). Q2's sentence is the one the owner's Q2 recommended; every other word is v7's.
 Two changes, both in the code:
 

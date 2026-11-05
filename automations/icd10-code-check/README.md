@@ -5,6 +5,8 @@ beside this spec, every word both clients show · **Research:** `research.md` be
 (2026-10-28, four passes: 1–3 approved ~17:19Z "Approve, write the spec (Recommended)", 4 approved
 ~21:24Z "Approve (Recommended)"), its gaps in section 11 · **Built in:** <PR link, once built>
 
+**Words approved for v3 and v4:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — `words.md` section 5, as shown, no word changed (v4 adds none).
+
 **Waits for the platform (section 10):** a setup dropdown that picks several choices, and an approval
 that accepts or denies each change. `/create-flow` stage 1 answer: a platform round first, then this
 flow's one pull request.
@@ -542,15 +544,16 @@ v3's "Other code" ships.
 
 ## v3 (2026-11-03)
 
-**Status:** built beside v2 on the branch `round-21/stage-1-flows`, not yet merged; its image
-served v3 alone until v4 ("v4", below), and v1 and v2 stay served on their own containers and pinned
-images until the owner retires them. **Words:** `words.md`, section 5, **awaiting the owner's
-approval**; every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
+**Status:** built beside v2 on the branch `round-21/stage-1-flows`, merged in #73 (a0f1f7d); v3 was
+never registered, as the platform refuses a new Healthcare version without `dataProtection`
+(snoopy-backend SYSTEM-MANIFEST §6), so v4 ("v4", below) took its place. v1 was withdrawn 2026-11-04
+18:36:49Z, and v2 stays served on its own container and pinned image until the owner retires it. **Words:** `words.md`, section 5, ~~**awaiting the owner's
+approval**~~ approved 2026-11-04 ("F1. approve"; this spec's top); every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
 amendment 5, vendored in `contract/` at snoopy-backend 0973082 (#265), the
 platform's `main` after Stage 1 merged): a manifest's `setupSections`, a text field's `example`, a held
 change's `options` and the answer `{id, other}`
 (the SDK's `othersOf`). Its pull request merges only after the platform's Stage 1 pull request is merged and
-deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words.
+deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words: #73 merged 2026-11-04 15:44:40Z, before the approval (this spec's top); v3 was never registered (snoopy-backend SYSTEM-MANIFEST §6).
 
 **What moved it** — the owner's decision 4 of 2026-11-03, word for word: "We can continue based on
 bedt practice and learn from the approval, denials, and edits the user makes on the results and
@@ -569,16 +572,17 @@ improve their results over time." — and TestFlight build 34 feedback, 2026-11-
 | 2   | The NPI's box shows an example in place of "Optional" (its `example`, the clients' placeholder): "10 digits, e.g. 1234567893". 1234567893 is a valid NPI by CMS's check digit (the Luhn formula over the prefix 80840 and its ten digits), proven in the test; its line stays v2's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | F2                           | the manifest; `WORDS_V3.npiExample`; `v3-manifest.test.ts`                                                                               |
 | 3   | "Other code": each Change decision offers up to 3 other codes (`options`, each "{code} · {title}", or the code alone past the option's 120 characters) from its own diagnosis's choice list, but the change's own code and suggestion, the closest first: the diagnosis's matched code's own 3-character category, then its family (the specialties' preferred families that hold it), then the words a code's title shares with the diagnosis's statement (`sharedWords`, the one score its choice list is ranked by), then the list's order. A code with neither the same category nor a shared word is left out, so a diagnosis with nothing related offers none. The lists are dropped after the match, so `matchVisit` keeps each matched diagnosis's first 3 so ranked that are neither its match nor on the note (`otherCodes`, `state.others`). They are counted in the held result's body bound (the platform's 256 KiB, `RESULT_BODY_LIMIT_BYTES`): past it no change offers any and the held state keeps none (and the visit's `measures` no `edited`), and each is accepted or denied as on v2, so they never cost the review its blocks. An Add, a Remove and a Move up offer none. The answer `other` makes that code final in the change's place (`finalCodes`; a check's "before the stage" order is for its own code) and the codes table says "Changed to {code}". The summary and the badge count it with the accepted, as the platform's run page does. The output's `decisions[]` carry its `other`. The save writes it to the clinic's accepted codes, and while the clinic learns, it is an accepted example and the suggestion it replaced a denied one. A visit's `measures` add `edited` beside `accepted` and `denied`, the third live measure | Item 4; the platform's S1-B3 | `otherCodes`, `sharedWords`, `optionsOf`, `heldFits`, `finalCodes`, `saveVisit`, `visitResult`; `WORDS_V3.changedTo`; `v3-other.test.ts` |
 
-**Open, for a person:** section 5's words wait for the owner.
+~~**Open, for a person:** section 5's words wait for the owner.~~ Approved 2026-11-04 (this spec's top).
 
 ## v4 (2026-11-04)
 
-**Status:** built on the branch `round-21/stage-2-flows`, not yet merged; this image serves v4 alone
-(`SERVED_VERSIONS`), and v1 to v3 stay served on their own containers and pinned images until the
-owner retires them (the `retire-version` skill), so no ICD-10 run stays on OpenRouter. **Words:**
+**Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image serves v4 alone
+(`SERVED_VERSIONS`), served since Flow CD's `FLOW CD OK` of 2026-11-04 18:41:00Z. v1 was withdrawn at
+18:36:49Z and v3 was never registered; v2 stays served on its own container and pinned image until the
+owner retires it (the `retire-version` skill), so no ICD-10 run stays on OpenRouter after that. **Words:**
 none new. **Rests on:** the platform's Stage 2 contract (its ADR-0049, C1 and C2), vendored in
-`contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266; not
-yet merged). **Merges only after** that pull request is merged and deployed: an older platform
+`contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266, merged as
+snoopy-backend 7793134). **Merges only after** that pull request is merged and deployed: an older platform
 registers v4, ignores the field and sends its calls to OpenRouter.
 
 **What moved it** — the owner's item 3 of 2026-11-03, word for word: "Just for healthcare and

@@ -2,6 +2,8 @@
 
 **Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v3 · **Built in:** v1 in [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin; v2 in [#57](https://github.com/siddak1234/snoopy-automations/pull/57) (`ea2a900`), registered by the platform's FORTY-SECOND pin and served since its read-back, 2026-10-25 07:07:47Z
 
+**v3's words approved after v3 went live:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — the Contact row "Name" and `Exact words: "…"` under the name, the email and the phone (§7), as built, no word changed. v3 was already served on both hosts: Flow CD run 41881756507 (this repository's `6ad084c`) served it in its attempt 1, which ended at 17:57:36Z (snoopy-backend SYSTEM-MANIFEST §6), before the approval — against the create-flow skill's stage 2, which registers nothing before it.
+
 **v2, 2026-10-24 (the owner's decisions on build 28's feedback):** the name "Resume Screening"
 (§1; v1 is "Candidate Reviewer"); the department options A–Z, "AI" added among them, HR still the
 default (§2); a verdict on each candidate, "Advance" at a score of 60 or above and "Decline" below
@@ -31,7 +33,7 @@ first); "Why this score" also lists flags, among them "years not shown" and "Tex
 direct the reader: "…"" (§4, §7); the resume field is not marked required (§2: the platform refuses a
 required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). At
 v1, every word on the screens the owner was shown is unchanged; what v2 changed is in the notes
-above. v3 adds two words, NEW, awaiting the owner's approval: the Contact row "Name" and
+above. v3 adds two words, NEW, ~~awaiting the owner's approval~~ approved 2026-11-04 after v3 went live (this spec's top): the Contact row "Name" and
 `Exact words: "…"` under the name, the email and the phone (§7).
 
 Every limit below is the platform's: `contract/schemas/automation-manifest.json` and

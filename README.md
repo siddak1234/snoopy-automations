@@ -224,7 +224,7 @@ platform's words. A manifest's `setupSections` and a text field's `example` are 
 clients from the manifest; an automation reads neither. The `links` block is above.
 
 **Stage 2: health data** (the platform's ADR-0049; `contract/` carries it at snoopy-backend 50a24f7,
-the head of its branch `round-21/stage-2-platform`, #266, not yet merged). What a manifest's optional
+the head of its branch `round-21/stage-2-platform`, #266, merged as snoopy-backend 7793134). What a manifest's optional
 `dataProtection: 'hipaa'` makes the platform do is in
 [contract/README.md](contract/README.md#what-the-platform-refuses-beyond-the-schema),
 "`dataProtection`". Its BAA gateway refuses a call naming its own `models` or `excludeModelAuthors`,
