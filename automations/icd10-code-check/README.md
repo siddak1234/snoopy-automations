@@ -544,9 +544,10 @@ v3's "Other code" ships.
 
 ## v3 (2026-11-03)
 
-**Status:** built beside v2 on the branch `round-21/stage-1-flows`, merged in #73 (a0f1f7d); its image
-served v3 alone until v4 ("v4", below), and v1 and v2 stay served on their own containers and pinned
-images until the owner retires them. **Words:** `words.md`, section 5, ~~**awaiting the owner's
+**Status:** built beside v2 on the branch `round-21/stage-1-flows`, merged in #73 (a0f1f7d); v3 was
+never registered, as the platform refuses a new Healthcare version without `dataProtection`
+(snoopy-backend SYSTEM-MANIFEST §6), so v4 ("v4", below) took its place. v1 was withdrawn 2026-11-04
+18:36:49Z, and v2 stays served on its own container and pinned image until the owner retires it. **Words:** `words.md`, section 5, ~~**awaiting the owner's
 approval**~~ approved 2026-11-04 ("F1. approve"; this spec's top); every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
 amendment 5, vendored in `contract/` at snoopy-backend 0973082 (#265), the
 platform's `main` after Stage 1 merged): a manifest's `setupSections`, a text field's `example`, a held
@@ -576,8 +577,9 @@ improve their results over time." — and TestFlight build 34 feedback, 2026-11-
 ## v4 (2026-11-04)
 
 **Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image serves v4 alone
-(`SERVED_VERSIONS`), and v1 to v3 stay served on their own containers and pinned images until the
-owner retires them (the `retire-version` skill), so no ICD-10 run stays on OpenRouter. **Words:**
+(`SERVED_VERSIONS`), served since Flow CD's `FLOW CD OK` of 2026-11-04 18:41:00Z. v1 was withdrawn at
+18:36:49Z and v3 was never registered; v2 stays served on its own container and pinned image until the
+owner retires it (the `retire-version` skill), so no ICD-10 run stays on OpenRouter after that. **Words:**
 none new. **Rests on:** the platform's Stage 2 contract (its ADR-0049, C1 and C2), vendored in
 `contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266, merged as
 snoopy-backend 7793134). **Merges only after** that pull request is merged and deployed: an older platform
