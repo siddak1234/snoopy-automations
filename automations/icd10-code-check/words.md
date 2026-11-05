@@ -2,6 +2,8 @@
 
 **Approved with the spec:** 2026-10-28 ~21:43Z, the owner: "approved." (the words as shown on the screens, and section 3's client words) · **Spec:** `README.md` beside this file
 
+**Section 5 (v3, v4) approved:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — as shown, no word changed.
+
 Every word a person reads on either client for this flow: one set, both clients. The flow's own
 words live in its manifest and its blocks (the spec, sections 1–8), and the clients draw them as the
 platform sends them. This list gathers them as the screens read them, for the owner's approval, and
@@ -131,7 +133,7 @@ clears them).
 
 ## 5. v3 (2026-11-03)
 
-**Dated 2026-11-03: these words await the owner's approval** (the session's Stage 1 spec, from the
+**Dated 2026-11-03: these words ~~await the owner's approval~~ were approved 2026-11-04 ("F1. approve")** (the session's Stage 1 spec, from the
 owner's TestFlight build 34 feedback and decision 4; the spec's "v3" says what each line serves). Every word of
 sections 1–4 that v3 does not replace stays.
 

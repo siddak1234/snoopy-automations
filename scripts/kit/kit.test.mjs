@@ -22,44 +22,40 @@ import { matches } from './check-docs.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const at = (path) => join(ROOT, path);
 export const KIT_FILES = [
-  '.claude/hooks/guard.mjs',
-  '.claude/hooks/session-start.mjs',
-  '.claude/hooks/stop-check.mjs',
-  '.claude/hooks/lib/quick-hygiene.mjs',
-  '.claude/hooks/lib/shell-words.mjs',
-  '.claude/hooks/cases.json',
-  '.claude/agents/explorer.md',
-  '.claude/agents/reviewer.md',
-  '.claude/agents/builder.md',
-  '.claude/agents/researcher.md',
-  'scripts/kit/check-docs.mjs',
-  'scripts/kit/map.mjs',
-  'scripts/kit/kit.test.mjs',
+  '.claude/hooks/guard.mjs', '.claude/hooks/session-start.mjs', '.claude/hooks/stop-check.mjs', '.claude/hooks/lib/quick-hygiene.mjs', '.claude/hooks/lib/shell-words.mjs', '.claude/hooks/cases.json',
+  '.claude/agents/explorer.md', '.claude/agents/reviewer.md', '.claude/agents/builder.md', '.claude/agents/researcher.md',
+  'scripts/kit/check-docs.mjs', 'scripts/kit/map.mjs', 'scripts/kit/kit.test.mjs',
 ];
 
 let TMP;
-before(() => {
-  TMP = mkdtempSync(join(tmpdir(), 'autom8x-kit-'));
-});
+before(() => (TMP = mkdtempSync(join(tmpdir(), 'autom8x-kit-'))));
 after(() => rmSync(TMP, { recursive: true, force: true }));
 
-// A child's environment without the hook variables of whatever session runs the tests.
+// git's own list of its repository variables, which git exports to a hook: under a linked worktree's pre-push they sent the
+// scratch repos' git into the pushed repository (snoopy-backend SYSTEM-MANIFEST §12.1 #342), so no other child here is given them.
+const GIT_REPO = execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' }).trim().split('\n');
+// A child's environment without the hook variables of whatever session runs the tests, nor git's repository variables.
 const quietEnv = (extra = {}) => {
   const env = { ...process.env, ...extra };
-  delete env.CLAUDE_PROJECT_DIR;
+  for (const key of ['CLAUDE_PROJECT_DIR', ...GIT_REPO]) delete env[key];
   return env;
 };
+// `run` with process.env changed by `vars` (undefined deletes one), then put back. Kit code run in this process (the
+// guard's decide(), session-start's sessionLines) spawns git with this process's own environment, so it runs outsideGitRepo.
+function withEnv(vars, run) {
+  const was = Object.fromEntries(Object.keys(vars).map((key) => [key, process.env[key]]));
+  const put = (pairs) => Object.entries(pairs).forEach(([key, value]) => (value === undefined ? delete process.env[key] : (process.env[key] = value)));
+  put(vars); try { return run(); } finally { put(was); }
+}
+const outsideGitRepo = (run) => withEnv(Object.fromEntries(GIT_REPO.map((key) => [key, undefined])), run);
 const node = (script, args, opts = {}) =>
   spawnSync(process.execPath, [at(script), ...args], { encoding: 'utf8', timeout: 30000, cwd: TMP, env: quietEnv(), ...opts });
 const GIT = ['-c', 'user.name=kit', '-c', 'user.email=kit@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
-const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8' }).trim();
+const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv() }).trim();
 function write(dir, files) {
   for (const [path, text] of Object.entries(files)) {
     if (text === null) rmSync(join(dir, path), { force: true });
-    else {
-      mkdirSync(dirname(join(dir, path)), { recursive: true });
-      writeFileSync(join(dir, path), text);
-    }
+    else { mkdirSync(dirname(join(dir, path)), { recursive: true }); writeFileSync(join(dir, path), text); }
   }
 }
 let made = 0;
@@ -91,15 +87,11 @@ describe('guard (STANDARD (h) rows 1–8)', () => {
         : v && typeof v === 'object'
           ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]))
           : v;
-  before(() => {
-    values.REPO = repo({ 'a.txt': 'a\n' });
-  });
+  before(() => (values.REPO = repo({ 'a.txt': 'a\n' })));
 
   test('decide() fails open on an error of its own', () => {
     const input = { tool_name: 'Bash', tool_input: { command: 'rm -rf /etc/autom8x-x' }, cwd: '/' };
-    const boom = () => {
-      throw new Error('boom');
-    };
+    const boom = () => { throw new Error('boom'); };
     assert.equal(decide(input, { HOME: values.HOME, toplevel: () => null }).exit, 2);
     assert.equal(decide(input, { HOME: values.HOME, toplevel: boom }).exit, 0);
   });
@@ -130,12 +122,8 @@ describe('guard (STANDARD (h) rows 1–8)', () => {
     test(`${c.name} → exit ${c.exit}, through decide() and the CLI`, () => {
       const input = fill(c.input);
       let parsed;
-      try {
-        parsed = typeof input === 'string' ? JSON.parse(input) : input;
-      } catch {
-        parsed = undefined;
-      }
-      const verdict = decide(parsed, { HOME: values.HOME });
+      try { parsed = typeof input === 'string' ? JSON.parse(input) : input; } catch { parsed = undefined; }
+      const verdict = outsideGitRepo(() => decide(parsed, { HOME: values.HOME }));
       assert.equal(verdict.exit, c.exit, 'decide()');
       if (c.exit === 2) assert.equal(verdict.row, Number(c.name[0]), 'blocked by its own row');
       const started = Date.now();
@@ -211,7 +199,7 @@ describe('quick-hygiene, session-start and stop-check', () => {
     assert.ok(out.length <= 15, `${out.length} lines`);
     assert.match(out[0], /^r\d+ · branch main · no local origin\/main · dirty 1 · worktrees 1 · stashes 0$/u);
     assert.match(out[1], /^hygiene: scratch processes \d+/u);
-    assert.equal(sessionLines(dir, () => Array(30).fill('x')).length, 15);
+    assert.equal(outsideGitRepo(() => sessionLines(dir, () => Array(30).fill('x'))).length, 15);
     assert.equal(node('.claude/hooks/session-start.mjs', [], { input: '{not json' }).status, 0);
   });
 });
@@ -362,6 +350,21 @@ describe('check-docs (STANDARD (e))', () => {
 });
 
 describe('the kit itself', () => {
+  test('a scratch repo, and kit code run in it, leave the repository an inherited GIT_DIR names untouched and take no inherited git config', () => {
+    const outer = repo({ 'o.txt': 'o\n' });
+    const look = () => [git(outer, 'rev-list', '--all'), git(outer, 'config', 'core.bare'), readFileSync(join(outer, '.git/index'), 'base64')];
+    const seen = look();
+    const [line, config] = withEnv({ GIT_DIR: join(outer, '.git'), GIT_CONFIG_PARAMETERS: "'kit.inherited'='yes'" }, () => {
+      const dir = repo({ 'a.txt': 'a\n' });
+      commit(dir, { 'b.txt': 'b\n' });
+      return [outsideGitRepo(() => sessionLines(dir, () => []))[0], git(dir, 'config', '--list')];
+    });
+    assert.deepEqual(look(), seen, 'the outer repository changed');
+    assert.match(line, / · dirty 0 · /u);
+    assert.doesNotMatch(config, /kit\.inherited/u, 'a scratch repo took an inherited GIT_CONFIG_PARAMETERS');
+    assert.deepEqual(GIT_REPO.filter((key) => key in quietEnv(Object.fromEntries(GIT_REPO.map((k) => [k, outer])))), []);
+  });
+
   test('every kit file names its own canonical path on its marker line, in 400 lines or fewer', () => {
     for (const file of KIT_FILES) {
       const text = readFileSync(at(file), 'utf8');
