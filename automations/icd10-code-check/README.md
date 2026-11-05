@@ -544,7 +544,7 @@ v3's "Other code" ships.
 
 ## v3 (2026-11-03)
 
-**Status:** built beside v2 on the branch `round-21/stage-1-flows`, not yet merged; its image
+**Status:** built beside v2 on the branch `round-21/stage-1-flows`, merged in #73 (a0f1f7d); its image
 served v3 alone until v4 ("v4", below), and v1 and v2 stay served on their own containers and pinned
 images until the owner retires them. **Words:** `words.md`, section 5, ~~**awaiting the owner's
 approval**~~ approved 2026-11-04 ("F1. approve"; this spec's top); every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
@@ -575,12 +575,12 @@ improve their results over time." — and TestFlight build 34 feedback, 2026-11-
 
 ## v4 (2026-11-04)
 
-**Status:** built on the branch `round-21/stage-2-flows`, not yet merged; this image serves v4 alone
+**Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image serves v4 alone
 (`SERVED_VERSIONS`), and v1 to v3 stay served on their own containers and pinned images until the
 owner retires them (the `retire-version` skill), so no ICD-10 run stays on OpenRouter. **Words:**
 none new. **Rests on:** the platform's Stage 2 contract (its ADR-0049, C1 and C2), vendored in
-`contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266; not
-yet merged). **Merges only after** that pull request is merged and deployed: an older platform
+`contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266, merged as
+snoopy-backend 7793134). **Merges only after** that pull request is merged and deployed: an older platform
 registers v4, ignores the field and sends its calls to OpenRouter.
 
 **What moved it** — the owner's item 3 of 2026-11-03, word for word: "Just for healthcare and
