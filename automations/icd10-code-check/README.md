@@ -5,6 +5,8 @@ beside this spec, every word both clients show · **Research:** `research.md` be
 (2026-10-28, four passes: 1–3 approved ~17:19Z "Approve, write the spec (Recommended)", 4 approved
 ~21:24Z "Approve (Recommended)"), its gaps in section 11 · **Built in:** <PR link, once built>
 
+**Words approved for v3 and v4:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — `words.md` section 5, as shown, no word changed (v4 adds none).
+
 **Waits for the platform (section 10):** a setup dropdown that picks several choices, and an approval
 that accepts or denies each change. `/create-flow` stage 1 answer: a platform round first, then this
 flow's one pull request.
@@ -544,13 +546,13 @@ v3's "Other code" ships.
 
 **Status:** built beside v2 on the branch `round-21/stage-1-flows`, not yet merged; its image
 served v3 alone until v4 ("v4", below), and v1 and v2 stay served on their own containers and pinned
-images until the owner retires them. **Words:** `words.md`, section 5, **awaiting the owner's
-approval**; every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
+images until the owner retires them. **Words:** `words.md`, section 5, ~~**awaiting the owner's
+approval**~~ approved 2026-11-04 ("F1. approve"; this spec's top); every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
 amendment 5, vendored in `contract/` at snoopy-backend 0973082 (#265), the
 platform's `main` after Stage 1 merged): a manifest's `setupSections`, a text field's `example`, a held
 change's `options` and the answer `{id, other}`
 (the SDK's `othersOf`). Its pull request merges only after the platform's Stage 1 pull request is merged and
-deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words.
+deployed (`contract/` re-pinned to that merge first) and the owner approves section 5's words (approved 2026-11-04).
 
 **What moved it** — the owner's decision 4 of 2026-11-03, word for word: "We can continue based on
 bedt practice and learn from the approval, denials, and edits the user makes on the results and
