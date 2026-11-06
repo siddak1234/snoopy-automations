@@ -68,11 +68,18 @@ const summary = (stage) =>
   `Write 2 KB or less to ${runDir}/${stage}.summary.md and return only that path.`;
 const between = (gate) =>
   `run only between \`${gate} acquire <label>\` and \`${gate} release <label>\`; always release`;
-const heavy = input.gateLock
-  ? `Heavy steps (npm ci, verify, a whole test run, Docker, local-ci) ${between(input.gateLock)}.`
-  : `Heavy steps (npm ci, verify, a whole test run, Docker, local-ci): if ${INSTALLED_LOCK} ` +
-    `exists, they ${between(`node ${INSTALLED_LOCK}`)}; if it does not, run one heavy step at ` +
-    `a time in this lane.`;
+// The backend's local-ci takes the machine's gate lock itself, so it is never listed among the
+// steps to wrap: a session that wrapped it waited 90 minutes for the lock to go stale
+// (2026-11-06, snoopy-backend SYSTEM-MANIFEST §12.1 #353).
+const LOCAL_CI =
+  " The backend's `node scripts/local-ci.mjs` takes the gate lock itself: run it without " +
+  'acquiring, never inside an acquire.';
+const heavy =
+  (input.gateLock
+    ? `Heavy steps (npm ci, verify, a whole test run, Docker) ${between(input.gateLock)}.`
+    : `Heavy steps (npm ci, verify, a whole test run, Docker): if ${INSTALLED_LOCK} ` +
+      `exists, they ${between(`node ${INSTALLED_LOCK}`)}; if it does not, run one heavy step at ` +
+      `a time in this lane.`) + LOCAL_CI;
 /**
  * Each repository's full local gate, run at land under the gate lock BEFORE any push, its counts
  * recorded (Round 21, j: the backend's pushed on a gate a lane had not run). Unknown repos: verify.
