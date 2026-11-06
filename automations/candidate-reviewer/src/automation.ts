@@ -2,20 +2,20 @@ import {
   defineAutomation,
   reaskingOnce,
   type Automation,
+  type EmittedBlock,
   type InvokeRequest,
   type JsonObject,
   type Manifest,
-  type RunSection,
 } from '@autom8x/automation-sdk';
 
+import { postingBlocks } from './blocks.js';
 import { PROMPTS, endsUnusable } from './prompts.js';
 import type { Posting } from './reading.js';
-import { postingSections } from './sections.js';
 import { candidateSteps, type Candidate } from './steps/candidate.js';
 import { JOB_STEPS, counted } from './steps/job.js';
 
 /**
- * Resume Screening, v2 and v3 of `candidate-reviewer` (the spec:
+ * Resume Screening, v2 to v4 of `candidate-reviewer` (the spec:
  * `automations/candidate-reviewer/README.md`, its words the build's source of truth). A flow with
  * items (the platform's ADR-0046): a job is made once, from its job description — the item run,
  * which reads it into the job's reading — and each candidate's run reads a resume and scores it
@@ -31,10 +31,13 @@ export const TEMPLATE_ID = 'candidate-reviewer';
  * The one version this image serves; its Dockerfile copies only its manifest. v3 (Round 21, Stage 2;
  * the owner's Q1 and Q2 of 2026-11-03) is v2's manifest but for its version and its own container:
  * the resume's read gives the exact words of the name, email and phone (`quotes.ts`), and an answer
- * off its schema is asked once more, a second miss ending the run (`endsUnusable`). v2's container
- * keeps its pinned image until it is retired.
+ * off its schema is asked once more, a second miss ending the run (`endsUnusable`). v4 (the owner's
+ * items 11–13 on build 37, 2026-11-05) is v3's manifest but for its version and its own container:
+ * each run's result is sent as blocks (`blocks.ts`) in place of sections — Contact a row per value
+ * under its label, the links as logo buttons named by the username. v3's container keeps its pinned
+ * image until it is retired.
  */
-export const SERVED_VERSIONS: readonly number[] = [3];
+export const SERVED_VERSIONS: readonly number[] = [4];
 
 /**
  * The manifests this image serves, of those given: `SERVED_VERSIONS` alone, as Invoice
@@ -77,13 +80,16 @@ export function define(
   };
 }
 
-/** An item run's result: the job's reading, and the sections "What AI read" shows. */
+/**
+ * An item run's result: the job's reading, and the blocks "What AI read" shows (v4) — never beside
+ * sections or details, which the SDK and the platform refuse.
+ */
 function job(state: JsonObject) {
   const posting = state.posting as unknown as Posting;
   return {
     output: posting as unknown as JsonObject,
     summary: `Job saved: ${counted(posting)}`,
-    sections: postingSections(posting),
+    blocks: postingBlocks(posting),
   };
 }
 
@@ -104,6 +110,6 @@ function candidate(state: JsonObject, request: InvokeRequest) {
     title: saved.title,
     score: saved.score,
     verdict: saved.verdict,
-    sections: saved.sections as unknown as RunSection[],
+    blocks: saved.blocks as unknown as EmittedBlock[],
   };
 }

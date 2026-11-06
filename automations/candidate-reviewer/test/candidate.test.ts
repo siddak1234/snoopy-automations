@@ -19,7 +19,7 @@ import {
   world,
   type Answers,
 } from './fixtures.js';
-import { reportedResult, validOutput } from './results.js';
+import { buttonsOf, reportedResult, rowsOf, sectionsOf, validOutput } from './results.js';
 
 /**
  * A candidate's run, on the SDK's RecordingPlatform with made-up answers — the spec's §9 cases
@@ -36,8 +36,7 @@ async function run(answers: Answers, file?: { contentType?: string; bytes?: Uint
   return { platform, result, sent: reportedResult(platform) };
 }
 
-const section = (result: Success, title: string) =>
-  result.sections?.find((each) => each.title === title)?.entries ?? [];
+const section = rowsOf;
 
 test('§9: a clear PDF resume meeting all three must-haves — Strong match, each named, 3 links', async () => {
   const { platform, sent } = await run({ resume: resumeAnswer(), score: scoreAnswer(88) });
@@ -58,18 +57,36 @@ test('§9: a clear PDF resume meeting all three must-haves — Strong match, eac
       requirement,
     );
   }
-  const links = section(result, 'Contact').filter((entry) => entry.subtitle === 'Link');
+  // v4 (the owner's items 11–13): Contact's rows, each label over its value; then its links as
+  // buttons, by their address (none of the three is a named site).
+  assert.deepEqual(section(result, 'Contact'), [
+    { title: 'Name', text: 'Jane Doe' },
+    { title: 'Email', text: 'jane.doe@example.com' },
+    { title: 'Phone', text: '+1 555 0100' },
+    { title: 'Location', text: 'Austin, TX' },
+  ]);
+  assert.deepEqual(buttonsOf(result, 'Contact'), [
+    {
+      label: 'linkedin.example.com/in/jane-doe',
+      url: 'https://linkedin.example.com/in/jane-doe',
+      brand: 'site',
+    },
+    { label: 'janedoe.example.com', url: 'https://janedoe.example.com', brand: 'site' },
+    {
+      label: 'code.example.org/jane-doe',
+      url: 'https://code.example.org/jane-doe',
+      brand: 'site',
+    },
+  ]);
+  // One group, "Candidate details", of the sections in the spec's order, each with something in
+  // it; no top-level metric or badge, so the run email stays as it is.
   assert.deepEqual(
-    links.map((link) => [link.title, link.url]),
-    [
-      ['LinkedIn', 'https://linkedin.example.com/in/jane-doe'],
-      ['Portfolio', 'https://janedoe.example.com'],
-      ['https://code.example.org/jane-doe', 'https://code.example.org/jane-doe'],
-    ],
+    result.blocks?.map((block) => [block.type, 'title' in block ? block.title : '']),
+    [['group', 'Candidate details']],
   );
-  // The sections in the spec's order, each with something in it.
+  assert.equal(result.sections, undefined, 'blocks, never beside sections');
   assert.deepEqual(
-    result.sections?.map((each) => each.title),
+    sectionsOf(result).map((each) => each.title),
     [
       'Contact',
       'Experience',
@@ -81,6 +98,16 @@ test('§9: a clear PDF resume meeting all three must-haves — Strong match, eac
       'Why this score',
     ],
   );
+  assert.deepEqual(section(result, 'Projects'), [
+    { title: 'Close checklist', text: 'A shared checklist for the close.' },
+  ]);
+  assert.deepEqual(buttonsOf(result, 'Projects'), [
+    {
+      label: 'jane-doe/close-checklist',
+      url: 'https://code.example.org/jane-doe/close-checklist',
+      brand: 'site',
+    },
+  ]);
   assert.deepEqual(section(result, 'Experience')[0], {
     title: 'Senior Accountant · Acme Corp',
     subtitle: '2021 – now · 5 years',
