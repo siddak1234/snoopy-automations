@@ -9,7 +9,8 @@ import { test } from 'node:test';
  * `scripts/audit-doc-references.mjs`: no document here names a file that does not
  * exist. It passes on this repository, and fails on a planted repository whose
  * document names a missing path, while a struck removed file and another
- * repository's path pass.
+ * repository's path pass. A path under snoopy-n8n's name is missing: it left the
+ * workspace on 2026-11-06, so it is no other repository.
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -67,6 +68,24 @@ test('a planted broken path fails the audit; a struck removed file and a sibling
     const broken = audit(dir);
     assert.equal(broken.status, 1, broken.stdout);
     assert.match(broken.stdout, /^missing\tREADME\.md:5\tsrc\/missing\.ts$/mu);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("snoopy-n8n left the workspace (2026-11-06): a path under its name is no other repository's, so it is missing", () => {
+  const dir = mkdtempSync(join(tmpdir(), 'autom8x-doc-references-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: dir });
+    writeFileSync(
+      join(dir, 'README.md'),
+      '# planted\n\n`snoopy-n8n/README.md` and [its README](../snoopy-n8n/README.md).\n',
+    );
+    execFileSync('git', ['add', '-A'], { cwd: dir });
+    const result = audit(dir);
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stdout, /^missing\tREADME\.md:3\tsnoopy-n8n\/README\.md$/mu);
+    assert.match(result.stdout, /^missing\tREADME\.md:3\t\.\.\/snoopy-n8n\/README\.md$/mu);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
