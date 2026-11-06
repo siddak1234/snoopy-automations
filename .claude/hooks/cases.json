@@ -85,4 +85,16 @@
 {"name": "7: open -a on a Downloads file writes nothing", "input": {"tool_name": "Bash", "tool_input": {"command": "open -a Preview ~/Downloads/report.pdf"}, "cwd": "${REPO}"}, "exit": 0},
 {"name": "7: a Downloads file copied into the scratchpad", "input": {"tool_name": "Bash", "tool_input": {"command": "cp ~/Downloads/a.pdf ${SCRATCH}/-proj/sess/scratchpad/a.pdf"}, "cwd": "${REPO}"}, "exit": 0},
 {"name": "7: an Artifact read", "input": {"tool_name": "Artifact", "tool_input": {"action": "read", "id": "a1"}, "cwd": "${REPO}"}, "exit": 0},
-{"name": "7: an Artifact list", "input": {"tool_name": "Artifact", "tool_input": {"action": "list"}, "cwd": "${REPO}"}, "exit": 0}]
+{"name": "7: an Artifact list", "input": {"tool_name": "Artifact", "tool_input": {"action": "list"}, "cwd": "${REPO}"}, "exit": 0},
+{"name": "9: a Desktop write, then a plain command", "input": {"tool_name": "Bash", "tool_input": {"command": "touch ~/Desktop/a.txt && echo ok"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: a bare redirect, with no command, into the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "> ~/Desktop/a.txt"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: curl --output <path> into Downloads, the path a word of its own", "input": {"tool_name": "Bash", "tool_input": {"command": "curl --output ~/Downloads/x.zip https://example.com/x.zip"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: curl -o<path> into Downloads, the path attached", "input": {"tool_name": "Bash", "tool_input": {"command": "curl -o$HOME/Downloads/x.zip https://example.com/x.zip"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: curl -O with --output-dir into Documents", "input": {"tool_name": "Bash", "tool_input": {"command": "curl -O --output-dir ~/Documents https://example.com/x.zip"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: cd to Downloads, then curl --remote-name into it", "input": {"tool_name": "Bash", "tool_input": {"command": "cd ~/Downloads && curl --remote-name https://example.com/x.zip"}, "cwd": "${REPO}"}, "exit": 0, "ask": true},
+{"name": "9: touch -- a name starting with a dash, on the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "touch -- -notes.txt"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 0, "ask": true},
+{"name": "7: curl -o - writes to stdout, on the Desktop", "input": {"tool_name": "Bash", "tool_input": {"command": "curl -sSo - https://example.com/x.json"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 0},
+{"name": "7: touch -r <a Desktop file> reads its times for a scratch file", "input": {"tool_name": "Bash", "tool_input": {"command": "touch -r ~/Desktop/ref.txt ${SCRATCH}/-proj/sess/scratchpad/a.txt"}, "cwd": "${REPO}"}, "exit": 0},
+{"name": "7: touch -d <date> on the Desktop, into the scratchpad", "input": {"tool_name": "Bash", "tool_input": {"command": "touch -d 2026-11-06T10:00:00 ${SCRATCH}/-proj/sess/scratchpad/a.txt"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 0},
+{"name": "7: touch -t <time> on the Desktop, into the scratchpad", "input": {"tool_name": "Bash", "tool_input": {"command": "touch -t 202611061000 ${SCRATCH}/-proj/sess/scratchpad/a.txt"}, "cwd": "${HOME}/Desktop/proj"}, "exit": 0},
+{"name": "7: Write in the scratch root reached as /tmp/claude-<uid>, macOS's link to /private/tmp", "input": {"tool_name": "Write", "tool_input": {"file_path": "${TMP_SCRATCH}/-proj/sess/scratchpad/a.md", "content": "x"}, "cwd": "${REPO}"}, "exit": 0}]

@@ -78,10 +78,10 @@ const linesOf = (n) => `${Array.from({ length: n }, (_, i) => `line ${i + 1}`).j
 
 describe('guard (STANDARD (h) rows 1–9)', () => {
   const cases = JSON.parse(readFileSync(at('.claude/hooks/cases.json'), 'utf8')).filter((row) => typeof row === 'object');
-  const values = { HOME: homedir(), SCRATCH: scratchRoot(), REPO: '' };
+  const values = { HOME: homedir(), SCRATCH: scratchRoot(), TMP_SCRATCH: scratchRoot().replace(/^\/private(?=\/tmp\/)/u, ''), REPO: '' };
   const fill = (v) =>
     typeof v === 'string'
-      ? v.replace(/\$\{(HOME|SCRATCH|REPO)\}/gu, (_, k) => values[k])
+      ? v.replace(/\$\{(HOME|SCRATCH|TMP_SCRATCH|REPO)\}/gu, (_, k) => values[k])
       : Array.isArray(v)
         ? v.map(fill)
         : v && typeof v === 'object'

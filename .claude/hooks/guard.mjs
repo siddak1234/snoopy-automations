@@ -4,7 +4,7 @@
 // row 9 never blocks: it asks the owner (stdout `permissionDecision: "ask"`, exit 0)
 // before a write outside the scratch root and a project's memory, a Bash write into
 // ~/Downloads, ~/Desktop, ~/Documents or iCloud Drive, or an Artifact publish or delete.
-// A block in any part of a command wins over an ask in another.
+// Rows 1–5 decide first: a block wins over an ask, in the same part of a command or another.
 // Anything it cannot read, including its own errors, exits 0 (fail open).
 // `decide(input, env)` is the whole policy and runs nothing: the only process it
 // may start is `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target.
