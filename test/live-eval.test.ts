@@ -121,21 +121,38 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
   try {
     const page = (filename: string) => {
       const candidate = CANDIDATES.find((each) => `${each.sample}.docx` === filename)!;
+      // v4's blocks: one group, its Contact a `{ title: label, text: value }` row each, then links.
       return {
         run: { title: candidate.name },
-        sections: [
+        blocks: [
           {
-            title: 'Contact',
-            entries: [
-              { title: candidate.name, subtitle: 'Name' },
-              { title: candidate.email, subtitle: 'Email' },
-              ...(candidate.phone === '' ? [] : [{ title: candidate.phone, subtitle: 'Phone' }]),
+            type: 'group',
+            title: 'Candidate details',
+            blocks: [
+              {
+                type: 'section',
+                title: 'Contact',
+                blocks: [
+                  {
+                    type: 'list',
+                    items: [
+                      { title: 'Name', text: candidate.name },
+                      { title: 'Email', text: candidate.email },
+                      ...(candidate.phone === ''
+                        ? []
+                        : [{ title: 'Phone', text: candidate.phone }]),
+                    ],
+                  },
+                  { type: 'links', items: [] },
+                ],
+              },
+              { type: 'section', title: 'Skills', blocks: [{ type: 'list', items: [] }] },
             ],
           },
         ],
       };
     };
-    const fake = { templateId: 'candidate-reviewer', version: 3, pageOf: page };
+    const fake = { templateId: 'candidate-reviewer', version: 4, pageOf: page };
     const profiles = { 'candidate-reviewer': profile };
     const recorded = await evaluate(['candidate-reviewer', '--record'], fake, profiles);
     assert.equal(recorded.code, 0, recorded.lines.join('\n'));
@@ -159,7 +176,12 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
       email: CANDIDATES[0]!.email,
       phone: CANDIDATES[0]!.phone,
     });
-    assert.equal(first.templateVersion, 3);
+    assert.equal(first.templateVersion, 4);
+    const reads = recorded.sent.filter((call) => /\/runs\/run-\d+/u.test(call.url));
+    assert.ok(
+      reads.length > 0 && reads.every((call) => call.url.endsWith('?shape=blocks')),
+      'each run read with shape=blocks: a read without it carries no blocks',
+    );
 
     assert.equal((await evaluate(['candidate-reviewer'], fake, profiles)).code, 0);
     const failing = await evaluate(
@@ -197,9 +219,9 @@ test("Resume Screening's job is archived however the pass ends: stopped by a run
     const profiles = { 'candidate-reviewer': profile };
     const page = (filename: string) => {
       const candidate = CANDIDATES.find((each) => `${each.sample}.docx` === filename)!;
-      return { run: { title: candidate.name }, sections: [] };
+      return { run: { title: candidate.name }, blocks: [] };
     };
-    const fake = { templateId: 'candidate-reviewer', version: 3, pageOf: page };
+    const fake = { templateId: 'candidate-reviewer', version: 4, pageOf: page };
 
     const stopped = await evaluate(
       ['candidate-reviewer', '--record'],
@@ -253,7 +275,7 @@ test('with no recording, compare mode runs nothing for that sample and fails it:
   try {
     const { code, lines, sent } = await evaluate(
       ['candidate-reviewer'],
-      { templateId: 'candidate-reviewer', version: 3, pageOf: () => ({}) },
+      { templateId: 'candidate-reviewer', version: 4, pageOf: () => ({}) },
       { 'candidate-reviewer': profile },
     );
     assert.equal(code, 1);
@@ -276,6 +298,12 @@ test('refused before anything runs, exit 2: in CI, without its session, off http
       /candidate-reviewer's, not/u,
     ],
     [['invoice-processing'], { version: 7 }, {}, /pins v7; the eval is for v8/u],
+    [
+      ['candidate-reviewer'],
+      { templateId: 'candidate-reviewer', version: 3 },
+      {},
+      /pins v3; the eval is for v4/u,
+    ],
     [['invoice-processing'], { status: 'paused' }, {}, /paused, not live/u],
     [
       ['invoice-processing'],
