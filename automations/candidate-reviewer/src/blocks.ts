@@ -6,6 +6,7 @@ import {
   type LinksBlock,
   type ListItem,
   type SectionBlock,
+  truncateText,
 } from '@autom8x/automation-sdk';
 
 import type { Posting, Resume } from './reading.js';
@@ -31,7 +32,10 @@ export const CONTACT_WORDS = {
   location: 'Location',
 } as const;
 
-/** The most characters a links button's label shows: the platform's word (its `wordLength`). */
+/**
+ * The most a links button's label shows: the platform's word (its `wordLength`), in UTF-16 units,
+ * the length the platform and the SDK's `truncateText` count (an emoji is two).
+ */
 export const LABEL_LENGTH = 40;
 
 /** A section of these blocks, or nothing when none has anything in it. */
@@ -62,10 +66,12 @@ const BRANDS: Readonly<Record<string, LinkBrand>> = {
   'huggingface.co': 'huggingface',
 };
 
-/** A label within `LABEL_LENGTH`: whole, or its first characters and "…". */
+/**
+ * A label within `LABEL_LENGTH` UTF-16 units: whole, or its first characters within 39 units, no
+ * surrogate pair split (`truncateText`), and "…", so the SDK's bound never cuts it again.
+ */
 function short(label: string): string {
-  const points = [...label];
-  return points.length <= LABEL_LENGTH ? label : `${points.slice(0, LABEL_LENGTH - 1).join('')}…`;
+  return label.length <= LABEL_LENGTH ? label : `${truncateText(label, LABEL_LENGTH - 1)}…`;
 }
 
 const decoded = (part: string): string => {
@@ -116,7 +122,7 @@ function usernameOf(address: Address): string | undefined {
 /**
  * A Contact link as a button (the owner's item 12): the site's logo by its host, and the username
  * the address names; any other site, or a known one whose address names no user, by its address
- * without "https://" and "www.", within 40 characters.
+ * without "https://" and "www.", within `LABEL_LENGTH`.
  */
 export function profileButton(url: string): LinksBlock['items'][number] | undefined {
   const address = addressOf(url);

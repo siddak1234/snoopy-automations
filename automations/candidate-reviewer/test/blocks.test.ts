@@ -136,6 +136,21 @@ test('another site, or a named one whose address names no user: the address with
   assert.equal(profileButton('https://'), undefined);
 });
 
+test('a label is measured as the platform measures it, in UTF-16 units: an emoji counts two, never split', () => {
+  // 40 characters but 42 units: cut to the characters within 39 units and "…", not sent whole.
+  const forty = profileButton(`https://example.com/${'a'.repeat(26)}🚀🚀`);
+  assert.equal(forty?.label, `example.com/${'a'.repeat(26)}…`);
+  // An emoji that would straddle the 39th unit is left out whole, no half of it sent.
+  const rockets = profileButton(`https://example.com/${'🚀'.repeat(30)}`);
+  assert.equal(rockets?.label, `example.com/${'🚀'.repeat(13)}…`);
+  for (const button of [forty!, rockets!]) {
+    assert.ok(button.label.length <= 40, button.label);
+    // The SDK's bound leaves it as built: its "…" stays the last thing shown.
+    const blocks: EmittedBlock[] = [{ type: 'links', items: [button] }];
+    assert.deepEqual(boundedBlocks(blocks), blocks);
+  }
+});
+
 test('a project link: a button by its host, named by the path after it', () => {
   assert.deepEqual(projectButton('http://github.com/AkulAggarwal2/repo'), {
     label: 'AkulAggarwal2/repo',

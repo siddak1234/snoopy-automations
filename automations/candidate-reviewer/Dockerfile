@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Resume Screening, v3 of candidate-reviewer, built from the repository root:
+# The image of Resume Screening, v4 of candidate-reviewer, built from the repository root:
 #   docker build --file automations/candidate-reviewer/Dockerfile .
 #
 # The SDK and automation are workspaces during development, so the build uses the

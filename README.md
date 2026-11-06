@@ -238,8 +238,9 @@ Every flow built from Round 21 on is defined with `defineFlow` (`packages/automa
 `defineAutomation` with the standards on, so every new flow fails, retries and words its failures
 the same way, by reuse rather than by each flow writing its own (the two live flows did: Invoice
 Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and the template use it.
-**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8,
-Resume Screening v3) too, with their own failure words and retries; `defineAutomation`'s behaviour is
+**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8;
+Resume Screening v3 and v4) too, with their own failure words and retries — this is the one list of
+those versions, which the other mentions link to; `defineAutomation`'s behaviour is
 as before. Those versions take only Q2's re-ask from `defineFlow`: `reaskingOnce(platform, log)`
 wraps the platform their `execute` is handed, and a second miss reaches their step, which ends the
 run "The AI's answer couldn't be used. Try a clearer file." (below).
@@ -686,12 +687,13 @@ a `*` bound to the flow's id):
 
 - **Invoice Processing**, `invoice-processing` (v8; each document's exact words, and Q2's re-ask):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
-- **Resume Screening**, `candidate-reviewer` (v3, the exact words and Q2's re-ask; Candidate Reviewer at v1): its spec,
+- **Resume Screening**, `candidate-reviewer` (v4, blocks: Contact rows, logo links, the exact words
+  kept nowhere; Candidate Reviewer at v1): its spec and the detail,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
-Both are live on `defineAutomation`; their after-pilot versions (Invoice Processing v8, Resume
-Screening v3) stay on it, with Q2's re-ask from `reaskingOnce` ("A new flow's standards", above).
+Both are live on `defineAutomation`; their after-pilot versions stay on it, with Q2's re-ask from
+`reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
   doctors and coders; v3; v4; v2 to v4 on `defineFlow`): its folder's README is its spec and how the
