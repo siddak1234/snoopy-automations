@@ -12,8 +12,8 @@ import { join, relative, resolve } from 'node:path';
  * the failure words, §9 the tests, Paths, Drill — appends it to `--summary` (CI's
  * `$GITHUB_STEP_SUMMARY`) and exits 1 on any FAIL. Without `--base` it reads every flow. The two
  * live flows are exempt from the rows the new standards add (§7, §8, §9, Drill) while they stay on
- * `defineAutomation` — their after-pilot versions too (Invoice Processing v8, Resume Screening v3,
- * which take Q2's re-ask alone) — the exemption `test/conformance.test.ts` names. `test/menu.test.ts` holds
+ * `defineAutomation` — their after-pilot versions too (README.md's "A new flow's standards" lists
+ * them; they take Q2's re-ask alone) — the exemption `test/conformance.test.ts` names. `test/menu.test.ts` holds
  * the menu half (B2.4) on the whole tree, and `test/review-rows.test.ts` each row.
  */
 

@@ -14,11 +14,11 @@ import {
   postingAnswer,
   world,
 } from './fixtures.js';
-import { reportedResult, validReading } from './results.js';
+import { reportedResult, rowsOf, sectionsOf, validReading } from './results.js';
 
 /**
  * The item run — a job made from its job description (the spec's §2, §6 and §9) — on the SDK's
- * RecordingPlatform: the reading it keeps, the sections "What AI read" shows, and the job
+ * RecordingPlatform: the reading it keeps, the blocks "What AI read" shows (v4), and the job
  * description that cannot be read, in the spec's words.
  */
 
@@ -50,8 +50,14 @@ test('§9: a job description photo makes the posting — title, must-haves, nice
     platform.steps.every((step) => steps.has(step.stepId)),
     'items.pipeline only',
   );
+  // v4: four sections at the top level, each a list; never beside sections.
+  assert.equal(result.sections, undefined);
   assert.deepEqual(
-    result.sections?.map((section) => [section.title, section.entries.length]),
+    result.blocks?.map((block) => block.type),
+    ['section', 'section', 'section', 'section'],
+  );
+  assert.deepEqual(
+    sectionsOf(result).map((section) => [section.title, rowsOf(result, section.title).length]),
     [
       ['Must-haves', 3],
       ['Nice to have', 2],
@@ -59,12 +65,14 @@ test('§9: a job description photo makes the posting — title, must-haves, nice
       ['Details', 5],
     ],
   );
-  assert.deepEqual(result.sections?.at(-1)?.entries, [
-    { title: 'Austin, TX (hybrid)', subtitle: 'Location' },
-    { title: 'Full-time', subtitle: 'Type' },
-    { title: '5 years or more', subtitle: 'Years' },
-    { title: "Bachelor's degree in accounting", subtitle: 'Education' },
-    { title: '$85,000–$100,000 a year', subtitle: 'Pay' },
+  assert.deepEqual(rowsOf(result, 'Must-haves')[0], { title: 'CPA license' });
+  // Details: each label over its value (the owner's item 13, the same layout as Contact).
+  assert.deepEqual(rowsOf(result, 'Details'), [
+    { title: 'Location', text: 'Austin, TX (hybrid)' },
+    { title: 'Type', text: 'Full-time' },
+    { title: 'Years', text: '5 years or more' },
+    { title: 'Education', text: "Bachelor's degree in accounting" },
+    { title: 'Pay', text: '$85,000–$100,000 a year' },
   ]);
   assert.equal(result.summary, 'Job saved: 3 must-haves, 2 nice-to-haves');
   assert.equal(result.title, undefined, 'a job is named by its role, not by its run');
@@ -90,7 +98,7 @@ test('a Word job description is read here and sent as text; empty sections are l
     text: 'Senior Accountant\nMust have: CPA license',
   });
   assert.deepEqual(
-    result.sections?.map((section) => section.title),
+    sectionsOf(result).map((section) => section.title),
     ['Must-haves'],
   );
 });

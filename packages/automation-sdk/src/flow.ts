@@ -28,8 +28,8 @@ import { FLOW_WORDS } from './words.js';
 /**
  * `defineFlow`: `defineAutomation` with the standards on (Round 21, D2). New flows only — the
  * template, `npm run scaffold` and `/create-flow` use it; the two live flows keep
- * `defineAutomation`, and their after-pilot versions (Invoice Processing v8, Resume Screening v3)
- * take only Q2's re-ask from here (`reaskingOnce`).
+ * `defineAutomation`, and their after-pilot versions (the repository README's "A new flow's
+ * standards" lists them) take only Q2's re-ask from here (`reaskingOnce`).
  *
  * - **A throw never reaches a person.** A step that threw until its attempts were spent, and
  *   that `recover` did not end, ends the run with the flow's own sentence for that step
@@ -276,13 +276,14 @@ function reasking(
 }
 
 /**
- * Q2 for a flow still on `defineAutomation` (Invoice Processing v8 and Resume Screening v3, which
- * keep their own failure words and retries): `platform` with `defineFlow`'s one re-ask of an answer
- * off its schema — the same registered prompt and `missLine` — and nothing else of its standards.
- * A second miss is thrown on, as `defineFlow`'s is, for the flow to end its run with
- * `FLOW_WORDS.ai_unusable`: no hold. 5d's re-ask comes with it, reached only by a call naming a
- * `maxOutputTokens` below the cap. **One to three more paid AI calls** a miss: the platform tries
- * the request's next model on a miss too. Wrap the platform `execute` is handed:
+ * Q2 for a flow still on `defineAutomation` (the live flows' after-pilot versions, listed in the
+ * repository README's "A new flow's standards", which keep their own failure words and retries):
+ * `platform` with `defineFlow`'s one re-ask of an answer off its schema — the same registered
+ * prompt and `missLine` — and nothing else of its standards. A second miss is thrown on, as
+ * `defineFlow`'s is, for the flow to end its run with `FLOW_WORDS.ai_unusable`: no hold. 5d's
+ * re-ask comes with it, reached only by a call naming a `maxOutputTokens` below the cap. **One to
+ * three more paid AI calls** a miss: the platform tries the request's next model on a miss too.
+ * Wrap the platform `execute` is handed:
  * `automation.execute(request, reaskingOnce(platform, log))`; `log` gets `model_reasked`.
  */
 export function reaskingOnce(platform: AutomationPlatform, log?: Logger): AutomationPlatform {

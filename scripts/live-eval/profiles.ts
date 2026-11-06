@@ -12,7 +12,7 @@ import {
   SAMPLES,
   samplePath,
 } from '../../automations/invoice-processing/test/sample-maker/samples.js';
-import { EvalError, type EvalFile, type RunDetail } from './client.js';
+import { EvalError, type EvalFile, type RunBlock, type RunDetail } from './client.js';
 import { CANDIDATES, JOB, resumeFile, sha256 } from './resumes.js';
 
 /** Key fields by name — "document 1 supplier", "email" — each a value, or null when none. */
@@ -37,6 +37,8 @@ export interface Profile {
   readonly job?: { readonly fields: Record<string, string>; readonly file: () => EvalFile };
   /** Why the subscription's setup is not one the eval may run; undefined when it may. */
   readonly unsafe: (config: Record<string, unknown>) => string | undefined;
+  /** `blocks` for a flow that sends blocks: its runs are read with `shape=blocks`. */
+  readonly shape?: 'blocks';
   readonly fieldsOf: (detail: RunDetail) => Fields;
   /** Where the eval's own recordings are kept, one `<sample>.json` each. */
   readonly recordings: string;
@@ -95,21 +97,37 @@ const INVOICE: Profile = {
   recordings: join(flow('invoice-processing'), 'test', 'live-eval'),
 };
 
-/** A Contact row's value by what it is ("Email", "Phone"); null when the resume has none. */
-function contact(detail: RunDetail, subtitle: string): string | null {
-  const rows = detail.sections?.find((section) => section.title === 'Contact')?.entries ?? [];
-  return rows.find((row) => row.subtitle === subtitle)?.title ?? null;
+/** The section of this title, at the top or inside a group; undefined when there is none. */
+function sectionOf(blocks: readonly RunBlock[], title: string): RunBlock | undefined {
+  for (const block of blocks) {
+    if (block.type === 'section' && block.title === title) return block;
+    const inner = block.type === 'group' ? sectionOf(block.blocks ?? [], title) : undefined;
+    if (inner !== undefined) return inner;
+  }
+  return undefined;
+}
+
+/**
+ * A Contact row's value by its label ("Email", "Phone": the flow's `CONTACT_WORDS`), v4's
+ * `{ title: label, text: value }` rows in the "Candidate details" group; null when there is none.
+ */
+function contact(detail: RunDetail, label: string): string | null {
+  const rows = (sectionOf(detail.blocks ?? [], 'Contact')?.blocks ?? [])
+    .filter((block) => block.type === 'list')
+    .flatMap((block) => block.items ?? []);
+  return rows.find((row) => row.title === label)?.text ?? null;
 }
 
 /** Resume Screening: 25 invented Word resumes, scored against one invented job made first. */
 const RESUMES: Profile = {
   templateId: 'candidate-reviewer',
-  version: 3,
+  version: 4,
   fileKey: 'resumeFile',
   samples: () =>
     CANDIDATES.map((candidate) => ({ name: candidate.sample, file: () => resumeFile(candidate) })),
   job: JOB,
   unsafe: () => undefined,
+  shape: 'blocks',
   fieldsOf: (detail) => ({
     name: detail.run.title ?? null,
     email: contact(detail, 'Email'),

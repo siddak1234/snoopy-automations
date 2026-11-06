@@ -76,8 +76,9 @@ const LINE = 600;
 const SHORT = 200;
 const LIST = 60;
 /**
- * The most links a resume keeps: what Contact shows beside the name (v3), email, phone and location
- * (`candidateSections`), so the platform's 40 rows a section never cut one.
+ * The most links a resume keeps: v3's, what its Contact showed beside the name, email, phone and
+ * location within the platform's 40 rows a section. v4 shows each as a button (`candidateBlocks`,
+ * eight to a `links` block), so none is cut.
  */
 const LINKS = RUN_SECTION_LIMITS.entries - 4;
 

@@ -18,7 +18,7 @@ import {
   world,
   zip,
 } from './fixtures.js';
-import { reportedResult, validOutput } from './results.js';
+import { buttonsOf, reportedResult, sectionsOf, validOutput } from './results.js';
 
 /**
  * The links a resume's file holds behind its words (the spec's §4; the owner's build 28 feedback,
@@ -62,24 +62,23 @@ async function run(bytes: Uint8Array, contentType = 'application/pdf', resume = 
   return { platform, sent: sent as Success };
 }
 
+/** Contact's link buttons (v4), each its label and url. */
 const contactLinks = (result: Success) =>
-  (result.sections?.find((each) => each.title === 'Contact')?.entries ?? [])
-    .filter((entry) => entry.subtitle === 'Link')
-    .map((entry) => [entry.title, entry.url]);
+  buttonsOf(result, 'Contact').map((button) => [button.label, button.url]);
 
-/** The three links `resumeAnswer` gives, as the Contact section shows them. */
+/** The three links `resumeAnswer` gives, as Contact's buttons show them: by address, none a named site. */
 const MODEL_LINKS = [
-  ['LinkedIn', 'https://linkedin.example.com/in/jane-doe'],
-  ['Portfolio', 'https://janedoe.example.com'],
-  ['https://code.example.org/jane-doe', 'https://code.example.org/jane-doe'],
+  ['linkedin.example.com/in/jane-doe', 'https://linkedin.example.com/in/jane-doe'],
+  ['janedoe.example.com', 'https://janedoe.example.com'],
+  ['code.example.org/jane-doe', 'https://code.example.org/jane-doe'],
 ];
 
-test('F8: a PDF link behind a word is added to Contact, named by its site, after the model’s', async () => {
+test('F8: a PDF link behind a word is added to Contact, named by its address, after the model’s', async () => {
   const bytes = pdf([PAGE, PAGE, annotation('(https://www.example.org/talks)')]);
   const { platform, sent } = await run(bytes);
   assert.deepEqual(contactLinks(sent), [
     ...MODEL_LINKS,
-    ['example.org', 'https://www.example.org/talks'],
+    ['example.org/talks', 'https://www.example.org/talks'],
   ]);
   // §4: links are contact details — the scoring call is sent none, the file's among them.
   const scored = JSON.stringify(platform.modelCalls[1]?.input);
@@ -91,7 +90,7 @@ test('F8: an annotation inside a compressed object stream is read', async () => 
   const bytes = pdf([PAGE, objectStream(`3 0 ${annotation('(https://example.com/packed)')}`)]);
   assert.deepEqual(pdfLinks(bytes), ['https://example.com/packed']);
   const { sent } = await run(bytes);
-  assert.deepEqual(contactLinks(sent).at(-1), ['example.com', 'https://example.com/packed']);
+  assert.deepEqual(contactLinks(sent).at(-1), ['example.com/packed', 'https://example.com/packed']);
 });
 
 test('a hex string and an escaped literal are decoded', () => {
@@ -124,7 +123,7 @@ test('only http and https are kept: a mailto: and a javascript: are dropped', as
   const { sent } = await run(bytes);
   assert.deepEqual(contactLinks(sent), [
     ...MODEL_LINKS,
-    ['example.com', 'https://example.com/kept'],
+    ['example.com/kept', 'https://example.com/kept'],
   ]);
 });
 
@@ -138,7 +137,7 @@ test("a link the model read is not added twice — a trailing slash or the host'
   const { sent } = await run(bytes);
   assert.deepEqual(contactLinks(sent), [
     ...MODEL_LINKS,
-    ['example.org', 'https://example.org/new'],
+    ['example.org/new', 'https://example.org/new'],
   ]);
   assert.deepEqual(
     withFileLinks(
@@ -172,7 +171,7 @@ test('F8: a Word file’s external hyperlinks are read from its relationships', 
   ]);
   const { sent } = await run(bytes, WORD.contentType);
   assert.deepEqual(contactLinks(sent).at(-1), [
-    'example.com',
+    'example.com/work',
     'https://example.com/work?tab=1&page=2',
   ]);
   // A Word file without relationships, or one that is not a ZIP, links to nothing.
@@ -239,17 +238,17 @@ test('a PDF whose bytes cannot be fetched costs the links alone: the model still
   assert.equal(resume.links.length, 3);
 });
 
-test('§9: a PDF whose LinkedIn, GitHub and Hugging Face are words — Contact names the three', async () => {
+test('§9: a PDF whose LinkedIn, GitHub and Hugging Face are words — Contact gives each its logo and username', async () => {
   const bytes = pdf([
     annotation('(https://www.linkedin.com/in/example)'),
     annotation('(https://github.com/example)'),
     annotation('(https://huggingface.co/example)'),
   ]);
   const { sent } = await run(bytes, 'application/pdf', resumeAnswer({ links: [] }));
-  assert.deepEqual(contactLinks(sent), [
-    ['LinkedIn', 'https://www.linkedin.com/in/example'],
-    ['GitHub', 'https://github.com/example'],
-    ['Hugging Face', 'https://huggingface.co/example'],
+  assert.deepEqual(buttonsOf(sent, 'Contact'), [
+    { label: 'example', url: 'https://www.linkedin.com/in/example', brand: 'linkedin' },
+    { label: 'example', url: 'https://github.com/example', brand: 'github' },
+    { label: 'example', url: 'https://huggingface.co/example', brand: 'huggingface' },
   ]);
 });
 
@@ -305,14 +304,24 @@ test('a link longer than the platform keeps is left out, never cut to another ad
   assert.deepEqual(contactLinks((await run(bytes, WORD.contentType)).sent), MODEL_LINKS);
 });
 
-test("at most the links Contact can show beside the name, email, phone and location; a PDF's first 200 addresses", async () => {
+test("at most v3's 36 links, each a button of Contact, eight to a links block; a PDF's first 200 addresses", async () => {
   const many = Array.from({ length: 45 }, (_, n) => `https://example.com/${n}`);
   const shown = RUN_SECTION_LIMITS.entries - 4;
   assert.deepEqual(fileLinks(many), many.slice(0, shown));
   const { sent } = await run(pdf(many.map((url) => annotation(`(${url})`))));
-  const contact = sent.sections?.find((each) => each.title === 'Contact')?.entries ?? [];
-  assert.equal(contact.length, RUN_SECTION_LIMITS.entries);
-  // Every link the output keeps is a row of Contact: none is cut by the platform's 40 rows.
+  const contact = sectionsOf(sent).find((each) => each.title === 'Contact')?.blocks ?? [];
+  assert.deepEqual(
+    contact.map((block) => [block.type, block.type === 'links' ? block.items.length : 0]),
+    [
+      ['list', 0],
+      ['links', 8],
+      ['links', 8],
+      ['links', 8],
+      ['links', 8],
+      ['links', 4],
+    ],
+  );
+  // Every link the output keeps is a button of Contact: none is cut by a links block's eight.
   const kept = (sent.output?.resume as JsonObject & { links: { url: string }[] }).links;
   assert.deepEqual(
     contactLinks(sent).map(([, url]) => url),
@@ -340,8 +349,8 @@ test('a link the model read is not added again with a www. or the other of http 
   ]);
   const { sent } = await run(bytes, 'application/pdf', resume);
   assert.deepEqual(contactLinks(sent), [
-    ['Profile', 'https://example.com/in/jane-doe'],
-    ['Portfolio', 'https://example.org/work'],
-    ['example.net', 'http://WWW.example.net/talks'],
+    ['example.com/in/jane-doe', 'https://example.com/in/jane-doe'],
+    ['example.org/work', 'https://example.org/work'],
+    ['example.net/talks', 'https://WWW.example.net/talks'],
   ]);
 });

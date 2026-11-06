@@ -11,10 +11,11 @@ import { classify, completion } from './flow-fixtures.js';
 import { TEMPLATE, invoke, manifest } from './runner-fixtures.js';
 
 /**
- * Q2 for a flow on `defineAutomation` (`reaskingOnce`; Invoice Processing v8, Resume Screening v3):
- * an answer off its schema is asked once more with `missLine`, and a second miss is thrown on for
- * the flow to end "The AI's answer couldn't be used. Try a clearer file." — never a third call,
- * never a hold. The other callbacks reach the platform unchanged.
+ * Q2 for a flow on `defineAutomation` (`reaskingOnce`; the live flows' after-pilot versions, listed
+ * in the repository README's "A new flow's standards"): an answer off its schema is asked once more
+ * with `missLine`, and a second miss is thrown on for the flow to end "The AI's answer couldn't be
+ * used. Try a clearer file." — never a third call, never a hold. The other callbacks reach the
+ * platform unchanged.
  */
 
 /** A step that reads, and ends the run with `FLOW_WORDS.ai_unusable` on an answer off its schema. */

@@ -96,16 +96,21 @@ export function fakePlatform(options: FakeOptions) {
       runs.set(id, { filename: uploads.get(artifact) ?? '', reads: 0 });
       return Promise.resolve(json({ run: { id, status: 'running' } }, 201));
     }
-    const read = /^\/runs\/(run-\d+)$/u.exec(path);
+    const read = /^\/runs\/(run-\d+)(\?shape=blocks)?$/u.exec(path);
     const run = read ? runs.get(read[1]!) : undefined;
     if (method === 'GET' && run) {
       run.reads += 1;
       // Read once while it runs, then ended.
       if (run.reads === 1)
         return Promise.resolve(json({ run: { id: read![1], status: 'running' } }));
-      const page = options.pageOf(run.filename);
+      // As the platform: a run's blocks come only on a read with `shape=blocks`.
+      const { blocks, ...page } = options.pageOf(run.filename);
       return Promise.resolve(
-        json({ ...page, run: { id: read![1], status: 'succeeded', ...(page.run ?? {}) } }),
+        json({
+          ...page,
+          ...(read![2] === undefined || blocks === undefined ? {} : { blocks }),
+          run: { id: read![1], status: 'succeeded', ...(page.run ?? {}) },
+        }),
       );
     }
     return Promise.resolve(json({ detail: 'not here' }, 404));

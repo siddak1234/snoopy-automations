@@ -14,8 +14,8 @@ import { JOB_FILE_KEY } from '../src/steps/job.js';
 import { NOW, candidateRun, manifest, manifestsRoot } from './fixtures.js';
 
 /**
- * `manifests/candidate-reviewer.v3.json`, the version this image serves (v2's but for its version
- * and container), as the spec words it
+ * `manifests/candidate-reviewer.v4.json`, the version this image serves (v3's, and so v2's, but for
+ * its version and container), as the spec words it
  * (§1–§7): its name and department, its one question, the files it takes, its four steps and
  * five, its jobs and their verdict words, and its container — and the code's constants held to
  * it; and v1, registered and immutable, as it was.
@@ -192,28 +192,34 @@ test("the job's reading is the posting prompt's answer less whether it was reada
   );
 });
 
-test('the image serves v3 alone: of v1 to v3 it keeps v3, and refuses a run pinned to v1 before any step or call', async () => {
+test('the image serves v4 alone: of v1 to v4 it keeps v4, and refuses a run pinned to v3 before any step or call', async () => {
   const all = readManifests(manifestsRoot, TEMPLATE_ID);
   assert.deepEqual(
     all.map((each) => each.version),
-    [1, 2, 3],
+    [1, 2, 3, 4],
   );
   const automation = define(all, () => NOW);
   assert.deepEqual(automation.versions, SERVED_VERSIONS);
-  assert.deepEqual(SERVED_VERSIONS, [3]);
-  const v1 = all.filter((each) => each.version === 1);
-  assert.throws(() => define(v1), /serves v3, and no such manifest was given/u);
+  assert.deepEqual(SERVED_VERSIONS, [4]);
+  const v3 = all.filter((each) => each.version === 3);
+  assert.throws(() => define(v3), /serves v4, and no such manifest was given/u);
 
   const platform = new RecordingPlatform();
-  const result = await automation.execute({ ...candidateRun(), templateVersion: 1 }, platform);
+  const result = await automation.execute({ ...candidateRun(), templateVersion: 3 }, platform);
   assert.equal(result.outcome, 'failed', JSON.stringify(result));
   assert.deepEqual([platform.steps, platform.artifactReads, platform.modelCalls], [[], [], []]);
 });
 
+test('the Dockerfile copies the v4 manifest alone', () => {
+  const dockerfile = readFileSync(join(import.meta.dirname, '..', 'Dockerfile'), 'utf8');
+  const copied = [...dockerfile.matchAll(/^COPY\b.*?\smanifests\/(\S+)/gmu)].map((each) => each[1]);
+  assert.deepEqual(copied, [`${TEMPLATE_ID}.v4.json`]);
+});
+
 test('§1: its own container and service account, as v7 of Invoice Processing set them', () => {
   assert.deepEqual(m.service, {
-    origin: 'http://candidate-reviewer-v3.autom8x.internal:8080',
-    serviceAccount: 'candidate-reviewer-v3@autom8x.iam.gserviceaccount.com',
+    origin: 'http://candidate-reviewer-v4.autom8x.internal:8080',
+    serviceAccount: 'candidate-reviewer-v4@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
@@ -233,15 +239,31 @@ const read = (version: number) =>
     readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v${version}.json`), 'utf8'),
   ) as typeof manifest;
 
+const withoutContainer = (each: typeof manifest) => ({
+  ...each,
+  version: undefined,
+  service: { ...(each.service as Entry), origin: undefined, serviceAccount: undefined },
+});
+
+test("v4 is v3 but for its version and its own container: its blocks are the code's (the owner's items 11–13)", () => {
+  const v3 = read(3);
+  assert.deepEqual(withoutContainer(manifest), withoutContainer(v3));
+  assert.equal(manifest.version, 4);
+  assert.deepEqual(
+    [v3.version, (v3.service as Entry).origin, (v3.service as Entry).serviceAccount],
+    [
+      3,
+      'http://candidate-reviewer-v3.autom8x.internal:8080',
+      'candidate-reviewer-v3@autom8x.iam.gserviceaccount.com',
+    ],
+  );
+});
+
 test("v3 is v2 but for its version and its own container: its exact words and its re-ask are the code's (the owner's Q1 and Q2)", () => {
   const v2 = read(2);
-  const without = (each: typeof manifest) => ({
-    ...each,
-    version: undefined,
-    service: { ...(each.service as Entry), origin: undefined, serviceAccount: undefined },
-  });
-  assert.deepEqual(without(manifest), without(v2));
-  assert.equal(manifest.version, 3);
+  const v3 = read(3);
+  assert.deepEqual(withoutContainer(v3), withoutContainer(v2));
+  assert.equal(v3.version, 3);
   assert.equal((v2.service as Entry).origin, 'http://candidate-reviewer-v2.autom8x.internal:8080');
 });
 

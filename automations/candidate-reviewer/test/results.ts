@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import type { RunResult } from '@autom8x/automation-sdk';
+import type {
+  EmittedBlock,
+  EmittedLeaf,
+  LinksBlock,
+  ListItem,
+  RunResult,
+  SectionBlock,
+} from '@autom8x/automation-sdk';
 import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
 import { manifest } from './fixtures.js';
@@ -37,3 +44,22 @@ export function validOutput(output: unknown): void {
 export function validReading(reading: unknown): void {
   assert.ok(jobReading(reading), ajv.errorsText(jobReading.errors));
 }
+
+/** The sections a result's blocks hold: a candidate's inside its one group, a job's at the top. */
+export function sectionsOf(result: RunResult): SectionBlock[] {
+  const blocks: readonly EmittedBlock[] = 'blocks' in result ? (result.blocks ?? []) : [];
+  return blocks.flatMap((block) =>
+    block.type === 'group' ? block.sections : block.type === 'section' ? [block] : [],
+  );
+}
+
+const leavesOf = (result: RunResult, title: string): readonly EmittedLeaf[] =>
+  sectionsOf(result).find((each) => each.title === title)?.blocks ?? [];
+
+/** The rows of a section's lists, in order. */
+export const rowsOf = (result: RunResult, title: string): ListItem[] =>
+  leavesOf(result, title).flatMap((leaf) => (leaf.type === 'list' ? leaf.items : []));
+
+/** The buttons of a section's `links` blocks, in order. */
+export const buttonsOf = (result: RunResult, title: string): LinksBlock['items'][number][] =>
+  leavesOf(result, title).flatMap((leaf) => (leaf.type === 'links' ? leaf.items : []));
