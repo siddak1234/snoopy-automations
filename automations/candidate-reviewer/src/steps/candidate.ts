@@ -6,12 +6,12 @@ import {
   type Step,
 } from '@autom8x/automation-sdk';
 
+import { candidateBlocks } from '../blocks.js';
 import { fileFromState, fileIdOf, fileLine, fileState, readResumeFile } from '../file.js';
 import { EXTRACT_RESUME, MODELS, SCORE_CANDIDATE, readDocument } from '../prompts.js';
-import { quotesFrom, quotesOf, trusted } from '../quotes.js';
+import { quotesOf, trusted } from '../quotes.js';
 import { postingOf, resumeOf, withFileLinks, type Posting, type Resume } from '../reading.js';
 import { quotesDirection, scoringOf, summaryLine, type Scoring } from '../scoring.js';
-import { candidateSections } from '../sections.js';
 import { FAILURES, bandOf, plural, stops, verdictOf } from '../words.js';
 import { yearsOfExperience } from '../years.js';
 
@@ -27,13 +27,13 @@ import { yearsOfExperience } from '../years.js';
 /** The key a candidate's run input carries the resume under: the manifest's `trigger.input`. */
 export const RESUME_FILE_KEY = 'resumeFile';
 
-/** What `save` leaves for the result: the run's title, score, verdict, summary and sections. */
+/** What `save` leaves for the result: the run's title, score, verdict, summary and blocks (v4). */
 export interface Candidate {
   title: string;
   score: number;
   verdict: RunVerdict;
   summary: string;
-  sections: JsonObject[];
+  blocks: JsonObject[];
 }
 
 /**
@@ -101,7 +101,8 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
         plural(resume.education.length, 'qualification', 'qualifications'),
         plural(resume.skills.length, 'skill', 'skills'),
       ].join(', ')}`,
-      // v3 (Q1): the exact words of the name, email and phone, a Word resume's checked against its text.
+      // v3 (Q1): the exact words of the name, email and phone, a Word resume's checked against its
+      // text; v4 keeps them here and shows them nowhere (quotes.ts).
       state: {
         document,
         resume: resume as unknown as JsonObject,
@@ -146,12 +147,7 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
       score: scoring.score,
       verdict: verdictOf(scoring.score),
       summary: summaryLine(scoring, posting),
-      sections: candidateSections(
-        resume,
-        scoring,
-        now(),
-        quotesFrom(state.quotes),
-      ) as unknown as JsonObject[],
+      blocks: candidateBlocks(resume, scoring, now()) as unknown as JsonObject[],
     };
     return Promise.resolve({
       outcome: 'ok',

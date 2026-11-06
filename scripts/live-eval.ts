@@ -195,7 +195,7 @@ async function runSamples(
       input: { [profile.fileKey]: artifactId },
       ...(itemId === undefined ? {} : { itemId }),
     });
-    const detail = await endedRun(live, runId);
+    const detail = await endedRun(live, runId, profile.shape);
     if (detail.run.status === 'failed' || detail.run.status === 'cancelled') {
       io.write(`${sample.name}: the run ${detail.run.status}: ${detail.run.failureReason ?? ''}`);
       continue;

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Resume Screening, v3 of candidate-reviewer, built from the repository root:
+# The image of Resume Screening, v4 of candidate-reviewer, built from the repository root:
 #   docker build --file automations/candidate-reviewer/Dockerfile .
 #
 # The SDK and automation are workspaces during development, so the build uses the
@@ -51,13 +51,13 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chown=node:node automations/candidate-reviewer/package.json ./
 COPY --chown=node:node --from=build /workspace/automations/candidate-reviewer/dist ./dist
 COPY --chown=node:node --from=production-dependencies /workspace/automations/candidate-reviewer/node_modules ./node_modules
-# The prompts, loaded from beside dist/ (src/prompts.ts): v3 sends extract-posting v1,
+# The prompts, loaded from beside dist/ (src/prompts.ts): v3 and v4 send extract-posting v1,
 # extract-resume v2 and score-candidate v1; extract-resume v1 rides along, loaded and never sent.
 COPY --chown=node:node automations/candidate-reviewer/prompts ./prompts
 # The ONE manifest version this image serves (src/automation.ts SERVED_VERSIONS): one image per
 # version (the platform's D2). The runner runs its pipeline, or its items.pipeline on an item
 # run, and refuses a run pinned to any other version (src/main.ts reads this dir).
-COPY --chown=node:node manifests/candidate-reviewer.v3.json ./manifests/
+COPY --chown=node:node manifests/candidate-reviewer.v4.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

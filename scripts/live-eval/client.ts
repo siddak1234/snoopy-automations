@@ -55,6 +55,16 @@ export interface RunDetail {
     readonly title: string;
     readonly entries: readonly { readonly title: string; readonly subtitle?: string }[];
   }[];
+  /** A flow's own blocks, sent only on a read with `shape=blocks` (a flow that sends blocks). */
+  readonly blocks?: readonly RunBlock[];
+}
+
+/** A block as the eval reads it: its type, a title, the blocks inside it, a list's rows. */
+export interface RunBlock {
+  readonly type: string;
+  readonly title?: string;
+  readonly blocks?: readonly RunBlock[];
+  readonly items?: readonly { readonly title?: string; readonly text?: string }[];
 }
 
 /** The subscription the eval runs, as far as it reads it. */
@@ -164,10 +174,14 @@ export async function startRun(
   return answer.run.id;
 }
 
-/** The run once it has ended, read whole; an `EvalError` past `runTimeoutMs`. */
-export async function endedRun(live: Live, runId: string): Promise<RunDetail> {
+/**
+ * The run once it has ended, read whole — with its blocks when `shape` is `blocks`, as a flow that
+ * sends blocks needs: a read without it carries none — an `EvalError` past `runTimeoutMs`.
+ */
+export async function endedRun(live: Live, runId: string, shape?: 'blocks'): Promise<RunDetail> {
+  const path = `/runs/${runId}${shape === undefined ? '' : `?shape=${shape}`}`;
   for (let waited = 0; ; waited += live.pollMs) {
-    const detail = await call<RunDetail>(live, 'GET', `/runs/${runId}`);
+    const detail = await call<RunDetail>(live, 'GET', path);
     if (ENDED.has(detail.run.status)) return detail;
     if (waited >= live.runTimeoutMs) {
       throw new EvalError(`run ${runId} had not ended after ${live.runTimeoutMs / 1000} s`);
