@@ -391,7 +391,8 @@ test('source files stay under the line ceiling', () => {
   ];
   const over: string[] = [];
   for (const file of roots.flatMap((root) => sourceFiles(root))) {
-    const lines = readFileSync(file, 'utf8').split('\n').length;
+    // A final newline ends the last line (CLAUDE.md's "400 lines or fewer", as the kit counts).
+    const lines = readFileSync(file, 'utf8').replace(/\n$/u, '').split('\n').length;
     if (lines > LINE_CEILING) over.push(`${relative(repositoryRoot, file)} (${lines})`);
   }
   assert.deepEqual(over, [], `over ${LINE_CEILING} lines — split the file`);
