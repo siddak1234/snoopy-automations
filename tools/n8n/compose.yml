@@ -1,0 +1,40 @@
+# n8n on the owner's Mac only, to design a flow (the platform's ADR-0052): never deployed, never
+# built into an image, never run by CI. Start, open, stop, the rules and the pin:
+# `tools/n8n/README.md`. `test/n8n-local.test.ts` holds this file: the pin by release and index
+# digest at or above its floor, the one port on 127.0.0.1, every hardening key below, the data
+# folder, and no key in the service but image, ports, environment and volumes (so no restart
+# policy).
+name: autom8x-n8n-design
+services:
+  n8n:
+    # The release and its multi-arch index digest: tools/n8n/README.md, "The pin".
+    image: docker.n8n.io/n8nio/n8n:2.46.6@sha256:8602f5dfacbe2c931eeafd010de0e68182310e9f309921e780ab69182e92b3ae
+    # This Mac only: nothing else on the network reaches the editor.
+    ports:
+      - '127.0.0.1:5678:5678'
+    environment:
+      # Set by n8n's own Docker page for its editor at http://localhost:5678: the settings file 0600.
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: 'true'
+      # No call to n8n's servers (n8n's "Isolate n8n" page): no telemetry, no version check, no
+      # templates, and its diagnostics addresses emptied.
+      N8N_DIAGNOSTICS_ENABLED: 'false'
+      N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
+      N8N_TEMPLATES_ENABLED: 'false'
+      EXTERNAL_FRONTEND_HOOKS_URLS: ''
+      N8N_DIAGNOSTICS_CONFIG_FRONTEND: ''
+      N8N_DIAGNOSTICS_CONFIG_BACKEND: ''
+      # No community package, no environment variable read from a workflow, no public API.
+      N8N_COMMUNITY_PACKAGES_ENABLED: 'false'
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'true'
+      N8N_PUBLIC_API_DISABLED: 'true'
+      N8N_PUBLIC_API_SWAGGERUI_DISABLED: 'true'
+      # No execution data saved, a run started by hand in the editor included.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: 'none'
+      EXECUTIONS_DATA_SAVE_ON_ERROR: 'none'
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: 'false'
+      # Only these five nodes load (n8n adds HTTP Request's tool variant): no Code node, no Execute
+      # Command, no file, SSH or Git node.
+      NODES_INCLUDE: '["n8n-nodes-base.webhook","n8n-nodes-base.respondToWebhook","n8n-nodes-base.set","n8n-nodes-base.if","n8n-nodes-base.httpRequest"]'
+    # The workflows, the local sign-in, n8n's own key and the exports: `.gitignore` keeps them out of git.
+    volumes:
+      - ./.data:/home/node/.n8n

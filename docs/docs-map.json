@@ -21,7 +21,8 @@
       "code": ["templates/**", "scripts/**", ".github/**"],
       "docs": ["README.md"]
     },
-    { "id": "claude", "code": [".claude/**"], "docs": ["CLAUDE.md"] }
+    { "id": "claude", "code": [".claude/**"], "docs": ["CLAUDE.md"] },
+    { "id": "tools", "code": ["tools/*/**"], "docs": ["tools/*/README.md"] }
   ],
   "facts": [{ "key": "sdk-callbacks", "home": "README.md", "pattern": "\\bsix callbacks\\b" }],
   "records": {
