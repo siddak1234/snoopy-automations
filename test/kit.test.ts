@@ -50,7 +50,9 @@ test('.claude/settings.json runs the three kit hooks', () => {
     command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/${file}"`,
     timeout,
   });
-  assert.deepEqual(entries('PreToolUse'), [hook('guard.mjs', 5, 'Bash|Write|Edit|NotebookEdit')]);
+  assert.deepEqual(entries('PreToolUse'), [
+    hook('guard.mjs', 5, 'Bash|Write|Edit|NotebookEdit|Artifact'),
+  ]);
   assert.deepEqual(entries('SessionStart'), [hook('session-start.mjs', 10)]);
   assert.deepEqual(entries('Stop'), [hook('stop-check.mjs', 10)]);
   assert.deepEqual(entries('SubagentStop'), [hook('stop-check.mjs', 10)]);

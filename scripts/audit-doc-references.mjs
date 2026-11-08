@@ -53,7 +53,7 @@ import { fileURLToPath } from 'node:url';
 const [target] = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const root = resolve(target ?? resolve(import.meta.dirname, '..'));
 const OWN = 'snoopy-automations';
-const SIBLINGS = ['snoopy', 'snoopy-mobile', 'snoopy-n8n', 'snoopy-backend'];
+const SIBLINGS = ['snoopy', 'snoopy-mobile', 'snoopy-backend'];
 const siblingRoot = (name) =>
   resolve(
     root,

@@ -76,12 +76,12 @@ function commit(dir, files, message = 'change', author) {
 const DEPENDABOT = 'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>';
 const linesOf = (n) => `${Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n')}\n`;
 
-describe('guard (STANDARD (h) rows 1–8)', () => {
+describe('guard (STANDARD (h) rows 1–9)', () => {
   const cases = JSON.parse(readFileSync(at('.claude/hooks/cases.json'), 'utf8')).filter((row) => typeof row === 'object');
-  const values = { HOME: homedir(), SCRATCH: scratchRoot(), REPO: '' };
+  const values = { HOME: homedir(), SCRATCH: scratchRoot(), TMP_SCRATCH: scratchRoot().replace(/^\/private(?=\/tmp\/)/u, ''), REPO: '' };
   const fill = (v) =>
     typeof v === 'string'
-      ? v.replace(/\$\{(HOME|SCRATCH|REPO)\}/gu, (_, k) => values[k])
+      ? v.replace(/\$\{(HOME|SCRATCH|TMP_SCRATCH|REPO)\}/gu, (_, k) => values[k])
       : Array.isArray(v)
         ? v.map(fill)
         : v && typeof v === 'object'
@@ -113,26 +113,27 @@ describe('guard (STANDARD (h) rows 1–8)', () => {
   });
 
   test('cases.json holds 3 or more rows for each row of the table', () => {
-    for (let row = 1; row <= 8; row++) {
+    for (let row = 1; row <= 9; row++) {
       assert.ok(cases.filter((c) => c.name.startsWith(`${row}:`)).length >= 3, `row ${row}`);
     }
   });
 
   for (const c of cases) {
-    test(`${c.name} → exit ${c.exit}, through decide() and the CLI`, () => {
+    test(`${c.name} → exit ${c.exit}${c.ask ? ', asks the owner' : ''}, through decide() and the CLI`, () => {
       const input = fill(c.input);
       let parsed;
       try { parsed = typeof input === 'string' ? JSON.parse(input) : input; } catch { parsed = undefined; }
       const verdict = outsideGitRepo(() => decide(parsed, { HOME: values.HOME }));
-      assert.equal(verdict.exit, c.exit, 'decide()');
-      if (c.exit === 2) assert.equal(verdict.row, Number(c.name[0]), 'blocked by its own row');
+      assert.deepEqual([verdict.exit, verdict.ask === true], [c.exit, c.ask === true], 'decide(): exit, ask');
+      if (c.exit === 2 || c.ask) assert.equal(verdict.row, Number(c.name[0]), 'decided by its own row');
+      if (c.ask) assert.match(verdict.reason, /^Outside the repositories and the scratchpad only on the owner's explicit ask \(the owner, 2026-11-06\)\. guard #9: \S/u);
       const started = Date.now();
       const stdin = typeof input === 'string' ? input : JSON.stringify(input);
       const r = node('.claude/hooks/guard.mjs', [], { input: stdin, env: quietEnv({ HOME: values.HOME }) });
       assert.ok(Date.now() - started < 1000, 'the CLI took over 1 s');
       assert.equal(r.status, c.exit, `CLI: ${r.stderr}`);
-      if (c.exit === 2) assert.match(r.stderr, /^guard #\d: .+ — .+\n$/u);
-      else assert.equal(r.stderr, '');
+      assert.match(r.stderr, c.exit === 2 ? /^guard #\d: .+ — .+\n$/u : /^$/u);
+      assert.deepEqual(r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null, c.ask ? { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: verdict.reason } : null, 'CLI stdout: only an ask prints');
     });
   }
 });

@@ -1,7 +1,11 @@
 // autom8x-kit v1 — canonical: snoopy-backend/.claude/hooks/guard.mjs
-// PreToolUse guard (STANDARD (h), rows 1–8). Blocks, with exit 2 and a one-line
+// PreToolUse guard (STANDARD (h), rows 1–9). Blocks, with exit 2 and a one-line
 // reason naming the allowed alternative, only the exact patterns its table names;
-// anything it cannot read, including its own errors, exits 0 (fail open).
+// row 9 never blocks: it asks the owner (stdout `permissionDecision: "ask"`, exit 0)
+// before a write outside the scratch root and a project's memory, a Bash write into
+// ~/Downloads, ~/Desktop, ~/Documents or iCloud Drive, or an Artifact publish or delete.
+// Rows 1–5 decide first: a block wins over an ask, in the same part of a command or another.
+// Anything it cannot read, including its own errors, exits 0 (fail open).
 // `decide(input, env)` is the whole policy and runs nothing: the only process it
 // may start is `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target.
 // Shell text is tokenised (lib/shell-words.mjs) with quotes respected, split on
@@ -25,6 +29,9 @@ const REASONS = {
   5: 'npm run hygiene --execute changes production hosts — the owner runs it; --clean prints the commands',
 };
 const block = (row, detail) => ({ exit: 2, row, reason: `guard #${row}: ${REASONS[row]}${detail ? ` (${detail})` : ''}` });
+// Row 9, the owner's rule of 2026-11-06, in the words the owner sees in the prompt.
+const OUTSIDE = "Outside the repositories and the scratchpad only on the owner's explicit ask (the owner, 2026-11-06).";
+const ask = (detail) => ({ exit: 0, ask: true, row: 9, reason: `${OUTSIDE} guard #9: ${detail}` });
 
 const base = (word) => String(word ?? '').split('/').pop();
 const strictlyUnder = (path, root) => !!root && path.startsWith(`${root.replace(/\/+$/u, '')}/`);
@@ -111,6 +118,51 @@ function pushBypass(args) {
   return hooksPath || noVerify;
 }
 
+/** A command's operands: its words that are not options (nor `valued` options' values); after `--`, every word. */
+function operands(args, valued = []) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--') return [...out, ...args.slice(i + 1)];
+    if (!args[i].startsWith('-')) out.push(args[i]);
+    else if (valued.includes(args[i])) i++;
+  }
+  return out;
+}
+
+// curl's flags that take no value, as a combined short option holds them before `o` or `O`.
+const CURL_FLAGS = 'sSLfkvi#';
+
+/**
+ * Row 9: what a command writes, by the forms the owner's rule names — a redirect, `cp`, `mv` (its
+ * sources too: a move takes them away), `tee`, `touch`, `mkdir`, `rm` and curl's output (`-o`,
+ * `--output`, or `-O` into `--output-dir` or the cwd). `writes` holds row 4's: the redirects,
+ * `tee`'s files and `cp`/`mv`'s destination. `open -a` writes nothing.
+ */
+function rowNineWrites(b, args, writes) {
+  const out = [...writes];
+  if (b === 'touch') out.push(...operands(args, ['-t', '-d', '-r', '-A']));
+  if (b === 'mkdir') out.push(...operands(args, ['-m']));
+  if (b === 'rm' || b === 'mv') out.push(...operands(args));
+  if (b === 'curl') {
+    let dir = '.';
+    let remote = false;
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      const long = /^--(output|output-dir)(?:=(.*))?$/u.exec(a);
+      if (long) {
+        const value = long[2] ?? args[++i];
+        if (long[1] === 'output') out.push(value);
+        else dir = value;
+      } else if (/^--remote-name(?:-all)?$/u.test(a)) remote = true;
+      else if (new RegExp(`^-[${CURL_FLAGS}]*o$`, 'u').test(a)) out.push(args[++i]);
+      else if (/^-o./u.test(a)) out.push(a.slice(2));
+      else if (new RegExp(`^-[${CURL_FLAGS}]*O[${CURL_FLAGS}]*$`, 'u').test(a)) remote = true;
+    }
+    if (remote) out.push(dir);
+  }
+  return out.filter((t) => typeof t === 'string' && t !== '' && t !== '-');
+}
+
 /** Where a build command builds: its `--prefix`, else the cwd; null when it is no build. */
 function buildDir(b, args, cwd, ctx) {
   if (b === 'npm') {
@@ -138,8 +190,10 @@ function buildDir(b, args, cwd, ctx) {
 
 function judgeCommand(words, redirects, cwd, ctx, depth) {
   const { argv, inner } = unwrap(words);
+  // An ask inside `bash -c` stands unless this command blocks.
+  let nested = ALLOW;
   if (inner !== undefined && depth < 3) {
-    const nested = evaluate(inner, cwd, ctx, depth + 1);
+    nested = evaluate(inner, cwd, ctx, depth + 1);
     if (nested.exit === 2) return nested;
   }
   const [cmd, ...args] = argv;
@@ -156,7 +210,14 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
     else if (plain.length >= 2) writes.push(plain[plain.length - 1]);
   }
   if (writes.some((t) => inZone(ctx.abs(t ?? '', cwd), ctx.icloud))) return block(4);
-  if (!cmd) return ALLOW;
+  // Row 9, decided after every block: the first write into a folder of the owner's.
+  const asking = () => {
+    const owned = rowNineWrites(b, args, writes)
+      .map((t) => ctx.abs(t, cwd))
+      .find((p) => p && ctx.owned.some((zone) => inZone(p, zone)));
+    return owned ? ask(`Bash writes ${owned}`) : nested;
+  };
+  if (!cmd) return asking();
   if (b === 'git' && pushBypass(args)) return block(1);
   if (b === 'rm') {
     let recursive = false;
@@ -193,16 +254,17 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
   const execute = args.some((a) => /^--execute(?:=|$)/u.test(a));
   if (execute && b === 'npm' && ['run', 'run-script'].includes(subcommand(args, NPM_VALUED).sub) && args.includes('hygiene')) return block(5);
   if (execute && b === 'node' && args.some((a) => /(?:^|\/)hygiene\.mjs$/u.test(a))) return block(5);
-  return ALLOW;
+  return asking();
 }
 
-/** Every simple command in `src`, in order, with the cwd `cd` leaves it in. */
+/** Every simple command in `src`, in order, with the cwd `cd` leaves it in: a block, else the first ask. */
 function evaluate(src, startCwd, ctx, depth = 0) {
   const tokens = tokenize(src);
   const stack = [];
   let cwd = startCwd;
   let words = [];
   let redirects = [];
+  let asked = null;
   const finish = () => {
     const verdict = judgeCommand(words, redirects, cwd, ctx, depth);
     const [cmd, ...args] = unwrap(words).argv;
@@ -225,11 +287,13 @@ function evaluate(src, startCwd, ctx, depth = 0) {
     } else {
       const verdict = finish();
       if (verdict.exit === 2) return verdict;
+      if (verdict.ask) asked ??= verdict;
       if (t.op === '(') stack.push(cwd);
       if (t.op === ')' && stack.length) cwd = stack.pop();
     }
   }
-  return finish();
+  const last = finish();
+  return last.exit === 2 ? last : (asked ?? last);
 }
 
 /** The policy. `env`: HOME, SCRATCH (the scratch root) and `toplevel(cwd)` may be given. */
@@ -242,6 +306,7 @@ export function decide(input, env = process.env) {
       scratch: env.SCRATCH || scratchRoot(),
       desktop: `${home}/Desktop`,
       icloud: `${home}/Library/Mobile Documents`,
+      owned: ['Downloads', 'Desktop', 'Documents', 'Library/Mobile Documents'].map((d) => `${home}/${d}`),
       toplevel: typeof env.toplevel === 'function' ? env.toplevel : gitToplevel,
       abs(word, cwd) {
         let p = String(word);
@@ -258,8 +323,18 @@ export function decide(input, env = process.env) {
       const path = ti.file_path ?? ti.notebook_path;
       if (typeof path !== 'string') return ALLOW;
       const p = ctx.abs(path, cwd);
-      const zone = ctx.icloud.toLowerCase();
-      return p && variants(p.toLowerCase()).some((v) => within(v, zone)) ? block(4) : ALLOW;
+      if (!p) return ALLOW;
+      const forms = variants(p.toLowerCase());
+      if (forms.some((v) => within(v, ctx.icloud.toLowerCase()))) return block(4);
+      // Row 9: files go in the scratch root (sessions' scratchpads and their clones) or a project's memory.
+      const escaped = home.toLowerCase().replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      const memory = new RegExp(`^${escaped}/\\.claude/projects/[^/]+/memory/`, 'u');
+      return forms.some((v) => strictlyUnder(v, ctx.scratch.toLowerCase()) || memory.test(v)) ? ALLOW : ask(`${tool} ${p}`);
+    }
+    // Row 9: an Artifact call publishes when it names no action.
+    if (tool === 'Artifact') {
+      const action = ti.action;
+      return action == null || action === 'publish' || action === 'delete' ? ask(`Artifact ${action ?? 'with no action (a publish)'}`) : ALLOW;
     }
     if (tool !== 'Bash' || typeof ti.command !== 'string') return ALLOW;
     return evaluate(ti.command, cwd, ctx);
@@ -278,5 +353,8 @@ if (isMain()) {
   let verdict = ALLOW;
   try { verdict = decide(JSON.parse(readFileSync(0, 'utf8'))); } catch { verdict = ALLOW; }
   if (verdict.exit === 2) process.stderr.write(`${verdict.reason}\n`);
+  // Row 9: PreToolUse's JSON decision, which Claude Code reads only on exit 0 (code.claude.com/docs/en/hooks.md).
+  const output = { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: verdict.reason };
+  if (verdict.ask) process.stdout.write(`${JSON.stringify({ hookSpecificOutput: output })}\n`);
   process.exitCode = verdict.exit === 2 ? 2 : 0;
 }

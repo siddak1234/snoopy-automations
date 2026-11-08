@@ -74,7 +74,7 @@ npm run format                                # fix formatting
 
 - Push normally, never with `--no-verify`. A PR is ready only when it is pushed, `all-green` is green on its head, and its body is final.
 - CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)): List (every `automations/*/Dockerfile`), Verify, then Image and Publish once per automation it lists, then Deploy on a push to main, then `all-green`.
-- `.claude/settings.json` runs the shared kit's hooks (canonical in `snoopy-backend`; the standard's section (h)): `guard.mjs` blocks `--no-verify` pushes, `rm -rf` outside the repository and the temp folders, builds under `~/Desktop` or iCloud Drive (a tool named with its version, `npx eas-cli@<version> build`, and any npm script that runs one, e.g. `npm run release:ios`, too), writes into iCloud Drive and `hygiene --execute`; `session-start.mjs` prints git and hygiene facts; `stop-check.mjs` warns about processes left running.
+- `.claude/settings.json` runs the shared kit's hooks (canonical in `snoopy-backend`; the standard's section (h)): `guard.mjs` blocks `--no-verify` pushes, `rm -rf` outside the repository and the temp folders, builds under `~/Desktop` or iCloud Drive (a tool named with its version, `npx eas-cli@<version> build`, and any npm script that runs one, e.g. `npm run release:ios`, too), writes into iCloud Drive and `hygiene --execute`, and asks the owner first before a Write or Edit outside the scratch root and a project's memory, a Bash write into Downloads, Desktop, Documents or iCloud Drive, or an Artifact publish or delete (`snoopy-backend/CLAUDE.md` rule 11); `session-start.mjs` prints git and hygiene facts; `stop-check.mjs` warns about processes left running.
 
 ## Docs always updated
 

@@ -96,7 +96,7 @@
 - agent `explorer`: Read-only search. Use to find where something lives or is described before reading or editing; returns path:line findings and what was not found. Never edits. ([.claude/agents/explorer.md](../.claude/agents/explorer.md))
 - agent `researcher`: Researches one lens of a flow idea on the web and in the given clones, read-only. Every finding is a URL, an exact quote and a source tier; "not found" is a va… ([.claude/agents/researcher.md](../.claude/agents/researcher.md))
 - agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS, FAIL or UNKNOWN verdict with 10 findin… ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))
-- hook `PreToolUse` (`Bash|Write|Edit|NotebookEdit`): `guard.mjs`
+- hook `PreToolUse` (`Bash|Write|Edit|NotebookEdit|Artifact`): `guard.mjs`
 - hook `SessionStart`: `session-start.mjs`
 - hook `Stop`: `stop-check.mjs`
 - hook `SubagentStop`: `stop-check.mjs`
