@@ -17,6 +17,7 @@
 - **contract**: `contract/**` → [contract/README.md](../contract/README.md)
 - **tooling**: `templates/**`, `scripts/**`, `.github/**` → [README.md](../README.md)
 - **claude**: `.claude/**` → [CLAUDE.md](../CLAUDE.md)
+- **tools**: `tools/*/**` → `tools/*/README.md`
 
 ## Folders
 
@@ -86,7 +87,7 @@
 
 ### Tests
 
-- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, live, manifest, menu, network, no, pins, repo, research, review, scaffold, workflow
+- `test/`: architecture, changed, conformance, doc, flow, isolation, kit, live, manifest, menu, n8n, network, no, pins, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 

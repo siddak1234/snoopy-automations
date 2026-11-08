@@ -19,3 +19,7 @@ tmp/
 # Recovered client data from the retired stack lives in encrypted storage, never
 # in git: history is permanent. CI fails if such a path is ever tracked.
 _salvage/
+
+# n8n on the owner's Mac (tools/n8n/README.md): its designs, its sign-in, its own key and the
+# exports. Never committed: test/n8n-local.test.ts holds this line.
+tools/n8n/.data/

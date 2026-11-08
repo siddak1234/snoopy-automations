@@ -12,7 +12,8 @@ import { test } from 'node:test';
  * nothing is shared with another automation or with the platform, so one engine's
  * failure reaches no other automation; the contract stays the probe, the invoke
  * and the callbacks, and every provider and model call still goes through the
- * platform.
+ * platform. n8n, for now, runs only on the owner's Mac as a design tool, never in an
+ * image (platform ADR-0052; `test/n8n-local.test.ts`).
  *
  * LIBRARY PACKAGES — the owner, 2026-10-10: "should we create a library folder that
  * specific automation folders call to build with". An automation may depend on the

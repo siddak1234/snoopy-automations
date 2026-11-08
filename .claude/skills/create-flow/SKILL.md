@@ -24,7 +24,7 @@ every pull request, and says go for each step that publishes or touches producti
 
 ## Inputs
 
-- The owner's idea, in whatever form: text, a document, a diagram, screenshots. If the command came
+- The owner's idea, in whatever form: text, a document, a diagram, screenshots, or a workflow exported from n8n on the owner's Mac ([tools/n8n](../../../tools/n8n/README.md); read, never served or committed). If the command came
   with nothing, ask once: "What should the flow do?" — then start.
 - A customer's file is read, never committed: `snoopy-automations` is public.
 

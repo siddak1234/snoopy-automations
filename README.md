@@ -59,6 +59,7 @@ scripts/live-eval.ts         npm run live-eval -- <flow> [--record]: a flow's 25
 test/architecture.test.ts    the boundary, enforced; every package shipping its dist on Node built-ins
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
+tools/n8n/                   n8n on the owner's Mac, to design a flow: never deployed, never in an image
 docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
@@ -848,6 +849,15 @@ called; `test/manifest-immutable.test.ts` fails when a file under `manifests/` t
 and one image per manifest version: `test/conformance.test.ts` holds every Dockerfile,
 the template's included, to copying exactly one `manifests/<templateId>.v<n>.json`, the
 version its code serves.
+
+## Design in n8n first (the owner's Mac only)
+
+The owner may try an idea in n8n before it is a flow: [tools/n8n/](tools/n8n/README.md) runs n8n
+on the owner's Mac, with test files only, and it is never deployed and never in an image (the
+platform's ADR-0052: a host has no room for it). `test/n8n-local.test.ts` refuses a flow's or the
+template's Dockerfile, `package.json` or `package-lock.json` that names n8n. A design reaches
+customers only as a code flow: export it, and give the export to `/create-flow` as the idea
+("Build a flow", step 1).
 
 ## Working here
 
