@@ -10,7 +10,10 @@
 // may start is `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target.
 // Shell text is tokenised (lib/shell-words.mjs) with quotes respected, split on
 // && || ; | & and newlines, heredoc bodies skipped, `cd` tracked per part and wrappers
-// (`perl -e '… exec @ARGV'`, caffeinate, timeout, env, sudo, bash -c) unwrapped.
+// (`perl -e '… exec @ARGV'`, caffeinate, timeout, env, sudo, bash -c) unwrapped. A variable
+// the same text sets (`NAME=value`, `export NAME=value`) is read in its later words, HOME too;
+// a path still naming an unknown one is never resolved against the cwd: row 9 does not ask on
+// it, and row 2 still refuses an `rm -rf` of it.
 // Cases: cases.json, run by scripts/kit/kit.test.mjs.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -38,6 +41,15 @@ const strictlyUnder = (path, root) => !!root && path.startsWith(`${root.replace(
 const within = (path, root) => path === root || strictlyUnder(path, root);
 // macOS: /tmp, /var and /etc are links into /private.
 const variants = (p) => (/^\/(?:tmp|var|etc)(?:\/|$)/u.test(p) ? [p, `/private${p}`] : [p]);
+
+// A shell assignment, `NAME=value`, alone or after export/declare/local/readonly/typeset: the
+// later words of the same command text read its value (2026-11-08: row 9 had asked the owner 27
+// times about `$R/plan.md`, a scratchpad path, read as a folder of the cwd).
+const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/su;
+const DECLARES = ['export', 'declare', 'local', 'readonly', 'typeset'];
+/** `$NAME` and `${NAME}` as `vars` holds them; an unknown one stays as written. */
+const expand = (word, vars) =>
+  String(word).replace(/\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/gu, (whole, a, b) => vars.get(a ?? b) ?? whole);
 
 /** Peel wrappers off a command: env, caffeinate, timeout, perl alarm, sudo, bash -c. */
 function unwrap(words) {
@@ -213,6 +225,9 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
   // Row 9, decided after every block: the first write into a folder of the owner's.
   const asking = () => {
     const owned = rowNineWrites(b, args, writes)
+      // A target still naming a variable or a substitution: where it is cannot be read, so row 9
+      // fails open on it, as on anything else it cannot read (never resolved against the cwd).
+      .filter((t) => !/[$`]/u.test(t))
       .map((t) => ctx.abs(t, cwd))
       .find((p) => p && ctx.owned.some((zone) => inZone(p, zone)));
     return owned ? ask(`Bash writes ${owned}`) : nested;
@@ -265,9 +280,18 @@ function evaluate(src, startCwd, ctx, depth = 0) {
   let words = [];
   let redirects = [];
   let asked = null;
+  // What this command text has set so far, and HOME; every word is read through it.
+  const vars = new Map([['HOME', ctx.home]]);
   const finish = () => {
-    const verdict = judgeCommand(words, redirects, cwd, ctx, depth);
-    const [cmd, ...args] = unwrap(words).argv;
+    const expanded = words.map((w) => expand(w, vars));
+    const verdict = judgeCommand(expanded, redirects.map((r) => expand(r, vars)), cwd, ctx, depth);
+    const set = (w) => {
+      const [, name, value] = ASSIGNMENT.exec(w);
+      vars.set(name, value);
+    };
+    if (expanded.length && expanded.every((w) => ASSIGNMENT.test(w))) expanded.forEach(set);
+    else if (DECLARES.includes(expanded[0])) expanded.slice(1).filter((w) => ASSIGNMENT.test(w)).forEach(set);
+    const [cmd, ...args] = unwrap(expanded).argv;
     if (cmd === 'cd' || cmd === 'pushd') {
       const target = args.find((a) => !a.startsWith('-') || a === '-');
       cwd = target === undefined ? ctx.home : target === '-' ? null : ctx.abs(target, cwd);
