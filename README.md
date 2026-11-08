@@ -855,8 +855,9 @@ version its code serves.
 The owner may try an idea in n8n before it is a flow: [tools/n8n/](tools/n8n/README.md) runs n8n
 on the owner's Mac, with test files only, and it is never deployed and never in an image (the
 platform's ADR-0052: a host has no room for it). `test/n8n-local.test.ts` refuses a flow's or the
-template's Dockerfile that names n8n. A design reaches customers only as a code flow: export it,
-and give the export to `/create-flow` as the idea ("Build a flow", step 1).
+template's Dockerfile, `package.json` or `package-lock.json` that names n8n. A design reaches
+customers only as a code flow: export it, and give the export to `/create-flow` as the idea
+("Build a flow", step 1).
 
 ## Working here
 

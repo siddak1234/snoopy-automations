@@ -2,13 +2,13 @@
 
 n8n here is a **design tool, and only that**: the owner tries an idea on n8n's canvas, on this Mac,
 with test files. It is **never deployed and never in an image** — no flow, no host and no CI job
-runs it — because a host has no room for it: measured, n8n idles at 411–653 MiB, and a flow's slot
-is 88M (the platform's ADR-0052,
+runs it — because a host has no room for it (the platform's ADR-0052, context 4 and 5:
 `snoopy-backend/docs/adr/0052-n8n-is-a-local-design-tool-a-hosted-n8n-waits-for-bigger-hosts.md`).
 A design reaches customers only as a code flow on the SDK, written by `/create-flow` ("From a
 design to a flow", below). `test/n8n-local.test.ts` holds what a file can show of this page: the
-pin and its floor, the one port, the hardening keys, the data folder, and no Dockerfile under
-`automations/` or `templates/` that names n8n.
+pin and its floor, the one port, the hardening keys, the data folder, nothing else in the service
+(so no restart policy), and no Dockerfile, `package.json` or `package-lock.json` of a flow or the
+template that names n8n.
 
 ## Start, open, stop
 
@@ -19,8 +19,10 @@ mkdir -p tools/n8n/.data
 docker compose -f tools/n8n/compose.yml up -d   # runs until stopped; it never restarts by itself
 ```
 
-Open <http://localhost:5678>. The first visit asks for an owner account: n8n has no way to turn its
-sign-in off. It lives in the data folder on this Mac, so any address and a password of its own do.
+Open <http://localhost:5678> in Chrome or Firefox: n8n refuses Safari over http, because its sign-in
+cookie stays secure (n8n's default). The first visit asks for an owner account: n8n has no way to
+turn its sign-in off. It lives in the data folder on this Mac, so any address and a password of its
+own do.
 
 ```bash
 docker compose -f tools/n8n/compose.yml down    # stops it; the data folder stays
@@ -53,8 +55,9 @@ Test URL the node shows, `curl -X POST '<Test URL>' -H 'content-type: applicatio
 
 1. **Test files only.** Never a customer's or a patient's data: no real patient data before
    release (the platform's BUILD-PLAN 29.4.9), and this repository is public.
-2. **Never export credentials.** Never run n8n's `export:credentials`. A key typed into n8n stays
-   in its data folder, encrypted with n8n's own key there.
+2. **Never export credentials.** Never run n8n's `export:credentials`. Keys go only into n8n's
+   credentials, where n8n's own key encrypts them, never into a node's field: an export carries
+   every field as typed.
 3. **Exports stay in the data folder,** `tools/n8n/.data/`, never in a tracked file.
 
 ## From a design to a flow

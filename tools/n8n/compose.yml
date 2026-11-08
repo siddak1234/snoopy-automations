@@ -2,11 +2,12 @@
 # built into an image, never run by CI. Start, open, stop, the rules and the pin:
 # `tools/n8n/README.md`. `test/n8n-local.test.ts` holds this file: the pin by release and index
 # digest at or above its floor, the one port on 127.0.0.1, every hardening key below, the data
-# folder and no restart policy.
+# folder, and no key in the service but image, ports, environment and volumes (so no restart
+# policy).
 name: autom8x-n8n-design
 services:
   n8n:
-    # The multi-arch index digest: `docker buildx imagetools inspect docker.n8n.io/n8nio/n8n:<release>`.
+    # The release and its multi-arch index digest: tools/n8n/README.md, "The pin".
     image: docker.n8n.io/n8nio/n8n:2.46.6@sha256:8602f5dfacbe2c931eeafd010de0e68182310e9f309921e780ab69182e92b3ae
     # This Mac only: nothing else on the network reaches the editor.
     ports:

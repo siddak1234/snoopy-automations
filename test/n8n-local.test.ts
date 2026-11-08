@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
@@ -9,13 +9,16 @@ import { test } from 'node:test';
  * design reaches customers only as a code flow, through `/create-flow`. What a file can show of
  * that is held here, by reading the files (no Docker):
  *
- * - no Dockerfile under `automations/` or `templates/` names n8n, so no flow's image carries it
- *   and no scaffolded flow starts with it;
+ * - no Dockerfile under `automations/` or `templates/` names n8n, and no flow's or the template's
+ *   `package.json` or `package-lock.json` names its npm package (by name, by alias or at any
+ *   depth), so no flow's image carries it and no scaffolded flow starts with it;
  * - the compose file names n8n by exact release and multi-arch index digest, at or above
  *   `N8N_FLOOR`, the one constant its README's "The pin" raises;
  * - its one service publishes its port on 127.0.0.1 only;
  * - it holds every hardening key with its value, and its node list is the five nodes and no other;
- * - its data is the gitignored `.data` folder beside it, and it never restarts by itself.
+ * - its data is the gitignored `.data` folder beside it;
+ * - its service holds image, ports, environment and volumes and no other key, so it never restarts
+ *   by itself (no `restart`, no `deploy`) and gains no privilege, network, build or env_file.
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -23,9 +26,8 @@ const read = (path: string) => readFileSync(join(repositoryRoot, path), 'utf8');
 const COMPOSE = 'tools/n8n/compose.yml';
 
 /**
- * The lowest n8n release the pin may name, set 2026-11-06 to n8n's stable of 2026-11-04: above
- * 2.46.1, where the 2.46 line takes the fixes of n8n's security advisories of 2026-10-28. A bump
- * raises it to the new release (tools/n8n/README.md, "The pin"); nothing lowers it.
+ * The lowest n8n release the pin may name; nothing lowers it. Why it is this release, and how a
+ * bump raises it: tools/n8n/README.md, "The pin".
  */
 const N8N_FLOOR = '2.46.6';
 
@@ -73,6 +75,49 @@ function dockerfiles(folder: string): string[] {
   });
 }
 
+/** Each flow's and the template's `package.json` and `package-lock.json`, from the root. */
+function packageFiles(): string[] {
+  return ['automations', 'templates']
+    .flatMap((folder) =>
+      readdirSync(join(repositoryRoot, folder), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .flatMap((entry) =>
+          ['package.json', 'package-lock.json'].map((name) => `${folder}/${entry.name}/${name}`),
+        ),
+    )
+    .filter((path) => existsSync(join(repositoryRoot, path)));
+}
+
+/** Every kind of dependency a `package.json` declares. */
+const DEPENDENCY_KINDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+];
+
+/**
+ * Where one package file names n8n's npm package, `n8n`, as `path: where`: in a `package.json`, a
+ * dependency of any kind named n8n or aliased to it (`npm:n8n@…`); in a `package-lock.json`, an
+ * entry installed at `node_modules/n8n`, at any depth, or one that names itself n8n (an alias).
+ */
+function n8nPackages(path: string, text: string): string[] {
+  const json = JSON.parse(text) as Record<string, Record<string, unknown> | undefined>;
+  if (path.endsWith('package-lock.json')) {
+    return Object.entries(json.packages ?? {})
+      .filter(
+        ([key, entry]) =>
+          /(?:^|\/)node_modules\/n8n$/u.test(key) || (entry as { name?: unknown }).name === 'n8n',
+      )
+      .map(([key]) => `${path}: ${key}`);
+  }
+  return DEPENDENCY_KINDS.flatMap((kind) =>
+    Object.entries(json[kind] ?? {})
+      .filter(([name, range]) => name === 'n8n' || /^npm:n8n(?:@|$)/u.test(String(range)))
+      .map(([name]) => `${path}: ${kind}.${name}`),
+  );
+}
+
 /** A YAML scalar as written here: quoted once in single or double quotes, or plain. */
 function unquote(value: string): string {
   const single = /^'(.*)'$/u.exec(value);
@@ -104,6 +149,21 @@ function entries(text: string, key: string): string[] {
   return out;
 }
 
+/**
+ * The keys of the one service as written: every line at exactly four spaces under `  n8n:`, cut at
+ * its colon, so a key this test does not know (a merge key `<<` included) is still read as one.
+ */
+function serviceKeys(text: string): string[] {
+  const lines = text.split('\n');
+  const keys: string[] = [];
+  for (const line of lines.slice(lines.indexOf('  n8n:') + 1)) {
+    if (line.trim() === '' || line.trim().startsWith('#')) continue;
+    if (!line.startsWith('    ')) break;
+    if (!line.startsWith('     ')) keys.push(line.trim().replace(/:.*$/u, ''));
+  }
+  return keys;
+}
+
 /** The service's environment, as a map form of `KEY: value` lines. */
 function environment(text: string): Record<string, string> {
   return Object.fromEntries(
@@ -125,7 +185,7 @@ function atOrAbove(a: string, b: string): boolean {
   return true;
 }
 
-test('no Dockerfile under automations/ or templates/ names n8n: no flow image carries it', () => {
+test('no Dockerfile under automations/ or templates/ names n8n', () => {
   const files = ['automations', 'templates'].flatMap(dockerfiles);
   assert.ok(files.includes('templates/automation/Dockerfile'), 'the template is read');
   assert.ok(files.length >= 2, 'the flows and the template are read');
@@ -134,6 +194,48 @@ test('no Dockerfile under automations/ or templates/ names n8n: no flow image ca
     [],
     'a Dockerfile names n8n',
   );
+});
+
+test("no flow's or the template's package.json or package-lock.json names n8n's npm package", () => {
+  const files = packageFiles();
+  for (const name of ['package.json', 'package-lock.json']) {
+    assert.ok(files.includes(`templates/automation/${name}`), `the template's ${name} is read`);
+  }
+  assert.ok(files.length >= 4, 'the flows and the template are read');
+  assert.deepEqual(
+    files.flatMap((path) => n8nPackages(path, read(path))),
+    [],
+    'a package file names n8n: its npm ci would put n8n into the image',
+  );
+});
+
+test('the package check finds n8n by name, by alias and at any depth, and nothing unrelated', () => {
+  const manifest = (body: object) => n8nPackages('a/package.json', JSON.stringify(body));
+  const lock = (packages: object) =>
+    n8nPackages('a/package-lock.json', JSON.stringify({ packages }));
+  assert.deepEqual(manifest({ dependencies: { n8n: '2.46.6' } }), [
+    'a/package.json: dependencies.n8n',
+  ]);
+  assert.deepEqual(manifest({ devDependencies: { n8n: '^2.46.6' } }), [
+    'a/package.json: devDependencies.n8n',
+  ]);
+  assert.deepEqual(manifest({ optionalDependencies: { engine: 'npm:n8n@2.46.6' } }), [
+    'a/package.json: optionalDependencies.engine',
+  ]);
+  assert.deepEqual(lock({ 'node_modules/n8n': { version: '2.46.6' } }), [
+    'a/package-lock.json: node_modules/n8n',
+  ]);
+  assert.deepEqual(lock({ 'node_modules/kit/node_modules/n8n': { version: '2.46.6' } }), [
+    'a/package-lock.json: node_modules/kit/node_modules/n8n',
+  ]);
+  assert.deepEqual(lock({ 'node_modules/engine': { name: 'n8n', version: '2.46.6' } }), [
+    'a/package-lock.json: node_modules/engine',
+  ]);
+  assert.deepEqual(
+    manifest({ dependencies: { '@autom8x/automation-sdk': 'file:../../packages/automation-sdk' } }),
+    [],
+  );
+  assert.deepEqual(lock({ '': { name: '@autom8x/example' }, 'node_modules/tsx': {} }), []);
 });
 
 test(`${COMPOSE} names n8n by exact release and multi-arch index digest, in its one service`, () => {
@@ -176,9 +278,16 @@ test(`${COMPOSE} holds every hardening key, and its node list is the five nodes 
   assert.deepEqual(JSON.parse(values.NODES_INCLUDE), NODES, 'the five nodes and no other');
 });
 
-test(`${COMPOSE} keeps its data in the gitignored .data folder and never restarts by itself`, () => {
+test(`${COMPOSE} keeps its data in the gitignored .data folder`, () => {
   const text = read(COMPOSE);
   assert.deepEqual(entries(text, 'volumes'), ['./.data:/home/node/.n8n'], 'one bind mount');
   assert.match(read('.gitignore'), /^tools\/n8n\/\.data\/$/mu, '.gitignore names the data folder');
-  assert.doesNotMatch(text, /^\s*restart:/mu, 'no restart policy');
+});
+
+test(`${COMPOSE}'s service holds only image, ports, environment and volumes: it never restarts by itself`, () => {
+  assert.deepEqual(
+    serviceKeys(read(COMPOSE)).sort(),
+    ['environment', 'image', 'ports', 'volumes'],
+    'no other key: no restart policy (restart, deploy), privileged, networks, build or env_file',
+  );
 });
