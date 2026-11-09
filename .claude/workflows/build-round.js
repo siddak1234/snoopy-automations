@@ -45,8 +45,10 @@ export const meta = {
 // through pipeline()'s resolved array (a rejected batch drops that whole); a lane with no record is
 // a gap worded "not known: no stage reported", with what to read before any rerun, never a guess.
 //
-// Round 21 (j): land runs the repository's full local gate (LAND_GATES) under the gate lock
-// before any push and records its counts; a design that finds the task is not a build returns
+// Round 21 (j), change-aware since the change-aware gates (ENGINEERING-STANDARD's gate rule):
+// land runs the repository's change-aware local gate (LAND_GATES) under the gate lock before any
+// push and records its counts — the platform's classifier picks ci.yml's light steps for a
+// records change and `CI=true npm run verify` for anything else; a design that finds the task is not a build returns
 // `NOT-A-BUILD <path>` and writes no design.done, so no lane runs, the gap is recorded and
 // hygiene still runs.
 //
@@ -81,15 +83,20 @@ const heavy =
       `exists, they ${between(`node ${INSTALLED_LOCK}`)}; if it does not, run one heavy step at ` +
       `a time in this lane.`) + LOCAL_CI;
 /**
- * Each repository's full local gate, run at land under the gate lock BEFORE any push, its counts
- * recorded (Round 21, j: the backend's pushed on a gate a lane had not run). Unknown repos: verify.
+ * Each repository's change-aware local gate, run at land under the gate lock BEFORE any push, its
+ * counts recorded (Round 21, j: the backend's pushed on a gate a lane had not run). The backend
+ * keeps `CI=true npm run verify` for anything but records, because a PR's hosted ci.yml runs the
+ * whole suite on paid minutes. Unknown repos: verify.
  */
 const LAND_GATES = {
-  'snoopy-backend': '`CI=true npm run verify`',
+  'snoopy-backend':
+    "`node scripts/ci-classify.mjs --plan --run` (records: ci.yml's light steps; anything " +
+    'else `CI=true npm run verify`)',
   snoopy:
-    '`npm run verify`, the change audit (.claude/agents/change-auditor.md) and ' +
-    '`node scripts/audit/record-pass.mjs`',
-  'snoopy-mobile': '`CI=1 npm run verify && npm run audit:dependencies`',
+    'the change audit (.claude/agents/change-auditor.md) and ' +
+    '`node scripts/audit/record-pass.mjs`, then the push, whose pre-push hook runs ' +
+    '`node scripts/change-class.mjs` (the change-aware gate)',
+  'snoopy-mobile': '`node scripts/change-class.mjs --run` (its pre-push hook runs the same set)',
   'snoopy-automations': '`npm run verify`',
 };
 const landGate = (repo) => LAND_GATES[repo] ?? '`npm run verify`';
@@ -248,7 +255,8 @@ try {
           `land ${lane.repo}`,
           (retry) =>
             agent(
-              `${retry}Land ${lane.clone}: BEFORE any push, the repository's full local gate once, ` +
+              `${retry}Land ${lane.clone}: BEFORE any push, the repository's change-aware local ` +
+                `gate once, ` +
                 `on the committed tree: ${landGate(lane.repo)}. ${heavy} Write the HEAD sha and ` +
                 `the gate's pass, fail and skipped counts in the summary, and push only when it is ` +
                 `green for that same HEAD (a moved HEAD runs it again). Then ` +
