@@ -85,8 +85,8 @@ const heavy =
 /**
  * Each repository's change-aware local gate, run at land under the gate lock BEFORE any push, its
  * counts recorded (Round 21, j: the backend's pushed on a gate a lane had not run). The backend
- * keeps `CI=true npm run verify` for anything but records, because a PR's hosted ci.yml runs the
- * whole suite on paid minutes. Unknown repos: verify.
+ * keeps `CI=true npm run verify` for anything but records, because a PR's suite runs only in
+ * local CI, after the push (snoopy-backend SYSTEM-MANIFEST §12.1 #357). Unknown repos: verify.
  */
 const LAND_GATES = {
   'snoopy-backend':
