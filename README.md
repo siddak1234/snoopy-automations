@@ -685,7 +685,7 @@ request after its retirement is shown (a release's `RETIRED` row, or the record 
 retirement), with a row in its flow's README saying where (the rules under
 [Build a flow](#build-a-flow)). Git keeps every file; a suite that still runs a retired version's
 code reads its file from git (`RETIRED_AT` in `test/definition-files.ts` and in each flow's test
-fixtures). Since BUILD-PLAN 30.15.2 (2026-11-14) each flow holds one file, its newest.
+fixtures). BUILD-PLAN 30.15.2 (2026-11-14) left each flow one file, its newest; D3 allows two.
 
 ## The flows
 

@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
-import { base, changeProblems, type History, type Tree } from './definition-files.js';
+import { base, changeProblems, retiredFile, type History, type Tree } from './definition-files.js';
 import { newestManifests, type Json } from './file-required.js';
 import { newReasonFor, requirementProblems } from './no-new-requirements.js';
 
@@ -51,7 +51,7 @@ test("every flow's newest file asks nothing new of a flow on its newest file at 
 
 test("today's three pairs pass: Resume Screening v4 to v5, Invoice Processing v8 to v9, ICD-10 Code Check v4 to v5", () => {
   // The older files left with BUILD-PLAN 30.15.2; git keeps them at the commit that added v5/v9/v5.
-  const at = (file: string) => JSON.parse(git('show', `30d6798:manifests/${file}`)) as Json;
+  const at = (file: string) => JSON.parse(retiredFile(root, file)) as Json;
   for (const [id, from, to] of [
     ['candidate-reviewer', 4, 5],
     ['invoice-processing', 8, 9],
