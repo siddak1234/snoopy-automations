@@ -182,6 +182,14 @@ test('D6: a deleted name never comes back, and a new version is above every one 
   });
   const added = history({ base: blobs('fx.v3.json'), head: blobs('fx.v3.json', 'fx.v4.json') });
   assert.deepEqual(changeProblems(next, added), []);
+  // At, not only below: main once held v4 (a name renamed within manifests/ is in no deletion list), so v4 is refused.
+  const held = history({
+    base: blobs('fx.v3.json'),
+    head: blobs('fx.v3.json', 'fx.v4.json'),
+    deletedOnMain: [],
+    everOnMain: ['fx.v3.json', 'fx.v4.json'],
+  });
+  assert.deepEqual(rules(changeProblems(next, held)), ['D6']);
 });
 
 test('D1: every tracked path under manifests/ is a top-level <id>.v<n>.json', () => {
