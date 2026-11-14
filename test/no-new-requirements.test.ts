@@ -129,6 +129,18 @@ test('more scopes are refused; the same or fewer are not', () => {
   assert.equal(problems(v1, v2([])), 0);
   const nppes = (scopes: string[]) => fx(2, { requiredConnections: [conn('nppes', scopes)] });
   assert.equal(problems(fx(1, { requiredConnections: [conn('nppes', [])] }), nppes(['x'])), 1);
+  // A public provider asking a scope at all is refused, even the one it asked before (planMove).
+  assert.equal(
+    problems(fx(1, { requiredConnections: [conn('nppes', ['x'])] }), nppes(['x'])),
+    1,
+    'public, the same scope',
+  );
+  // A provider the previous version never named, added as an optional connection with scopes.
+  assert.equal(
+    problems(fx(1), fx(2, { requiredConnections: [conn('quickbooks', ['accounting'], true)] })),
+    0,
+    'a new optional connection with scopes',
+  );
 });
 
 test('a required setting with no default is refused, unless it was one before', () => {
