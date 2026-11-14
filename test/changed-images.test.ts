@@ -38,7 +38,7 @@ test('a flow’s own source, prompts, manifest or Dockerfile builds that flow al
   for (const [changed, built] of [
     [['automations/candidate-reviewer/src/steps/candidate.ts'], ['candidate-reviewer']],
     [['automations/invoice-processing/prompts/extract-documents.v1.json'], ['invoice-processing']],
-    [['manifests/invoice-processing.v8.json'], ['invoice-processing']],
+    [['manifests/invoice-processing.v9.json'], ['invoice-processing']],
     [['automations/candidate-reviewer/Dockerfile'], ['candidate-reviewer']],
   ] as const) {
     assert.deepEqual(changedImages(flows, [...changed]), built, changed.join());

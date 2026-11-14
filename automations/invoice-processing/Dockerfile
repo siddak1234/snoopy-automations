@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Invoice Processing v8, built from the repository root:
+# The image of Invoice Processing v9, built from the repository root:
 #   docker build --file automations/invoice-processing/Dockerfile .
 #
 # The flow's own lock is the image's only lock: the build stage installs
@@ -72,13 +72,13 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chown=node:node automations/invoice-processing/package.json ./
 COPY --chown=node:node --from=build /workspace/automations/invoice-processing/dist ./dist
 COPY --chown=node:node --from=production-dependencies /workspace/automations/invoice-processing/node_modules ./node_modules
-# The prompts, loaded from beside dist/ (src/prompts.ts): v8 sends extract-documents v2 and
+# The prompts, loaded from beside dist/ (src/prompts.ts): v8 and v9 send extract-documents v2 and
 # verify-documents v1; extract-documents v1 rides along, loaded and never sent.
 COPY --chown=node:node automations/invoice-processing/prompts ./prompts
 # The ONE manifest version this image serves (src/automation.ts SERVED_VERSIONS): one image
-# per version (the platform's D2) — v7's container keeps its own pinned digest until it is
+# per version (the platform's D2) — v8's container keeps its own pinned digest until it is
 # retired. The runner refuses a run pinned to any other (src/main.ts reads this dir).
-COPY --chown=node:node manifests/invoice-processing.v8.json ./manifests/
+COPY --chown=node:node manifests/invoice-processing.v9.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -14,8 +15,8 @@ import { JOB_FILE_KEY } from '../src/steps/job.js';
 import { NOW, candidateRun, manifest, manifestsRoot } from './fixtures.js';
 
 /**
- * `manifests/candidate-reviewer.v4.json`, the version this image serves (v3's, and so v2's, but for
- * its version and container), as the spec words it
+ * `manifests/candidate-reviewer.v5.json`, the version this image serves (v4's, and so v3's and v2's,
+ * but for its version, its container and, since v5, its resume field required), as the spec words it
  * (§1–§7): its name and department, its one question, the files it takes, its four steps and
  * five, its jobs and their verdict words, and its container — and the code's constants held to
  * it; and v1, registered and immutable, as it was.
@@ -46,8 +47,7 @@ test('§2–§5: started by hand with a resume; PDF, JPEG, PNG or Word; no conne
         title: 'Resume',
         description: 'A PDF, Word file or photo.',
         control: 'artifact',
-        // The spec's "no: the platform refuses a required file field"; the run asks for it.
-        required: false,
+        required: true,
       },
     ],
   });
@@ -192,34 +192,34 @@ test("the job's reading is the posting prompt's answer less whether it was reada
   );
 });
 
-test('the image serves v4 alone: of v1 to v4 it keeps v4, and refuses a run pinned to v3 before any step or call', async () => {
+test('the image serves v5 alone: of v1 to v5 it keeps v5, and refuses a run pinned to v4 before any step or call', async () => {
   const all = readManifests(manifestsRoot, TEMPLATE_ID);
   assert.deepEqual(
     all.map((each) => each.version),
-    [1, 2, 3, 4],
+    [1, 2, 3, 4, 5],
   );
   const automation = define(all, () => NOW);
   assert.deepEqual(automation.versions, SERVED_VERSIONS);
-  assert.deepEqual(SERVED_VERSIONS, [4]);
-  const v3 = all.filter((each) => each.version === 3);
-  assert.throws(() => define(v3), /serves v4, and no such manifest was given/u);
+  assert.deepEqual(SERVED_VERSIONS, [5]);
+  const v4 = all.filter((each) => each.version === 4);
+  assert.throws(() => define(v4), /serves v5, and no such manifest was given/u);
 
   const platform = new RecordingPlatform();
-  const result = await automation.execute({ ...candidateRun(), templateVersion: 3 }, platform);
+  const result = await automation.execute({ ...candidateRun(), templateVersion: 4 }, platform);
   assert.equal(result.outcome, 'failed', JSON.stringify(result));
   assert.deepEqual([platform.steps, platform.artifactReads, platform.modelCalls], [[], [], []]);
 });
 
-test('the Dockerfile copies the v4 manifest alone', () => {
+test('the Dockerfile copies the v5 manifest alone', () => {
   const dockerfile = readFileSync(join(import.meta.dirname, '..', 'Dockerfile'), 'utf8');
   const copied = [...dockerfile.matchAll(/^COPY\b.*?\smanifests\/(\S+)/gmu)].map((each) => each[1]);
-  assert.deepEqual(copied, [`${TEMPLATE_ID}.v4.json`]);
+  assert.deepEqual(copied, [`${TEMPLATE_ID}.v5.json`]);
 });
 
 test('§1: its own container and service account, as v7 of Invoice Processing set them', () => {
   assert.deepEqual(m.service, {
-    origin: 'http://candidate-reviewer-v4.autom8x.internal:8080',
-    serviceAccount: 'candidate-reviewer-v4@autom8x.iam.gserviceaccount.com',
+    origin: 'http://candidate-reviewer-v5.autom8x.internal:8080',
+    serviceAccount: 'candidate-reviewer-v5@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,
@@ -245,10 +245,35 @@ const withoutContainer = (each: typeof manifest) => ({
   service: { ...(each.service as Entry), origin: undefined, serviceAccount: undefined },
 });
 
+/** A manifest's resume field: required since v5. */
+const resumeField = (each: typeof manifest) =>
+  ((each.trigger as Entry).input as unknown as Entry[])[0]!;
+
+test("v5 is v4 but for its version, its own container and a required file (the owner's items 1 and 4 on build 43)", () => {
+  const v4 = read(4);
+  const optional = (each: typeof manifest) => ({
+    ...withoutContainer(each),
+    trigger: { ...(each.trigger as Entry), input: [{ ...resumeField(each), required: false }] },
+  });
+  assert.deepEqual(optional(manifest), optional(v4));
+  assert.deepEqual(
+    [manifest.version, resumeField(manifest).required, resumeField(v4).required],
+    [5, true, false],
+  );
+  // v4 is registered and immutable: these bytes, as served until it is retired.
+  assert.equal(
+    createHash('sha256')
+      .update(readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v4.json`)))
+      .digest('hex'),
+    '99f6944c6d96278068af5d98fd7d1c332a9a4ec7980bf928ab1db6bacb8a7be9',
+  );
+});
+
 test("v4 is v3 but for its version and its own container: its blocks are the code's (the owner's items 11–13)", () => {
   const v3 = read(3);
-  assert.deepEqual(withoutContainer(manifest), withoutContainer(v3));
-  assert.equal(manifest.version, 4);
+  const v4 = read(4);
+  assert.deepEqual(withoutContainer(v4), withoutContainer(v3));
+  assert.equal(v4.version, 4);
   assert.deepEqual(
     [v3.version, (v3.service as Entry).origin, (v3.service as Entry).serviceAccount],
     [

@@ -1,6 +1,6 @@
 # Resume Screening (`candidate-reviewer`): spec
 
-**Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v4 · **Built in:** v1 in [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin; v2 in [#57](https://github.com/siddak1234/snoopy-automations/pull/57) (`ea2a900`), registered by the platform's FORTY-SECOND pin and served since its read-back, 2026-10-25 07:07:47Z
+**Approved:** 2026-10-24 — the design by the owner's five answers (below) and "now continue and complete in parallel"; the words as shown to the owner, by the owner's reply "complete" when asked for "words approved" (~06:10Z) · **Version:** v5 · **Built in:** v1 in [#52](https://github.com/siddak1234/snoopy-automations/pull/52) (`314b619`), registered by the platform's FORTY-FIRST pin; v2 in [#57](https://github.com/siddak1234/snoopy-automations/pull/57) (`ea2a900`), registered by the platform's FORTY-SECOND pin and served since its read-back, 2026-10-25 07:07:47Z
 
 **v3's words approved after v3 went live:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — the Contact row "Name" and `Exact words: "…"` under the name, the email and the phone (§7), as built, no word changed. v3 was already served on both hosts: Flow CD run 41881756507 (this repository's `6ad084c`) served it in its attempt 1, which ended at 17:57:36Z (snoopy-backend SYSTEM-MANIFEST §6), before the approval — against the create-flow skill's stage 2, which registers nothing before it.
 
@@ -60,12 +60,28 @@ buttons (a `links` block carries no title, so the flow sends no such string).
   (`FLOW_SERVED_SLOTS=6`, the platform's SYSTEM-MANIFEST); one is retired with the owner before
   this merges. v3's runs keep their sections, drawn by the platform as before.
 
+**v5, 2026-11-14 (the owner's items 1 and 4 on build 43; "Yes to all 3", 2026-11-14):** the
+manifest is v4's but for its version, its own container (origin
+`http://candidate-reviewer-v5.autom8x.internal:8080`, service account `candidate-reviewer-v5`) and
+its resume field **required** (§2): the platform refuses a run without a file before it starts,
+since its ADR-0030 amendment of 2026-11-14 allows a required file field. A run that still names no
+file stops in its own words, "Add the resume as a PDF, Word file or photo." (§8), apart from a file
+that could not be read. Item 1: "I pressed start without uploading anything. It took me to
+activity. If there is no file uploaded then it shouldnt start. This is a basic requirement for a
+button. " Item 4: "I believe this spdcific error was because no file existed. Ensure there is
+differentiation between errors and their types." The new words are the design's default: shown to
+the owner with the round's plan (its "For the owner" point 7), not answered, so built at the
+default by the project's rule; not approved by the owner. v4's container keeps its pinned image until it is retired
+(`/retire-version`); v4's runs keep v4's words. It merges only after the platform's build-43 pull
+request is merged and deployed (Flow CD runs the platform's validator, which until then refuses a
+required file field).
+
 **Changed since the words were shown to the owner (2026-10-24):** the step descriptions "Scored
 against the job, with reasons." and "Added to the job's list, highest score first." (were "posting");
 a fourth failure, "This candidate's job has not been read yet." (§8; the platform refuses such a run
 first); "Why this score" also lists flags, among them "years not shown" and "Text that tries to
-direct the reader: "…"" (§4, §7); the resume field is not marked required (§2: the platform refuses a
-required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). At
+direct the reader: "…"" (§4, §7); the resume field was not marked required until v5 (§2: the platform
+then refused a required file field); `save` declares no retry (§6); what the scoring call is never sent (§4). At
 v1, every word on the screens the owner was shown is unchanged; what v2 changed is in the notes
 above. v3 adds two words, NEW, ~~awaiting the owner's approval~~ approved 2026-11-04 after v3 went live (this spec's top): the Contact row "Name" and
 `Exact words: "…"` under the name, the email and the phone (§7).
@@ -108,9 +124,9 @@ added by "owners and admins for now"; the command is `/create-flow`. Name "Candi
 
 Run inputs, asked when a person starts it (at most 16):
 
-| Key (camelCase) | Title  | Description (200)          | Control: toggle, money, text, email, artifact | Required                                                                                                                         |
-| --------------- | ------ | -------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| resumeFile      | Resume | A PDF, Word file or photo. | artifact                                      | no: the platform refuses a required file field; the screens ask for the file, and a run without one fails as "could not be read" |
+| Key (camelCase) | Title  | Description (200)          | Control: toggle, money, text, email, artifact | Required                                                                                                         |
+| --------------- | ------ | -------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| resumeFile      | Resume | A PDF, Word file or photo. | artifact                                      | yes: a run without it is refused before it starts (v5); v1 to v4 left it optional, as the platform then required |
 
 The job the candidate is added to is not a question: "Add candidate" sits on the job's page, so the
 run carries the job (section 10, items).
@@ -240,6 +256,7 @@ sends them as blocks, each Details row its label ("Location", "Type", "Years", "
 | The file cannot be read (blurred, empty, a blank scan)                                 | The file could not be read. Try a clearer PDF or photo.            | stops                     |
 | The job description cannot be read                                                     | The job description could not be read. Try a clearer PDF or photo. | the job is not made       |
 | A run whose job has no reading (the platform refuses such a run first; never expected) | This candidate's job has not been read yet.                        | stops                     |
+| No file was added (the platform refuses such a run first, since v5)                    | Add the resume as a PDF, Word file or photo.                       | stops                     |
 | The model's answer is off its schema twice, once asked again (v3, Q2)                  | The AI's answer couldn't be used. Try a clearer file.              | stops                     |
 | The model refuses, or the plan's monthly calls are used up                             | the platform's own words for the refusal                           | stops                     |
 
@@ -254,6 +271,7 @@ Made-up inputs only.
 | A photo of a one-page resume with no dates                                                        | a score, Experience "years not shown", the flag listed                                                   |
 | A receipt uploaded as a resume                                                                    | fails: This file does not look like a resume.                                                            |
 | A blank page                                                                                      | fails: The file could not be read. Try a clearer PDF or photo.                                           |
+| A run whose input names no file (v5; the platform refuses it first)                               | fails: Add the resume as a PDF, Word file or photo.                                                      |
 | A job description photo                                                                           | the job made: title, must-haves and nice-to-haves read; Job saved                                        |
 | A PDF resume whose LinkedIn, GitHub and Hugging Face are words, their addresses only in its links | Contact lists the three, v4 as buttons with the LinkedIn, GitHub and Hugging Face logos and the username |
 | A Word resume with a word linked to a site, its address not printed                               | Contact lists that link, v4 named by its address, after those the model read                             |
@@ -292,18 +310,23 @@ items (the repository README, "A flow's items"): a job is its item, a candidate 
 does, in the words a person reads, is this spec, above, the build's source of truth word for word.
 This section moved here from the repository README in Round 21, so a change to the flow asks for
 this file in the same change (`docs/docs-map.json`). It is one of the two live flows on
-`defineAutomation`, exempt from the new flows' standards; its after-pilot versions, v3 and v4, stay on it
+`defineAutomation`, exempt from the new flows' standards; its after-pilot versions, v3 to v5, stay on it
 and take Q2's re-ask alone. Where the code does it:
 
-- **v4, the version this code serves**: `SERVED_VERSIONS` in
+- **v5, the version this code serves**: `SERVED_VERSIONS` in
   `automations/candidate-reviewer/src/automation.ts`, whose `servedManifests` keeps it alone of the
   manifests `define` is given and refuses when none is left, as Invoice Processing's does; its
-  Dockerfile copies only `manifests/candidate-reviewer.v4.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
+  Dockerfile copies only `manifests/candidate-reviewer.v5.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
   holds to the spec and the code's constants to (the file types and size in
-  `automations/candidate-reviewer/src/file.ts`, the two file keys), to v3's but for its version and
-  container, v3 to v2's likewise, and v2 to v1's `manifests/candidate-reviewer.v1.json` but for what
-  v2 changed — its job's reading v1's. The containers of v1 to v3 keep their pinned images until
-  they are retired.
+  `automations/candidate-reviewer/src/file.ts`, the two file keys), to v4's but for its version,
+  container and required resume field (v4's bytes held by their sha256), v4 to v3's but for its
+  version and container, v3 to v2's likewise, and v2 to v1's `manifests/candidate-reviewer.v1.json`
+  but for what v2 changed — its job's reading v1's. The containers of v1 to v4 keep their pinned
+  images until they are retired.
+- **v5's no-file stop** (item 4): `receive` in `automations/candidate-reviewer/src/steps/candidate.ts`
+  stops `FAILURES.noResume` (`automations/candidate-reviewer/src/words.ts`) when the run's input
+  names no file, and `FAILURES.resumeUnreadable` when a named file cannot be opened
+  (`automations/candidate-reviewer/test/candidate.test.ts`).
 - **v4's blocks** (items 11–13): `automations/candidate-reviewer/src/blocks.ts` — `candidateBlocks`
   (a candidate's group), `postingBlocks` (a job's four sections), `profileButton` and
   `projectButton` (a link's logo, label and https address); the SDK's `boundedBlocks` holds them as

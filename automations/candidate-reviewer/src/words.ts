@@ -14,6 +14,11 @@ import {
 export const FAILURES = {
   /** A file that is not a resume: a receipt, a letter. */
   notAResume: 'This file does not look like a resume.',
+  /**
+   * v5 (the owner's item 4 on build 43): a run whose input names no file. Its own sentence, apart
+   * from a file that could not be read; the platform refuses such a run first, since v5.
+   */
+  noResume: 'Add the resume as a PDF, Word file or photo.',
   /** A resume that cannot be read: blurred, empty, a blank scan, a Word file that will not open. */
   resumeUnreadable: 'The file could not be read. Try a clearer PDF or photo.',
   /** A job description that cannot be read: the job is not made. */

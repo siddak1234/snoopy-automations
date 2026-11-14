@@ -221,6 +221,20 @@ test("§9 and §8: a blank page fails in the spec's words", async () => {
   }
 });
 
+test("§8, v5 (the owner's item 4 on build 43): a run with no file stops in its own words, before any read or call", async () => {
+  for (const input of [{}, { resumeFile: '' }, { resumeFile: '  ' }]) {
+    const { automation, platform } = world({});
+    const request = { ...candidateRun(), input };
+    const result = await automation.execute(request, platform);
+    assert.deepEqual(result, {
+      outcome: 'failed',
+      failureReason: 'Add the resume as a PDF, Word file or photo.',
+    });
+    assert.deepEqual([platform.artifactReads, platform.modelCalls], [[], []]);
+    assert.equal(platform.steps.at(-1)?.stepId, 'receive');
+  }
+});
+
 test('a Word resume is read here and sent as text, never as a file', async () => {
   const bytes = docx([paragraph('Jane Doe'), paragraph('Senior Accountant, Acme Corp')].join(''));
   const { platform, sent } = await run(

@@ -73,8 +73,10 @@ export function candidateSteps(now: () => Date): Readonly<Record<string, Step>> 
     // The job's reading every candidate is scored against; the platform starts a run only on a
     // job that is ready, so a missing one ends the run before anything is spent.
     if (!isObject(request.item?.reading)) return stops(FAILURES.jobNotRead);
+    // No file named is its own stop (v5); a named file that cannot be opened is unreadable.
     const id = fileIdOf(request.input, RESUME_FILE_KEY);
-    const file = id === undefined ? undefined : await readResumeFile(platform, id);
+    if (id === undefined) return stops(FAILURES.noResume);
+    const file = await readResumeFile(platform, id);
     if (file === undefined) return stops(FAILURES.resumeUnreadable);
     return {
       outcome: 'ok',

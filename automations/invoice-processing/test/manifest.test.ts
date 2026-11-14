@@ -40,7 +40,7 @@ const sha256 = (version: number) =>
   createHash('sha256')
     .update(readFileSync(file(version)))
     .digest('hex');
-const manifest = read(8);
+const manifest = read(9);
 const v4 = read(4);
 const v3 = read(3);
 
@@ -58,11 +58,11 @@ function stepTitle(group: Group, config: JsonObject): string {
   return titled.titles.find((each) => each.providerId === chosen)?.title ?? group.title;
 }
 
-test('v8 is the one version this code serves; v1 to v7 stay registered, byte for byte', () => {
-  assert.deepEqual([...SERVED_VERSIONS], [8]);
+test('v9 is the one version this code serves; v1 to v8 stay registered, byte for byte', () => {
+  assert.deepEqual([...SERVED_VERSIONS], [9]);
   assert.deepEqual(
     manifests.map((each) => each.version),
-    [8],
+    [9],
   );
   assert.deepEqual(
     [1, 2, 3, 4].map(sha256),
@@ -92,9 +92,9 @@ test('v8 is the one version this code serves; v1 to v7 stay registered, byte for
   assert.equal(
     sha256(8),
     '0532983aa1eb5878146a2e8b4884aa9f3f0221ed661e200bbe906016e72b2339',
-    'v8 is these bytes',
+    'v8 untouched: a registered version is immutable',
   );
-  assert.equal(manifest.version, 8);
+  assert.equal(manifest.version, 9);
 });
 
 test('the five steps, in order, in their words: Upload invoice · Connect integration · AI processing · Details saved, or QuickBooks updated · Run completed', () => {
@@ -223,10 +223,12 @@ test('the vendor choice is step 2, titled "Integration", under the key v3 had; t
 test("nothing else moved from v3: the name, price, trigger, connection, capability, file limits, the 22 steps' words and order, and the outputSchema", () => {
   // v4 less what the spec changes (§3: version, groups, each step's and the vendor's group, the
   // vendor's title, the approval limit's group, the origin and the service account) is v3 less
-  // the same, exactly — and v7's words for its documents (the platform's BUILD-PLAN 27.3.2).
+  // the same, exactly — and v7's words for its documents (the platform's BUILD-PLAN 27.3.2), and
+  // v9's required file (`versions.test.ts`).
   const without = (each: Manifest) => ({
     ...each,
     version: undefined,
+    trigger: { ...each.trigger, input: each.trigger.input.map(({ required: _r, ...f }) => f) },
     display: { ...each.display, documentWords: undefined },
     groups: undefined,
     pipeline: each.pipeline.map(({ group: _group, ...step }) => step),
@@ -322,10 +324,10 @@ test('the 22 steps, each in its step: its kicker, step, title and description as
   );
 });
 
-test("its own container: v8's origin and service account; the rest of the service v3's", () => {
+test("its own container: v9's origin and service account; the rest of the service v3's", () => {
   assert.deepEqual(manifest.service, {
-    origin: 'http://invoice-processing-v8.autom8x.internal:8080',
-    serviceAccount: 'invoice-processing-v8@autom8x.iam.gserviceaccount.com',
+    origin: 'http://invoice-processing-v9.autom8x.internal:8080',
+    serviceAccount: 'invoice-processing-v9@autom8x.iam.gserviceaccount.com',
     contractVersion: 1,
     maxConcurrentRuns: 1,
     acceptTimeoutMs: 5000,

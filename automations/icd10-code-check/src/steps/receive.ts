@@ -4,9 +4,10 @@ import { SPECIALTIES_FIELD } from '../families.js';
 import { FAILURES } from '../words.js';
 
 /**
- * Visit received: a visit note arrives. The file is the run input `visitNote` (the platform refuses
- * a required file field, so a run without one stops here, in section 8's words); the specialties
- * are the setup's picks. The file's name is never read into a line: it may carry a patient's name.
+ * Visit received: a visit note arrives. The file is v1's run input `visitNote`, not required (the
+ * platform then refused a required file field), so a run without one stops here, in section 8's
+ * words; the specialties are the setup's picks. The file's name is never read into a line: it may
+ * carry a patient's name.
  */
 export const receive: Step = async (context) => {
   const { request, platform } = context;
