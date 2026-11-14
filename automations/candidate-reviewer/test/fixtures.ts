@@ -15,7 +15,7 @@ import { WORD_TYPE } from '../src/file.js';
 
 /**
  * The suite's made-up world (the spec's §9: made-up inputs only): the manifest the image serves
- * (v3), a fixed day, a recording platform whose model answers by prompt, the files a run is
+ * (v5), a fixed day, a recording platform whose model answers by prompt, the files a run is
  * given, and Word files built here in memory. No name, address or posting below is a real one.
  */
 

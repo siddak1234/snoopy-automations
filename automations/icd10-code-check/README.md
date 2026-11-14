@@ -101,9 +101,9 @@ real charts wait for section 10's model path.
 | Trigger | manual: a person adds a visit                                                                | —                                 |
 | Files   | PDF, JPEG or PNG, up to 3,500,000 bytes, a PDF up to 30 pages, a photo's side up to 8,000 px | the model reads these three types |
 
-| Key (camelCase) | Title      | Description (200)                 | Control  | Required                                                                            |
-| --------------- | ---------- | --------------------------------- | -------- | ----------------------------------------------------------------------------------- |
-| visitNote       | Visit note | A PDF or photo of the visit note. | artifact | no: the platform refuses a required file field; a run without one stops (section 8) |
+| Key (camelCase) | Title      | Description (200)                 | Control  | Required                                                                                        |
+| --------------- | ---------- | --------------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| visitNote       | Visit note | A PDF or photo of the visit note. | artifact | v1 to v4 not required, as the platform then required; v5's `visitNotes` is required (v5, below) |
 
 The codes are read from the note. No items: a visit is one run.
 
@@ -576,7 +576,7 @@ improve their results over time." — and TestFlight build 34 feedback, 2026-11-
 
 ## v4 (2026-11-04)
 
-**Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image serves v4 alone
+**Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image served v4 alone until v5
 (`SERVED_VERSIONS`), served since Flow CD's `FLOW CD OK` of 2026-11-04 18:41:00Z. v1 was withdrawn at
 18:36:49Z and v3 was never registered; v2 stays served on its own container and pinned image until the
 owner retires it (the `retire-version` skill), so no ICD-10 run stays on OpenRouter after that. **Words:**
@@ -593,3 +593,24 @@ departments that require this lets consider another vendor, while the rest go to
 | 1   | The manifest is v3's but its version, its own origin and service account (`-v4`), and `"dataProtection": "hipaa"`: its runs carry health data, and what the platform then does is in [contract/README.md](../../contract/README.md#what-the-platform-refuses-beyond-the-schema), "`dataProtection`". The description keeps "Test charts only for now": nothing here allows real charts, which wait for every BAA                                              | the manifest; `v4-manifest.test.ts` |
 | 2   | Its calls name no models and leave no maker out (`HEALTH_VERSIONS` and `modelsFor` in `src/models.ts`, read by `askModel`): the BAA gateway refuses an automation's own `models` and `excludeModelAuthors` before anything is spent, and serves the call from its own list. v1 to v3 keep `MODELS`                                                                                                                                                            | `modelsFor`; `v4-manifest.test.ts`  |
 | 3   | The review rule (the audit's H-W6, Anthropic's "Do not include PHI in JSON schema definitions"): no patient data in any output schema's `enum`, `const` or `pattern`. Every schema v4 sends is its prompt file's, never built from a run (`renderPrompt`); its only fixed values are categorize-pages' segment kinds and read-note's certainty, and its manifest's output schema has none. A new one is read for patient data before the test's list takes it | `v4-manifest.test.ts`               |
+
+## v5 (2026-11-14)
+
+**Status:** built on the branch `round-22/build-43-items`; this image serves v5 alone
+(`SERVED_VERSIONS`). v4 stays served on its own container and pinned image until the owner retires it
+(the `retire-version` skill). **Words:** none new: section 8's "Add the visit note as a PDF or photo."
+already tells no file apart from a note that could not be read. **Merges only after** the platform's
+build-43 pull request (its BUILD-PLAN 30.13.1, ADR-0030's amendment of 2026-11-14: a file field may be
+required) is merged and deployed: until then Flow CD's validator refuses a required file field.
+
+**What moved it** — the owner's item 1 on build 43, word for word: "I pressed start without uploading
+anything. It took me to activity. If there is no file uploaded then it shouldnt start. This is a basic
+requirement for a button. ", and the owner's "Yes to all 3" (2026-11-14) to the session's proposal
+that every current flow's file field be required now. Its slot is the third the session's
+retirements freed; BUILD-PLAN 30.6.1's later hook version becomes v6.
+
+| #   | Change                                                                                                                                                                                                                                  | Built                                     |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1   | The manifest is v4's, byte for byte, but its version, its own origin and service account (`-v5`), and `visitNotes` `"required": true`: the platform refuses a run without a file before it starts. It keeps `"dataProtection": "hipaa"` | the manifest; `v5-manifest.test.ts`       |
+| 2   | Its calls name no models, as v4's (`HEALTH_VERSIONS` in `src/models.ts` names v4 and v5)                                                                                                                                                | `modelsFor`; `v4-manifest.test.ts`        |
+| 3   | A batch run that still names no file stops "Add the visit note as a PDF or photo." (`chunk`, `FAILURES.noFile`), before any read or call                                                                                                | `v5-manifest.test.ts`, `v2-batch.test.ts` |

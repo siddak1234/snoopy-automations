@@ -26,6 +26,7 @@ const read = (version: number) =>
   ) as Manifest;
 const manifest = read(7);
 const v8 = read(8);
+const v9 = read(9);
 const v6 = read(6);
 const v5 = read(5);
 const v4 = read(4);
@@ -91,4 +92,25 @@ test("v8 is v7 but for its version and its own container: its exact words and it
   assert.equal(v8.version, 8);
   assert.equal(v8.service.origin, 'http://invoice-processing-v8.autom8x.internal:8080');
   assert.equal(v8.service.serviceAccount, 'invoice-processing-v8@autom8x.iam.gserviceaccount.com');
+});
+
+test("v9 is v8 but for its version, its own container and a required file (the owner's item 1 on build 43)", () => {
+  const fileField = (each: Manifest) =>
+    ((each.trigger as { input: Record<string, unknown>[] }).input[0] ?? {}) as Record<
+      string,
+      unknown
+    >;
+  const without = (each: Manifest) => ({
+    ...each,
+    version: undefined,
+    service: { ...each.service, origin: undefined, serviceAccount: undefined },
+    trigger: { ...(each.trigger as object), input: [{ ...fileField(each), required: undefined }] },
+  });
+  assert.deepEqual(without(v9), without(v8));
+  assert.deepEqual(
+    [v9.version, fileField(v9).key, fileField(v9).required, fileField(v8).required],
+    [9, 'invoiceFile', true, false],
+  );
+  assert.equal(v9.service.origin, 'http://invoice-processing-v9.autom8x.internal:8080');
+  assert.equal(v9.service.serviceAccount, 'invoice-processing-v9@autom8x.iam.gserviceaccount.com');
 });

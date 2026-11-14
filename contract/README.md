@@ -1,10 +1,13 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at snoopy-backend 50a24f7, the head of its branch
-`round-21/stage-2-platform` (#266, Round 21's Stage 2 contract, ADR-0049 and ADR-0050; not yet
-merged; all eleven files `cmp`-equal to it; 2026-11-04, "Refreshed 2026-11-04, Stage 2" below),
-re-pinned to its merge commit when it lands. Before it, `0973082` (snoopy-backend 0973082 (#265),
+(`snoopy-backend`, private) at snoopy-backend 926321f (#283), the platform's `main` after its #283
+squash-merged Round 22's limits before breadth (its BUILD-PLAN 30.2: ADR-0051 decision 2,
+ADR-0049 Amendment 3), merged and deployed 2026-11-14; all eleven files `cmp`-equal to it
+(2026-11-14, "Refreshed 2026-11-14, a connection's operations" below). Before it, `50a24f7`, the
+head of its branch `round-21/stage-2-platform` (#266, Round 21's Stage 2 contract, ADR-0049 and
+ADR-0050; merged as `7793134`; all eleven files `cmp`-equal to `50a24f7`, `7793134` and the
+platform's `64770b8`, #282; 2026-11-04, "Refreshed 2026-11-04, Stage 2" below). Before it, `0973082` (snoopy-backend 0973082 (#265),
 the platform's `main` after its #265
 squash-merged Round 21's Stage 1 contract (ADR-0048 amendment 5; first copied at its branch head
 `7ae5d92`; all eleven files `cmp`-equal to both; 2026-11-04, "Refreshed 2026-11-03, Stage 1" below)). Before it,
@@ -524,6 +527,20 @@ and is deployed, an older platform registers a manifest declaring the field, ign
 its calls to OpenRouter (its `validateManifest` refuses no unknown top-level key), so v4 merges only
 after it.
 
+Refreshed 2026-11-14, a connection's operations, from snoopy-backend 926321f (#283, Round 22's
+BUILD-PLAN 30.2), the platform's `main`, merged and deployed. Two files moved; all eleven are
+`cmp`-equal to `926321f` (each copied with `git show 926321f:schemas/<file>`):
+
+- `automation-manifest.json`: a connection's optional `operations`, 1 to 64 unique names of at
+  most 60 characters, each one or more dotted names (its words in "What the platform refuses
+  beyond the schema", **`requiredConnections`**, below).
+- `platform-menu.json`: `limits.operationsPerConnection` (64) and `limits.operationLength` (60).
+
+The other nine files are byte-identical to `50a24f7`'s. No flow here lists `operations` yet: a
+connection listing none keeps the platform's check of the provider file alone. The build-43
+platform branch (its BUILD-PLAN 30.13.1, a file field may be required) changes no schema file; its
+words are in "`trigger`", below.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -540,8 +557,10 @@ amendments 3 and 4's words (`setup[]`'s options, `trigger`'s `multiple` and `max
 decision's `group`, the `memory` capability) at `10b5fae`, "Size, before the validator" at
 `d9297bc`, and amendment 5's words (`setup[]`'s `example` and `setupSections`, the `links` block, a
 decision's `options` and an `other` answer) at `7ae5d92`, and `dataProtection`'s at `50a24f7`
-(its registration rule from `snoopy-backend/packages/contracts/src/data-protection.ts`), its file paths written
-from `snoopy-backend/`.
+(its registration rule from `snoopy-backend/packages/contracts/src/data-protection.ts`), a connection's
+`operations` and the `ehr-fhir` new-version rule at `926321f`, and the required `artifact` field at
+the platform's build-43 branch (`8489f79`, not yet merged), its file paths written from
+`snoopy-backend/`.
 
 **Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
 of the committed file, counted as committed (pretty-printed JSON, its
@@ -570,11 +589,23 @@ ready, and the workspace accepts the health data agreement before the flow is ad
 The validator checks its value and nothing more — a stored Healthcare manifest without it,
 ICD-10 Code Check v1–v3, still reads. A NEW version of a Healthcare flow without it is refused
 when it registers: "dataProtection: is required for a Healthcare flow, whose runs carry health
-data".
+data". **A new version only** (`newVersionProblems`, at registration; ADR-0049 Amendment 3, at
+`926321f`): a flow that connects `ehr-fhir` is refused without `hipaa` — "must be hipaa for a flow
+that connects ehr-fhir, whose runs carry health data" — and without that connection's
+`operations` — "is required of a flow that connects ehr-fhir: name each operation it calls". A
+version registered before the rule is never re-judged.
 
 **`requiredConnections`** — a `providerId` "is declared more than once" is refused; the
 schema's `uniqueItems` compares whole entries, the validator compares `providerId`
-alone, which is stricter. **`requiredCapabilities`** — each "is declared more than
+alone, which is stricter. Its **`operations`** (ADR-0051 decision 2, at `926321f`) — optional on
+each connection: absent, the flow may call every operation the provider's file declares, as
+before; present, only these, and Runs refuses any other call 403 `operation_not_declared`.
+Refused: an empty list, "must name at least one operation"; over 64, "must contain at most 64
+entries"; a name over 60 characters, "must be at most 60 characters"; a name outside the provider
+file's pattern for an operation, "must be one or more names joined by dots, each starting a-z and
+continuing a-z, A-Z or 0-9, e.g. chat.postMessage"; a repeat, "is declared more than once".
+`flow-up` refuses a name the provider file lacks: "requiredConnections[<i>].operations[<j>]: <op>
+is not an operation snoopy-backend's providers/<id>.json declares". **`requiredCapabilities`** — each "is declared more than
 once" refused; here `uniqueItems` is exact.
 
 **`service.origin`** — "must be an absolute URL"; "must use https, or http only for a
@@ -617,9 +648,10 @@ manifest does not declare; a trigger kind the platform does not implement is ref
 registration. `input` (ADR-0030) "is only meaningful when kind is 'manual'"; each field takes the
 setup field's properties except `section` and `notifies` — anything else "is not a run input
 property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact` (never `select`); an `email`
-value "must be an email address for an email control"; an `artifact` field "must be false for an
-artifact control" when required and "is not meaningful for an artifact control" with a default —
-a file is uploaded, never required or shared; its `multiple` (amendment 3; since amendment 4 every
+value "must be an email address for an email control"; an `artifact` field may be `required`
+(ADR-0030, 2026-11-14, at the platform's build-43 branch, its BUILD-PLAN 30.13.1: the run start
+refuses a run without it, 422) and a default "is not meaningful for an artifact control" — a file
+is uploaded, never shared; its `multiple` (amendment 3; since amendment 4 every
 file goes into ONE run, its value a list of 1 to `maxFiles` upload ids) "must be a boolean" and on
 any other control "is only meaningful on an 'artifact' control"; its `maxFiles` (amendment 4: 1 to
 200, default 50, Runs refuses a longer list) "is only meaningful on a field with multiple"; a key
@@ -711,7 +743,7 @@ declares no page or pixel limit (`artifacts`, below). Since `cf17dbb` (build 28)
 "must be an object", a key besides `positive` and `negative` "is not a verdict word", and each word
 is a display string of at most 40 characters ("Text", above); of these only a blank word, "must not
 be empty", is one the schema cannot say. `test/manifest-items.ts` ports the rules here the schema
-cannot say, `test/manifest-rules.ts` the `artifact` field's two rules above, and
+cannot say, `test/manifest-rules.ts` the `artifact` field's one rule above (no default), and
 `test/manifest-items.test.ts` bites each.
 
 **A flow's pages** (ADR-0048 decision 5; `pagesProblem` in `snoopy-backend/packages/contracts/src/pages.ts`) —
@@ -793,8 +825,8 @@ refused. The decision route then takes one answer per change:
 other", and an `other` names one of its change's offered values (`unofferedOther`). The SDK's
 `boundedDecisions` holds a flow's list to these before sending (`packages/automation-sdk/src/review.ts`).
 
-**Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps and
-scopes per connection each "must contain at most N entries".
+**Arrays** — connections, capabilities, setup fields, run input fields, pipeline steps,
+scopes per connection and operations per connection each "must contain at most N entries".
 
 **At registration** — the filename must match `templateId` and `version`; a registered
 version is immutable; `service.origin` and `service.serviceAccount` are unique across

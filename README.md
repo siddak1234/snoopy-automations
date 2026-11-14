@@ -239,8 +239,8 @@ Every flow built from Round 21 on is defined with `defineFlow` (`packages/automa
 `defineAutomation` with the standards on, so every new flow fails, retries and words its failures
 the same way, by reuse rather than by each flow writing its own (the two live flows did: Invoice
 Processing's `noteThrows`, Resume Screening's `stops`). `npm run scaffold` and the template use it.
-**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8;
-Resume Screening v3 and v4) too, with their own failure words and retries — this is the one list of
+**The two live flows keep `defineAutomation`**, their after-pilot versions (Invoice Processing v8 and
+v9; Resume Screening v3 to v5) too, with their own failure words and retries — this is the one list of
 those versions, which the other mentions link to; `defineAutomation`'s behaviour is
 as before. Those versions take only Q2's re-ask from `defineFlow`: `reaskingOnce(platform, log)`
 wraps the platform their `execute` is handed, and a second miss reaches their step, which ends the
@@ -686,10 +686,11 @@ Each flow's spec and build record is its own README, which a change to its code,
 manifests updates in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules,
 a `*` bound to the flow's id):
 
-- **Invoice Processing**, `invoice-processing` (v8; each document's exact words, and Q2's re-ask):
+- **Invoice Processing**, `invoice-processing` (v9, its file required; v8, each document's exact
+  words, and Q2's re-ask):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
-- **Resume Screening**, `candidate-reviewer` (v4, blocks: Contact rows, logo links, the exact words
-  kept nowhere; Candidate Reviewer at v1): its spec and the detail,
+- **Resume Screening**, `candidate-reviewer` (v5, its resume required and "no file" its own stop;
+  v4, blocks: Contact rows, logo links, the exact words kept nowhere; Candidate Reviewer at v1): its spec and the detail,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
@@ -697,11 +698,11 @@ Both are live on `defineAutomation`; their after-pilot versions stay on it, with
 `reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, withdrawn 2026-11-04; v2, a batch of
-  visit notes for doctors and coders; v3, never registered; v4; v2 to v4 on `defineFlow`): its
-  folder's README is its spec and how the code does it. v2 and v4 are served, each on its own
-  container; the image built here serves v4 alone (v4 carrying health data,
-  `dataProtection: 'hipaa'`, its calls naming no models; the folder README's "v4"), on the Stage 2
-  contract (`contract/`, "Stage 2" above).
+  visit notes for doctors and coders; v3, never registered; v4; v5; v2 to v5 on `defineFlow`): its
+  folder's README is its spec and how the code does it. Each served version runs on its own
+  container; the image built here serves v5 alone (v4 carrying health data,
+  `dataProtection: 'hipaa'`, its calls naming no models, the folder README's "v4"; v5 the same with
+  its file required, its "v5"), on the Stage 2 contract (`contract/`, "Stage 2" above).
 
 ## The kit
 
