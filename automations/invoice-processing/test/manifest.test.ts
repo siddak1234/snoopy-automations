@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -8,7 +7,7 @@ import type { JsonObject } from '@autom8x/automation-sdk';
 
 import { SERVED_VERSIONS } from '../src/automation.js';
 import { VENDOR_KEY } from '../src/quickbooks-path.js';
-import { NONE, QUICKBOOKS, manifests, manifestsRoot } from './fixtures.js';
+import { NONE, QUICKBOOKS, manifests, manifestsRoot, retiredFile } from './fixtures.js';
 
 /**
  * The v4 manifest as the session's spec of 2026-10-17 words it (Build 22, §3, V1): v3's
@@ -18,8 +17,8 @@ import { NONE, QUICKBOOKS, manifests, manifestsRoot } from './fixtures.js';
  * Then something about AI Processing / 4. Quickbooks updated / 5. Email sent"). The words of steps
  * 3 and 4 are the session's suggestions D2 and D3, which the owner approved ("continue and
  * complete", 21:12Z); the mapping of v3's steps to the five (S18) and the vendor choice titled
- * "Integration" in step 2 with the approval limit in none (S19) are the session's choices. v1, v2
- * and v3 stay beside it, registered, byte for byte, until each is retired.
+ * "Integration" in step 2 with the approval limit in none (S19) are the session's choices. v1 to
+ * v8 are retired; their files left `manifests/`, and git keeps them (`retiredFile`).
  */
 
 type Group = Record<string, unknown> & { id: string; title: string };
@@ -34,15 +33,11 @@ type Manifest = Record<string, unknown> & {
   service: Record<string, unknown>;
 };
 
-const file = (version: number) => join(manifestsRoot, `invoice-processing.v${version}.json`);
-const read = (version: number) => JSON.parse(readFileSync(file(version), 'utf8')) as Manifest;
-const sha256 = (version: number) =>
-  createHash('sha256')
-    .update(readFileSync(file(version)))
-    .digest('hex');
-const manifest = read(9);
-const v4 = read(4);
-const v3 = read(3);
+const manifest = JSON.parse(
+  readFileSync(join(manifestsRoot, 'invoice-processing.v9.json'), 'utf8'),
+) as Manifest;
+const v4 = JSON.parse(retiredFile(4)) as Manifest;
+const v3 = JSON.parse(retiredFile(3)) as Manifest;
 
 /**
  * A step's title as the clients draw it (the platform's ADR-0041, contract §1 (d)): the title its
@@ -58,41 +53,11 @@ function stepTitle(group: Group, config: JsonObject): string {
   return titled.titles.find((each) => each.providerId === chosen)?.title ?? group.title;
 }
 
-test('v9 is the one version this code serves; v1 to v8 stay registered, byte for byte', () => {
+test('v9 is the one version this code serves; v1 to v8 were retired and their files left (git keeps them)', () => {
   assert.deepEqual([...SERVED_VERSIONS], [9]);
   assert.deepEqual(
     manifests.map((each) => each.version),
     [9],
-  );
-  assert.deepEqual(
-    [1, 2, 3, 4].map(sha256),
-    [
-      'd712dd7e399e268a030619ca08144fd0249b730211ab5f37b8bc57b853155f25',
-      '867b4eca9f022f09bc3cc92a1023719381374631c5041e6842a52777b1feca98',
-      '3c7f1134b2c8918b578d08f4f23e5c69daf04ea930aaa3fbf0f14dd993ddcab9',
-      'b07092537297d442538c629b0488ba9810fb752f2e3fc6b0e89202355476d750',
-    ],
-    'v1 to v4 untouched: a registered version is immutable',
-  );
-  assert.equal(
-    sha256(5),
-    '3845b67842a4ffa923d850328d9a3836418d1d3f61015a2f37b20f1d3c6472bf',
-    'v5 untouched: a registered version is immutable',
-  );
-  assert.equal(
-    sha256(6),
-    '166742dcba1530901c82e696efa9eb635aee6ab093d774e93c45c533505fb142',
-    'v6 untouched: a registered version is immutable',
-  );
-  assert.equal(
-    sha256(7),
-    '85a85536b46aa199d14c42a7f77a44f0f666e23bb0da4537a413c69c8775afe4',
-    'v7 untouched: a registered version is immutable',
-  );
-  assert.equal(
-    sha256(8),
-    '0532983aa1eb5878146a2e8b4884aa9f3f0221ed661e200bbe906016e72b2339',
-    'v8 untouched: a registered version is immutable',
   );
   assert.equal(manifest.version, 9);
 });

@@ -2,6 +2,22 @@
 
 **v8's words approved:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — "Supplier, exact words", "Number, exact words" and "Total, exact words" (v8, below), as shown, no word changed.
 
+**Versions.** This flow's files in `manifests/`: its newest, and the one before it only while it may
+still be served. A retired version's file leaves with its row here (the repository README, "The
+definition-file standard"; `test/definition-files.ts`, D5); git keeps it.
+
+| Version | State                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| v1      | retired 2026-10-18: snoopy-backend BUILD-PLAN 25.4.48 (SYSTEM-MANIFEST §1.1a)                          |
+| v2      | retired 2026-10-18: snoopy-backend BUILD-PLAN 25.4.48 (SYSTEM-MANIFEST §1.1a)                          |
+| v3      | retired 2026-10-20: snoopy-backend BUILD-PLAN 25.4.60 (SYSTEM-MANIFEST §10a)                           |
+| v4      | retired 2026-10-20: snoopy-backend BUILD-PLAN 25.4.60 (SYSTEM-MANIFEST §10a)                           |
+| v5      | retired 2026-10-21: snoopy-backend BUILD-PLAN 25.10.13 (SYSTEM-MANIFEST §10a)                          |
+| v6      | retired 2026-10-23: snoopy-backend BUILD-PLAN 27.8.11 (SYSTEM-MANIFEST §10a)                           |
+| v7      | retired 2026-11-06: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-06 block                            |
+| v8      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5) |
+| v9      | served: `manifests/invoice-processing.v9.json`, this image's (`SERVED_VERSIONS`)                       |
+
 This flow was built before `/create-flow`'s specs, so this file is its build's record: moved here
 from the repository README in Round 21, so a change to the flow's code, prompts or manifests asks
 for this file in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules). It
@@ -24,10 +40,10 @@ manifest is v8's but for its version, its own container (`-v9`) and its file fie
 amendment of 2026-11-14 allows a required file field, and its clients say "Add Document first."
 (the field's title). Its code and words are v8's; `RUN_FAILS.no_file`, "Add a PDF or photo, then
 start again.", stays the backstop for a run that still names no file. The image serves v9 alone (its
-Dockerfile copies only `manifests/invoice-processing.v9.json`), and v1 to v8 stay registered and
-immutable, each held to its sha256 (`automations/invoice-processing/test/manifest.test.ts`;
-`versions.test.ts` holds v9 to v8 but for its version, container and `required`). v8's container
-keeps its pinned image until it is retired (`/retire-version`). It merges only after the platform's
+Dockerfile copies only `manifests/invoice-processing.v9.json`); v1 to v8 are retired ("Versions",
+above), their files read from git by the suite (`retiredFile` in
+`automations/invoice-processing/test/fixtures.ts`; `versions.test.ts` holds v9 to v8 but for its
+version, container and `required`). It merges only after the platform's
 build-43 pull request is merged and deployed (Flow CD runs the platform's validator, which until then
 refuses a required file field).
 
@@ -61,8 +77,8 @@ Two changes, both in the code:
 `display.documentWords`, "Invoice" and "Invoices" — so the website, the app and the run package head
 each document "Invoice 1 of 3" from the flow's own words, and any other flow "Document 1 of 3"; its
 code is v6's. `automations/invoice-processing/test/manifest.test.ts` holds that v7 is v6 but for its
-version, its own container and those words; its image served v7 alone until v8; v1 to v6 stay
-registered and immutable, each held to its sha256.
+version, its own container and those words; its image served v7 alone until v8; v1 to v6 stayed
+registered and immutable, each held to its sha256 until their files left (BUILD-PLAN 30.15.2).
 
 **v6** (Build 24; the owner's build 23 feedback of 2026-10-20, F15 and
 F16). v6's results also say, for each document, the uploaded file it came from (`source.file` — a run
@@ -81,12 +97,12 @@ v4 with step 5 named **"Run completed"** ("Done when the run succeeds.") instead
 clients check it only when the run succeeds, and a held run's approval email never checks it. Nothing
 else moved — `automations/invoice-processing/test/manifest.test.ts` holds v5 to v4 less the version,
 the container's origin and service account, and step 5's words. The image serves v5 alone
-(`SERVED_VERSIONS`; its Dockerfile copies only `manifests/invoice-processing.v5.json`); v1 to v4 stay
-registered and immutable, held to their sha256 by the same test.
+(`SERVED_VERSIONS`; its Dockerfile copies only ~~`manifests/invoice-processing.v5.json`~~); v1 to v4 stayed
+registered and immutable, held to their sha256 by the same test until their files left (BUILD-PLAN 30.15.2).
 
 **v4** (Build 22; the session's spec of 2026-10-17, §3, V1) — served until v5's release. Its
-image served v4 alone; v1, v2 and v3 stay registered and immutable,
-`automations/invoice-processing/test/manifest.test.ts` holding each to its sha256. v4 is v3's automation, unchanged — the same 22
+image served v4 alone; v1, v2 and v3 stayed registered and immutable,
+`automations/invoice-processing/test/manifest.test.ts` holding each to its sha256 until their files left (BUILD-PLAN 30.15.2). v4 is v3's automation, unchanged — the same 22
 steps, prompts, checks, holds, QuickBooks writes, result and `outputSchema`, and the same model
 calls per file: `automations/invoice-processing/test/v4.test.ts` runs one file on v4's manifest and on v3's and finds the same
 steps reported, the same calls and the same result — shown in the five steps the owner asked for
@@ -107,8 +123,8 @@ cannot be registered. What follows describes v3, v2 and v1; where they differ, t
 wins.
 
 **v3** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8 change it). Its image served v3
-alone; v1 and v2 stay registered and immutable, and v3 since the platform's thirty-second pin (its
-#214). A file holds
+alone; v1 and v2 stayed registered and immutable, and v3 since the platform's thirty-second pin (its
+#214), until their files left (BUILD-PLAN 30.15.2). A file holds
 any number of documents: `extract` reads them all with `automations/invoice-processing/prompts/extract-documents.v1.json`, in
 parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
 8,000-token cap — each its own entry with its own seller and details (`automations/invoice-processing/src/run/extract.ts`,
@@ -160,8 +176,8 @@ below). The
 platform's Build 21 contract merged as `69b8d97` (`contract/README.md`). What follows describes
 v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, and v4's above it.
 
-**v2.** Its image served v2 alone; v1's manifest stays, registered and immutable, until it is
-retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
+**v2.** Its image served v2 alone; v1's manifest stayed, registered and immutable, until it was
+retired ("Versions", above). v2's manifest is category Accounting; QuickBooks is an optional connection,
 chosen in its one `connection` setup field, `vendor` — "None" by default; two settings, the
 approval limit and "Also email", neither required, and no setting can fail a run
 (`automations/invoice-processing/test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
@@ -187,7 +203,7 @@ merges and is promoted, v2 cannot be registered. What follows describes v1, and 
 of it; where they differ, this paragraph wins, and v3's above it.
 
 **v1.** It was built in groups, each appending its steps to
-`manifests/invoice-processing.v1.json`; v1 holds all 24 and was registered on 2026-10-12 (the
+~~`manifests/invoice-processing.v1.json`~~; v1 holds all 24 and was registered on 2026-10-12 (the
 platform's #205, read back live by its #206), so that file is now immutable and a change to it
 is a v2 (below). The first five steps spend nothing. `receive` holds the platform's
 measurements of the upload — its real kind, its size, a PDF's pages, an image's pixels, taken

@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { readManifests } from '@autom8x/automation-sdk';
+import { readManifests, type Manifest } from '@autom8x/automation-sdk';
 import { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
 import { SERVED_VERSIONS, TEMPLATE_ID, define } from '../src/automation.js';
@@ -12,14 +11,14 @@ import { FILE_LIMITS } from '../src/file.js';
 import { EXTRACT_POSTING, EXTRACT_RESUME, PROMPTS, SCORE_CANDIDATE } from '../src/prompts.js';
 import { RESUME_FILE_KEY } from '../src/steps/candidate.js';
 import { JOB_FILE_KEY } from '../src/steps/job.js';
-import { NOW, candidateRun, manifest, manifestsRoot } from './fixtures.js';
+import { NOW, candidateRun, manifest, manifestsRoot, retiredFile } from './fixtures.js';
 
 /**
  * `manifests/candidate-reviewer.v5.json`, the version this image serves (v4's, and so v3's and v2's,
  * but for its version, its container and, since v5, its resume field required), as the spec words it
  * (§1–§7): its name and department, its one question, the files it takes, its four steps and
  * five, its jobs and their verdict words, and its container — and the code's constants held to
- * it; and v1, registered and immutable, as it was.
+ * it; and v1 to v4, retired, as they were (their files left `manifests/`; git keeps them).
  */
 
 type Entry = Record<string, unknown>;
@@ -193,7 +192,10 @@ test("the job's reading is the posting prompt's answer less whether it was reada
 });
 
 test('the image serves v5 alone: of v1 to v5 it keeps v5, and refuses a run pinned to v4 before any step or call', async () => {
-  const all = readManifests(manifestsRoot, TEMPLATE_ID);
+  const all = [
+    ...[1, 2, 3, 4].map((version) => JSON.parse(retiredFile(version)) as Manifest),
+    ...readManifests(manifestsRoot, TEMPLATE_ID),
+  ];
   assert.deepEqual(
     all.map((each) => each.version),
     [1, 2, 3, 4, 5],
@@ -233,11 +235,8 @@ function linksOf(schema: unknown) {
   return resume.properties.links as { description: string; items: { properties: { url: Entry } } };
 }
 
-/** A registered version's manifest, as committed. */
-const read = (version: number) =>
-  JSON.parse(
-    readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v${version}.json`), 'utf8'),
-  ) as typeof manifest;
+/** A retired version's manifest, as committed (git keeps it: `retiredFile`). */
+const read = (version: number) => JSON.parse(retiredFile(version)) as typeof manifest;
 
 const withoutContainer = (each: typeof manifest) => ({
   ...each,
@@ -259,13 +258,6 @@ test("v5 is v4 but for its version, its own container and a required file (the o
   assert.deepEqual(
     [manifest.version, resumeField(manifest).required, resumeField(v4).required],
     [5, true, false],
-  );
-  // v4 is registered and immutable: these bytes, as served until it is retired.
-  assert.equal(
-    createHash('sha256')
-      .update(readFileSync(join(manifestsRoot, `${TEMPLATE_ID}.v4.json`)))
-      .digest('hex'),
-    '99f6944c6d96278068af5d98fd7d1c332a9a4ec7980bf928ab1db6bacb8a7be9',
   );
 });
 
@@ -296,7 +288,7 @@ test("v2 is v1 but for its name, departments, verdict words, container and links
   const v1 = read(1);
   const manifest = read(2);
   const v1Items = v1.items as unknown as Entry & { fields: Entry[] };
-  // v1 is registered and immutable: as it was built.
+  // v1, retired: as it was built.
   assert.deepEqual(
     [v1.version, (v1.display as Entry).name, (v1.service as Entry).origin, v1Items.verdictWords],
     [1, 'Candidate Reviewer', 'http://candidate-reviewer-v1.autom8x.internal:8080', undefined],

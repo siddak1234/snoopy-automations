@@ -680,27 +680,34 @@ this repository with its 25.4.11 (2026-10-22): their code, their manifests and t
 publishing. The platform's catalog keeps their rows, withdrawn, never deleted; their history is in
 `docs/records/round-record.archive.md`.
 
+A retired version leaves this repository too: its file leaves `manifests/` in the first pull
+request after its retirement is shown (a release's `RETIRED` row, or the record of a hand
+retirement), with a row in its flow's README saying where (the rules under
+[Build a flow](#build-a-flow)). Git keeps every file; a suite that still runs a retired version's
+code reads its file from git (`RETIRED_AT` in `test/definition-files.ts` and in each flow's test
+fixtures). BUILD-PLAN 30.15.2 (2026-11-14) left each flow one file, its newest; D3 allows two.
+
 ## The flows
 
 Each flow's spec and build record is its own README, which a change to its code, prompts or
 manifests updates in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules,
 a `*` bound to the flow's id):
 
-- **Invoice Processing**, `invoice-processing` (v9, its file required; v8, each document's exact
-  words, and Q2's re-ask):
+- **Invoice Processing**, `invoice-processing` (v9, its file required; v1 to v8 retired, their
+  files gone, each in its README's "Versions"):
   [automations/invoice-processing/README.md](automations/invoice-processing/README.md).
-- **Resume Screening**, `candidate-reviewer` (v5, its resume required and "no file" its own stop;
-  v4, blocks: Contact rows, logo links, the exact words kept nowhere; Candidate Reviewer at v1): its spec and the detail,
+- **Resume Screening**, `candidate-reviewer` (v5, its resume required and "no file" its own stop,
+  on v4's blocks; v1 to v4 retired, their files gone; Candidate Reviewer at v1): its spec and the detail,
   [automations/candidate-reviewer/README.md](automations/candidate-reviewer/README.md), and how the
   code does it, at its end.
 
 Both are live on `defineAutomation`; their after-pilot versions stay on it, with Q2's re-ask from
 `reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
-- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, withdrawn 2026-11-04; v2, a batch of
-  visit notes for doctors and coders; v3, never registered; v4; v5; v2 to v5 on `defineFlow`): its
-  folder's README is its spec and how the code does it. Each served version runs on its own
-  container; the image built here serves v5 alone (v4 carrying health data,
+- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; v2, a batch of visit notes for doctors
+  and coders; v3, never registered; v4; v5; v2 to v5 on `defineFlow`; v1 to v4 retired, their files
+  gone): its folder's README is its spec and how the code does it. Each served version runs on its
+  own container; the image built here serves v5 alone (v4 carrying health data,
   `dataProtection: 'hipaa'`, its calls naming no models, the folder README's "v4"; v5 the same with
   its file required, its "v5"), on the Stage 2 contract (`contract/`, "Stage 2" above).
 
@@ -849,12 +856,44 @@ declares `SERVED_VERSIONS = [<n>]` in `automations/<templateId>/src/automation.t
 `contract/README.md`, in the validator's own words.
 
 A registered manifest at a version is **immutable.** Changing anything means a new
-file at `v<n+1>` — a run pinned to v1 must still resolve the service it actually
-called; `test/manifest-immutable.test.ts` fails when a file under `manifests/` that is on
-`main` is edited or deleted. The platform's decision of 2026-10-08 (D2) is one container
+file at `v<n+1>` — a run pinned to a version must still resolve the service it actually
+called. The platform's decision of 2026-10-08 (D2) is one container
 and one image per manifest version: `test/conformance.test.ts` holds every Dockerfile,
 the template's included, to copying exactly one `manifests/<templateId>.v<n>.json`, the
 version its code serves.
+
+**The definition-file standard** (BUILD-PLAN 30.15.2, 2026-11-14). The owner: "Also why do we
+have 16 versions for flows. Why do we not just have the latest ones since we confirmed they are the
+best. Why are we wasting time, resources, soace and bandwidth on older flows. Shouldnt we clean up
+after every revision?", and on the plan: "k2, yes(but is this safe? is there a way to ensure we
+are not duplicating efforts or items and properly updating definition files based on standards?),
+yes." (The owner typed two spaces after "there"; the format check prints them as one.) The rules
+are the session's answer, `test/definition-files.ts` (its header names what a repository check
+cannot see: which version is served or withdrawn):
+
+- D1 a file is named `<templateId>.v<n>.json`, says that id and version, and its flow folder exists
+  (`test/architecture.test.ts`); every tracked path under `manifests/` is such a name at its top
+  level, so no subfolder, `.bak` or leading zero there escapes D2–D8.
+- D2 each flow's newest file is the one its Dockerfile copies.
+- D3 at most two files a flow: the newest, and the one before it while it may still be served.
+- D4 a file on `main` is never edited.
+- D5 a file leaves only below a newer one of its flow (or with its whole flow), and with a row in
+  its flow's README, first cell `v<n>`, last cell `retired <yyyy-mm-dd>: <where shown>` (a Flow CD
+  or cd.yml run, or the record of a hand retirement); a flow retired whole has no README left, so
+  its rows go in this README, first cell `<id> v<n>`. The form is checked, its truth is the review's.
+- D6 a name ever deleted on `main` never comes back, and a new version is above every one its flow
+  ever had.
+- D7 no copy of a definition file outside `manifests/`.
+- D8 one added file a flow a change, the one its Dockerfile copies.
+
+**No new requirements.** The owner: "connections are optional. why would a user have to connect to
+update?" A flow moves to its newest version by itself only when that version asks nothing new, so
+`test/no-new-requirements.ts` refuses a new version that, against its flow's newest file at the
+base, adds a required connection (a public provider asking no scope aside), asks a connection for
+more scopes, or adds a required setting with no `defaultValue` — unless the flow's README gives the
+reason on a row whose first cell is the provider id or the setting key and whose last cell is
+`new in v<n>: <the reason>`. CI's Deploy job prints each version a release retired, with the file
+to remove in the next pull request.
 
 ## Design in n8n first (the owner's Mac only)
 

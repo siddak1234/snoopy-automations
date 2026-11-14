@@ -15,6 +15,7 @@ import {
 } from '@autom8x/automation-sdk';
 
 import { LIVE_FLOWS } from '../scripts/review-rows.js';
+import { imageManifests } from './definition-files.js';
 
 /**
  * The conformance test (platform BUILD-PLAN 25.3.5): every automation here is
@@ -227,7 +228,7 @@ function assertCopiesOneManifest(
   versions: readonly number[],
   label: string,
 ): void {
-  const copied = imageManifests(directory);
+  const copied = copiedManifests(directory);
   assert.equal(
     copied.length,
     1,
@@ -242,15 +243,11 @@ function assertCopiesOneManifest(
   );
 }
 
-/** The manifest files an automation's Dockerfile copies into its image, as written there. */
-function imageManifests(directory: string): string[] {
-  const dockerfile = readFileSync(join(directory, 'Dockerfile'), 'utf8');
-  return dockerfile
-    .split('\n')
-    .filter((line) => /^COPY\b/u.test(line))
-    .flatMap((line) => line.split(/\s+/u).filter((word) => word.startsWith('manifests/')))
-    .filter((path) => path !== 'manifests/' && !path.startsWith('./'))
-    .sort();
+/** The manifest files an automation's Dockerfile copies into its image (`imageManifests`). */
+function copiedManifests(directory: string): string[] {
+  return imageManifests(readFileSync(join(directory, 'Dockerfile'), 'utf8')).map(
+    (name) => `manifests/${name}`,
+  );
 }
 
 test('the template automation conforms to its example manifest, which validates against the vendored schema', async () => {

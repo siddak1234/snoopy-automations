@@ -8,8 +8,8 @@
 (§1; v1 is "Candidate Reviewer"); the department options A–Z, "AI" added among them, HR still the
 default (§2); a verdict on each candidate, "Advance" at a score of 60 or above and "Decline" below
 (§7), a label from the score alone: a person decides (§11). The job's reading, the prompts, the
-steps and every other word are v1's, so a job made on v1 serves v2's runs; v1 is served beside v2
-until it is retired. It needs the platform's build 28 contract first (§10).
+steps and every other word are v1's, so a job made on v1 serves v2's runs; v1 was served beside v2
+until it was retired ("Versions", below). It needs the platform's build 28 contract first (§10).
 
 **v2, 2026-10-25 (build 28's F8: "If there is a url that should be in the section"):** a resume's
 links are also those its file links to behind a word, such as "LinkedIn" (§4), each named by its
@@ -71,8 +71,8 @@ activity. If there is no file uploaded then it shouldnt start. This is a basic r
 button. " Item 4: "I believe this spdcific error was because no file existed. Ensure there is
 differentiation between errors and their types." The new words are the design's default: shown to
 the owner with the round's plan (its "For the owner" point 7), not answered, so built at the
-default by the project's rule; not approved by the owner. v4's container keeps its pinned image until it is retired
-(`/retire-version`); v4's runs keep v4's words. It merges only after the platform's build-43 pull
+default by the project's rule; not approved by the owner. v4 was retired on 2026-11-14 ("Versions",
+below); v4's runs keep v4's words. It merges only after the platform's build-43 pull
 request is merged and deployed (Flow CD runs the platform's validator, which until then refuses a
 required file field).
 
@@ -85,6 +85,18 @@ then refused a required file field); `save` declares no retry (§6); what the sc
 v1, every word on the screens the owner was shown is unchanged; what v2 changed is in the notes
 above. v3 adds two words, NEW, ~~awaiting the owner's approval~~ approved 2026-11-04 after v3 went live (this spec's top): the Contact row "Name" and
 `Exact words: "…"` under the name, the email and the phone (§7).
+
+**Versions.** This flow's files in `manifests/`: its newest, and the one before it only while it may
+still be served. A retired version's file leaves with its row here (the repository README, "The
+definition-file standard"; `test/definition-files.ts`, D5); git keeps it.
+
+| Version | State                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:45Z)      |
+| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14         |
+| v3      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14         |
+| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5) |
+| v5      | served: `manifests/candidate-reviewer.v5.json`, this image's (`SERVED_VERSIONS`)                       |
 
 Every limit below is the platform's: `contract/schemas/automation-manifest.json` and
 `contract/schemas/automation-run-result.json`, and the rules beyond them in `contract/README.md`,
@@ -319,10 +331,9 @@ and take Q2's re-ask alone. Where the code does it:
   Dockerfile copies only `manifests/candidate-reviewer.v5.json`, which `automations/candidate-reviewer/test/manifest.test.ts`
   holds to the spec and the code's constants to (the file types and size in
   `automations/candidate-reviewer/src/file.ts`, the two file keys), to v4's but for its version,
-  container and required resume field (v4's bytes held by their sha256), v4 to v3's but for its
-  version and container, v3 to v2's likewise, and v2 to v1's `manifests/candidate-reviewer.v1.json`
-  but for what v2 changed — its job's reading v1's. The containers of v1 to v4 keep their pinned
-  images until they are retired.
+  container and required resume field, v4 to v3's but for its version and container, v3 to v2's
+  likewise, and v2 to v1's but for what v2 changed — its job's reading v1's; v1 to v4 retired, their
+  files read from git (`retiredFile` in `automations/candidate-reviewer/test/fixtures.ts`).
 - **v5's no-file stop** (item 4): `receive` in `automations/candidate-reviewer/src/steps/candidate.ts`
   stops `FAILURES.noResume` (`automations/candidate-reviewer/src/words.ts`) when the run's input
   names no file, and `FAILURES.resumeUnreadable` when a named file cannot be opened

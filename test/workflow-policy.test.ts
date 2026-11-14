@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -7,7 +8,8 @@ import { test } from 'node:test';
  * What this public repository's workflows may do (the platform's ADR-0047 §1 and §7(b)):
  * no trigger that runs a fork's code with this repository's rights; one secret,
  * DISPATCH_APP_KEY, read by Deploy alone; Deploy only on a push to main, in `production`,
- * with no GITHUB_TOKEN permission and no code of this repository; Publish attesting each
+ * with no GITHUB_TOKEN permission and no code of this repository, printing the release's retire
+ * pass and, for each RETIRED row, the file to remove next (jq run here); Publish attesting each
  * digest after both scans and before the tag, and holding the attestation permissions
  * alone; every matrix List's, never typed by hand; every action pinned by SHA;
  * all-green seeing every job; every job but a call held to a time limit; and the nightly, its own
@@ -132,6 +134,49 @@ test('Deploy runs only on a push to main, in production, with no permission and 
   );
   assert.match(text, /jq \. "\$dir\/result\.json"/u, 'it prints result.json');
   assert.match(text, /jq -r \.ok "\$dir\/result\.json"\)" != true \]; then[^]*?exit 1/u);
+});
+
+test('Deploy prints the retire pass’s rows, and for each RETIRED row the file to remove next', () => {
+  const text = steps(job('deploy')).join('\n');
+  // The two programs Deploy runs on result.json's retirements, run here by jq itself.
+  const programs = [
+    ...text.matchAll(/jq -r '(\(\.retirements \/\/ \[\]\)\[\][^']*)' "\$dir\/result\.json"/gu),
+  ].map((m) => m[1]!);
+  assert.equal(programs.length, 2, 'the remove lines and the retire-pass table');
+  const run = (program: string, result: object) =>
+    execFileSync('jq', ['-r', program], { input: JSON.stringify(result), encoding: 'utf8' });
+  const [remove, table] = programs as [string, string];
+  const before = { ok: true, templates: [] };
+  assert.equal(run(remove, before), '', 'a result from before the retire pass prints nothing');
+  assert.equal(run(table, before), '');
+  const after = {
+    ...before,
+    retirements: [
+      {
+        templateId: 'invoice-processing',
+        version: 8,
+        outcome: 'RETIRED',
+        reason: 'off both hosts',
+      },
+      { templateId: 'candidate-reviewer', version: 4, outcome: 'WAITING', reason: 'an open run' },
+    ],
+  };
+  assert.equal(
+    run(remove, after),
+    'remove manifests/invoice-processing.v8.json in the next pull request\n',
+    'only the RETIRED row names a file',
+  );
+  assert.equal(
+    run(table, after),
+    '| RETIRED | invoice-processing | v8 | off both hosts |\n| WAITING | candidate-reviewer | v4 | an open run |\n',
+  );
+  assert.match(text, /remove="\$\(jq -r '/u, 'the remove lines are kept');
+  assert.equal(
+    [...text.matchAll(/if \[ -n "\$remove" \]; then\n(?: +echo\n)? +echo "\$remove"\n +fi/gu)]
+      .length,
+    2,
+    'printed to the summary and to the log',
+  );
 });
 
 test('Publish attests each digest after both scans and before the tag', () => {

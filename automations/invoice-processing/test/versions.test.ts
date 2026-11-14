@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { manifestsRoot } from './fixtures.js';
+import { manifestsRoot, retiredFile } from './fixtures.js';
 
 /**
  * What each version of the manifest changed from the one before it — every other field held equal
@@ -20,9 +20,12 @@ type Manifest = Record<string, unknown> & {
   service: Record<string, unknown>;
 };
 
+// v4 to v8 were retired and their files left `manifests/`: git keeps them (`retiredFile`).
 const read = (version: number) =>
   JSON.parse(
-    readFileSync(join(manifestsRoot, `invoice-processing.v${version}.json`), 'utf8'),
+    version < 9
+      ? retiredFile(version)
+      : readFileSync(join(manifestsRoot, `invoice-processing.v${version}.json`), 'utf8'),
   ) as Manifest;
 const manifest = read(7);
 const v8 = read(8);

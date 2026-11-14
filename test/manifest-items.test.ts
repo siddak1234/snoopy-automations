@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
+import { retiredFile } from './definition-files.js';
 import { manifestProblems, type Json } from './manifest-rules.js';
 
 /**
@@ -16,12 +17,13 @@ type Items = Json & {
   items: Json & { fields: Json[]; pipeline: Json[]; file: Json };
   trigger: Json;
 };
+// v1 and v2 were retired and their files left `manifests/`: git keeps them (`retiredFile`).
+const manifestsRoot = resolve(import.meta.dirname, '..', 'manifests');
 const read = (version: number) =>
   JSON.parse(
-    readFileSync(
-      join(resolve(import.meta.dirname, '..', 'manifests'), `candidate-reviewer.v${version}.json`),
-      'utf8',
-    ),
+    version < 5
+      ? retiredFile(manifestsRoot, `candidate-reviewer.v${version}.json`)
+      : readFileSync(join(manifestsRoot, `candidate-reviewer.v${version}.json`), 'utf8'),
   ) as Items;
 const v1 = read(1);
 const v2 = read(2);

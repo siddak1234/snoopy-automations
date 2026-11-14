@@ -1,27 +1,25 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { SERVED_VERSIONS, define } from '../src/automation.js';
 import { FAILURES } from '../src/words.js';
-import { flow, manifests } from './fixtures.js';
+import { flow, manifests, retiredFile } from './fixtures.js';
 import { batchPlatform, batchRequest } from './v2-fixtures.js';
 
 /**
  * v5's manifest (README, "v5"; the owner's item 1 on build 43 and "Yes to all 3", 2026-11-14):
  * v4's, byte for byte, but its version, its own origin and service account, and its file field
  * `visitNotes` required — the platform refuses a run without a file before it starts. It keeps
- * `dataProtection: 'hipaa'`; this image serves v5 alone, and v4 stays as registered.
+ * `dataProtection: 'hipaa'`; this image serves v5 alone. v4 was retired 2026-11-14.
  */
 
 type Json = Record<string, any>;
-const manifestsDir = join(flow, '..', '..', 'manifests');
-const file = (version: number) => join(manifestsDir, `icd10-code-check.v${version}.json`);
-const read = (version: number): Json => JSON.parse(readFileSync(file(version), 'utf8')) as Json;
-const v4 = read(4);
-const v5 = read(5);
+const v4 = JSON.parse(retiredFile(4)) as Json; // retired 2026-11-14; git keeps its file
+const v5 = JSON.parse(
+  readFileSync(join(flow, '..', '..', 'manifests', 'icd10-code-check.v5.json'), 'utf8'),
+) as Json;
 
 /** A manifest without what v5 changes: its version, its service's names, its file's `required`. */
 function withoutV5(manifest: Json): Json {
@@ -46,13 +44,6 @@ test("v5 is v4's manifest but its version, its own origin and service account, a
   assert.equal(v5.dataProtection, 'hipaa');
   assert.equal(v5.service.origin, 'http://icd10-code-check-v5.autom8x.internal:8080');
   assert.equal(v5.service.serviceAccount, 'icd10-code-check-v5@autom8x.iam.gserviceaccount.com');
-  // v4 is registered and immutable: these bytes, as served until it is retired.
-  assert.equal(
-    createHash('sha256')
-      .update(readFileSync(file(4)))
-      .digest('hex'),
-    'de934cda928c04c0315d0fa23f03831cd203c24474026fe2b2dbb24de87b1309',
-  );
 });
 
 test('this image serves v5 alone', () => {

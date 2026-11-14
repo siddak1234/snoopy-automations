@@ -473,6 +473,9 @@ jobs:
             exit 1
           fi
           jq . "$dir/result.json"
+          # A RETIRED version's file leaves manifests/ in the next pull request, with its row in its
+          # flow's README (README, "The definition-file standard", D5).
+          remove="$(jq -r '(.retirements // [])[] | select(.outcome == "RETIRED") | "remove manifests/\(.templateId).v\(.version).json in the next pull request"' "$dir/result.json")"
           {
             echo "### Flow CD"
             echo
@@ -481,7 +484,20 @@ jobs:
             echo '| Automation | Version | Outcome | Digest | Codes |'
             echo '| --- | --- | --- | --- | --- |'
             jq -r '.templates[] | "| \(.templateId) | v\(.version) | \(.outcome) | \(.digest) | \(.codes | join(", ")) |"' "$dir/result.json"
+            # The release's retire pass (the platform's ADR-0047, amended 2026-11-14): one row per
+            # older version it read; absent from a result before that pass shipped, so `// []`.
+            echo
+            echo '| Retire pass | Automation | Version | Reason |'
+            echo '| --- | --- | --- | --- |'
+            jq -r '(.retirements // [])[] | "| \(.outcome) | \(.templateId) | v\(.version) | \(.reason // "") |"' "$dir/result.json"
+            if [ -n "$remove" ]; then
+              echo
+              echo "$remove"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$remove" ]; then
+            echo "$remove"
+          fi
           if [ "$status" -ne 0 ]; then
             echo "Flow CD run $RUN_ID failed" >&2
             exit 1
