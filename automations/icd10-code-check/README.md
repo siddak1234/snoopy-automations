@@ -1,6 +1,6 @@
 # ICD-10 Code Check (`icd10-code-check`): spec
 
-**Approved:** 2026-10-28 ~21:43Z, the owner: "approved." (the words as shown on the screens, and section 3's client words) · **Version:** v1 · **Words:** `words.md`
+**Approved:** 2026-10-28 ~21:43Z, the owner: "approved." (the words as shown on the screens, and section 3's client words) · **Version:** v5 · **Words:** `words.md`
 beside this spec, every word both clients show · **Research:** `research.md` beside this spec
 (2026-10-28, four passes: 1–3 approved ~17:19Z "Approve, write the spec (Recommended)", 4 approved
 ~21:24Z "Approve (Recommended)"), its gaps in section 11 · **Built in:** <PR link, once built>

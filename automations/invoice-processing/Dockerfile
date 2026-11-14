@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Invoice Processing v8, built from the repository root:
+# The image of Invoice Processing v9, built from the repository root:
 #   docker build --file automations/invoice-processing/Dockerfile .
 #
 # The flow's own lock is the image's only lock: the build stage installs

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# The image of Resume Screening, v4 of candidate-reviewer, built from the repository root:
+# The image of Resume Screening, v5 of candidate-reviewer, built from the repository root:
 #   docker build --file automations/candidate-reviewer/Dockerfile .
 #
 # The flow's own lock is the image's only lock: the build stage installs

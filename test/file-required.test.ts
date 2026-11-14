@@ -20,12 +20,20 @@ const specOf = (templateId: string) => {
 };
 
 test("every flow's newest manifest asks for its file, or its spec gives the reason", () => {
-  const newest = newestManifests(readdirSync(manifestsRoot));
-  assert.deepEqual(newest, [
-    'candidate-reviewer.v5.json',
-    'icd10-code-check.v5.json',
-    'invoice-processing.v9.json',
-  ]);
+  const files = readdirSync(manifestsRoot);
+  const newest = newestManifests(files);
+  // One newest manifest for every flow, none skipped, found from the files alone: a new version
+  // is judged here with no edit to this test.
+  const flows = (names: string[]) =>
+    [
+      ...new Set(
+        names
+          .filter((name) => /\.v\d+\.json$/u.test(name))
+          .map((name) => name.replace(/\.v\d+\.json$/u, '')),
+      ),
+    ].sort();
+  assert.ok(newest.length > 0, 'no manifest found');
+  assert.deepEqual(flows(newest), flows(files));
   for (const file of newest) {
     const manifest = read(file);
     assert.deepEqual(
