@@ -38,10 +38,13 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
-  # No npm entry for any automation: each one's only dependencies are the local SDK
-  # and kit (file:), and its dev tooling is never installed in the image (the
-  # Dockerfile's `--omit=dev`). An entry there raised ranges the root lock did not
-  # carry, and the root entry raised ranges that automation's lock did not carry.
+  # No npm entry for any automation: each one's only runtime dependencies are the local
+  # SDK and kit (file:), and its runtime image holds none of its dev tools (the
+  # Dockerfile's `--omit=dev`). Its build stage compiles with its own lock's TypeScript,
+  # which test/pins.test.ts holds to this root lock's, so a move of TypeScript here fails
+  # Verify until each automation's lock and the template's carry the root lock's entry.
+  # An entry there raised ranges the root lock did not carry, and the root entry raised
+  # ranges that automation's lock did not carry.
 
   # invoice-intake's and invoice-check's entries left with their code (the platform's
   # BUILD-PLAN 25.4.11, 2026-10-22).

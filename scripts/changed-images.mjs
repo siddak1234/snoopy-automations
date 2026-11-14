@@ -4,21 +4,18 @@
 // on a pull request and prints a JSON list of the flows under `automations/` whose image inputs
 // changed since <ref>: the Dockerfile itself, or any of its COPY sources (never `--from=`), the
 // rule the platform's Flow CD uses to tell an UPDATE from a SKIP (`snoopy-backend/scripts/flow-cd.mjs`,
-// `dockerfileInputs`). A change under `packages/`, to the root `package.json`, `package-lock.json`
-// or a root tsconfig, or to CI's own workflow builds every flow. A push to main builds every flow,
-// as before, and does not run this. Node built-ins only: it runs before any install.
+// `dockerfileInputs`). A change under `packages/`, to `tsconfig.base.json` or to CI's own workflow
+// builds every flow; the root `package.json`, `package-lock.json` and `tsconfig.json` are no image's
+// input (each flow's image reads its own lock), so a change to them alone builds none. A push to
+// main builds every flow, as before, and does not run this. Node built-ins only: it runs before any
+// install.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPOSITORY = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const EVERY = [
-  /^packages\//u,
-  /^package(?:-lock)?\.json$/u,
-  /^tsconfig(?:\.base)?\.json$/u,
-  /^\.github\/workflows\/ci\.yml$/u,
-];
+const EVERY = [/^packages\//u, /^tsconfig\.base\.json$/u, /^\.github\/workflows\/ci\.yml$/u];
 
 /** A Dockerfile's build-context inputs: its COPY and ADD sources, never a `--from=` stage. */
 export function dockerfileInputs(text) {
