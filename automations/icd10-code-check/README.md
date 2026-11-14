@@ -101,9 +101,10 @@ real charts wait for section 10's model path.
 | Trigger | manual: a person adds a visit                                                                | —                                 |
 | Files   | PDF, JPEG or PNG, up to 3,500,000 bytes, a PDF up to 30 pages, a photo's side up to 8,000 px | the model reads these three types |
 
-| Key (camelCase) | Title      | Description (200)                 | Control  | Required                                                                                        |
-| --------------- | ---------- | --------------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| visitNote       | Visit note | A PDF or photo of the visit note. | artifact | v1 to v4 not required, as the platform then required; v5's `visitNotes` is required (v5, below) |
+| Key (camelCase) | Title       | Description (200)                 | Control  | Required                                                                                                         |
+| --------------- | ----------- | --------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| visitNote       | Visit note  | A PDF or photo of the visit note. | artifact | v1's only, not required, as the platform then required                                                           |
+| visitNotes      | Visit notes | For doctors and coders.           | artifact | yes: a run without it is refused before it starts (v5); v2 to v4 left it optional, as the platform then required |
 
 The codes are read from the note. No items: a visit is one run.
 

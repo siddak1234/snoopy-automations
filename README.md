@@ -493,14 +493,14 @@ list changes, the session runs `npm run live-eval -- <invoice-processing|candida
 platform — each uploaded, run and read through the public API as a person's app does — in a test
 workspace, on the platform's own model key, one at a time, and compares each run's key fields with
 its recording, field by field: Invoice Processing's supplier, number and total of each document
-(and how many), Resume Screening's name, email and phone (v4's Contact rows, `{ title: label,
+(and how many), Resume Screening's name, email and phone (v4's and v5's Contact rows, `{ title: label,
 text: value }`, read from its run's blocks with `shape=blocks`: a read without it carries none). It
 passes, exit 0, only when every key field of every sample matches; it prints each difference — the
 sample, the field, the recorded and the live value — for the owner, and exits 1. A run that fails, or a sample with no recording, is a
 difference. `--record` writes the recordings from the live runs instead, one
 `automations/<flow>/test/live-eval/<sample>.json` each (its file's sha256, the version, when, the
 fields); a recording made for other bytes is refused. Resume Screening's are made first, by the
-session, after its v4 deploys; until Invoice Processing's are recorded live, each of its samples is
+session, after its v5 deploys; until Invoice Processing's are recorded live, each of its samples is
 compared with the first read the agents recorded for it (`test/recordings/extract-documents.v1/`),
 read as the run reads it.
 
@@ -508,8 +508,8 @@ read as the run reads it.
   time — `AUTOM8X_EVAL_API_URL` (an https origin, or http on localhost), `AUTOM8X_EVAL_SESSION`
   (sent only as the bearer to the API, never to the store, a line or a file),
   `AUTOM8X_EVAL_WORKSPACE_ID` and `AUTOM8X_EVAL_SUBSCRIPTION_ID` — and never committed. The
-  subscription must be the flow's, live, on the version the eval is for (Invoice Processing v8,
-  Resume Screening v4), and Invoice Processing's on "None": the eval never writes to QuickBooks.
+  subscription must be the flow's, live, on the version the eval is for (Invoice Processing v9,
+  Resume Screening v5), and Invoice Processing's on "None": the eval never writes to QuickBooks.
   Resume Screening's job is made first, once a run, from an invented job description, and archived
   when the pass ends, passed, failed or stopped (`POST /items/{id}/archive`; its runs stay), so no
   eval job stays in the flow's list; one the platform does not archive is named in a line. Anything

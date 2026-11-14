@@ -88,7 +88,7 @@ const invoicePage =
     };
   };
 
-const INVOICE_FAKE = { templateId: 'invoice-processing', version: 8, config: { vendor: 'none' } };
+const INVOICE_FAKE = { templateId: 'invoice-processing', version: 9, config: { vendor: 'none' } };
 
 test("Invoice Processing: 25 samples, each run's supplier, number and total matching the agents' recorded first read: PASS, exit 0", async () => {
   assert.equal(INVOICE.samples().length, 25);
@@ -121,7 +121,7 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
   try {
     const page = (filename: string) => {
       const candidate = CANDIDATES.find((each) => `${each.sample}.docx` === filename)!;
-      // v4's blocks: one group, its Contact a `{ title: label, text: value }` row each, then links.
+      // v4's and v5's blocks: one group, its Contact a `{ title: label, text: value }` row each, then links.
       return {
         run: { title: candidate.name },
         blocks: [
@@ -152,7 +152,7 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
         ],
       };
     };
-    const fake = { templateId: 'candidate-reviewer', version: 4, pageOf: page };
+    const fake = { templateId: 'candidate-reviewer', version: 5, pageOf: page };
     const profiles = { 'candidate-reviewer': profile };
     const recorded = await evaluate(['candidate-reviewer', '--record'], fake, profiles);
     assert.equal(recorded.code, 0, recorded.lines.join('\n'));
@@ -176,7 +176,7 @@ test('Resume Screening: --record makes its job first, then 25 recordings from li
       email: CANDIDATES[0]!.email,
       phone: CANDIDATES[0]!.phone,
     });
-    assert.equal(first.templateVersion, 4);
+    assert.equal(first.templateVersion, 5);
     const reads = recorded.sent.filter((call) => /\/runs\/run-\d+/u.test(call.url));
     assert.ok(
       reads.length > 0 && reads.every((call) => call.url.endsWith('?shape=blocks')),
@@ -221,7 +221,7 @@ test("Resume Screening's job is archived however the pass ends: stopped by a run
       const candidate = CANDIDATES.find((each) => `${each.sample}.docx` === filename)!;
       return { run: { title: candidate.name }, blocks: [] };
     };
-    const fake = { templateId: 'candidate-reviewer', version: 4, pageOf: page };
+    const fake = { templateId: 'candidate-reviewer', version: 5, pageOf: page };
 
     const stopped = await evaluate(
       ['candidate-reviewer', '--record'],
@@ -275,7 +275,7 @@ test('with no recording, compare mode runs nothing for that sample and fails it:
   try {
     const { code, lines, sent } = await evaluate(
       ['candidate-reviewer'],
-      { templateId: 'candidate-reviewer', version: 4, pageOf: () => ({}) },
+      { templateId: 'candidate-reviewer', version: 5, pageOf: () => ({}) },
       { 'candidate-reviewer': profile },
     );
     assert.equal(code, 1);
@@ -297,12 +297,12 @@ test('refused before anything runs, exit 2: in CI, without its session, off http
       {},
       /candidate-reviewer's, not/u,
     ],
-    [['invoice-processing'], { version: 7 }, {}, /pins v7; the eval is for v8/u],
+    [['invoice-processing'], { version: 8 }, {}, /pins v8; the eval is for v9/u],
     [
       ['candidate-reviewer'],
-      { templateId: 'candidate-reviewer', version: 3 },
+      { templateId: 'candidate-reviewer', version: 4 },
       {},
-      /pins v3; the eval is for v4/u,
+      /pins v4; the eval is for v5/u,
     ],
     [['invoice-processing'], { status: 'paused' }, {}, /paused, not live/u],
     [

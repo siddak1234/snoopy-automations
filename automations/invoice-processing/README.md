@@ -6,7 +6,7 @@ This flow was built before `/create-flow`'s specs, so this file is its build's r
 from the repository README in Round 21, so a change to the flow's code, prompts or manifests asks
 for this file in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules). It
 is one of the two live flows on `defineAutomation`, exempt from the new flows' standards; its
-after-pilot versions, v8 and v9, stay on it and takes Q2's re-ask alone ([the repository
+after-pilot versions, v8 and v9, stay on it and take Q2's re-ask alone ([the repository
 README](../../README.md#a-new-flows-standards-defineflow)).
 
 `invoice-processing` — shown to people as **Invoice Processing** since v2, as **Bills &
