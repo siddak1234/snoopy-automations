@@ -7,7 +7,9 @@
  * on scratch trees, as `test/file-required.ts` is.
  *
  * - D1 a file is named `<templateId>.v<n>.json`, says that id and version, and its flow folder
- *   exists: held where it always was, `test/architecture.test.ts`.
+ *   exists: held where it always was, `test/architecture.test.ts`, which reads the top level of
+ *   `manifests/` alone; here every tracked path under `manifests/` is such a name at the top
+ *   level (no subfolder, no `.bak`, no leading zero), so no file there escapes D2–D8.
  * - D2 each flow's newest file is the one its Dockerfile copies; a file newer than that is a stray.
  * - D3 at most two files per flow.
  * - D4 a file at the base keeps its bytes: a change is a new `v<n+1>` file, never an edit (the
@@ -123,9 +125,19 @@ function versionsByFlow(names: readonly string[]): Map<string, number[]> {
   return byFlow;
 }
 
-/** D2, D3 and D7: what the tree alone refuses. */
+/** D1's tracked paths, D2, D3 and D7: what the tree alone refuses. */
 export function treeProblems(tree: Tree): string[] {
   const problems: string[] = [];
+  for (const path of tree.tracked) {
+    if (!path.startsWith('manifests/')) continue;
+    const name = path.slice('manifests/'.length);
+    if (parseName(name) === undefined) {
+      problems.push(
+        `D1 ${path} is not a top-level manifests/<templateId>.v<n>.json: a file there the ` +
+          `other rules cannot read`,
+      );
+    }
+  }
   for (const [id, versions] of versionsByFlow(tree.manifests)) {
     if (!tree.flows.includes(id)) continue; // D1's, in test/architecture.test.ts
     const newest = `${id}.v${versions.at(-1)}.json`;

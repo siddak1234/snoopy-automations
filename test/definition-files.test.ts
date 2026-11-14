@@ -15,7 +15,7 @@ import {
 } from './definition-files.js';
 
 /**
- * The definition-file standard, D2–D8 (`test/definition-files.ts`, whose header says what it
+ * The definition-file standard, D2–D8 and D1's tracked paths (`test/definition-files.ts`, whose header says what it
  * cannot see), on this tree against its base (`base`, there), and each rule bitten on a scratch
  * tree.
  */
@@ -182,6 +182,18 @@ test('D6: a deleted name never comes back, and a new version is above every one 
   });
   const added = history({ base: blobs('fx.v3.json'), head: blobs('fx.v3.json', 'fx.v4.json') });
   assert.deepEqual(changeProblems(next, added), []);
+});
+
+test('D1: every tracked path under manifests/ is a top-level <id>.v<n>.json', () => {
+  for (const path of [
+    'manifests/old/fx.v1.json',
+    'manifests/fx.v3.json.bak',
+    'manifests/fx.v03.json',
+  ]) {
+    const stray = scratch({ tracked: [...scratch().tracked, path] });
+    assert.deepEqual(rules(treeProblems(stray)), ['D1'], path);
+    assert.ok(treeProblems(stray)[0]!.startsWith(`D1 ${path} `), path);
+  }
 });
 
 test('D7: no copy of a definition file outside manifests/', () => {

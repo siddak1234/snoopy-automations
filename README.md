@@ -871,7 +871,8 @@ yes." The rules are the session's answer, `test/definition-files.ts` (its header
 repository check cannot see: which version is served or withdrawn):
 
 - D1 a file is named `<templateId>.v<n>.json`, says that id and version, and its flow folder exists
-  (`test/architecture.test.ts`).
+  (`test/architecture.test.ts`); every tracked path under `manifests/` is such a name at its top
+  level, so no subfolder, `.bak` or leading zero there escapes D2–D8.
 - D2 each flow's newest file is the one its Dockerfile copies.
 - D3 at most two files a flow: the newest, and the one before it while it may still be served.
 - D4 a file on `main` is never edited.
