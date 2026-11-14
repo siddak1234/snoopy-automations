@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { newestManifests, optionalFileProblems, reasonFor, type Json } from './file-required.js';
 
 /**
- * The owner's rule of 2026-11-14 (`test/file-required.ts`): every flow's newest manifest asks for
+ * The session's rule the owner accepted, 2026-11-14 (`test/file-required.ts`): every flow's newest manifest asks for
  * its file, or its spec says why not; and the rule bitten on copies changed to break it.
  */
 

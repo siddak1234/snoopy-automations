@@ -69,8 +69,9 @@ file stops in its own words, "Add the resume as a PDF, Word file or photo." (§8
 that could not be read. Item 1: "I pressed start without uploading anything. It took me to
 activity. If there is no file uploaded then it shouldnt start. This is a basic requirement for a
 button. " Item 4: "I believe this spdcific error was because no file existed. Ensure there is
-differentiation between errors and their types." The new words are the design's, shown to the
-owner with the round's plan. v4's container keeps its pinned image until it is retired
+differentiation between errors and their types." The new words are the design's default: shown to
+the owner with the round's plan (its "For the owner" point 7), not answered, so built at the
+default by the project's rule; not approved by the owner. v4's container keeps its pinned image until it is retired
 (`/retire-version`); v4's runs keep v4's words. It merges only after the platform's build-43 pull
 request is merged and deployed (Flow CD runs the platform's validator, which until then refuses a
 required file field).

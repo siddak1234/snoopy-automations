@@ -1,6 +1,6 @@
 /**
- * The owner's rule of 2026-11-14 (Round 22, "Yes to all 3"): "A file field is required. Optional
- * only with a written reason in the flow's spec." Each flow's NEWEST manifest in `manifests/` has
+ * The session's proposed rule, which the owner accepted with "Yes to all 3" (2026-11-14, Round
+ * 22): "A file field is required. Optional only with a written reason in the flow's spec." Each flow's NEWEST manifest in `manifests/` has
  * every `artifact` run input `required: true`, unless the flow's spec,
  * `automations/<templateId>/README.md`, gives the reason on that field's row of its run-input
  * table: the row's first cell the field's key, its last cell `no: <the reason>`. A version before

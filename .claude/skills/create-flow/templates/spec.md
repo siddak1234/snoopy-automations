@@ -47,7 +47,7 @@ brief does not carry is not written here.
 | Files            |       | the types accepted, a size up to 100 MiB, PDF pages up to 1,000, an image's side up to 20,000 px; or none. The model reads PDF, JPEG and PNG (up to 3,750,000 bytes); another type (a Word file) is read as text by the flow, and its manifest declares no page or pixel limit |
 
 Run inputs, asked when a person starts it (at most 16). A file field is required. Optional only with a
-written reason in the flow's spec: its Required cell `no: <the reason>` (the owner, 2026-11-14;
+written reason in the flow's spec: its Required cell `no: <the reason>` (the session's proposal; the owner's "Yes to all 3", 2026-11-14;
 `test/file-required.test.ts` refuses a flow's newest manifest otherwise).
 
 | Key (camelCase) | Title | Description (200) | Control: toggle, money, text, email, artifact | Required |
