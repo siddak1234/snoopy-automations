@@ -123,8 +123,8 @@ cannot be registered. What follows describes v3, v2 and v1; where they differ, t
 wins.
 
 **v3** (Build 21; the session's spec B1–B6 as the owner's AM1–AM8 change it). Its image served v3
-alone; v1 and v2 stay registered and immutable, and v3 since the platform's thirty-second pin (its
-#214). A file holds
+alone; v1 and v2 stayed registered and immutable, and v3 since the platform's thirty-second pin (its
+#214), until their files left (BUILD-PLAN 30.15.2). A file holds
 any number of documents: `extract` reads them all with `automations/invoice-processing/prompts/extract-documents.v1.json`, in
 parts — at most 5 documents and 80 lines a part, fewer when an answer is cut at the platform's
 8,000-token cap — each its own entry with its own seller and details (`automations/invoice-processing/src/run/extract.ts`,

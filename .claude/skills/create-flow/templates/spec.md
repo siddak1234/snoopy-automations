@@ -116,7 +116,7 @@ by the session).
 | ---------------------------------------------------- | --- | ----- | ----------------- | ------------------------------------------------------------------ | ------- | -------- | ---------- |
 
 A new version of a live flow adds no required setting without a Default. Only when one must, the
-reason is a row here, its first cell the setting's key or the connection's provider id and its last
+reason is a row of the **New requirements** table below, its first cell the setting's key or the connection's provider id and its last
 `new in v<n>: <the reason>`, n the new version (`test/no-new-requirements.ts`); its merge is the
 owner's approval. None for a first version.
 

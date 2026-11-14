@@ -877,7 +877,8 @@ repository check cannot see: which version is served or withdrawn):
 - D4 a file on `main` is never edited.
 - D5 a file leaves only below a newer one of its flow (or with its whole flow), and with a row in
   its flow's README, first cell `v<n>`, last cell `retired <yyyy-mm-dd>: <where shown>` (a Flow CD
-  or cd.yml run, or the record of a hand retirement); the form is checked, its truth is the review's.
+  or cd.yml run, or the record of a hand retirement); a flow retired whole has no README left, so
+  its rows go in this README, first cell `<id> v<n>`. The form is checked, its truth is the review's.
 - D6 a name ever deleted on `main` never comes back, and a new version is above every one its flow
   ever had.
 - D7 no copy of a definition file outside `manifests/`.
