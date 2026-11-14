@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 import { specialtyOptions } from '../src/v2/specialties.js';
 import { WORDS_V2 } from '../src/v2/words.js';
-import { flow } from './fixtures.js';
+import { flow, retiredFile } from './fixtures.js';
 
 /**
  * v2's manifest (the spec's v2 section; `words.md` section 4): the Healthcare department; the NPI
@@ -16,9 +16,8 @@ import { flow } from './fixtures.js';
  */
 
 const root = join(flow, '..', '..');
-const v2 = JSON.parse(
-  readFileSync(join(root, 'manifests', 'icd10-code-check.v2.json'), 'utf8'),
-) as Record<string, any>;
+// v2 was retired 2026-11-14 and its file left `manifests/`: git keeps it (`retiredFile`).
+const v2 = JSON.parse(retiredFile(2)) as Record<string, any>;
 const menu = JSON.parse(
   readFileSync(join(root, 'contract', 'schemas', 'platform-menu.json'), 'utf8'),
 ) as { providers: { id: string; auth: string; operations: { name: string }[] }[] };

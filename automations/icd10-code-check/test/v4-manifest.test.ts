@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -10,7 +8,7 @@ import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 import { define } from '../src/automation.js';
 import { HEALTH_VERSIONS, MODELS } from '../src/models.js';
 import { prompts } from '../src/prompts.js';
-import { flow, manifests, reading } from './fixtures.js';
+import { manifests, reading, retiredFile } from './fixtures.js';
 import { PDF_ID, batchPlatform, batchRequest, page, runChild } from './v2-fixtures.js';
 
 /**
@@ -23,10 +21,8 @@ import { PDF_ID, batchPlatform, batchRequest, page, runChild } from './v2-fixtur
  */
 
 type Json = Record<string, any>;
-const root = join(flow, '..', '..');
-const manifestsDir = join(root, 'manifests');
-const read = (version: number): Json =>
-  JSON.parse(readFileSync(join(manifestsDir, `icd10-code-check.v${version}.json`), 'utf8')) as Json;
+// v3 and v4 left `manifests/` once retired: git keeps them (`retiredFile`).
+const read = (version: number): Json => JSON.parse(retiredFile(version)) as Json;
 const v3 = read(3);
 const v4 = read(4);
 
@@ -48,9 +44,8 @@ test("v4 is v3's manifest, word for word, but its version, its own origin and se
 });
 
 test("HEALTH_VERSIONS is every version whose manifest says dataProtection 'hipaa'", () => {
-  const declared = readdirSync(manifestsDir)
-    .filter((name) => /^icd10-code-check\.v\d+\.json$/u.test(name))
-    .map((name) => JSON.parse(readFileSync(join(manifestsDir, name), 'utf8')) as Json)
+  // Every version: the retired ones from git, the newest from `manifests/` (`manifests`).
+  const declared = (manifests as Json[])
     .filter((manifest) => manifest.dataProtection === 'hipaa')
     .map((manifest) => manifest.version as number)
     .sort((a, b) => a - b);

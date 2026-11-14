@@ -1,13 +1,7 @@
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
-import {
-  readManifest,
-  readManifests,
-  type JsonObject,
-  type Manifest,
-} from '@autom8x/automation-sdk';
+import { readManifests, type JsonObject, type Manifest } from '@autom8x/automation-sdk';
 import { RecordingPlatform, invokeFixture } from '@autom8x/automation-sdk/testing';
 
 import { TEMPLATE_ID, define, servedManifests } from '../src/automation.js';
@@ -21,7 +15,15 @@ import {
   type DocumentsRun,
   type Run,
 } from './documents-world.js';
-import { NONE, QUICKBOOKS, isSecondRead, lines, manifests, manifestsRoot } from './fixtures.js';
+import {
+  NONE,
+  QUICKBOOKS,
+  isSecondRead,
+  lines,
+  manifests,
+  manifestsRoot,
+  retiredFile,
+} from './fixtures.js';
 
 /**
  * Invoice Processing v4 (Build 22, the session's spec of 2026-10-17, §3, V1): the image serves v4
@@ -32,7 +34,7 @@ import { NONE, QUICKBOOKS, isSecondRead, lines, manifests, manifestsRoot } from 
  * choice and step 5 the platform's email, neither a step this code reports.
  */
 
-const v3 = readManifest(join(manifestsRoot, 'invoice-processing.v3.json'));
+const v3 = JSON.parse(retiredFile(3)) as Manifest; // retired; git keeps its file
 const [v4] = manifests as [Manifest];
 
 /** v3's manifest, numbered as the run asks — what the runner reads of it is v3's alone. */
@@ -73,7 +75,10 @@ function assertTrackerInOrder(stepIds: readonly string[], label: string): void {
 }
 
 test('the image serves v9 alone: of v1 to v9 it keeps v9, and refuses a run pinned to v3 before any step or call', async () => {
-  const all = readManifests(manifestsRoot, TEMPLATE_ID);
+  const all = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((version) => JSON.parse(retiredFile(version)) as Manifest),
+    ...readManifests(manifestsRoot, TEMPLATE_ID),
+  ];
   assert.deepEqual(
     all.map((each) => each.version),
     [1, 2, 3, 4, 5, 6, 7, 8, 9],

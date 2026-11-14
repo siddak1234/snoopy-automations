@@ -165,7 +165,7 @@ test("a manifest's page parts are the published schema's closed set", () => {
   // `scores`, since the switch (amendment 1, point 3b): a flow with items may list it.
   const reviewer = JSON.parse(
     readFileSync(
-      resolve(import.meta.dirname, '../../../manifests/candidate-reviewer.v2.json'),
+      resolve(import.meta.dirname, '../../../manifests/candidate-reviewer.v5.json'),
       'utf8',
     ),
   ) as Json;
