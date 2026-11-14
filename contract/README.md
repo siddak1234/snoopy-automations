@@ -537,9 +537,10 @@ BUILD-PLAN 30.2), the platform's `main`, merged and deployed. Two files moved; a
 - `platform-menu.json`: `limits.operationsPerConnection` (64) and `limits.operationLength` (60).
 
 The other nine files are byte-identical to `50a24f7`'s. No flow here lists `operations` yet: a
-connection listing none keeps the platform's check of the provider file alone. The build-43
-platform branch (its BUILD-PLAN 30.13.1, a file field may be required) changes no schema file; its
-words are in "`trigger`", below.
+connection listing none keeps the platform's check of the provider file alone. The platform's
+build-43 pull request (#285, merged as `ee72d96`; its BUILD-PLAN 30.13.1, a file field may be
+required) changes no schema file: all eleven are `cmp`-equal to `ee72d96`'s too; its words are in
+"`trigger`", below.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
@@ -559,7 +560,7 @@ decision's `group`, the `memory` capability) at `10b5fae`, "Size, before the val
 decision's `options` and an `other` answer) at `7ae5d92`, and `dataProtection`'s at `50a24f7`
 (its registration rule from `snoopy-backend/packages/contracts/src/data-protection.ts`), a connection's
 `operations` and the `ehr-fhir` new-version rule at `926321f`, and the required `artifact` field at
-the platform's build-43 branch (`8489f79`, not yet merged), its file paths written from
+`ee72d96` (#285, the platform's build-43 pull request), its file paths written from
 `snoopy-backend/`.
 
 **Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
@@ -649,7 +650,7 @@ registration. `input` (ADR-0030) "is only meaningful when kind is 'manual'"; eac
 setup field's properties except `section` and `notifies` — anything else "is not a run input
 property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact` (never `select`); an `email`
 value "must be an email address for an email control"; an `artifact` field may be `required`
-(ADR-0030, 2026-11-14, at the platform's build-43 branch, its BUILD-PLAN 30.13.1: the run start
+(ADR-0030, 2026-11-14, at `ee72d96`, #285, its BUILD-PLAN 30.13.1: the run start
 refuses a run without it, 422) and a default "is not meaningful for an artifact control" — a file
 is uploaded, never shared; its `multiple` (amendment 3; since amendment 4 every
 file goes into ONE run, its value a list of 1 to `maxFiles` upload ids) "must be a boolean" and on
