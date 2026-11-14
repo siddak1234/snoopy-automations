@@ -34,6 +34,15 @@ test('Candidate Reviewer v1 and Resume Screening v2 pass every rule', () => {
   assert.deepEqual(manifestProblems(v2), []);
 });
 
+test('a required file field is no problem: the platform takes it since ADR-0030 of 2026-11-14', () => {
+  const required = {
+    ...v1,
+    trigger: { ...v1.trigger, input: [{ ...(v1.trigger.input as Json[])[0], required: true }] },
+  };
+  assert.deepEqual(manifestProblems(required), []);
+  assert.deepEqual(manifestProblems(read(5)), [], 'Resume Screening v5, its resume required');
+});
+
 test('a blank verdict word is refused, as the platform refuses it (build 28)', () => {
   const words = v2.items.verdictWords as Json;
   for (const [name, blank] of [
@@ -123,14 +132,6 @@ test('the rules refuse what the platform refuses', () => {
         outputSchema: { type: 'object', properties: { title: { type: 'string', pattern: '^A' } } },
       }),
       'items.outputSchema.properties.title: uses pattern, which the platform cannot hold an output to',
-    ],
-    [
-      'a required file field',
-      {
-        ...v1,
-        trigger: { ...v1.trigger, input: [{ ...(v1.trigger.input as Json[])[0], required: true }] },
-      },
-      'trigger.input[0].required: must be false for an artifact control',
     ],
     [
       'a file field with a default',

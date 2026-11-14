@@ -318,6 +318,8 @@
       "setupSectionTitle": 40,
       "groupTitlesByConnection": 16,
       "scopesPerConnection": 32,
+      "operationsPerConnection": 64,
+      "operationLength": 60,
       "maxConcurrentRuns": 1000,
       "acceptTimeoutMs": 30000,
       "runTimeoutSeconds": 3600,

@@ -11,7 +11,7 @@ import { flow } from './fixtures.js';
  * v3's manifest (the spec's "v3"; `words.md` section 5): v2's, word for word, with its setup in
  * three sections — NPI, Specialty, Integrations (TestFlight build 34, F3) — held to the platform's
  * rules for them both ways (ADR-0048 amendment 5; `contract/README.md`, "`setup[]`"), and the NPI
- * box's example, a valid NPI (F2). The image serves v4 alone (`v4-manifest.test.ts`).
+ * box's example, a valid NPI (F2). The image serves v5 alone (`v5-manifest.test.ts`).
  */
 
 type Json = Record<string, any>;

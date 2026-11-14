@@ -15,7 +15,7 @@ import { candidateSteps, type Candidate } from './steps/candidate.js';
 import { JOB_STEPS, counted } from './steps/job.js';
 
 /**
- * Resume Screening, v2 to v4 of `candidate-reviewer` (the spec:
+ * Resume Screening, v2 to v5 of `candidate-reviewer` (the spec:
  * `automations/candidate-reviewer/README.md`, its words the build's source of truth). A flow with
  * items (the platform's ADR-0046): a job is made once, from its job description — the item run,
  * which reads it into the job's reading — and each candidate's run reads a resume and scores it
@@ -34,10 +34,12 @@ export const TEMPLATE_ID = 'candidate-reviewer';
  * off its schema is asked once more, a second miss ending the run (`endsUnusable`). v4 (the owner's
  * items 11–13 on build 37, 2026-11-05) is v3's manifest but for its version and its own container:
  * each run's result is sent as blocks (`blocks.ts`) in place of sections — Contact a row per value
- * under its label, the links as logo buttons named by the username. v3's container keeps its pinned
- * image until it is retired.
+ * under its label, the links as logo buttons named by the username. v5 (the owner's items 1 and 4
+ * on build 43, 2026-11-14) is v4's manifest but for its version, its own container and its resume
+ * field required, so the platform refuses a run without a file before it starts; a run that still
+ * names none stops `FAILURES.noResume`. v4's container keeps its pinned image until it is retired.
  */
-export const SERVED_VERSIONS: readonly number[] = [4];
+export const SERVED_VERSIONS: readonly number[] = [5];
 
 /**
  * The manifests this image serves, of those given: `SERVED_VERSIONS` alone, as Invoice

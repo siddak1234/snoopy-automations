@@ -6,7 +6,7 @@ This flow was built before `/create-flow`'s specs, so this file is its build's r
 from the repository README in Round 21, so a change to the flow's code, prompts or manifests asks
 for this file in the same change (`docs/docs-map.json`, its "automations" and "manifests" rules). It
 is one of the two live flows on `defineAutomation`, exempt from the new flows' standards; its
-after-pilot version, v8, stays on it and takes Q2's re-ask alone ([the repository
+after-pilot versions, v8 and v9, stay on it and take Q2's re-ask alone ([the repository
 README](../../README.md#a-new-flows-standards-defineflow)).
 
 `invoice-processing` — shown to people as **Invoice Processing** since v2, as **Bills &
@@ -16,11 +16,24 @@ in QuickBooks Online and compares a statement with it (the platform's BUILD-PLAN
 25.4.13–25.4.30, 25.4.54; the owner's design of 2026-10-10, plan of 2026-10-11, build-19 feedback
 of 2026-10-14, Build 21 corrections of 2026-10-15 and build-21 feedback of 2026-10-17).
 
-**v8, the version this code serves** (Round 21, Stage 2; the owner's Q1 and Q2 of 2026-11-03,
+**v9, the version this code serves** (Round 22, 2026-11-14; the owner's item 1 on build 43, "I
+pressed start without uploading anything. It took me to activity. If there is no file uploaded then
+it shouldnt start. This is a basic requirement for a button. ", and "Yes to all 3", 2026-11-14). Its
+manifest is v8's but for its version, its own container (`-v9`) and its file field `invoiceFile`
+**required**: the platform refuses a run without a file before it starts, since its ADR-0030
+amendment of 2026-11-14 allows a required file field, and its clients say "Add Document first."
+(the field's title). Its code and words are v8's; `RUN_FAILS.no_file`, "Add a PDF or photo, then
+start again.", stays the backstop for a run that still names no file. The image serves v9 alone (its
+Dockerfile copies only `manifests/invoice-processing.v9.json`), and v1 to v8 stay registered and
+immutable, each held to its sha256 (`automations/invoice-processing/test/manifest.test.ts`;
+`versions.test.ts` holds v9 to v8 but for its version, container and `required`). v8's container
+keeps its pinned image until it is retired (`/retire-version`). It merges only after the platform's
+build-43 pull request is merged and deployed (Flow CD runs the platform's validator, which until then
+refuses a required file field).
+
+**v8** (Round 21, Stage 2; the owner's Q1 and Q2 of 2026-11-03,
 "continue with recommended"). Its manifest is v7's but for its version and its own container
-(`-v8`); the image serves v8 alone (its Dockerfile copies only `manifests/invoice-processing.v8.json`),
-and v1 to v7 stay registered and immutable, each held to its sha256
-(`automations/invoice-processing/test/manifest.test.ts`, `versions.test.ts`). **Words:** NEW,
+(`-v8`); its image served v8 alone until v9. **Words:** NEW,
 ~~awaiting the owner's approval~~ approved 2026-11-04 ("F1. approve"; this file's top): "Supplier, exact words", "Number, exact words" and "Total, exact
 words" (Q1, below). Q2's sentence is the one the owner's Q2 recommended; every other word is v7's.
 Two changes, both in the code:

@@ -118,11 +118,12 @@ export function manifestProblems(manifest: Json): string[] {
     }
   }
   titlesByConnection(list(manifest.groups), list(manifest.setup), optional, add);
-  // ADR-0030 — a run's file is uploaded: never required, never a default (its `validateRunInput`).
+  // ADR-0030 — a run's file is uploaded, never a default (its `validateRunInput`); it may be
+  // required since its amendment of 2026-11-14 (snoopy-backend 30.13.1): the run start refuses a
+  // run without it.
   for (const [index, field] of list(trigger.input).entries()) {
     if (field.control !== 'artifact') continue;
     const path = `trigger.input[${index}]`;
-    if (field.required === true) add(`${path}.required`, 'must be false for an artifact control');
     if (field.defaultValue !== undefined) {
       add(`${path}.defaultValue`, 'is not meaningful for an artifact control');
     }

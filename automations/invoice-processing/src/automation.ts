@@ -30,12 +30,18 @@ import { readPreferences } from './steps/read-preferences.js';
 import { receive } from './steps/receive.js';
 
 /**
- * Invoice Processing (template `invoice-processing`), version 8 — v7 with the owner's Q1 and Q2
+ * Invoice Processing (template `invoice-processing`), version 9 — v8's manifest but for its version,
+ * its own container and its file field required (the owner's item 1 on build 43, 2026-11-14): the
+ * platform refuses a run without a file before it starts, and `RUN_FAILS.no_file` stays the
+ * backstop. Its code is v8's; THIS code serves v9 alone.
+ *
+ * Version 8 — v7 with the owner's Q1 and Q2
  * (2026-11-03, "continue with recommended"): the first read gives each document's exact words for
  * its seller, number and total (`automations/invoice-processing/prompts/extract-documents.v2.json`), shown as detail lines under
  * them (`automations/invoice-processing/src/run/documents.ts`); and an answer off its schema is asked once more
  * (`reaskingOnce`), a second miss ending the run "The AI's answer couldn't be used. Try a clearer
- * file." Its manifest is v7's but for its version and its own container; THIS code serves v8 alone.
+ * file." Its manifest is v7's but for its version and its own container; this code served v8 alone
+ * until v9.
  *
  * Version 7 — reads EVERY bill, invoice,
  * receipt, credit note, statement and other financial document in a PDF or photo, each on its own,
@@ -84,8 +90,8 @@ import { receive } from './steps/receive.js';
  */
 export const TEMPLATE_ID = 'invoice-processing';
 
-/** The manifest versions this code serves: v8 alone. v7's container runs its own image. */
-export const SERVED_VERSIONS = [8] as const;
+/** The manifest versions this code serves: v9 alone. v8's container runs its own image. */
+export const SERVED_VERSIONS = [9] as const;
 
 /**
  * The QuickBooks reads and the file's, each repeated after a TRANSIENT failure — no answer, or a

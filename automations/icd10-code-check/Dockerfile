@@ -68,7 +68,7 @@ COPY --chown=node:node automations/icd10-code-check/assets ./assets
 # The ONE manifest version this image serves: one image per version. The runner runs
 # the pipeline it declares and refuses a run pinned to any other (src/main.ts reads
 # this dir); test/conformance.test.ts holds every Dockerfile to exactly one file.
-COPY --chown=node:node manifests/icd10-code-check.v4.json ./manifests/
+COPY --chown=node:node manifests/icd10-code-check.v5.json ./manifests/
 
 LABEL org.opencontainers.image.source="https://github.com/siddak1234/snoopy-automations"
 

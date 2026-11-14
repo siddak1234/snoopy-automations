@@ -71,7 +71,7 @@ function documentFields(
  */
 const INVOICE: Profile = {
   templateId: 'invoice-processing',
-  version: 8,
+  version: 9,
   fileKey: 'invoiceFile',
   samples: () =>
     SAMPLES.map((sample) => ({
@@ -109,7 +109,7 @@ function sectionOf(blocks: readonly RunBlock[], title: string): RunBlock | undef
 
 /**
  * A Contact row's value by its label ("Email", "Phone": the flow's `CONTACT_WORDS`), v4's
- * `{ title: label, text: value }` rows in the "Candidate details" group; null when there is none.
+ * and v5's `{ title: label, text: value }` rows in the "Candidate details" group; null when there is none.
  */
 function contact(detail: RunDetail, label: string): string | null {
   const rows = (sectionOf(detail.blocks ?? [], 'Contact')?.blocks ?? [])
@@ -121,7 +121,7 @@ function contact(detail: RunDetail, label: string): string | null {
 /** Resume Screening: 25 invented Word resumes, scored against one invented job made first. */
 const RESUMES: Profile = {
   templateId: 'candidate-reviewer',
-  version: 4,
+  version: 5,
   fileKey: 'resumeFile',
   samples: () =>
     CANDIDATES.map((candidate) => ({ name: candidate.sample, file: () => resumeFile(candidate) })),

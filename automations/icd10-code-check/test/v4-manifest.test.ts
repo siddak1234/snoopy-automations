@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ModelRequest } from '@autom8x/automation-sdk';
 import type { RecordingPlatform } from '@autom8x/automation-sdk/testing';
 
-import { SERVED_VERSIONS, define } from '../src/automation.js';
+import { define } from '../src/automation.js';
 import { HEALTH_VERSIONS, MODELS } from '../src/models.js';
 import { prompts } from '../src/prompts.js';
 import { flow, manifests, reading } from './fixtures.js';
@@ -16,10 +16,10 @@ import { PDF_ID, batchPlatform, batchRequest, page, runChild } from './v2-fixtur
 /**
  * v4's manifest (README, "v4"; the platform's ADR-0049, C1 and C2): v3's, word for word, with
  * `dataProtection: 'hipaa'` — its runs carry health data — and its own origin and service account;
- * this image serves v4 alone. Its calls name no models, so the platform's BAA gateway serves them
- * from its own list (an automation's own `models` it refuses); and no patient data reaches any
- * output schema's `enum`, `const` or `pattern` (the audit's H-W6, Anthropic's "Do not include PHI
- * in JSON schema definitions").
+ * this image served v4 alone until v5 (`v5-manifest.test.ts`). Its calls name no models, so the
+ * platform's BAA gateway serves them from its own list (an automation's own `models` it refuses);
+ * and no patient data reaches any output schema's `enum`, `const` or `pattern` (the audit's H-W6,
+ * Anthropic's "Do not include PHI in JSON schema definitions").
  */
 
 type Json = Record<string, any>;
@@ -45,12 +45,6 @@ test("v4 is v3's manifest, word for word, but its version, its own origin and se
   assert.equal(v4.service.origin, 'http://icd10-code-check-v4.autom8x.internal:8080');
   assert.equal(v4.service.serviceAccount, 'icd10-code-check-v4@autom8x.iam.gserviceaccount.com');
   assert.match(v4.display.description, /Test charts only for now\.$/u, 'no real charts yet');
-});
-
-test('this image serves v4 alone', () => {
-  assert.deepEqual(SERVED_VERSIONS, [4]);
-  const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
-  assert.match(dockerfile, /^COPY --chown=node:node manifests\/icd10-code-check\.v4\.json /mu);
 });
 
 test("HEALTH_VERSIONS is every version whose manifest says dataProtection 'hipaa'", () => {
