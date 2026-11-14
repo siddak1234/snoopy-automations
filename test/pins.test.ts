@@ -13,6 +13,8 @@ import { test } from 'node:test';
  * pinned base images).
  * `.nvmrc` names that same release, and every workflow installs Node from it, as in the other
  * repositories, so CI and a developer's nvm run what the images ship.
+ * Each image compiles with its own flow's lock (README, "Build a flow"), so every flow's lock, and
+ * the template's, pins the TypeScript the root lock pins, the compiler Verify builds with.
  */
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -181,4 +183,27 @@ test('.nvmrc names the exact Node release the images ship, every setup-node inst
     }
   }
   assert.ok(setups >= 1, 'CI sets up Node');
+});
+
+test('every flow’s lock, and the template’s, pins the TypeScript the root lock pins: the image compiles with the compiler Verify builds with', () => {
+  type Lock = { packages: Record<string, unknown> };
+  const typescript = (path: string) =>
+    (JSON.parse(read(path)) as Lock).packages['node_modules/typescript'];
+  const root = typescript('package-lock.json');
+  assert.ok(root, 'the root lock pins TypeScript');
+  const locks = [
+    ...readdirSync(join(repositoryRoot, 'automations'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `automations/${entry.name}/package-lock.json`)
+      .filter((path) => existsSync(join(repositoryRoot, path))),
+    'templates/automation/package-lock.json',
+  ];
+  assert.ok(locks.length >= 4, locks.join());
+  for (const path of locks) {
+    assert.deepEqual(
+      typescript(path),
+      root,
+      `copy the root lock's packages['node_modules/typescript'] entry into ${path}`,
+    );
+  }
 });

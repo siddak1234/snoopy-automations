@@ -3,12 +3,15 @@
 # The image of Resume Screening, v4 of candidate-reviewer, built from the repository root:
 #   docker build --file automations/candidate-reviewer/Dockerfile .
 #
-# The SDK and automation are workspaces during development, so the build uses the
-# root lock. The runtime install below is deliberately different: it consumes the
-# automation's own lockfile and packs the already-built local SDK into node_modules.
+# The flow's own lock is the image's only lock: the build stage installs
+# automations/candidate-reviewer/package-lock.json, packing the local SDK into node_modules (its
+# package.json alone until it is built, then again with its dist), and compiles the SDK and
+# the automation with the TypeScript that lock pins; /workspace/node_modules points at that
+# install, so the SDK finds it too. No root lock, root package.json or root tsconfig.json is
+# copied, so a new flow's merge changes no input of this image (README, "Build a flow"). The
+# runtime install below consumes the same lock without its dev tools.
 #
-# Only this automation's and the SDK's package.json are copied before `npm ci`: npm
-# installs a root lock whose other workspaces are absent from disk, so one
+# Only this automation's files, the SDK's and tsconfig.base.json are copied, so one
 # automation's image never sees another's files (ADR-0034 §6).
 #
 # The one FROM that names an image, `base`: the same Node by tag and index digest in every flow,
@@ -19,15 +22,21 @@ FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc6
 FROM base AS build
 WORKDIR /workspace
 
-COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
+COPY tsconfig.base.json ./
 COPY packages/automation-sdk/package.json packages/automation-sdk/tsconfig.json ./packages/automation-sdk/
-COPY automations/candidate-reviewer/package.json automations/candidate-reviewer/tsconfig.json ./automations/candidate-reviewer/
-RUN npm ci --ignore-scripts
+COPY automations/candidate-reviewer/package.json automations/candidate-reviewer/package-lock.json automations/candidate-reviewer/tsconfig.json ./automations/candidate-reviewer/
+WORKDIR /workspace/automations/candidate-reviewer
+RUN npm ci --ignore-scripts --workspaces=false --install-links=true \
+  && ln -s automations/candidate-reviewer/node_modules /workspace/node_modules
 
-COPY packages/automation-sdk/src ./packages/automation-sdk/src
-COPY automations/candidate-reviewer/src ./automations/candidate-reviewer/src
-RUN npm run build --workspace @autom8x/automation-sdk \
-  && npm run build --workspace @autom8x/candidate-reviewer
+WORKDIR /workspace/packages/automation-sdk
+COPY packages/automation-sdk/src ./src
+RUN npm run build
+
+WORKDIR /workspace/automations/candidate-reviewer
+RUN npm ci --ignore-scripts --workspaces=false --install-links=true
+COPY automations/candidate-reviewer/src ./src
+RUN npm run build
 
 FROM base AS production-dependencies
 WORKDIR /workspace

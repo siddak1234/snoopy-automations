@@ -696,11 +696,12 @@ a `*` bound to the flow's id):
 Both are live on `defineAutomation`; their after-pilot versions stay on it, with Q2's re-ask from
 `reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
-- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, live; v2, a batch of visit notes for
-  doctors and coders; v3; v4; v2 to v4 on `defineFlow`): its folder's README is its spec and how the
-  code does it. v1 to v3 stay served on their own containers; the image built here serves v4 alone
-  (v3 carrying health data, `dataProtection: 'hipaa'`, its calls naming no models; the folder
-  README's "v4"), on the Stage 2 contract (`contract/`, "Stage 2" above).
+- **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot, withdrawn 2026-11-04; v2, a batch of
+  visit notes for doctors and coders; v3, never registered; v4; v2 to v4 on `defineFlow`): its
+  folder's README is its spec and how the code does it. v2 and v4 are served, each on its own
+  container; the image built here serves v4 alone (v4 carrying health data,
+  `dataProtection: 'hipaa'`, its calls naming no models; the folder README's "v4"), on the Stage 2
+  contract (`contract/`, "Stage 2" above).
 
 ## The kit
 
@@ -823,15 +824,19 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    it serves changes — then starts the version on both hosts, smoke-tests it and registers it. Read
    the Deploy job's summary: each flow shows NEW, UPDATE, SKIP, SUPERSEDED or REFUSED.
 
-**Every new flow's merge redeploys the live flows too.** The root `package-lock.json` is an input of
-every flow's image (each Dockerfile copies it), the scaffold adds the new workspace to it, and Flow CD
-redeploys a served version whose inputs changed as an UPDATE. So each new flow's merge also restarts
-Invoice Processing and Resume Screening at their versions, with no change in what they do: each
-UPDATE is smoke-tested and the version it replaces keeps serving until it passes, and each passes the
-readiness check again. A REFUSED row for another flow is not the new flow's: its code says what the
-platform lacks (Invoice Processing's QuickBooks keys, for one), the owner's step, and re-running the
-Deploy job once it is fixed serves it. Locks per flow, so that one flow's merge leaves the others
-alone, are the platform's follow-up (its SYSTEM-MANIFEST §12.1 #314); the image inputs are unchanged.
+**A flow's merge redeploys only that flow** (since Round 22, the platform's BUILD-PLAN 30.10.2 and
+its SYSTEM-MANIFEST §12.1 #314). Each flow's image reads its own folder, its own manifest,
+`packages/` and `tsconfig.base.json`, and no lock but its own: the build stage installs
+`automations/<id>/package-lock.json` and compiles the SDK (and the kit, for a flow that uses it) and
+the flow with the TypeScript that lock pins, which `test/pins.test.ts` holds to the root lock's. The
+scaffold still adds a new flow's workspace to the root `package-lock.json`, which the root's `npm ci`
+and Verify install and no image reads. So a new flow's merge changes no input of another flow's
+image, and Flow CD reads every other served version as SKIP (`test/changed-images.test.ts` holds
+both). A change under `packages/` or to `tsconfig.base.json` still rebuilds every flow that copies
+it, and its merge redeploys each as an UPDATE: smoke-tested, the version it replaces serving until it
+passes, the readiness check passed again. A REFUSED row for another flow then is not yours: its code
+says what the platform lacks (Invoice Processing's QuickBooks keys, for one), the owner's step, and
+re-running the Deploy job once it is fixed serves it.
 
 Each version's origin is `http://<templateId>-v<n>.autom8x.internal:8080`, with a service account
 of its own: one container per manifest version for everything new (the platform's D2), and the
