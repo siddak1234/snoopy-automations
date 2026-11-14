@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { crc32, deflateRawSync } from 'node:zlib';
@@ -26,6 +27,18 @@ export const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as JsonOb
   items: JsonObject & { outputSchema: JsonObject };
   outputSchema: JsonObject;
 };
+
+/**
+ * The commit whose `manifests/` last held v1 to v4: the base of the change that removed their
+ * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). Git keeps them.
+ */
+export const RETIRED_AT = '30d6798df2817e0b97ad4a7a26b70b018273eef7';
+
+/** A retired version's manifest file, as committed, read from git at `RETIRED_AT`. */
+export function retiredFile(version: number): string {
+  const file = `${RETIRED_AT}:manifests/${TEMPLATE_ID}.v${version}.json`;
+  return execFileSync('git', ['show', file], { cwd: manifestsRoot, encoding: 'utf8' });
+}
 
 /** The day the suite runs on: a current role's years run to it. */
 export const NOW = new Date('2026-10-24T12:00:00Z');

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 import { SPECIALTIES_FIELD } from '../src/families.js';
 import { prompts } from '../src/prompts.js';
-import { flow } from './fixtures.js';
+import { flow, retiredFile } from './fixtures.js';
 
 /**
  * The manifest against the spec, word for word: section 1 (the card), 2 (the start and its file),
@@ -13,9 +13,8 @@ import { flow } from './fixtures.js';
  * and section 4's capabilities, the prompts'.
  */
 
-const manifest = JSON.parse(
-  readFileSync(join(flow, '..', '..', 'manifests', 'icd10-code-check.v1.json'), 'utf8'),
-);
+// v1 was retired 2026-11-04 and its file left `manifests/`: git keeps it (`retiredFile`).
+const manifest = JSON.parse(retiredFile(1));
 const spec = readFileSync(join(flow, 'README.md'), 'utf8');
 
 /** A spec table's rows after the heading row whose first cells are `first`. */

@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { npiOf } from '../src/v2/specialties.js';
 import { WORDS_V2, WORDS_V3 } from '../src/v2/words.js';
-import { flow } from './fixtures.js';
+import { retiredFile } from './fixtures.js';
 
 /**
  * v3's manifest (the spec's "v3"; `words.md` section 5): v2's, word for word, with its setup in
@@ -15,11 +13,8 @@ import { flow } from './fixtures.js';
  */
 
 type Json = Record<string, any>;
-const root = join(flow, '..', '..');
-const read = (version: number): Json =>
-  JSON.parse(
-    readFileSync(join(root, 'manifests', `icd10-code-check.v${version}.json`), 'utf8'),
-  ) as Json;
+// v2 and v3 left `manifests/` once retired: git keeps them (`retiredFile`).
+const read = (version: number): Json => JSON.parse(retiredFile(version)) as Json;
 const v2 = read(2);
 const v3 = read(3);
 
