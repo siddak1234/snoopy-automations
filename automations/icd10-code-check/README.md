@@ -7,6 +7,18 @@ beside this spec, every word both clients show · **Research:** `research.md` be
 
 **Words approved for v3 and v4:** 2026-11-04, before 18:36:45Z, the owner: "F1. approve" — `words.md` section 5, as shown, no word changed (v4 adds none).
 
+**Versions.** This flow's files in `manifests/`: its newest, and the one before it only while it may
+still be served. A retired version's file leaves with its row here (the repository README, "The
+definition-file standard"; `test/definition-files.ts`, D5); git keeps it.
+
+| Version | State                                                                                                             |
+| ------- | ----------------------------------------------------------------------------------------------------------------- |
+| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:49Z)                 |
+| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14                    |
+| v3      | retired 2026-11-04: never registered, v4 took its place (snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block) |
+| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5)            |
+| v5      | served: `manifests/icd10-code-check.v5.json`, this image's (`SERVED_VERSIONS`)                                    |
+
 **Waits for the platform (section 10):** a setup dropdown that picks several choices, and an approval
 that accepts or denies each change. `/create-flow` stage 1 answer: a platform round first, then this
 flow's one pull request.
@@ -548,7 +560,7 @@ v3's "Other code" ships.
 **Status:** built beside v2 on the branch `round-21/stage-1-flows`, merged in #73 (a0f1f7d); v3 was
 never registered, as the platform refuses a new Healthcare version without `dataProtection`
 (snoopy-backend SYSTEM-MANIFEST §6), so v4 ("v4", below) took its place. v1 was withdrawn 2026-11-04
-18:36:49Z, and v2 stays served on its own container and pinned image until the owner retires it. **Words:** `words.md`, section 5, ~~**awaiting the owner's
+18:36:49Z, and v2 stayed served on its own container and pinned image until it was retired on 2026-11-14 ("Versions", at the top). **Words:** `words.md`, section 5, ~~**awaiting the owner's
 approval**~~ approved 2026-11-04 ("F1. approve"; this spec's top); every other word is v2's. **Rests on:** the platform's Stage 1 contract (ADR-0048
 amendment 5, vendored in `contract/` at snoopy-backend 0973082 (#265), the
 platform's `main` after Stage 1 merged): a manifest's `setupSections`, a text field's `example`, a held
@@ -579,8 +591,8 @@ improve their results over time." — and TestFlight build 34 feedback, 2026-11-
 
 **Status:** built on the branch `round-21/stage-2-flows`, merged in #74 (6ad084c); this image served v4 alone until v5
 (`SERVED_VERSIONS`), served since Flow CD's `FLOW CD OK` of 2026-11-04 18:41:00Z. v1 was withdrawn at
-18:36:49Z and v3 was never registered; v2 stays served on its own container and pinned image until the
-owner retires it (the `retire-version` skill), so no ICD-10 run stays on OpenRouter after that. **Words:**
+18:36:49Z and v3 was never registered; v2 stayed served on its own container and pinned image until it
+was retired on 2026-11-14 ("Versions", at the top), so no ICD-10 run stays on OpenRouter since. **Words:**
 none new. **Rests on:** the platform's Stage 2 contract (its ADR-0049, C1 and C2), vendored in
 `contract/` at snoopy-backend 50a24f7, the head of its branch `round-21/stage-2-platform` (#266, merged as
 snoopy-backend 7793134). **Merges only after** that pull request is merged and deployed: an older platform
@@ -598,7 +610,7 @@ departments that require this lets consider another vendor, while the rest go to
 ## v5 (2026-11-14)
 
 **Status:** built on the branch `round-22/build-43-items`; this image serves v5 alone
-(`SERVED_VERSIONS`). v4 stays served on its own container and pinned image until the owner retires it
+(`SERVED_VERSIONS`). v4 stayed served on its own container and pinned image until it was retired on 2026-11-14 ("Versions", at the top)
 (the `retire-version` skill). **Words:** none new: section 8's "Add the visit note as a PDF or photo."
 already tells no file apart from a note that could not be read. **Merges only after** the platform's
 build-43 pull request (its BUILD-PLAN 30.13.1, ADR-0030's amendment of 2026-11-14: a file field may be

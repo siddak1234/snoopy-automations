@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import type { Clock } from '@autom8x/automation-kit/quickbooks';
@@ -63,6 +64,18 @@ export {
 
 export const manifestsRoot = resolve(import.meta.dirname, '..', '..', '..', 'manifests');
 export const manifests = servedManifests(readManifests(manifestsRoot, TEMPLATE_ID));
+
+/**
+ * The commit whose `manifests/` last held v1 to v8: the base of the change that removed their
+ * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). Git keeps them.
+ */
+export const RETIRED_AT = '30d6798df2817e0b97ad4a7a26b70b018273eef7';
+
+/** A retired version's manifest file, as committed, read from git at `RETIRED_AT`. */
+export function retiredFile(version: number): string {
+  const file = `${RETIRED_AT}:manifests/${TEMPLATE_ID}.v${version}.json`;
+  return execFileSync('git', ['show', file], { cwd: manifestsRoot, encoding: 'utf8' });
+}
 
 /** The flow's settings with QuickBooks chosen; `NONE` with "None". */
 export const QUICKBOOKS: JsonObject = { vendor: 'quickbooks' };

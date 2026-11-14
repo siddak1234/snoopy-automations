@@ -4,8 +4,9 @@
  * every `artifact` run input `required: true`, unless the flow's spec,
  * `automations/<templateId>/README.md`, gives the reason on that field's row of its run-input
  * table: the row's first cell the field's key, its last cell `no: <the reason>`. A version before
- * the newest is registered and immutable (`test/manifest-immutable.test.ts`), so it is never judged
- * again: Resume Screening v1 to v4 say `required: false`, as the platform then required.
+ * the newest keeps its bytes (`test/definition-files.test.ts`, D4), so it is never judged again:
+ * Resume Screening v4, before its file left (D5), said `required: false`, as the platform then
+ * required.
  */
 
 export type Json = Record<string, unknown>;
@@ -23,8 +24,9 @@ export function newestManifests(files: readonly string[]): string[] {
   return [...newest.values()].map((each) => each.file).sort();
 }
 
-/** The reason a spec gives on a run input's row, `| key | … | no: <reason> |`; none without one. */
-export function reasonFor(spec: string, key: string): string | undefined {
+/** The last cell of each table row in a spec whose first cell is `key`, backticks aside. */
+export function lastCells(spec: string, key: string): string[] {
+  const found: string[] = [];
   for (const line of spec.split('\n')) {
     if (!line.trimStart().startsWith('|')) continue;
     const cells = line
@@ -32,8 +34,15 @@ export function reasonFor(spec: string, key: string): string | undefined {
       .split('|')
       .slice(1, -1)
       .map((cell) => cell.trim());
-    if (cells.length < 2 || cells[0]!.replaceAll('`', '') !== key) continue;
-    const reason = /^no\s*:\s*(?<reason>\S.*)$/iu.exec(cells.at(-1)!)?.groups?.reason;
+    if (cells.length >= 2 && cells[0]!.replaceAll('`', '') === key) found.push(cells.at(-1)!);
+  }
+  return found;
+}
+
+/** The reason a spec gives on a run input's row, `| key | … | no: <reason> |`; none without one. */
+export function reasonFor(spec: string, key: string): string | undefined {
+  for (const cell of lastCells(spec, key)) {
+    const reason = /^no\s*:\s*(?<reason>\S.*)$/iu.exec(cell)?.groups?.reason;
     if (reason !== undefined) return reason;
   }
   return undefined;

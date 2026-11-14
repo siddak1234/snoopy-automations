@@ -157,7 +157,7 @@ Refreshed 2026-10-10, later, from two of the platform's branches, neither yet me
   (its BUILD-PLAN 25.2.28): the `artifacts` block gains the optional `maximumPdfPages` (1 to
   1,000) and `maximumImageSidePixels` (1 to 20,000), held by
   `packages/automation-sdk/test/contract.test.ts` with the platform's samples. They are the
-  limits `manifests/invoice-processing.v1.json` now declares (10 and 8,000): the platform
+  limits ~~`manifests/invoice-processing.v1.json`~~ now declares (10 and 8,000): the platform
   measures an upload's pages and pixels only for a manifest declaring one, and without the
   measurements `receive` refuses every file.
 
@@ -283,7 +283,7 @@ built beside the platform's. One file moved, additively: `automation-manifest.js
 the optional `documentWords`, `{ singular, plural }`, each 1–40 characters — what a flow calls one
 of the documents its runs return, and many, which the platform publishes on the catalog entry and
 both clients and the run package print ("Invoice 1 of 3"; a flow that declares none, "Document 1 of
-3"). `manifests/invoice-processing.v7.json` declares "Invoice" and "Invoices" (27.3.2). The other
+3"). ~~`manifests/invoice-processing.v7.json`~~ declares "Invoice" and "Invoices" (27.3.2). The other
 seven files are byte-identical to `708ed6e`'s (each checked with `cmp`). Until that branch merges
 and a promotion carries it, the live platform refuses a manifest declaring `documentWords`, so v7
 is registered only by the platform's pin change after both; this copy is re-pinned to the merge
@@ -304,7 +304,7 @@ above, this repository's half built beside the platform's. Three files moved, ad
   `control`: `text`, with an optional `maxLength` of 1–200, or `select`, with 1–32 unique `options`
   of 1–40 characters, an optional `allowOther` and an optional `defaultValue`; `file` (`key`,
   `title`, `description`); `pipeline`, the item run's 1–8 steps (`id`, `title`, `description`);
-  and `outputSchema`, the reading's, an object schema. `manifests/candidate-reviewer.v1.json`
+  and `outputSchema`, the reading's, an object schema. ~~`manifests/candidate-reviewer.v1.json`~~
   declares one.
 - `automation-invoke-request.json`: the optional `item` — `id`, `fields` (each a string) and
   `reading` (an object, or null on the item run itself) — and `readsItem`, whose one value is
@@ -332,7 +332,7 @@ repository's half built beside the platform's. Two files moved, additively:
 
 - `automation-manifest.json`: `items` gains the optional `verdictWords`, `{ positive, negative }`,
   each 1–40 characters — what a run's verdict is called, which the platform publishes on the
-  catalog's items and both clients print. `manifests/candidate-reviewer.v2.json` declares "Advance"
+  catalog's items and both clients print. ~~`manifests/candidate-reviewer.v2.json`~~ declares "Advance"
   and "Decline".
 - `automation-run-result.json`: the success branch's optional `verdict`, `positive` or `negative`,
   which the platform keeps with the run and counts on its item. Beyond the schema, the result

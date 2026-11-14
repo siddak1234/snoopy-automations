@@ -79,6 +79,10 @@ person decides".
 | Provider | Why, as the person reads it (200) | Operations it calls | Required, or optional with None |
 | -------- | --------------------------------- | ------------------- | ------------------------------- |
 
+A new version of a live flow adds no required connection and asks no connection for more scopes
+(the owner: "connections are optional. why would a user have to connect to update?"), unless its
+reason is a row of section 5's "New requirements" table.
+
 ## 4. AI steps
 
 As few calls as the job needs: each one is paid for, per document. Each failure of section 8 that a
@@ -110,6 +114,15 @@ by the session).
 
 | Section: connections, source, rules or notifications | Key | Title | Description (200) | Control: toggle, money, text, email, resource-picker or connection | Default | Required | Step group |
 | ---------------------------------------------------- | --- | ----- | ----------------- | ------------------------------------------------------------------ | ------- | -------- | ---------- |
+
+A new version of a live flow adds no required setting without a Default. Only when one must, the
+reason is a row here, its first cell the setting's key or the connection's provider id and its last
+`new in v<n>: <the reason>`, n the new version (`test/no-new-requirements.ts`); its merge is the
+owner's approval. None for a first version.
+
+| Key or provider id | New requirement           |
+| ------------------ | ------------------------- |
+|                    | new in v<n>: <the reason> |
 
 ## 6. Steps a person sees
 

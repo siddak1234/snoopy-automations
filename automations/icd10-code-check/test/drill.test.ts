@@ -3,11 +3,10 @@ import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { readManifests } from '@autom8x/automation-sdk';
 import { failureDrill } from '@autom8x/automation-sdk/testing';
 
-import { TEMPLATE_ID, define } from '../src/automation.js';
-import { platformFor, reading, request } from './fixtures.js';
+import { define } from '../src/automation.js';
+import { manifests, platformFor, reading, request } from './fixtures.js';
 import { PDF_ID, batchPlatform, batchRequest, childInvoke, page } from './v2-fixtures.js';
 
 /**
@@ -16,7 +15,6 @@ import { PDF_ID, batchPlatform, batchRequest, childInvoke, page } from './v2-fix
  * so the drill's provider cases are not reached; its model, timeout and report cases are.
  */
 const flow = resolve(import.meta.dirname, '..');
-const manifests = readManifests(join(flow, '..', '..', 'manifests'), TEMPLATE_ID);
 const words = ['README.md', 'words.md']
   .map((name) => join(flow, name))
   .filter((path) => existsSync(path))

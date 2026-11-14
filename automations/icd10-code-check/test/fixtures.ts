@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 
 import {
   readManifests,
+  type Manifest,
   type InvokeRequest,
   type JsonObject,
   type RunResult,
@@ -25,7 +27,28 @@ import type { CheckNoteOptions } from '../src/steps/check-note.js';
 export const NOTE_ID = '33333333-3333-4333-8333-333333333333';
 
 export const flow = resolve(import.meta.dirname, '..');
-export const manifests = readManifests(join(flow, '..', '..', 'manifests'), TEMPLATE_ID);
+
+/**
+ * The commit whose `manifests/` last held v1 to v4: the base of the change that removed their
+ * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). Git keeps them, so
+ * the suite still runs the code each served on its manifest as it was.
+ */
+export const RETIRED_AT = '30d6798df2817e0b97ad4a7a26b70b018273eef7';
+
+/** A retired version's manifest file, as committed, read from git at `RETIRED_AT`. */
+export function retiredFile(version: number): string {
+  const file = `${RETIRED_AT}:manifests/${TEMPLATE_ID}.v${version}.json`;
+  return execFileSync('git', ['show', file], { cwd: flow, encoding: 'utf8' });
+}
+
+/** A retired version's manifest, parsed. */
+export const retiredManifest = (version: number) => JSON.parse(retiredFile(version)) as Manifest;
+
+/** Every version: v1 to v4 from git, and the newest from `manifests/`. */
+export const manifests = [
+  ...[1, 2, 3, 4].map(retiredManifest),
+  ...readManifests(join(flow, '..', '..', 'manifests'), TEMPLATE_ID),
+];
 
 export interface Dx {
   statement: string;

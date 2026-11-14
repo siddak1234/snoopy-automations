@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
+import { retiredFile } from './definition-files.js';
 import { manifestProblems, type Json } from './manifest-rules.js';
 
 /**
@@ -12,8 +13,11 @@ import { manifestProblems, type Json } from './manifest-rules.js';
 
 const manifestsRoot = resolve(import.meta.dirname, '..', 'manifests');
 
-const read = (file: string) =>
-  JSON.parse(readFileSync(join(manifestsRoot, file), 'utf8')) as Json & {
+// A retired version's file, Invoice Processing v2's below, is read from git (`retiredFile`).
+const read = (file: string, retired = false) =>
+  JSON.parse(
+    retired ? retiredFile(manifestsRoot, file) : readFileSync(join(manifestsRoot, file), 'utf8'),
+  ) as Json & {
     pipeline: Json[];
     groups?: Json[];
     setup: Json[];
@@ -27,7 +31,7 @@ test('every manifest here passes the rules the platform adds beyond the schema',
 });
 
 test('the rules refuse what the platform refuses', () => {
-  const v2 = read('invoice-processing.v2.json');
+  const v2 = read('invoice-processing.v2.json', true);
   const [vendor, ...settings] = v2.setup as [Json, ...Json[]];
   const [quickBooks] = v2.requiredConnections as [Json];
   const cases: [string, Json, string][] = [
@@ -149,7 +153,7 @@ test('the rules refuse what the platform refuses', () => {
 });
 
 test("the rules refuse what the platform refuses of a step that is a setting, the platform's email step and a title by connection (ADR-0041)", () => {
-  const v4 = read('invoice-processing.v4.json');
+  const v4 = read('invoice-processing.v9.json'); // its five steps, as v4 set them
   const groups = v4.groups ?? [];
   const [upload, connect, process, record, email] = groups as [Json, Json, Json, Json, Json];
   const [vendor, limit] = v4.setup as [Json, Json];
