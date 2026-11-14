@@ -176,8 +176,8 @@ below). The
 platform's Build 21 contract merged as `69b8d97` (`contract/README.md`). What follows describes
 v2 and v1, and what v3 keeps of them; where they differ, this paragraph wins, and v4's above it.
 
-**v2.** Its image served v2 alone; v1's manifest stays, registered and immutable, until it is
-retired. v2's manifest is category Accounting; QuickBooks is an optional connection,
+**v2.** Its image served v2 alone; v1's manifest stayed, registered and immutable, until it was
+retired ("Versions", above). v2's manifest is category Accounting; QuickBooks is an optional connection,
 chosen in its one `connection` setup field, `vendor` — "None" by default; two settings, the
 approval limit and "Also email", neither required, and no setting can fail a run
 (`automations/invoice-processing/test/settings.test.ts`); no "paid personally" input (decision 4) — `find-payer`, the owners
