@@ -1,7 +1,7 @@
 /**
  * The definition-file standard (Round 22, the platform's BUILD-PLAN 30.15.2): `manifests/` holds
  * the file of each flow's newest version, and the one before it only while that one may still be
- * served. The owner asked "is there a way to ensure we are not duplicating efforts or items and
+ * served. The owner asked "is there  a way to ensure we are not duplicating efforts or items and
  * properly updating definition files based on standards?" (2026-11-14); rules D1–D8 are the
  * session's answer, pure functions here driven by `test/definition-files.test.ts` on the tree and
  * on scratch trees, as `test/file-required.ts` is.

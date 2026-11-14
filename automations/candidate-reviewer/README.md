@@ -8,8 +8,8 @@
 (§1; v1 is "Candidate Reviewer"); the department options A–Z, "AI" added among them, HR still the
 default (§2); a verdict on each candidate, "Advance" at a score of 60 or above and "Decline" below
 (§7), a label from the score alone: a person decides (§11). The job's reading, the prompts, the
-steps and every other word are v1's, so a job made on v1 serves v2's runs; v1 is served beside v2
-until it is retired. It needs the platform's build 28 contract first (§10).
+steps and every other word are v1's, so a job made on v1 serves v2's runs; v1 was served beside v2
+until it was retired ("Versions", below). It needs the platform's build 28 contract first (§10).
 
 **v2, 2026-10-25 (build 28's F8: "If there is a url that should be in the section"):** a resume's
 links are also those its file links to behind a word, such as "LinkedIn" (§4), each named by its

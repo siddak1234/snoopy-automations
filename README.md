@@ -867,8 +867,9 @@ have 16 versions for flows. Why do we not just have the latest ones since we con
 best. Why are we wasting time, resources, soace and bandwidth on older flows. Shouldnt we clean up
 after every revision?", and on the plan: "k2, yes(but is this safe? is there a way to ensure we
 are not duplicating efforts or items and properly updating definition files based on standards?),
-yes." The rules are the session's answer, `test/definition-files.ts` (its header names what a
-repository check cannot see: which version is served or withdrawn):
+yes." (The owner typed two spaces after "there"; the format check prints them as one.) The rules
+are the session's answer, `test/definition-files.ts` (its header names what a repository check
+cannot see: which version is served or withdrawn):
 
 - D1 a file is named `<templateId>.v<n>.json`, says that id and version, and its flow folder exists
   (`test/architecture.test.ts`); every tracked path under `manifests/` is such a name at its top
