@@ -109,12 +109,11 @@
 - [CLAUDE.md](../CLAUDE.md) (doc)
 - [README.md](../README.md) (doc)
 - [contract/README.md](../contract/README.md) (doc)
-- [docs/records/round-record.archive.md](records/round-record.archive.md) (archive)
 - [docs/records/round-record.md](records/round-record.md) (current)
 
 ### 100 KB to 1 MB
 
-- none
+- [docs/records/round-record.archive.md](records/round-record.archive.md) (archive)
 
 ### Over 1 MB: grep only
 

@@ -34,8 +34,8 @@ jobs:
   # Dockerfile, as a JSON list. Publish takes its matrix from it, so a new automation is
   # built, published and deployed with no edit here. Image takes `images`: on a pull
   # request only the flows whose image inputs changed (scripts/changed-images.mjs, the rule
-  # the platform's Flow CD uses; a change under packages/, the root lock or this file builds
-  # them all), and on a push to main or the nightly every one.
+  # the platform's Flow CD uses; a change under packages/, to tsconfig.base.json or to this
+  # file builds them all), and on a push to main or the nightly every one.
   list:
     name: List
     runs-on: ubuntu-24.04

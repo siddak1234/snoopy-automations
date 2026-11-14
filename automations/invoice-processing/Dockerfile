@@ -3,15 +3,18 @@
 # The image of Invoice Processing v8, built from the repository root:
 #   docker build --file automations/invoice-processing/Dockerfile .
 #
-# The SDK, the kit and the automation are workspaces during development, so the build
-# uses the root lock. The runtime install below is deliberately different: it consumes
-# the automation's own lockfile and packs the already-built local SDK and kit into
-# node_modules, so the image carries its own copy of each and shares nothing at run
-# time with another automation (ADR-0034 §6).
+# The flow's own lock is the image's only lock: the build stage installs
+# automations/invoice-processing/package-lock.json, packing the local SDK and kit into
+# node_modules (each one's package.json alone until it is built, then again with its dist),
+# and compiles the SDK, the kit and the automation with the TypeScript that lock pins;
+# /workspace/node_modules points at that install, so the SDK and kit find it too. No root
+# lock, root package.json or root tsconfig.json is copied, so a new flow's merge changes no
+# input of this image (README, "Build a flow"). The runtime install below consumes the same
+# lock without its dev tools.
 #
-# Only this automation's, the SDK's and the kit's package.json are copied before
-# `npm ci`: npm installs a root lock whose other workspaces are absent from disk, so
-# one automation's image never sees another's files.
+# Only this automation's files, the SDK's, the kit's and tsconfig.base.json are copied, so the
+# image carries its own copy of each and shares nothing at run time with another automation
+# (ADR-0034 §6).
 #
 # The one FROM that names an image, `base`: the same Node by tag and index digest in every flow,
 # and every stage builds FROM it, since Dependabot moves only a Dockerfile's first FROM (README,
@@ -21,18 +24,29 @@ FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc6
 FROM base AS build
 WORKDIR /workspace
 
-COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
+COPY tsconfig.base.json ./
 COPY packages/automation-sdk/package.json packages/automation-sdk/tsconfig.json ./packages/automation-sdk/
 COPY packages/automation-kit/package.json packages/automation-kit/tsconfig.json ./packages/automation-kit/
-COPY automations/invoice-processing/package.json automations/invoice-processing/tsconfig.json ./automations/invoice-processing/
-RUN npm ci --ignore-scripts
+COPY automations/invoice-processing/package.json automations/invoice-processing/package-lock.json automations/invoice-processing/tsconfig.json ./automations/invoice-processing/
+WORKDIR /workspace/automations/invoice-processing
+RUN npm ci --ignore-scripts --workspaces=false --install-links=true \
+  && ln -s automations/invoice-processing/node_modules /workspace/node_modules
 
-COPY packages/automation-sdk/src ./packages/automation-sdk/src
-COPY packages/automation-kit/src ./packages/automation-kit/src
-COPY automations/invoice-processing/src ./automations/invoice-processing/src
-RUN npm run build --workspace @autom8x/automation-sdk \
-  && npm run build --workspace @autom8x/automation-kit \
-  && npm run build --workspace @autom8x/invoice-processing
+WORKDIR /workspace/packages/automation-sdk
+COPY packages/automation-sdk/src ./src
+RUN npm run build
+
+WORKDIR /workspace/automations/invoice-processing
+RUN npm ci --ignore-scripts --workspaces=false --install-links=true
+
+WORKDIR /workspace/packages/automation-kit
+COPY packages/automation-kit/src ./src
+RUN npm run build
+
+WORKDIR /workspace/automations/invoice-processing
+RUN npm ci --ignore-scripts --workspaces=false --install-links=true
+COPY automations/invoice-processing/src ./src
+RUN npm run build
 
 FROM base AS production-dependencies
 WORKDIR /workspace

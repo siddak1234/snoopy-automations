@@ -25,6 +25,10 @@ import { networkProblems } from './network.js';
  */
 
 const repositoryRoot = join(import.meta.dirname, '..');
+/** Plain JavaScript (it runs before any install), imported by URL as test/changed-images.test.ts does. */
+const { dockerfileInputs } = (await import(
+  new URL('../scripts/changed-images.mjs', import.meta.url).href
+)) as { dockerfileInputs: (text: string) => string[] };
 const scratch = mkdtempSync(join(tmpdir(), 'scaffold-test-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
@@ -107,6 +111,16 @@ test('scaffold writes a frame that typechecks, passes its own tests and the gate
   });
   const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
   assert.match(dockerfile, new RegExp(`COPY --chown=node:node manifests/${ID}\\.v1\\.json`, 'u'));
+  // The image reads its own lock and no root file (README, "Build a flow"), so this flow's merge
+  // changes no input of another flow's image.
+  const inputs = dockerfileInputs(dockerfile);
+  assert.deepEqual(
+    [...new Set(inputs.filter((input) => input.endsWith('package-lock.json')))],
+    [`automations/${ID}/package-lock.json`],
+  );
+  for (const root of ['package.json', 'package-lock.json', 'tsconfig.json']) {
+    assert.ok(!inputs.includes(root), `the image copies the root ${root}`);
+  }
   assert.ok(!/example/u.test(dockerfile + readFileSync(join(flow, 'package.json'), 'utf8')));
   const todos = readFileSync(join(flow, 'test', 'spec.test.ts'), 'utf8');
   assert.match(todos, /test\.todo\('§9: a clear bill — its vendor and total'\)/u);
