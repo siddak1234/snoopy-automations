@@ -209,7 +209,7 @@ test('a .git with no origin or not its own work tree, or a symbolic link on the 
   const away = mkdtempSync(join(dir, 'away-'));
   const [lone, fake, folder, file] = ['lone-', 'fake-', 'link-', 'link-'].map((p) =>
     mkdtempSync(join(dir, p)),
-  );
+  ) as [string, string, string, string];
   git(lone, 'init', '-q'); // a work tree with no origin
   mkdirSync(join(fake, '.git')); // no work tree: git finds the one around it, `dir`, with its origin
   cloneAt(folder);
