@@ -5,7 +5,7 @@
   "description": "An Autom8x automation on the SDK's step runner: declared steps, a versioned prompt, a hold above a threshold, a provider action, and an outcome mailed by the platform.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

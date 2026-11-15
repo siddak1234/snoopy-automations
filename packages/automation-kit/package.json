@@ -5,7 +5,7 @@
   "description": "A library automations build with: QuickBooks reads and writes through the SDK's provider call, the one cleaning of values read from a document, and a QuickBooks simulator for their suites. Node built-ins only; packed into each automation's image at build time, so nothing is shared at run time.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "exports": {
     "./quickbooks": {

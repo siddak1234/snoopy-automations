@@ -140,11 +140,44 @@ test('Dependabot’s docker entry covers every Dockerfile’s folder, in one gro
   );
 });
 
+test("every package.json that declares engines declares .nvmrc's major as `<major>.x`, and its lockfile's root entry says the same", () => {
+  const major = read('.nvmrc').trim().split('.')[0];
+  const folders = [
+    '.',
+    'templates/automation',
+    ...['packages', 'automations'].flatMap((parent) =>
+      readdirSync(join(repositoryRoot, parent), { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            existsSync(join(repositoryRoot, parent, entry.name, 'package.json')),
+        )
+        .map((entry) => `${parent}/${entry.name}`),
+    ),
+  ];
+  let declared = 0;
+  for (const folder of folders) {
+    const { engines } = JSON.parse(read(`${folder}/package.json`)) as {
+      engines?: { node?: string };
+    };
+    if (engines === undefined) continue;
+    declared += 1;
+    assert.equal(engines.node, `${major}.x`, `${folder}/package.json engines`);
+    const lock = `${folder}/package-lock.json`;
+    if (!existsSync(join(repositoryRoot, lock))) continue;
+    const root = (
+      JSON.parse(read(lock)) as { packages: Record<string, { engines?: { node?: string } }> }
+    ).packages[''];
+    assert.equal(root?.engines?.node, `${major}.x`, `${lock}'s root entry engines`);
+  }
+  assert.ok(declared >= 7, `${declared} package.json files declare engines: this test is blind`);
+});
+
 test('.nvmrc names the exact Node release the images ship, every setup-node installs it from the file, and no brief types it', () => {
   const exact = read('.nvmrc').trim();
   assert.match(exact, /^\d+\.\d+\.\d+$/u, `.nvmrc names ${exact}, not one exact release`);
   const { engines } = JSON.parse(read('package.json')) as { engines: { node: string } };
-  assert.equal(engines.node, `>=${exact.split('.')[0]}`, 'its major is the one engines declares');
+  assert.equal(engines.node, `${exact.split('.')[0]}.x`, 'its major is the one engines declares');
   // Moved by hand with the image: a bump of the FROM is red here until `.nvmrc` moves with it.
   const shipped = bases(dockerfiles.map((path) => ({ path, text: read(path) }))).map(
     ([, image]) => /^node:(\d+\.\d+\.\d+)-/u.exec(image)?.[1],

@@ -61,6 +61,7 @@ test/isolation.test.ts       the engine rule: no automation shares code, files o
 test/conformance.test.ts     every automation held to the manifests it serves
 tools/n8n/                   n8n on the owner's Mac, to design a flow: never deployed, never in an image
 .githooks/                   pre-commit and pre-push: the kit's private-data scan, then before a push its workflow lint (npm run hooks:install)
+SECURITY.md, LICENSE         a vulnerability is reported privately by email, never in a public issue; no license is granted
 docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
@@ -967,6 +968,7 @@ group (`.github/dependabot.yml`) moves them all in one pull request, which needs
 other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
 until `.nvmrc` moves with it.
 
-Node: the release `.nvmrc` names (`nvm use`). Agent sessions read `CLAUDE.md` first. The committed facts file
+Node: the release `.nvmrc` names (`nvm use`); every `package.json` here that declares `engines`
+declares its major, `22.x` (`test/pins.test.ts`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

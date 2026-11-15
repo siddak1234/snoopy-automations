@@ -5,7 +5,7 @@
   "description": "The Autom8x automation SDK: the step runner, prompt modules, the callbacks, the serving shell, and test doubles. Deliberately depends on no platform package.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "exports": {
     ".": {
