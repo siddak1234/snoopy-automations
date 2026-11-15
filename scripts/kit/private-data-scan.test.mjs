@@ -2,19 +2,20 @@
 // The private-data scan's tests, imported by kit.test.mjs, so every repository's runner runs them.
 // Pure functions first; then the client-name search in scratch git repos (no download); then the
 // public config's personal-data rules, read from the TOML and run in JS on fixtures built at run
-// time by concatenation, so this file never holds a value its own rules would find. Nothing is
-// downloaded: the one check against the real gitleaks runs only with AUTOM8X_GITLEAKS_LIVE=1 and
-// the binary already cached, and is otherwise skipped (so every gate counts the same tests).
+// time by concatenation, so this file never holds a value its own rules would find. The last
+// check runs the real gitleaks on those fixtures: the pinned, checksum-verified binary the scan
+// itself uses (cached; fetched once, as CI's scan step fetches it), never skipped — a gate that
+// refuses skipped tests counts it like every other.
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { GIT, outsideGitRepo, quietEnv } from './guard-cases.test.mjs';
 import {
-  addedLines, ensureGitleaks, ereToRegExp, findingLines, gitleaksArgs, gitleaksAsset, gitleaksCache, GITLEAKS_VERSION,
+  addedLines, ensureGitleaks, ereToRegExp, findingLines, gitleaksArgs, gitleaksAsset, gitleaksBinary, gitleaksCache, GITLEAKS_VERSION,
   isPublic, LEAKS_EXIT, nameFindings, parseMode, PATTERN_FILE, pathFindings, patternSource, sha256,
 } from './private-data-scan.mjs';
 
@@ -257,9 +258,8 @@ describe('private-data scan: the configs', () => {
     assert.deepEqual(simulate(rules, `"author": "${email('jane.roe', 'gmail.com')}"`, 'package-lock.json'), []);
   });
 
-  const bin = join(gitleaksCache(process.env, homedir()), 'gitleaks');
-  const live = process.env.AUTOM8X_GITLEAKS_LIVE === '1' && existsSync(bin);
-  test('the real gitleaks agrees with the JS reading of the rules (AUTOM8X_GITLEAKS_LIVE=1, binary cached)', { skip: !live }, () => {
+  test('the real gitleaks agrees with the JS reading of the rules', async () => {
+    const bin = await gitleaksBinary();
     const text = cases.map(([line]) => line).join('\n');
     const r = spawnSync(bin, ['stdin', '--config', join(KIT, 'private-data-public.toml'), '--no-banner', '--redact', '--report-format', 'json', '--report-path', '-', '--exit-code', '0', '--log-level', 'error'],
       { cwd: resolve(KIT, '../..'), input: text, encoding: 'utf8', timeout: 60000 });

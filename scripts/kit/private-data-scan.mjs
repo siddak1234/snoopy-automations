@@ -223,10 +223,15 @@ async function download(url) {
 }
 const extract = (archive, into) => run('tar', ['-xzf', archive, '-C', into, 'gitleaks']);
 
-async function gitleaks(root, mode, publicRepo) {
+/** The pinned gitleaks for this machine: cached, checksum-verified, fetched once. The scan and its test share it. */
+export async function gitleaksBinary(env = process.env, home = homedir()) {
   const asset = gitleaksAsset(process.platform, process.arch);
   if (!asset) throw new Error(`gitleaks ${GITLEAKS_VERSION} is not pinned for ${process.platform}_${process.arch}`);
-  const bin = await ensureGitleaks({ dir: gitleaksCache(process.env, homedir()), asset, download, extract });
+  return ensureGitleaks({ dir: gitleaksCache(env, home), asset, download, extract });
+}
+
+async function gitleaks(root, mode, publicRepo) {
+  const bin = await gitleaksBinary();
   let target = '';
   if (mode === 'push') target = pushRange(root).join(' ');
   if (mode === 'tree') {
