@@ -10,8 +10,8 @@ app draw it from its manifest and its blocks.
 
 `git diff <base>..HEAD` in the flow's `snoopy-automations` branch, against
 `automations/<name>/README.md` (approved: its top line carries the owner's words). Its
-`research.json` is the clone's git-ignored `tmp/create-flow/<name>/research.json`, rendered as
-`research.md` beside the spec.
+`research.json` and `research.md`: where `.claude/skills/create-flow/research-stage.md` puts them
+("The run", "The steps").
 
 **CI has answered the rows marked (CI)** — Verify's "Review rows" (`scripts/review-rows.ts`), in the
 run's summary: §3 the menu, §4 the capabilities, §6 each step built and tested with one TRIGGER and

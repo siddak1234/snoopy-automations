@@ -1,19 +1,27 @@
 #!/usr/bin/env node
-// /create-flow stage 1b: checks the research.json `.claude/workflows/flow-research.js` wrote inside
-// the automations clone, in its git-ignored tmp/, against the checksum and length it returned in
-// its Workflow result, then renders research.md from the checked file beside the spec, in
-// automations/<name>/ (files only inside a repository copy: the owner, 2026-11-14; BUILD-PLAN
-// 30.17.2). Nothing a model typed reaches the owner unchecked: a ranked integration is a
+// /create-flow stage 1b: checks the research.json `.claude/workflows/flow-research.js` wrote
+// against the checksum and length it returned in its Workflow result, then renders research.md
+// from the checked file; where each lands, and what is refused: research-stage.md, "The run" and
+// "The steps". Nothing a model typed reaches the owner unchecked: a ranked integration is a
 // row only while it keeps a confirmed line and confirmed adoption evidence, else a Gaps line (in
 // research.md, and first in the summary's gaps); "First to build" only when it names a row.
-//   node research-render.mjs <clone>/tmp/create-flow/<name>/research.json <djb2> <length>
-// Exit 0: <clone>/automations/<name>/research.md written, a summary of 2 KB or less printed. Exit
-// 1: a mismatch or no readable file (re-run the workflow with resumeFromRunId and
-// args.writeAttempt = 2). Exit 2: usage, or a research.json anywhere but a clone's (a folder
-// holding .git) tmp/create-flow/<name>/. It re-serializes the file (JSON.stringify(JSON.parse(…))),
-// so whitespace is not a mismatch and a changed word is. djb2 is not a security hash: it catches a
-// model's retyping, which is all it is for. Node built-ins only.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+//   node research-render.mjs <research.json> <djb2> <length>
+// Exit 0: research.md written, a summary of 2 KB or less printed, its first line naming the file.
+// Exit 1: a mismatch or no readable file (re-run the workflow with resumeFromRunId and
+// args.writeAttempt = 2). Exit 2: usage, or a place research-stage.md refuses; nothing written.
+// It re-serializes the file (JSON.stringify(JSON.parse(…))), so whitespace is not a mismatch and a
+// changed word is. djb2 is not a security hash: it catches a model's retyping, which is all it is
+// for. Node built-ins only.
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -164,12 +172,44 @@ export function render(data) {
   return `${out.join('\n')}\n`;
 }
 
-/** `<clone>/tmp/create-flow/<name>/research.json`'s clone and name (`name` a templateId, the clone a
- * folder holding .git), else null: the workflow writes it there and nowhere else. */
+/** A templateId, `contract/schemas/automation-manifest.json`'s pattern (test/flow-research.test.ts
+ * holds this copy and flow-research.js's to it). */
+export const TEMPLATE_ID = '[a-z][a-z0-9-]{0,62}[a-z0-9]';
+// No GIT_* variable may point git at another repository than the clone (as the guard's row 10).
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')));
+const git = (dir, ...args) =>
+  spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', env, timeout: 10_000 });
+
+/** `<clone>/tmp/create-flow/<name>/research.json`'s clone and name, else null: `name` a templateId,
+ * the clone a repository copy, the top of a git work tree with an origin (as the guard's row 10). */
 export function placeOf(path) {
-  const at = /^(.+)\/tmp\/create-flow\/([a-z][a-z0-9-]{0,62}[a-z0-9])\/research\.json$/u;
+  const at = new RegExp(`^(.+)/tmp/create-flow/(${TEMPLATE_ID})/research\\.json$`, 'u');
   const [, clone, name] = at.exec(resolve(path)) ?? [];
-  return clone && existsSync(join(clone, '.git')) ? { clone, name } : null;
+  if (!clone || !existsSync(join(clone, '.git'))) return null;
+  const top = git(clone, 'rev-parse', '--show-toplevel').stdout?.trim();
+  const origin = git(clone, 'config', '--get', 'remote.origin.url').stdout?.trim();
+  return top === realpathSync(clone) && origin ? { clone, name } : null;
+}
+
+/** The first symbolic link on `rel`'s way down from the clone, the file included, else undefined. */
+const linkOn = (clone, rel) =>
+  rel
+    .split('/')
+    .map((_, k, parts) => join(clone, ...parts.slice(0, k + 1)))
+    .find((p) => lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink());
+
+/** research.md's two places: beside the spec, or beside research.json when the flow already has a
+ * brief tracked there or a manifest, so an approved brief is never overwritten. */
+const briefs = (name) => [`automations/${name}/research.md`, `tmp/create-flow/${name}/research.md`];
+function briefOf({ clone, name }) {
+  const [spec, beside] = briefs(name);
+  const manifest = new RegExp(`^${name}\\.v\\d+\\.json$`, 'u');
+  const manifests = existsSync(join(clone, 'manifests'))
+    ? readdirSync(join(clone, 'manifests'))
+    : [];
+  // ls-files exits 1 only for an untracked path; anything else (git failed) keeps the brief too.
+  const kept = git(clone, 'ls-files', '--error-unmatch', '--', spec).status !== 1;
+  return kept || manifests.some((f) => manifest.test(f)) ? beside : spec;
 }
 
 const USAGE =
@@ -178,6 +218,10 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   if (!path || !expected || !length) return (write(`${USAGE}\n`), 2);
   const place = placeOf(path);
   if (!place) return (write(`research-render: ${path} is not in a clone's tmp/; ${USAGE}\n`), 2);
+  const link = briefs(place.name)
+    .map((rel) => linkOn(place.clone, rel))
+    .find(Boolean);
+  if (link) return (write(`research-render: ${link} is a symbolic link; nothing written\n`), 2);
   let data;
   try {
     data = JSON.parse(readFileSync(path, 'utf8'));
@@ -192,9 +236,11 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
     );
     return 1;
   }
-  const brief = join(place.clone, 'automations', place.name, 'research.md');
+  const rel = briefOf(place);
+  const brief = join(place.clone, rel);
   mkdirSync(dirname(brief), { recursive: true });
   writeFileSync(brief, render(data));
+  const note = rel === briefs(place.name)[1] ? ` (automations/${place.name}/ is kept)` : '';
   const ranked = rank(data);
   const gaps = [...unconfirmed(ranked), ...data.gaps];
   const first = firstOf(
@@ -203,7 +249,7 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   );
   const counts = HEADINGS.map(([k]) => `${k} ${data.brief?.[k]?.length ?? 0}`).join(', ');
   const lines = [
-    `research-render: checksum ok (${sum}); automations/${place.name}/research.md written${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
+    `research-render: checksum ok (${sum}); ${rel} written${note}${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
     `lines: ${counts}; integrations ${data.brief?.integrations?.length ?? 0}; first to build: ${first?.text ?? 'a person decides'}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
     `not researched: ${data.notResearched.length ? data.notResearched.join(' | ') : 'none'}`,
     `gaps (${gaps.length}): ${gaps.join(' | ')}`,

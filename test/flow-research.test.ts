@@ -17,6 +17,7 @@ import {
   run,
   render,
   has,
+  TEMPLATE_ID,
 } from './flow-research.js';
 
 /**
@@ -104,6 +105,18 @@ test('research.json lands inside the automations clone, in its git-ignored tmp/;
   assert.ok(!existsSync(join(r.clone, 'tmp/create-flow/invoice-check/research.md')));
   for (const args of [{ runDir: '/elsewhere' }, { name: '../out' }, { name: 'Invoice Check' }])
     await assert.rejects(run(normal, { args }), /^Error: flow-research needs args .*; no runDir$/u);
+});
+
+test("the name's two hand copies of the templateId pattern are the manifest schema's", () => {
+  const root = resolve(import.meta.dirname, '..');
+  const read = (file: string) => readFileSync(join(root, file), 'utf8');
+  const { pattern } = JSON.parse(read('contract/schemas/automation-manifest.json')).properties
+    .templateId;
+  const workflow = /^const folder = \/(.+)\/u\.test\(name \?\? ''\);/mu.exec(
+    read('.claude/workflows/flow-research.js'),
+  );
+  assert.equal(workflow?.[1], pattern, 'flow-research.js');
+  assert.equal(`^${TEMPLATE_ID}$`, pattern, 'research-render.mjs');
 });
 
 test('every unsourced default, of either kind, is "a person decides" unless the owner keeps it', async () => {

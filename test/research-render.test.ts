@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
+import { git, repoCopy } from './flow-research.js';
 
 /**
  * `.claude/skills/create-flow/research-render.mjs` (/create-flow stage 1b): it renders research.md
@@ -12,7 +14,7 @@ import { pathToFileURL } from 'node:url';
  * model retyped after the skeptic reaches the owner. It reads research.json only from a clone's
  * git-ignored `tmp/create-flow/<name>/` and writes research.md beside the spec, in
  * `automations/<name>/` (files only inside a repository copy, BUILD-PLAN 30.17.2); each case's
- * clone is a temp folder holding `.git`.
+ * clone is a temp folder made a repository copy (`repoCopy`, test/flow-research.ts).
  */
 
 const script = join(
@@ -26,9 +28,9 @@ const { main, djb2 } = (await import(pathToFileURL(script).href)) as {
 type Any = any;
 const dir = mkdtempSync(join(tmpdir(), 'autom8x-research-render-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
-/** A stand-in clone (a folder holding `.git`): where research.json is read and research.md written. */
+/** A stand-in clone (a repository copy): where research.json is read and research.md written. */
 const cloneAt = (clone: string, name = 'invoice-check') => {
-  mkdirSync(join(clone, '.git'), { recursive: true });
+  repoCopy(clone);
   const json = join(clone, 'tmp/create-flow', name, 'research.json');
   mkdirSync(dirname(json), { recursive: true });
   return { json, md: join(clone, 'automations', name, 'research.md') };
@@ -201,6 +203,56 @@ test("research.json only from a clone's tmp/create-flow/<name>/: anywhere else i
     assert.match(out.out, /is not in a clone's tmp\/; usage: /u);
   }
   assert.ok(!existsSync(join(dir, 'research.md')) && !existsSync(join(bare, 'automations')));
+});
+
+test('a .git with no origin or not its own work tree, or a symbolic link on the way: exit 2, nothing written', () => {
+  const away = mkdtempSync(join(dir, 'away-'));
+  const [lone, fake, folder, file] = ['lone-', 'fake-', 'link-', 'link-'].map((p) =>
+    mkdtempSync(join(dir, p)),
+  );
+  git(lone, 'init', '-q'); // a work tree with no origin
+  mkdirSync(join(fake, '.git')); // no work tree: git finds the one around it, `dir`, with its origin
+  cloneAt(folder);
+  mkdirSync(join(folder, 'automations'));
+  symlinkSync(away, join(folder, 'automations/invoice-check'));
+  const { md } = cloneAt(file);
+  mkdirSync(dirname(md), { recursive: true });
+  symlinkSync(join(away, 'brief.md'), md);
+  for (const [clone, why] of [
+    [lone, /is not in a clone's tmp\//u],
+    [fake, /is not in a clone's tmp\//u],
+    [folder, /automations\/invoice-check is a symbolic link; nothing written\n$/u],
+    [file, /invoice-check\/research\.md is a symbolic link; nothing written\n$/u],
+  ] as const) {
+    const json = join(clone, 'tmp/create-flow/invoice-check/research.json');
+    mkdirSync(dirname(json), { recursive: true });
+    writeFileSync(json, text);
+    const out = call([json, djb2(text), String(text.length)]);
+    assert.equal(out.code, 2, clone);
+    assert.match(out.out, why);
+  }
+  assert.deepEqual(readdirSync(away), []);
+  assert.ok(!existsSync(join(lone, 'automations')) && !existsSync(join(fake, 'automations')));
+});
+
+test('a flow with a brief tracked beside its spec, or a manifest: research.md beside research.json, never over it', () => {
+  for (const kept of ['automations/invoice-check/research.md', 'manifests/invoice-check.v3.json']) {
+    const clone = mkdtempSync(join(dir, 'kept-'));
+    const { json, md } = cloneAt(clone);
+    mkdirSync(dirname(join(clone, kept)), { recursive: true });
+    writeFileSync(join(clone, kept), 'approved\n');
+    git(clone, 'add', kept);
+    writeFileSync(json, text);
+    const out = call([json, djb2(text), String(text.length)]);
+    assert.equal(out.code, 0, out.out);
+    assert.match(
+      out.out,
+      /; tmp\/create-flow\/invoice-check\/research\.md written \(automations\/invoice-check\/ is kept\)\n/u,
+    );
+    const beside = readFileSync(join(dirname(json), 'research.md'), 'utf8');
+    assert.match(beside, /^# invoice-check: domain brief\n/u);
+    assert.equal(existsSync(md) && readFileSync(md, 'utf8'), kept.endsWith('.md') && 'approved\n');
+  }
 });
 
 /** Renders `d` through main() in its own clone: research.md and the summary. */

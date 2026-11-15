@@ -803,8 +803,8 @@ A developer needs this repository alone: no backend checkout (CLAUDE.md, "Start 
    (its own pull request here, first: `.claude/skills/create-flow/templates/order.md`, step 2); or
    **stop**, a platform change. It writes the
    spec, `automations/<id>/README.md`, `words.md` and the research brief `research.md` beside them
-   for the owner's approval, each inside the clone it works in (its research.json stays in that
-   clone's git-ignored `tmp/create-flow/<id>/`, never committed).
+   for the owner's approval, each inside the clone it works in (research.json's place:
+   [research-stage.md](.claude/skills/create-flow/research-stage.md), "The run").
 2. **Write `manifests/<id>.v1.json`** from the spec's sections 1–3 and 5–7 — at most the menu's
    `limits.manifest.bytes` as committed, its whitespace counted (`contract/` carries it since
    snoopy-backend d9297bc (#259); `test/conformance.test.ts` fails a bigger one) — then

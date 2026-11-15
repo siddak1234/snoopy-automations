@@ -76,12 +76,15 @@ without it every lens fails.
    `length`, `stopped`, `gaps`, `notResearched`. The Workflow tool hands the session that value;
    `log()` lines do not reach the session.
 2. Run `node .claude/skills/create-flow/research-render.mjs <research> <djb2> <length>`, `research`
-   the result's path, `<clone>/tmp/create-flow/<name>/research.json`. Exit 0: the file is the one
-   the script computed, and research.md is written beside the spec, `automations/<name>/research.md`.
+   the result's path (The run, above). Exit 0: the file is the one the script computed, and
+   research.md is written beside the spec, `automations/<name>/research.md` — or, when the flow
+   already has a brief tracked there or a manifest (`manifests/<name>.v<n>.json`), beside
+   research.json, never over the approved one; the summary's first line names the file.
    Exit 1 (a mismatch, or no file): re-run the workflow with `resumeFromRunId` and
    `args.writeAttempt = 2`, so only the write runs again. A second mismatch: tell the owner
-   research.json could not be written, with the result's gaps; no spec is written. Exit 2: the
-   usage, or a research.json outside a clone's `tmp/create-flow/<name>/`.
+   research.json could not be written, with the result's gaps; no spec is written. Exit 2, nothing
+   written: the usage; a research.json anywhere but that place; a clone that is not a repository
+   copy, the top of a git work tree with an `origin`; or a symbolic link on the way to research.md.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
 4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work
    is done today, what an expert checks, the Integrations rows and the first to build, what the first
@@ -93,9 +96,8 @@ without it every lens fails.
 
 If an Integrations row the flow uses says "to add", tell the owner the check's answer is now "a
 new vendor" (stage 1): a provider file, or a platform round when no file can describe it. The approved brief is
-`automations/<name>/research.md`, beside the spec, where the render wrote it (its one place;
-research.json stays in the git-ignored `tmp/`): sources and invented examples only, never a
-customer's data (this repository is public). Each pilot failure joins the research evals,
+`automations/<name>/research.md`, beside the spec, where the render wrote it (its one place):
+sources and invented examples only, never a customer's data (this repository is public). Each pilot failure joins the research evals,
 [evals/research.md](evals/research.md), at stage 8.
 
 ## Sources

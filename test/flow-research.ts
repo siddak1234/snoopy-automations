@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -10,20 +11,25 @@ import { pathToFileURL } from 'node:url';
  * the file and its two children (the tables, the integrations stage) compiled as the tool runs
  * them (async function bodies, each top-level return the result); a child's workflow() throws, as
  * the tool's does (one level). Each run's `automations` is a stand-in clone of its own (a temp
- * folder holding `.git`): the write lands in its git-ignored `tmp/create-flow/<name>/` and
- * research.md beside the spec, in its `automations/<name>/` (`at`). Its
- * cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
+ * folder made a repository copy, `repoCopy`): the write lands in its git-ignored
+ * `tmp/create-flow/<name>/` and research.md beside the spec, in its `automations/<name>/` (`at`).
+ * Its cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
  * (stops, retries and the write).
  */
 
 const root = resolve(import.meta.dirname, '..');
 const read = (file: string) => readFileSync(join(root, '.claude/workflows', file), 'utf8');
 const renderUrl = pathToFileURL(join(root, '.claude/skills/create-flow/research-render.mjs')).href;
-const { main: renderMain, COLUMNS } = (await import(renderUrl)) as {
+const {
+  main: renderMain,
+  COLUMNS,
+  TEMPLATE_ID,
+} = (await import(renderUrl)) as {
   main: (argv: string[], write: (text: string) => void) => number;
   COLUMNS: string[][];
+  TEMPLATE_ID: string;
 };
-export { COLUMNS };
+export { COLUMNS, TEMPLATE_ID };
 // The stand-ins answer whatever shape each step asks for.
 export type Any = any;
 export type Behave = (label: string, attempt: number, prompt: string, clone: string) => Any;
@@ -40,6 +46,19 @@ const nested = async () => {
 };
 const dirs: string[] = [];
 after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+/** git in `dir` alone: no GIT_* variable may point it at this repository. */
+export const git = (dir: string, ...args: string[]) => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/u.test(k)));
+  const r = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', env });
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+  return r.stdout;
+};
+/** `dir` made a stand-in repository copy, as research-render.mjs requires: a git work tree with an origin. */
+export const repoCopy = (dir: string) => {
+  git(dir, 'init', '-q');
+  git(dir, 'config', 'remote.origin.url', 'https://example.com/snoopy-automations.git');
+  return dir;
+};
 /** The flow's name in every run, and where its research.json and research.md land in a clone. */
 export const NAME = 'invoice-check';
 export const at = (clone: string) => ({
@@ -214,9 +233,8 @@ export async function run(
     args?: object;
   } = {},
 ) {
-  const clone = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
+  const clone = repoCopy(options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-')));
   if (!options.dir) dirs.push(clone);
-  mkdirSync(join(clone, '.git'), { recursive: true });
   const workflows = `${clone}/.claude/workflows/`;
   const total = options.total ?? null;
   const logs: string[] = [];

@@ -5,14 +5,14 @@ a provider or an operation it calls (`provider-pr.md`); the SDK change next, ste
 changes `packages/automation-sdk/`; then the automations pull request, step 3, always. A merge to
 `main` is the deploy (the platform's ADR-0047): no pin, registration or release pull request
 follows one, and no client pull request comes with it (`/create-flow` v4, Round 21). The session
-writes this list out for the owner at stage 1, every pull request up front, and fills it in through
-stage 6 — each pull request's link once its required check is green on the head, each run's
-summary as read. The owner merges every pull request, and says go, in manual permission mode, for
-any step that touches production outside a merge. An integration the idea names (a live intake, a
-write-back) is planned here at stage 1 — its research, its provider file or its platform round,
-and its pull request — never only a "next version" row (the ICD-10 pilot, F4: "Integrations for
-step 1. Your review after completion of approving it should automatically go into the ehr
-system.").
+writes this list out for the owner at stage 1, in its reply and the round's records, every pull
+request up front, and fills it in through stage 6 — each pull request's link once its required
+check is green on the head, each run's summary as read. The owner merges every pull request, and
+says go, in manual permission mode, for any step that touches production outside a merge. An
+integration the idea names (a live intake, a write-back) is planned here at stage 1 — its
+research, its provider file or its platform round, and its pull request — never only a "next
+version" row (the ICD-10 pilot, F4: "Integrations for step 1. Your review after completion of
+approving it should automatically go into the ehr system.").
 
 ## The check (stage 1)
 
@@ -45,8 +45,9 @@ link.
 2. **The SDK change** (only when the flow needs one): its own `snoopy-automations` pull request for
    `packages/automation-sdk/`, built first by its own lane — its own `build-round` run and scratch
    clone at stage 4, the brief from `lane-brief.md` naming only the SDK change, one review at stage
-   5 — then its gate and its merge, before step 3; the flow's lane clones `main` after this merge
-   (the ICD-10 pilot: the SDK half had to be split out (#65 before #66)).
+   5 — then its gate and its merge, before step 3; the flow's lane branches from `origin/main` in
+   the same clone after this merge (`lane-brief.md`, "Clone") (the ICD-10 pilot: the SDK half had
+   to be split out (#65 before #66)).
 3. **The automations pull request.** Its `contract/` is the platform's `main`'s `schemas/`, byte for
    byte (`cmp` each file, the commit cited in `snoopy-automations/contract/README.md`); re-vendored
    first if the platform's `schemas/` moved since — after step 1, to its merge, so the menu lists the
