@@ -6,22 +6,30 @@ on:
   push:
     branches: [main]
   # The nightly (.github/workflows/nightly.yml) calls this workflow whole; its schedule lives there
-  # alone (README, "Working here", the nightly).
+  # alone (README, "Working here", the nightly). A called workflow sees only the secrets its caller
+  # passes: the nightly passes the private-data scan's pattern, the one this requires.
   workflow_call:
+    secrets:
+      CLIENT_DENY_PATTERN:
+        required: true
 
 # This repository is PUBLIC and its files hold no secret of any kind: an automation
 # receives a run-scoped token at runtime and nothing else (platform invariant 3).
 # Every job but Deploy runs on GITHUB_TOKEN alone, which GitHub mints per job and
-# expires when the job ends. The workflow's one secret is DISPATCH_APP_KEY, the
-# private key of the GitHub App autom8x-dispatch. It lives in environment
+# expires when the job ends. The workflow has two secrets. The one credential is
+# DISPATCH_APP_KEY, the private key of the GitHub App autom8x-dispatch. It lives in environment
 # `production` (main only), so only Deploy, on a push to main, can read it; a
 # pull request, a fork's included, never reaches it. It mints a token whose one
 # permission is Actions read and write on snoopy-backend: it can start that
 # repository's Flow CD and read its runs. It reaches no backend credential — no
 # host key, no Doppler token, no database URL, no write to any image — and the
 # Mac that runs Flow CD believes nothing the dispatch sends but the commit, which
-# it checks itself (the platform's ADR-0047 §4). test/workflow-policy.test.ts
-# holds these rules.
+# it checks itself (the platform's ADR-0047 §4). The other secret is
+# CLIENT_DENY_PATTERN, the private-data scan's client-name pattern, kept out of
+# every tracked file: Verify's "No private data" step alone reads it, and
+# it reaches nothing — it is a search pattern, not a credential. A fork's pull
+# request gets no secret, and the kit's scan then fails rather than skip the names
+# (it skips them only for Dependabot). test/workflow-policy.test.ts holds these rules.
 permissions:
   contents: read
 
@@ -103,6 +111,16 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # This repository is public and git history is permanent, so a client's name or real contact
+      # details must never land: deleting them in a later commit does not remove them. Here the
+      # kit's private-data scan reads every tracked file, with the client-name pattern from the
+      # secret, never a tracked file; exit 1 on a finding, 2 on an error (where else it runs:
+      # README, "No private data, ever"). Node built-ins alone, so it runs before the install.
+      - name: No private data
+        env:
+          CLIENT_DENY_PATTERN: ${{ secrets.CLIENT_DENY_PATTERN }}
+        run: node scripts/kit/private-data-scan.mjs --tree
 
       # --ignore-scripts: a dependency's install script is arbitrary code running
       # with the build's privileges. Nothing here has a postinstall to lose.

@@ -1,0 +1,97 @@
+# autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/private-data-public.toml
+# The private-data scan's rules for a PUBLIC repository (scripts/kit/private-data-scan.mjs):
+# private-data.toml's secrets, plus personal data — "no pii in public repos ever" (the owner,
+# 2026-11-15). Tests and docs use reserved values only: example.com/.org/.net and the .example,
+# .test and .invalid names, 555-0100 to 555-0199, 192.0.2.0/24, 198.51.100.0/24 and
+# 203.0.113.0/24, made-up names. The placeholder domains allowed below were measured on the
+# public repositories' trees (2026-11-15). `path` is read from the repository root, where the
+# scan runs gitleaks.
+title = "autom8x private data: secrets and personal data (public repositories)"
+
+[extend]
+path = "scripts/kit/private-data.toml"
+
+[[rules]]
+id = "autom8x-email"
+description = "An email address outside the reserved, company and placeholder domains."
+regex = '''[A-Za-z0-9._%+\-]+@(?:[A-Za-z0-9\-]+\.)+[A-Za-z]{2,}'''
+keywords = ["@"]
+[[rules.allowlists]]
+description = "Reserved, company, generated and placeholder domains. Personal mail (gmail.com, googlemail.com, yahoo, outlook.com, hotmail, live.com, icloud.com, me.com, mac.com, aol.com, proton.me, protonmail.com, gmx) is never here."
+regexes = [
+  '''(?i)@(?:[a-z0-9-]+\.)*example\.(?:com|org|net|co\.uk)$''',
+  # A reserved name, and test text that glues a capitalised word straight after one.
+  '''@(?:[A-Za-z0-9-]+\.)+(?:example|test|invalid|localhost)(?:[A-Z][A-Za-z]*)?$''',
+  '''(?i)@users\.noreply\.github\.com$''',
+  '''(?i)@(?:[a-z0-9-]+\.)*autom8x\.ai$''',
+  '''(?i)\.iam\.gserviceaccount\.com$''',
+  '''(?i)^noreply@anthropic\.com$''',
+  '''(?i)@(?:company\.com|acme\.co|[a-z]\.(?:com|co|org|net))$''',
+  # An SSH remote and an image's density suffix, which only look like addresses.
+  '''^git@''',
+  '''(?i)@\d+x\.(?:png|jpe?g|gif|webp)$''',
+]
+paths = ['''(?:^|/)package-lock\.json$''']
+
+[[rules]]
+id = "autom8x-phone"
+description = "A North American phone number written with separators, or +1 and ten digits."
+regex = '''(?:^|[^\w+.\-/])((?:\+?1[ .\-]?)?(?:\([2-9]\d{2}\)[ .\-]?|[2-9]\d{2}[ .\-])[2-9]\d{2}[ .\-]\d{4}|\+1[2-9]\d{2}[2-9]\d{6})(?:[^\w.\-]|$)'''
+secretGroup = 1
+[[rules.allowlists]]
+description = "555-0100 to 555-0199, the numbers set aside for fiction."
+regexes = ['''555[ .\-]?01\d{2}$''']
+
+[[rules]]
+id = "autom8x-phone-bare"
+description = "Ten bare digits a phone, tel, mobile, cell, fax or SMS field holds."
+regex = '''(?i)(?:phone|tel|mobile|cell|fax|sms|whatsapp)[\w\-]*["']?\s*[:=]\s*["']?(\+?1?[2-9]\d{2}[2-9]\d{6})(?:\D|$)'''
+secretGroup = 1
+keywords = ["phone", "tel", "mobile", "cell", "fax", "sms", "whatsapp"]
+[[rules.allowlists]]
+description = "555-0100 to 555-0199, the numbers set aside for fiction."
+regexes = ['''55501\d{2}$''']
+
+[[rules]]
+id = "autom8x-public-ipv4"
+description = "A public IPv4 address."
+regex = '''(?:^|[^\w.@§/\-]|//)((?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?:[^\w.\-]|\.(?:\s|$)|$)'''
+secretGroup = 1
+[[rules.allowlists]]
+description = "This network, loopback, private, link-local, shared, documentation, multicast and reserved ranges, and one-digit-part version numbers."
+regexes = [
+  '''^(?:0|10|127)\.''',
+  '''^169\.254\.''',
+  '''^172\.(?:1[6-9]|2\d|3[01])\.''',
+  '''^192\.168\.''',
+  '''^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.''',
+  '''^192\.0\.2\.''',
+  '''^198\.51\.100\.''',
+  '''^203\.0\.113\.''',
+  '''^(?:22[4-9]|2[3-5]\d)\.''',
+  '''^\d\.\d\.\d\.\d$''',
+]
+
+[[rules]]
+id = "autom8x-supabase-project"
+description = "A Supabase project's address, which names the project."
+regex = '''\b([a-z]{20})\.supabase\.(?:co|in)\b'''
+secretGroup = 1
+keywords = ["supabase"]
+
+[[rules]]
+id = "autom8x-supabase-project-ref"
+description = "A Supabase project ref given to a project_ref, projectRef or --project-ref."
+regex = '''(?i:project[_-]?ref)["'\]]?\s*[:=]?\s*["']?([a-z]{20})(?:[^A-Za-z0-9]|$)'''
+secretGroup = 1
+keywords = ["project_ref", "project-ref", "projectref"]
+
+[[rules]]
+id = "autom8x-macos-home"
+description = "A macOS home folder, which names its user."
+regex = '''(?:^|[\s"'`=(:,\[{<>]|file://)/Users/([A-Za-z0-9][A-Za-z0-9._\-]+)(?:[^A-Za-z0-9._\-]|$)'''
+secretGroup = 1
+keywords = ["/users/"]
+[[rules.allowlists]]
+description = "The hosted runner's user and the shared folder; a one-letter name is a placeholder."
+regexes = ['''^(?:runner|Shared)$''']

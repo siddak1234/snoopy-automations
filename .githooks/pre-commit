@@ -1,0 +1,23 @@
+#!/bin/sh
+# Native pre-commit gate: every commit of this public repository runs the kit's
+# private-data scan on the staged content (a client's name, real contact
+# details: CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan that
+# cannot run (any other non-zero exit) or a missing scan, so private data never
+# reaches history. Where else the scan runs: README, "No private data, ever".
+# Installed via `npm run hooks:install` (git config core.hooksPath .githooks).
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if [ ! -f scripts/kit/private-data-scan.mjs ]; then
+  echo "pre-commit: the kit's private-data scan is missing from this clone — refused." >&2
+  exit 1
+fi
+node scripts/kit/private-data-scan.mjs --staged </dev/null >&2
+status=$?
+if [ "$status" -eq 1 ]; then
+  echo "pre-commit: the private-data scan found private data in the staged content — refused. Replace it with a reserved value (CLAUDE.md rule 10)." >&2
+  exit 1
+elif [ "$status" -ne 0 ]; then
+  echo "pre-commit: the private-data scan could not run (exit $status) — refused." >&2
+  exit 1
+fi
+exit 0

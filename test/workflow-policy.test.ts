@@ -6,8 +6,10 @@ import { test } from 'node:test';
 
 /**
  * What this public repository's workflows may do (the platform's ADR-0047 §1 and §7(b)):
- * no trigger that runs a fork's code with this repository's rights; one secret,
- * DISPATCH_APP_KEY, read by Deploy alone; Deploy only on a push to main, in `production`,
+ * no trigger that runs a fork's code with this repository's rights; one credential,
+ * DISPATCH_APP_KEY, read by Deploy alone, and one search pattern, CLIENT_DENY_PATTERN, read by
+ * Verify's private-data scan alone, which ci.yml's workflow_call requires and the nightly passes;
+ * Deploy only on a push to main, in `production`,
  * with no GITHUB_TOKEN permission and no code of this repository, printing the release's retire
  * pass and, for each RETIRED row, the file to remove next (jq run here); Publish attesting each
  * digest after both scans and before the tag, and holding the attestation permissions
@@ -64,6 +66,10 @@ const job = (id: string) => {
   return block;
 };
 
+/** ci.yml's workflow_call requiring the private-data scan's pattern, the one secret a caller passes. */
+const callSecrets =
+  /^ {2}workflow_call:\n {4}secrets:\n {6}CLIENT_DENY_PATTERN:\n {8}required: true\n/mu;
+
 test('no workflow runs on pull_request_target or workflow_run', () => {
   assert.ok(workflowFiles.length > 0);
   for (const file of workflowFiles) {
@@ -71,19 +77,33 @@ test('no workflow runs on pull_request_target or workflow_run', () => {
   }
 });
 
-test('the only secret is DISPATCH_APP_KEY, and only Deploy reads it', () => {
+test('the secrets are DISPATCH_APP_KEY, read by Deploy alone, and CLIENT_DENY_PATTERN, read by the private-data scan alone and passed by the nightly', () => {
   const reads: string[] = [];
   for (const file of workflowFiles) {
     const text = read(file);
     const header = code(text.split(/^jobs:\s*$/mu)[0]!);
-    assert.doesNotMatch(header, /\bsecrets\b/u, `${file} reads a secret outside its jobs`);
+    // Outside the jobs, only ci.yml's workflow_call declaring the one secret a caller passes.
+    const declared = file === 'ci.yml' ? header.replace(callSecrets, '') : header;
+    assert.doesNotMatch(declared, /\bsecrets\b/u, `${file} reads a secret outside its jobs`);
     for (const [id, block] of jobs(text)) {
-      for (const match of block.matchAll(/\bsecrets\b(\.[A-Za-z0-9_]+)?/gu)) {
+      for (const match of block.matchAll(/\bsecrets\b(\.[A-Za-z0-9_]+|:)?/gu)) {
         reads.push(`${file}:${id}:${match[0]}`);
       }
     }
   }
-  assert.deepEqual(reads, ['ci.yml:deploy:secrets.DISPATCH_APP_KEY']);
+  assert.match(code(ci), callSecrets, "ci.yml's workflow_call requires the scan's pattern");
+  assert.deepEqual(reads, [
+    'ci.yml:verify:secrets.CLIENT_DENY_PATTERN',
+    'ci.yml:deploy:secrets.DISPATCH_APP_KEY',
+    'nightly.yml:ci:secrets:',
+    'nightly.yml:ci:secrets.CLIENT_DENY_PATTERN',
+  ]);
+  const scan = steps(job('verify')).find((step) => /^name: No private data$/mu.test(step));
+  assert.ok(scan !== undefined, "Verify's private-data scan");
+  assert.match(
+    scan,
+    /^ {8}env:\n {10}CLIENT_DENY_PATTERN: \$\{\{ secrets\.CLIENT_DENY_PATTERN \}\}\n {8}run: node scripts\/kit\/private-data-scan\.mjs --tree$/mu,
+  );
 });
 
 test('Deploy runs only on a push to main, in production, with no permission and no repository code', () => {
@@ -339,7 +359,13 @@ test("the nightly is its own workflow: a schedule calling ci.yml whole, and ci.y
   assert.deepEqual([...nightlyJobs.keys()], ['ci', 'report']);
   const call = nightlyJobs.get('ci')!;
   assert.match(call, /^ {4}uses: \.\/\.github\/workflows\/ci\.yml$/mu);
-  assert.doesNotMatch(call, /^ {4}(with|secrets|steps|runs-on):/mu, 'ci.yml whole, as it is');
+  assert.doesNotMatch(call, /^ {4}(with|steps|runs-on):/mu, 'ci.yml whole, as it is');
+  // The one secret ci.yml requires, by name: never `secrets: inherit`.
+  assert.match(
+    call,
+    /^ {4}secrets:\n {6}CLIENT_DENY_PATTERN: \$\{\{ secrets\.CLIENT_DENY_PATTERN \}\}$/mu,
+  );
+  assert.doesNotMatch(call, /\binherit\b/u);
 });
 
 test('Nightly red reports a red night on its own issue, with issues: write alone, no checkout and no code of this repository', () => {

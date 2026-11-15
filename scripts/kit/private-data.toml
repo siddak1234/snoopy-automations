@@ -1,0 +1,47 @@
+# autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/private-data.toml
+# The private-data scan's secrets (scripts/kit/private-data-scan.mjs): gitleaks' own rules, for
+# every repository; private-data-public.toml extends this file for the public ones. The
+# allowlists below are values that are not secrets, measured on the four repositories' trees
+# (2026-11-15). They sit on the rules themselves: gitleaks 8.30.1 drops a `targetRules`
+# allowlist when another file extends this one. A single line no rule here can tell apart
+# takes an inline `gitleaks:allow` with its reason.
+title = "autom8x private data: secrets"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "An idempotency key names a request; it opens nothing."
+regexTarget = "match"
+regexes = ['''(?i)idempotency[-_]?key''']
+[[rules.allowlists]]
+description = "A value that calls itself a fixture is one."
+stopwords = ["fixture"]
+
+[[rules]]
+id = "private-key"
+[[rules.allowlists]]
+description = "A local simulator's fixture key, made for the tests and used nowhere else."
+paths = ['''(?:^|/)[^/]*fixture[^/]*\.pem$''']
+
+[[rules]]
+id = "curl-auth-user"
+[[rules.allowlists]]
+description = "Shell variables, which name a secret the environment holds."
+regexes = ['''^["']?(?:(?:\$\{[A-Za-z_][A-Za-z0-9_]*(?::?[-=?+][^}]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*):?)+["']?$''']
+[[rules.allowlists]]
+description = "A call to this machine's own development server."
+regexTarget = "match"
+regexes = ['''(?i)curl\s[^\n]*\b(?:localhost|127\.0\.0\.1)[:/]''']
+
+[[rules]]
+id = "curl-auth-header"
+[[rules.allowlists]]
+description = "Shell variables, which name a secret the environment holds."
+regexes = ['''^["']?(?:(?:\$\{[A-Za-z_][A-Za-z0-9_]*(?::?[-=?+][^}]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*):?)+["']?$''']
+[[rules.allowlists]]
+description = "A call to this machine's own development server."
+regexTarget = "match"
+regexes = ['''(?i)curl\s[^\n]*\b(?:localhost|127\.0\.0\.1)[:/]''']
