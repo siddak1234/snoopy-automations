@@ -19,8 +19,10 @@ jobs:
   # The permissions are the ceiling GitHub requires of a call: it refuses one whose called jobs
   # ask for more than the caller grants, whether or not they run. Publish's (packages, id-token and
   # attestations write) reach Publish alone, which never runs off a push; every other called job
-  # keeps ci.yml's contents: read, Deploy none. No secret is passed. No timeout-minutes: GitHub
-  # allows none on a call; each of ci.yml's jobs carries its own.
+  # keeps ci.yml's contents: read, Deploy none. One secret is passed, the one ci.yml requires: the
+  # private-data scan's pattern, a search pattern and no credential (ci.yml's header); never
+  # `secrets: inherit`. No timeout-minutes: GitHub allows none on a call; each of ci.yml's jobs
+  # carries its own.
   ci:
     name: CI
     uses: ./.github/workflows/ci.yml
@@ -29,6 +31,8 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    secrets:
+      CLIENT_DENY_PATTERN: ${{ secrets.CLIENT_DENY_PATTERN }}
 
   # A red night opens an issue, or comments on the one still open, so it is read rather than lost
   # in an email. Its token writes issues and nothing else; it checks nothing out and runs no code
