@@ -21,6 +21,7 @@
     "facts": "tsx scripts/repo-facts.ts",
     "check:docs": "node scripts/kit/check-docs.mjs",
     "map": "node scripts/kit/map.mjs",
+    "hooks:install": "git config core.hooksPath .githooks",
     "scaffold": "node scripts/scaffold.mjs",
     "review-rows": "tsx scripts/review-rows.ts",
     "live-eval": "tsx scripts/live-eval.ts",

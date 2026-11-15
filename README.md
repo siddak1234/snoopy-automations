@@ -60,6 +60,7 @@ test/architecture.test.ts    the boundary, enforced; every package shipping its 
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
 tools/n8n/                   n8n on the owner's Mac, to design a flow: never deployed, never in an image
+.githooks/                   pre-commit and pre-push: the kit's private-data scan (npm run hooks:install)
 docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
@@ -678,7 +679,8 @@ rehearsal waits the floor, 10 seconds, in real time.
 moved here on 2026-10-08, left production with the platform's BUILD-PLAN 25.4.5 (2026-10-13) and
 this repository with its 25.4.11 (2026-10-22): their code, their manifests and their images'
 publishing. The platform's catalog keeps their rows, withdrawn, never deleted; their history is in
-`docs/records/round-record.archive.md`.
+the round record's archive, kept only in the private backend
+(`snoopy-backend/docs/records/snoopy-automations/`).
 
 A retired version leaves this repository too: its file leaves `manifests/` in the first pull
 request after its retirement is shown (a release's `RETIRED` row, or the record of a hand
@@ -910,6 +912,7 @@ customers only as a code flow: export it, and give the export to `/create-flow` 
 
 ```bash
 npm ci --ignore-scripts
+npm run hooks:install # once per clone: the private-data scan on every commit and push
 npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gates and push");
                       # its last step re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
@@ -921,6 +924,15 @@ the same way. Every `tsx --test` script names the TAP reporter (`--test-reporter
 from the template's), and a suite with no TAP summary (`# tests N`) fails too, each suite — the
 root's and each workspace's — read on its own: Node's default reporter is no contract (the
 script's header). So a flow just scaffolded is red until each §9 `test.todo` is written.
+
+**No private data, ever.** This repository is public and git history is permanent, so a client's
+name or real contact details must never land (CLAUDE.md rule 10: reserved test data only). The
+kit's private-data scan runs three times: on the staged content before every commit
+(`.githooks/pre-commit`), on the commits being pushed, to any remote (`.githooks/pre-push`; both
+armed once per clone by `npm run hooks:install`, which sets `core.hooksPath`), and on every tracked
+file in CI's Verify, which reads the client-name pattern from the `CLIENT_DENY_PATTERN` secret,
+never a tracked file; the nightly passes it. A finding, a scan that cannot run or a missing scan
+refuses the commit, the push or the run.
 
 **The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
 — Verify, and every flow's image built, smoke-tested and scanned

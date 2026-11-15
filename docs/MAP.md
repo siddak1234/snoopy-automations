@@ -6,7 +6,6 @@
 
 - [CLAUDE.md](../CLAUDE.md)
 - `snoopy-backend/docs/platform/ENGINEERING-STANDARD.md`
-- [docs/records/round-record.md](records/round-record.md)
 
 ## Where to look by task
 
@@ -15,7 +14,7 @@
 - **automations**: `automations/*/src/**`, `automations/*/prompts/**` → `automations/*/README.md`
 - **manifests**: `manifests/*.v*.json` → `automations/*/README.md`
 - **contract**: `contract/**` → [contract/README.md](../contract/README.md)
-- **tooling**: `templates/**`, `scripts/**`, `.github/**` → [README.md](../README.md)
+- **tooling**: `templates/**`, `scripts/**`, `.github/**`, `.githooks/**` → [README.md](../README.md)
 - **claude**: `.claude/**` → [CLAUDE.md](../CLAUDE.md)
 - **tools**: `tools/*/**` → `tools/*/README.md`
 
@@ -30,6 +29,7 @@
 - `npm run facts`: `tsx scripts/repo-facts.ts`
 - `npm run format`: `prettier --write .`
 - `npm run format:check`: `prettier --check .`
+- `npm run hooks:install`: `git config core.hooksPath .githooks`
 - `npm run live-eval`: `tsx scripts/live-eval.ts`
 - `npm run map`: `node scripts/kit/map.mjs`
 - `npm run review-rows`: `tsx scripts/review-rows.ts`
@@ -86,9 +86,14 @@
 - [scripts/review-rows.ts](../scripts/review-rows.ts): The review checklist's machine-checkable rows (Round 21, R3; `/create-flow`'s
 - [scripts/scaffold.mjs](../scripts/scaffold.mjs): `npm run scaffold -- templateId [--root dir]` (Round 21, R2): everything structural about a
 
+### Git hooks
+
+- [.githooks/pre-commit](../.githooks/pre-commit): Native pre-commit gate: every commit of this public repository runs the kit's
+- [.githooks/pre-push](../.githooks/pre-push): Native pre-push gate: every push, to any remote (a fork or a mirror is as
+
 ### Tests
 
-- `test/`: architecture, changed, conformance, definition, doc, file, flow, isolation, kit, live, manifest, menu, n8n, network, no, pins, repo, research, review, scaffold, workflow
+- `test/`: architecture, changed, conformance, definition, doc, file, flow, githooks, isolation, kit, live, manifest, menu, n8n, network, no, pins, repo, research, review, scaffold, workflow
 
 ## Skills, agents and hooks
 
@@ -110,11 +115,10 @@
 - [CLAUDE.md](../CLAUDE.md) (doc)
 - [README.md](../README.md) (doc)
 - [contract/README.md](../contract/README.md) (doc)
-- [docs/records/round-record.md](records/round-record.md) (current)
 
 ### 100 KB to 1 MB
 
-- [docs/records/round-record.archive.md](records/round-record.archive.md) (archive)
+- none
 
 ### Over 1 MB: grep only
 

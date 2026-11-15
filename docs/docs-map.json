@@ -4,7 +4,7 @@
   "generated": ["docs/MAP.md", "docs/repo-facts/snoopy-automations.json"],
   "ignore": ["**/*.test.ts", "**/test/**", "templates/automation/Dockerfile"],
   "unmapped": {
-    "docs": "the documents themselves: records, the generated map and the repo-facts file"
+    "docs": "the documents themselves: the generated map, this docs map and the repo-facts file (the round records live in the private backend)"
   },
   "rules": [
     { "id": "sdk", "code": ["packages/automation-sdk/src/**"], "docs": ["README.md"] },
@@ -18,7 +18,7 @@
     { "id": "contract", "code": ["contract/**"], "docs": ["contract/README.md"] },
     {
       "id": "tooling",
-      "code": ["templates/**", "scripts/**", ".github/**"],
+      "code": ["templates/**", "scripts/**", ".github/**", ".githooks/**"],
       "docs": ["README.md"]
     },
     { "id": "claude", "code": [".claude/**"], "docs": ["CLAUDE.md"] },
@@ -26,16 +26,12 @@
   ],
   "facts": [{ "key": "sdk-callbacks", "home": "README.md", "pattern": "\\bsix callbacks\\b" }],
   "records": {
-    "current": ["docs/records/round-record.md"],
-    "archive": ["docs/records/round-record.archive.md"]
+    "current": [],
+    "archive": []
   },
   "map": {
     "kind": "automation",
-    "readFirst": [
-      "CLAUDE.md",
-      "snoopy-backend/docs/platform/ENGINEERING-STANDARD.md",
-      "docs/records/round-record.md"
-    ],
+    "readFirst": ["CLAUDE.md", "snoopy-backend/docs/platform/ENGINEERING-STANDARD.md"],
     "folders": ["automations"],
     "lists": [
       { "title": "Automations", "glob": "automations/*", "as": "automation" },
@@ -43,6 +39,7 @@
       { "title": "Template", "glob": "templates/*", "as": "package" },
       { "title": "Contract schemas", "glob": "contract/schemas/*.json", "as": "header-line" },
       { "title": "Scripts", "glob": "scripts/**", "as": "header-line" },
+      { "title": "Git hooks", "glob": ".githooks/*", "as": "header-line" },
       { "title": "Tests", "glob": "test/*.test.ts", "as": "test-prefixes" }
     ]
   }
