@@ -928,11 +928,11 @@ script's header). So a flow just scaffolded is red until each §9 `test.todo` is
 **No private data, ever.** This repository is public and git history is permanent, so a client's
 name or real contact details must never land (CLAUDE.md rule 10: reserved test data only). The
 kit's private-data scan runs three times: on the staged content before every commit
-(`.githooks/pre-commit`), on the commits being pushed, to any remote (`.githooks/pre-push`; both
-armed once per clone by `npm run hooks:install`, which sets `core.hooksPath`), and on every tracked
-file in CI's Verify, which reads the client-name pattern from the `CLIENT_DENY_PATTERN` secret,
-never a tracked file; the nightly passes it. A finding, a scan that cannot run or a missing scan
-refuses the commit, the push or the run.
+(`.githooks/pre-commit`), on the commits since origin/main before every push, to any remote
+(`.githooks/pre-push`; both armed once per clone by `npm run hooks:install`, which sets
+`core.hooksPath`), and on every tracked file in CI's Verify, which reads the client-name pattern
+from the `CLIENT_DENY_PATTERN` secret, never a tracked file; the nightly passes it. A finding, a
+scan that cannot run or a missing scan refuses the commit, the push or the run.
 
 **The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
 — Verify, and every flow's image built, smoke-tested and scanned

@@ -1,12 +1,13 @@
 #!/bin/sh
 # Native pre-push gate: every push, to any remote (a fork or a mirror is as
 # public as this repository), runs the kit's private-data scan of the commits
-# being pushed (CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan
+# since origin/main (CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan
 # that cannot run (any other non-zero exit) or a missing scan.
 # Installed via `npm run hooks:install` (git config core.hooksPath .githooks).
 #
 # git calls this with: $1=remote name, $2=remote url, and stdin lines of
-# "<local_ref> <local_sha> <remote_ref> <remote_sha>", which the scan reads.
+# "<local_ref> <local_sha> <remote_ref> <remote_sha>", handed on to the scan's
+# stdin; it reads the commits since origin/main itself.
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 if [ ! -f scripts/kit/private-data-scan.mjs ]; then
@@ -16,7 +17,7 @@ fi
 node scripts/kit/private-data-scan.mjs --push >&2
 status=$?
 if [ "$status" -eq 1 ]; then
-  echo "pre-push: the private-data scan found private data in the commits being pushed — refused. Rewrite them with reserved values (CLAUDE.md rule 10)." >&2
+  echo "pre-push: the private-data scan found private data in the commits since origin/main — refused. Rewrite them with reserved values (CLAUDE.md rule 10)." >&2
   exit 1
 elif [ "$status" -ne 0 ]; then
   echo "pre-push: the private-data scan could not run (exit $status) — refused." >&2

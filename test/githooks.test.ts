@@ -16,7 +16,7 @@ import { test } from 'node:test';
 /**
  * The committed git hooks (CLAUDE.md rule 10): `npm run hooks:install` points git at `.githooks/`,
  * whose pre-commit hook runs the kit's private-data scan on the staged content and whose pre-push
- * hook runs it on the commits being pushed, to any remote, with git's ref lines on its stdin. A
+ * hook runs it on the commits since origin/main, to any remote, with git's ref lines on its stdin. A
  * finding, a scan that cannot run or a missing scan refuses either one. Driven as git drives them,
  * in a throwaway repository whose scan is a stub that notes its arguments and stdin and exits
  * FAKE_SCAN (0, clean, by default).
@@ -145,7 +145,7 @@ test('the pre-commit hook scans the staged content and refuses a commit on a fin
   assert.equal(head(), at);
 });
 
-test("the pre-push hook scans the pushed commits, given git's ref lines, on a push to any remote, and refuses on a finding, a failure or a missing scan", (t) => {
+test("the pre-push hook scans the commits since origin/main, given git's ref lines, on a push to any remote, and refuses on a finding, a failure or a missing scan", (t) => {
   const { base, repo, scans, reset } = fixture();
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const sha = git(repo, 'rev-parse', 'HEAD');
@@ -162,7 +162,7 @@ test("the pre-push hook scans the pushed commits, given git's ref lines, on a pu
 
     const found = push(repo, url, refLine, { FAKE_SCAN: '1' });
     assert.equal(found.exit, 1, `a finding refuses a push to ${url}`);
-    assert.match(found.stderr, /found private data in the commits being pushed/u);
+    assert.match(found.stderr, /found private data in the commits since origin\/main/u);
     reset();
   }
   const broken = push(repo, 'https://github.com/other/elsewhere.git', refLine, { FAKE_SCAN: '2' });

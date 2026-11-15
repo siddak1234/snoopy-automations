@@ -27,8 +27,9 @@ on:
 # it checks itself (the platform's ADR-0047 §4). The other secret is
 # CLIENT_DENY_PATTERN, the private-data scan's client-name pattern, kept out of
 # every tracked file: Verify's "No salvaged client data" step alone reads it, and
-# it reaches nothing — it is a search pattern, not a credential; a fork's pull
-# request runs without it. test/workflow-policy.test.ts holds these rules.
+# it reaches nothing — it is a search pattern, not a credential. A fork's pull
+# request gets no secret, and the kit's scan then fails rather than skip the names
+# (it skips them only for Dependabot). test/workflow-policy.test.ts holds these rules.
 permissions:
   contents: read
 
