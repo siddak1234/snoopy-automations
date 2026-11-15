@@ -968,7 +968,8 @@ group (`.github/dependabot.yml`) moves them all in one pull request, which needs
 other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
 until `.nvmrc` moves with it.
 
-Node: the release `.nvmrc` names (`nvm use`); every `package.json` here that declares `engines`
-declares its major, `22.x` (`test/pins.test.ts`). Agent sessions read `CLAUDE.md` first. The committed facts file
+Node: the release `.nvmrc` names (`nvm use`); the root `package.json` declares its major as `22.x`, and
+the flows' own, the packages' and the template's keep `>=22` until a real change, since each flow's image copies
+them (`test/pins.test.ts`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

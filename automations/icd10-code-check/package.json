@@ -5,7 +5,7 @@
   "description": "Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now.",
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
