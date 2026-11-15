@@ -2,7 +2,8 @@
 # Native pre-push gate: every push, to any remote (a fork or a mirror is as
 # public as this repository), runs the kit's private-data scan of the commits
 # since origin/main (CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan
-# that cannot run (any other non-zero exit) or a missing scan.
+# that cannot run (any other non-zero exit) or a missing scan. Where else the
+# scan runs: README, "No private data, ever".
 # Installed via `npm run hooks:install` (git config core.hooksPath .githooks).
 #
 # git calls this with: $1=remote name, $2=remote url, and stdin lines of

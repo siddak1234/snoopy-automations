@@ -26,7 +26,7 @@ on:
 # Mac that runs Flow CD believes nothing the dispatch sends but the commit, which
 # it checks itself (the platform's ADR-0047 §4). The other secret is
 # CLIENT_DENY_PATTERN, the private-data scan's client-name pattern, kept out of
-# every tracked file: Verify's "No salvaged client data" step alone reads it, and
+# every tracked file: Verify's "No private data" step alone reads it, and
 # it reaches nothing — it is a search pattern, not a credential. A fork's pull
 # request gets no secret, and the kit's scan then fails rather than skip the names
 # (it skips them only for Dependabot). test/workflow-policy.test.ts holds these rules.
@@ -113,11 +113,11 @@ jobs:
           cache: npm
 
       # This repository is public and git history is permanent, so a client's name or real contact
-      # details must never land: deleting them in a later commit does not remove them. The kit's
-      # private-data scan reads every tracked file, as the pre-commit and pre-push hooks do
-      # (.githooks/), with the client-name pattern from the secret, never a tracked file; exit 1 on
-      # a finding, 2 on an error. Node built-ins alone, so it runs before the install.
-      - name: No salvaged client data
+      # details must never land: deleting them in a later commit does not remove them. Here the
+      # kit's private-data scan reads every tracked file, with the client-name pattern from the
+      # secret, never a tracked file; exit 1 on a finding, 2 on an error (where else it runs:
+      # README, "No private data, ever"). Node built-ins alone, so it runs before the install.
+      - name: No private data
         env:
           CLIENT_DENY_PATTERN: ${{ secrets.CLIENT_DENY_PATTERN }}
         run: node scripts/kit/private-data-scan.mjs --tree

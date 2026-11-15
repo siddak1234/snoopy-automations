@@ -98,7 +98,7 @@ test('the secrets are DISPATCH_APP_KEY, read by Deploy alone, and CLIENT_DENY_PA
     'nightly.yml:ci:secrets:',
     'nightly.yml:ci:secrets.CLIENT_DENY_PATTERN',
   ]);
-  const scan = steps(job('verify')).find((step) => /^name: No salvaged client data$/mu.test(step));
+  const scan = steps(job('verify')).find((step) => /^name: No private data$/mu.test(step));
   assert.ok(scan !== undefined, "Verify's private-data scan");
   assert.match(
     scan,
