@@ -17,7 +17,10 @@ to the spec's section 11 with its default, never a new round of questions.
 ## The run
 
 The Workflow tool, with `scriptPath` set to the clone's `.claude/workflows/flow-research.js` and
-`args` set to `{ runDir, automations, name, idea, answers, platform }` — no backend clone: the
+`args` set to `{ automations, name, idea, answers, platform }` — `name` the flow's folder, as in
+`automations/<name>/`; no run folder: research.json is written inside the automations clone, in
+its git-ignored `tmp/create-flow/<name>/research.json` (the owner, 2026-11-14: files only inside a
+repository copy; BUILD-PLAN 30.17.2), and a `runDir` is refused — no backend clone: the
 adoption lens reads the menu, `contract/schemas/platform-menu.json` (a `backend` clone, when given,
 is read-only and its files a source too). It runs two children beside it, each once with
 `workflow({ scriptPath })` inside its try (one level, the harness's limit; a child that fails to
@@ -72,11 +75,13 @@ without it every lens fails.
 1. Read the Workflow **result**, the script's top-level return value — `research`, `djb2`,
    `length`, `stopped`, `gaps`, `notResearched`. The Workflow tool hands the session that value;
    `log()` lines do not reach the session.
-2. Run `node .claude/skills/create-flow/research-render.mjs <runDir>/research.json <djb2> <length>`.
-   Exit 0: the file is the one the script computed, and research.md is written beside it. Exit 1 (a
-   mismatch, or no file): re-run the workflow with `resumeFromRunId` and `args.writeAttempt = 2`,
-   so only the write runs again. A second mismatch: tell the owner research.json could not be
-   written, with the result's gaps; no spec is written.
+2. Run `node .claude/skills/create-flow/research-render.mjs <research> <djb2> <length>`, `research`
+   the result's path, `<clone>/tmp/create-flow/<name>/research.json`. Exit 0: the file is the one
+   the script computed, and research.md is written beside the spec, `automations/<name>/research.md`.
+   Exit 1 (a mismatch, or no file): re-run the workflow with `resumeFromRunId` and
+   `args.writeAttempt = 2`, so only the write runs again. A second mismatch: tell the owner
+   research.json could not be written, with the result's gaps; no spec is written. Exit 2: the
+   usage, or a research.json outside a clone's `tmp/create-flow/<name>/`.
 3. A `stopped` result: show the owner the stop and the gaps; no spec is written from it.
 4. Show the owner, at stage 2 beside the screens and the words, in 10 lines or fewer, how the work
    is done today, what an expert checks, the Integrations rows and the first to build, what the first
@@ -87,9 +92,10 @@ without it every lens fails.
    Nothing is registered from a brief the owner has not approved.
 
 If an Integrations row the flow uses says "to add", tell the owner the check's answer is now "a
-new vendor" (stage 1): a provider file, or a platform round when no file can describe it. The approved brief is copied beside the spec as
-`automations/<name>/research.md`: sources and invented examples only, never a customer's data
-(this repository is public). Each pilot failure joins the research evals,
+new vendor" (stage 1): a provider file, or a platform round when no file can describe it. The approved brief is
+`automations/<name>/research.md`, beside the spec, where the render wrote it (its one place;
+research.json stays in the git-ignored `tmp/`): sources and invented examples only, never a
+customer's data (this repository is public). Each pilot failure joins the research evals,
 [evals/research.md](evals/research.md), at stage 8.
 
 ## Sources

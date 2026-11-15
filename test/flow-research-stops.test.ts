@@ -38,7 +38,7 @@ test('two failed lenses with a working write: the gaps are written, no source is
   assert.equal(r.data.brief, null);
   assert.equal(r.data.sources.length, 0, 'nothing unverified is written as a source');
   assert.ok(has(r.data.gaps, 'rules lens: failed twice'));
-  assert.equal(render(r.runDir, r.result).code, 0);
+  assert.equal(render(r.clone, r.result).code, 0);
 });
 
 test('streamlining and rules fail: the integrations stage never runs, adoption is not counted', async () => {
@@ -116,7 +116,7 @@ test('a null write is retried once, then the run stops; the gaps were logged bef
 
 test('writeAttempt 2 changes only the write prompt, so a resume re-runs only the write', async () => {
   const one = await run(normal);
-  const two = await run(normal, { writeAttempt: 2, dir: one.runDir });
+  const two = await run(normal, { writeAttempt: 2, dir: one.clone });
   const prompt = (r: typeof one, label: string) => r.calls.find((c) => c.label === label)!.prompt;
   const changed = [...new Set(one.calls.map((c) => c.label))].filter(
     (l) => prompt(one, l) !== prompt(two, l),

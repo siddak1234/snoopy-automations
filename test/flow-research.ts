@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { after } from 'node:test';
 import { pathToFileURL } from 'node:url';
 
@@ -9,7 +9,9 @@ import { pathToFileURL } from 'node:url';
  * Workflow tool's `agent`, `parallel`, `log`, `phase`, `args`, `budget` and `workflow` replaced,
  * the file and its two children (the tables, the integrations stage) compiled as the tool runs
  * them (async function bodies, each top-level return the result); a child's workflow() throws, as
- * the tool's does (one level). Its
+ * the tool's does (one level). Each run's `automations` is a stand-in clone of its own (a temp
+ * folder holding `.git`): the write lands in its git-ignored `tmp/create-flow/<name>/` and
+ * research.md beside the spec, in its `automations/<name>/` (`at`). Its
  * cases are in `test/flow-research.test.ts` (the gates) and `test/flow-research-stops.test.ts`
  * (stops, retries and the write).
  */
@@ -24,7 +26,7 @@ const { main: renderMain, COLUMNS } = (await import(renderUrl)) as {
 export { COLUMNS };
 // The stand-ins answer whatever shape each step asks for.
 export type Any = any;
-export type Behave = (label: string, attempt: number, prompt: string, runDir: string) => Any;
+export type Behave = (label: string, attempt: number, prompt: string, clone: string) => Any;
 type Body = (...values: unknown[]) => Promise<Any>;
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
 const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget', 'workflow'];
@@ -32,13 +34,18 @@ const GLOBALS = ['agent', 'parallel', 'log', 'phase', 'args', 'budget', 'workflo
 // is the syntax check too: `node --check` refuses the top-level return the result travels in.
 export const compile = (file = 'flow-research.js'): Body =>
   new AsyncFunction(...GLOBALS, read(file).replace('export const meta', 'const meta'));
-const WORKFLOWS = '/clones/snoopy-automations/.claude/workflows/';
 const CHILDREN = ['flow-research-tables.js', 'flow-research-integrations.js'];
 const nested = async () => {
   throw new Error('workflow() inside a child: nesting is one level only');
 };
 const dirs: string[] = [];
 after(() => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+/** The flow's name in every run, and where its research.json and research.md land in a clone. */
+export const NAME = 'invoice-check';
+export const at = (clone: string) => ({
+  json: join(clone, 'tmp/create-flow', NAME, 'research.json'),
+  md: join(clone, 'automations', NAME, 'research.md'),
+});
 
 const IDEA = 'Check each supplier invoice against its purchase order before we pay it.';
 const ANSWERS = ['Only PDF invoices.', 'A good result is a clear match or mismatch per line.'];
@@ -168,7 +175,7 @@ export const skepticSays =
   };
 export const normalWith =
   (skeptic: (prompt: string) => Any = skepticSays()): Behave =>
-  (label, _attempt, prompt, runDir) => {
+  (label, _attempt, prompt, clone) => {
     if (label === 'frame')
       return {
         ownerWords: {
@@ -183,9 +190,14 @@ export const normalWith =
     if (label === 'synthesis') return BRIEF();
     if (label === 'skeptic') return skeptic(prompt);
     if (label === 'write') {
+      // The path the prompt names, as the writer would; never outside the stand-in clone's tmp/.
+      const path = /Write (\S+) with one Write call/u.exec(prompt)![1]!;
+      if (!path.startsWith(join(clone, 'tmp') + '/'))
+        throw new Error(`a write outside tmp/: ${path}`);
       const text = prompt.split('<<<JSON\n')[1]!.split('\nJSON>>>')[0]!;
-      writeFileSync(join(runDir, 'research.json'), text);
-      return join(runDir, 'research.json');
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+      return path;
     }
     throw new Error(`unexpected ${label}`);
   };
@@ -199,10 +211,13 @@ export async function run(
     dir?: string;
     noBackend?: boolean;
     unreadable?: string;
+    args?: object;
   } = {},
 ) {
-  const runDir = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
-  if (!options.dir) dirs.push(runDir);
+  const clone = options.dir ?? mkdtempSync(join(tmpdir(), 'autom8x-flow-research-'));
+  if (!options.dir) dirs.push(clone);
+  mkdirSync(join(clone, '.git'), { recursive: true });
+  const workflows = `${clone}/.claude/workflows/`;
   const total = options.total ?? null;
   const logs: string[] = [];
   const calls: { label: string; prompt: string; startedAt: number; schema: Any }[] = [];
@@ -222,7 +237,7 @@ export async function run(
       await new Promise((done) => setTimeout(done, opts.label === 'practice lens' ? 5 : 15));
       spent += 10_000;
       const attempt = calls.filter((c) => c.label === opts.label).length;
-      const out = await behave(opts.label, attempt, prompt, runDir);
+      const out = await behave(opts.label, attempt, prompt, clone);
       finishedAt[opts.label] = tick++;
       return out;
     } finally {
@@ -234,9 +249,9 @@ export async function run(
   const log = (m: string) => logs.push(m);
   /** The tool's workflow({ scriptPath }, args): a child at the clone's path, the same globals. */
   const workflow = async ({ scriptPath }: { scriptPath: string }, childArgs: unknown) => {
-    const file = scriptPath.slice(WORKFLOWS.length);
+    const file = scriptPath.slice(workflows.length);
     if (
-      !scriptPath.startsWith(WORKFLOWS) ||
+      !scriptPath.startsWith(workflows) ||
       !CHILDREN.includes(file) ||
       file === options.unreadable
     )
@@ -244,23 +259,23 @@ export async function run(
     return compile(file)(agent, parallel, log, () => {}, childArgs, budget, nested);
   };
   const args = {
-    runDir,
-    automations: '/clones/snoopy-automations',
+    automations: clone,
     ...(options.noBackend ? {} : { backend: '/clones/snoopy-backend' }),
-    name: 'invoice-check',
+    name: NAME,
     idea: IDEA,
     answers: ANSWERS,
     platform: 'everything there',
     writeAttempt: options.writeAttempt,
+    ...options.args,
   };
   const result = await compile()(agent, parallel, log, () => {}, args, budget, workflow);
-  const file = join(runDir, 'research.json');
+  const file = at(clone).json;
   const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-  return { runDir, logs, calls, peak, finishedAt, result, data };
+  return { clone, logs, calls, peak, finishedAt, result, data };
 }
-export const render = (runDir: string, result: Any) => {
+export const render = (clone: string, result: Any) => {
   let out = '';
-  const argv = [join(runDir, 'research.json'), result.djb2, String(result.length)];
+  const argv = [at(clone).json, result.djb2, String(result.length)];
   return { code: renderMain(argv, (text) => (out += text)), out };
 };
 export const has = (list: string[], start: string) => list.some((line) => line.startsWith(start));

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
-// /create-flow stage 1b: checks <runDir>/research.json against the checksum and length that
-// `.claude/workflows/flow-research.js` returned in its Workflow result, then renders research.md
-// from the checked file. Nothing a model typed reaches the owner unchecked: a ranked integration is a
+// /create-flow stage 1b: checks the research.json `.claude/workflows/flow-research.js` wrote inside
+// the automations clone, in its git-ignored tmp/, against the checksum and length it returned in
+// its Workflow result, then renders research.md from the checked file beside the spec, in
+// automations/<name>/ (files only inside a repository copy: the owner, 2026-11-14; BUILD-PLAN
+// 30.17.2). Nothing a model typed reaches the owner unchecked: a ranked integration is a
 // row only while it keeps a confirmed line and confirmed adoption evidence, else a Gaps line (in
 // research.md, and first in the summary's gaps); "First to build" only when it names a row.
-//   node research-render.mjs <runDir>/research.json <djb2> <length>
-// Exit 0: research.md written beside it, a summary of 2 KB or less printed. Exit 1: a mismatch or
-// no readable file (re-run the workflow with resumeFromRunId and args.writeAttempt = 2). Exit 2:
-// usage. It re-serializes the file (JSON.stringify(JSON.parse(…))), so whitespace is not a
-// mismatch and a changed word is. djb2 is not a security hash: it catches a model's retyping,
-// which is all it is for. Node built-ins only.
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+//   node research-render.mjs <clone>/tmp/create-flow/<name>/research.json <djb2> <length>
+// Exit 0: <clone>/automations/<name>/research.md written, a summary of 2 KB or less printed. Exit
+// 1: a mismatch or no readable file (re-run the workflow with resumeFromRunId and
+// args.writeAttempt = 2). Exit 2: usage, or a research.json anywhere but a clone's (a folder
+// holding .git) tmp/create-flow/<name>/. It re-serializes the file (JSON.stringify(JSON.parse(…))),
+// so whitespace is not a mismatch and a changed word is. djb2 is not a security hash: it catches a
+// model's retyping, which is all it is for. Node built-ins only.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 /** The same djb2 the workflow computes over the exact text it hands the write. */
@@ -161,9 +164,20 @@ export function render(data) {
   return `${out.join('\n')}\n`;
 }
 
+/** `<clone>/tmp/create-flow/<name>/research.json`'s clone and name (`name` a templateId, the clone a
+ * folder holding .git), else null: the workflow writes it there and nowhere else. */
+export function placeOf(path) {
+  const at = /^(.+)\/tmp\/create-flow\/([a-z][a-z0-9-]{0,62}[a-z0-9])\/research\.json$/u;
+  const [, clone, name] = at.exec(resolve(path)) ?? [];
+  return clone && existsSync(join(clone, '.git')) ? { clone, name } : null;
+}
+
+const USAGE =
+  'usage: research-render.mjs <clone>/tmp/create-flow/<name>/research.json <djb2> <length>';
 export function main([path, expected, length], write = (t) => process.stdout.write(t)) {
-  if (!path || !expected || !length)
-    return (write('usage: research-render.mjs <research.json> <djb2> <length>\n'), 2);
+  if (!path || !expected || !length) return (write(`${USAGE}\n`), 2);
+  const place = placeOf(path);
+  if (!place) return (write(`research-render: ${path} is not in a clone's tmp/; ${USAGE}\n`), 2);
   let data;
   try {
     data = JSON.parse(readFileSync(path, 'utf8'));
@@ -178,7 +192,9 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
     );
     return 1;
   }
-  writeFileSync(join(dirname(path), 'research.md'), render(data));
+  const brief = join(place.clone, 'automations', place.name, 'research.md');
+  mkdirSync(dirname(brief), { recursive: true });
+  writeFileSync(brief, render(data));
   const ranked = rank(data);
   const gaps = [...unconfirmed(ranked), ...data.gaps];
   const first = firstOf(
@@ -187,7 +203,7 @@ export function main([path, expected, length], write = (t) => process.stdout.wri
   );
   const counts = HEADINGS.map(([k]) => `${k} ${data.brief?.[k]?.length ?? 0}`).join(', ');
   const lines = [
-    `research-render: checksum ok (${sum}); research.md written${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
+    `research-render: checksum ok (${sum}); automations/${place.name}/research.md written${data.stopped ? `; STOPPED: ${data.stopped}` : ''}`,
     `lines: ${counts}; integrations ${data.brief?.integrations?.length ?? 0}; first to build: ${first?.text ?? 'a person decides'}; golden cases ${data.brief?.goldenCases?.length ?? 0}; sources ${data.sources.length}`,
     `not researched: ${data.notResearched.length ? data.notResearched.join(' | ') : 'none'}`,
     `gaps (${gaps.length}): ${gaps.join(' | ')}`,

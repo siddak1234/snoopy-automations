@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 import {
   type Any,
+  at,
   compile,
   finding,
   lensOut,
@@ -41,9 +43,7 @@ test('a developer with this repository alone: no backend clone, the adoption len
   const r = await run(normal, { noBackend: true });
   assert.equal(r.data.stopped, '');
   const adoption = r.calls.find((c) => c.label === 'adoption lens')!;
-  assert.ok(
-    adoption.prompt.includes('/clones/snoopy-automations/contract/schemas/platform-menu.json'),
-  );
+  assert.ok(adoption.prompt.includes(`${r.clone}/contract/schemas/platform-menu.json`));
   assert.ok(
     !r.calls.some((c) => c.prompt.includes('snoopy-backend')),
     'no prompt names the backend',
@@ -72,17 +72,38 @@ test('a normal run: three agents at most, the gates drop and name, the checksum 
   );
   assert.deepEqual(
     [r.result.research, r.result.stopped, r.result.gaps, r.result.notResearched],
-    [join(r.runDir, 'research.json'), '', r.data.gaps, r.data.notResearched],
+    [at(r.clone).json, '', r.data.gaps, r.data.notResearched],
   );
   assert.ok(r.logs.includes(`research.json: djb2 ${r.result.djb2} length ${r.result.length}`));
-  assert.equal(render(r.runDir, r.result).code, 0);
-  assert.ok(existsSync(join(r.runDir, 'research.md')));
-  const file = join(r.runDir, 'research.json');
+  assert.equal(render(r.clone, r.result).code, 0);
+  assert.ok(existsSync(at(r.clone).md));
+  const file = at(r.clone).json;
   writeFileSync(file, JSON.stringify(r.data, null, 2));
-  assert.equal(render(r.runDir, r.result).code, 0, 'pretty-printing is not a mismatch');
+  assert.equal(render(r.clone, r.result).code, 0, 'pretty-printing is not a mismatch');
   writeFileSync(file, readFileSync(file, 'utf8').replace('for practice 1', 'for practice one'));
-  assert.equal(render(r.runDir, r.result).code, 1, 'a reworded quote is');
+  assert.equal(render(r.clone, r.result).code, 1, 'a reworded quote is');
   assert.ok(r.logs.at(-1)!.startsWith('research: done'), r.logs.at(-1));
+});
+
+test('research.json lands inside the automations clone, in its git-ignored tmp/; research.md beside the spec', async () => {
+  const r = await run(normal);
+  assert.equal(r.result.research, join(r.clone, 'tmp/create-flow/invoice-check/research.json'));
+  const write = r.calls.find((c) => c.label === 'write')!.prompt;
+  assert.ok(
+    write.startsWith(`Write ${r.result.research} with one Write call`),
+    write.slice(0, 200),
+  );
+  // This repository's .gitignore keeps that path out of every commit (files only in a copy, 30.17.2).
+  const relativePath = relative(r.clone, r.result.research);
+  const ignored = spawnSync('git', ['check-ignore', '-q', relativePath], {
+    cwd: resolve(import.meta.dirname, '..'),
+  });
+  assert.equal(ignored.status, 0, `${relativePath} is not git-ignored here`);
+  assert.equal(render(r.clone, r.result).code, 0);
+  assert.ok(existsSync(join(r.clone, 'automations/invoice-check/research.md')), 'beside the spec');
+  assert.ok(!existsSync(join(r.clone, 'tmp/create-flow/invoice-check/research.md')));
+  for (const args of [{ runDir: '/elsewhere' }, { name: '../out' }, { name: 'Invoice Check' }])
+    await assert.rejects(run(normal, { args }), /^Error: flow-research needs args .*; no runDir$/u);
 });
 
 test('every unsourced default, of either kind, is "a person decides" unless the owner keeps it', async () => {
@@ -260,7 +281,7 @@ test('a throw after the synthesis writes no unverified line: the lines are gaps'
     ),
   );
   assert.ok(!r.calls.some((c) => c.label === 'skeptic'));
-  assert.equal(render(r.runDir, r.result).code, 0);
+  assert.equal(render(r.clone, r.result).code, 0);
 });
 
 test("the ICD-10 pilot's lessons reach the prompts: four questions, a pick list in full, one-sentence quotes", async () => {

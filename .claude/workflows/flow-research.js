@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Research one flow idea before its spec: the owner's words, four lenses, one researcher per integration the adoption lens ranks (at most three agents at once), one synthesis, one skeptic, research.json (/create-flow stage 1b).",
   whenToUse:
-    'After /create-flow stage 1 (the platform check and the decisions); pass args { runDir, automations, name, idea, answers, platform, backend?, writeAttempt? }; no backend clone is needed: the adoption lens reads the menu in contract/schemas.',
+    "After /create-flow stage 1 (the platform check and the decisions); pass args { automations, name, idea, answers, platform, backend?, writeAttempt? }, name the flow's folder; research.json goes inside the automations clone, <automations>/tmp/create-flow/<name>/; no backend clone is needed: the adoption lens reads the menu in contract/schemas.",
   phases: [
     { title: 'Frame', detail: "the owner's words, quoted; the lens questions; no research" },
     { title: 'Lenses', detail: 'practice then streamlining, and rules, at once' },
@@ -22,10 +22,11 @@ export const meta = {
 // prompt changes). The checksum, the stops and the gaps are the return value: the Workflow tool
 // hands the session the top-level return; log() lines do not reach it. `node --check` refuses it,
 // so test/flow-research.ts compiles this file and its two children as the harness runs them.
-const { runDir, automations, backend, name, idea, answers, platform } = args ?? {};
-const writeAttempt = args?.writeAttempt ?? 1;
-const needs = 'flow-research needs args { runDir, automations, name, idea, answers }';
-if (!runDir || !automations || !name || !idea) throw new Error(needs);
+const { automations, backend, name, idea, answers, platform, writeAttempt = 1 } = args ?? {};
+const needs = 'flow-research needs args { automations, name (a folder), idea, answers }; no runDir';
+const folder = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/u.test(name ?? ''); // a templateId, a path segment
+if (args?.runDir || !automations || !folder || !idea) throw new Error(needs);
+const jsonPath = `${automations}/tmp/create-flow/${name}/research.json`; // git-ignored; 30.17.2
 // Two children beside this file, each run once in the try (one level, the harness's limit).
 const child = (file) => ({ scriptPath: `${automations}/.claude/workflows/${file}` });
 let T, LENS, DATA, SCHEMA, CAP, NEED, MAX_FINDINGS, MAX_QUESTIONS, LENSES, ALL;
@@ -383,7 +384,7 @@ if (!fits(NEED?.write)) stop('the token target is spent; research.json was not w
 else {
   const again = writeAttempt > 1 ? `Attempt ${writeAttempt}: a file failed its checksum. ` : '';
   const writePrompt = (extra) =>
-    `${extra}${again}Write ${runDir}/research.json with one Write call whose whole content is exactly the text between the markers, unchanged: no reformatting, no reordering, no rewording. Then return that path and nothing else.\n<<<JSON\n${text}\nJSON>>>`;
+    `${extra}${again}Write ${jsonPath} with one Write call whose whole content is exactly the text between the markers, unchanged: no reformatting, no reordering, no rewording. Then return that path and nothing else.\n<<<JSON\n${text}\nJSON>>>`;
   const writer = { label: 'write', phase: 'Write', agentType: 'builder', model: 'sonnet' };
   written = await once(
     'write',
@@ -394,6 +395,6 @@ else {
 }
 const done = stopped ? `stopped (${stopped})` : 'done';
 log(`research: ${done}; ${sources.length} sources; ${gaps.length} gaps; djb2 ${checksum}`);
-const research = written ? `${runDir}/research.json` : null;
+const research = written ? jsonPath : null;
 const result = { research, djb2: checksum, length: text.length, stopped, gaps, notResearched };
 return { ...result, sources: sources.length };
