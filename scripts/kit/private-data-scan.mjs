@@ -8,10 +8,12 @@
 //     ~/.config/autom8x/client-deny-pattern (line 1 full names, every repository; line 2
 //     short forms, public repositories only). --tree greps HEAD's files, --staged and --push
 //     the added lines of their diffs, --history `git log -G`. Prints paths or commit ids,
-//     never the text or the pattern. No pattern: CI fails (Dependabot, which gets no
+//     never the text or the pattern — nor an error's text, which would quote it. No pattern:
+//     CI fails (a fork's pull request is told it cannot be scanned; Dependabot, which gets no
 //     secrets, is skipped with a notice); a machine warns once and skips (CI enforces);
 //   3 gitleaks 8.30.1, pinned by sha256 and checked before extraction, with
 //     private-data.toml (secrets) or private-data-public.toml (secrets and personal data).
+//     The fetch and cache are shared: workflow-lint.mjs pins zizmor the same way.
 // Modes: --staged the index (pre-commit), --push origin/main..HEAD (pre-push), --tree the
 // tracked files at HEAD (CI, local CI), --history every commit. Exit 0 clean, 1 findings,
 // 2 usage or tool error. Public or private: docs/docs-map.json `repo`; only snoopy-backend
@@ -64,9 +66,24 @@ export function pathFindings(paths, publicRepo) {
 }
 
 /**
+ * Pure: whether this Actions run is a pull request from another repository — a fork's, which
+ * GitHub gives no secrets: the event's head repository is not this one (or is gone).
+ */
+export function forkPullRequest(env, readFile) {
+  if (!/^pull_request/u.test(env.GITHUB_EVENT_NAME ?? '') || !env.GITHUB_EVENT_PATH) return false;
+  try {
+    const head = JSON.parse(readFile(env.GITHUB_EVENT_PATH) ?? 'null')?.pull_request?.head;
+    return head !== undefined && head?.repo?.full_name !== env.GITHUB_REPOSITORY;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pure: where the client-name pattern comes from. `{ pattern }`, or `{ skip: message }` (a
- * machine without the file, or Dependabot in CI), or `{ fail: message }` (CI without it).
- * `readFile(path)` returns the text or null. A secret that is not set reaches CI as ''.
+ * machine without the file, or Dependabot in CI), or `{ fail: message }` (CI without it: a
+ * fork's pull request is told why, any other run to add the secret). `readFile(path)` returns
+ * the text or null. A secret that is not set reaches CI as ''.
  */
 export function patternSource({ env, home, readFile, publicRepo }) {
   const fromEnv = (env.CLIENT_DENY_PATTERN ?? '').trim();
@@ -78,10 +95,16 @@ export function patternSource({ env, home, readFile, publicRepo }) {
     if (env.GITHUB_ACTOR === 'dependabot[bot]') {
       return { skip: '::notice::client names not checked: Dependabot runs get no secrets; the owner’s next pull request checks them' };
     }
+    if (forkPullRequest(env, readFile)) {
+      return { fail: 'CLIENT_DENY_PATTERN is not available: a fork’s pull request gets no secrets, so its client names cannot be scanned here; the owner’s pushes to this repository are — push the branch here to scan it' };
+    }
     return { fail: 'CLIENT_DENY_PATTERN is not set: add the repository secret (one ERE of the client names)' };
   }
   return { skip: `warning: client names not checked here — ~/${PATTERN_FILE} is missing (CI checks them)` };
 }
+
+/** What a pattern that does not compile says: a fixed text, since RegExp's and git's both quote it. */
+export const PATTERN_ERROR = 'the client-name pattern could not be used: is it one valid ERE? (neither it nor the error is shown: both would print it)';
 
 /** Pure: the ERE as a case-insensitive JS RegExp (POSIX classes and \< \> translated). */
 export function ereToRegExp(ere) {
@@ -89,7 +112,11 @@ export function ereToRegExp(ere) {
   const source = ere
     .replace(/\[:(\w+):\]/gu, (whole, name) => classes[name] ?? whole)
     .replace(/\\[<>]/gu, '\\b');
-  return new RegExp(source, 'i');
+  try {
+    return new RegExp(source, 'i');
+  } catch {
+    throw new Error(PATTERN_ERROR);
+  }
 }
 
 /** Pure: the added lines of `git diff -U0` or `git log -p -U0 --format=commit %H` output. */
@@ -115,22 +142,24 @@ export function gitleaksAsset(platform, arch) {
   return { name, sha256, url: `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${name}` };
 }
 
-/** Pure: the cache — $RUNNER_TEMP under GitHub Actions, else ~/.cache/autom8x. */
-export function gitleaksCache(env, home) {
+/** Pure: a pinned tool's cache — $RUNNER_TEMP under GitHub Actions, else ~/.cache/autom8x. */
+export function toolCache(env, home, tool, version) {
   return env.GITHUB_ACTIONS === 'true' && env.RUNNER_TEMP
-    ? join(env.RUNNER_TEMP, `gitleaks-${GITLEAKS_VERSION}`)
-    : join(home, '.cache/autom8x/gitleaks', GITLEAKS_VERSION);
+    ? join(env.RUNNER_TEMP, `${tool}-${version}`)
+    : join(home, '.cache/autom8x', tool, version);
 }
+export const gitleaksCache = (env, home) => toolCache(env, home, 'gitleaks', GITLEAKS_VERSION);
 
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 /**
- * The binary, from an archive whose sha256 is the pinned one: a cached archive is reused when
- * its sum still matches, else downloaded and checked BEFORE it is written or extracted. Only
- * `gitleaks` is extracted, fresh each run, so a changed binary never outlives the run.
- * `download(url)` resolves to bytes; `extract(archive, intoDir)` writes `intoDir/gitleaks`.
+ * A pinned tool's binary, from an archive whose sha256 is the pinned one: a cached archive is
+ * reused when its sum still matches, else downloaded and checked BEFORE it is written or
+ * extracted. Only `binary` is extracted, fresh each run, so a changed binary never outlives the
+ * run. `download(url)` resolves to bytes; `extract(archive, intoDir, binary)` writes
+ * `intoDir/<binary>`. gitleaks here, zizmor in workflow-lint.mjs.
  */
-export async function ensureGitleaks({ dir, asset, download, extract }) {
+export async function ensureBinary({ dir, asset, download, extract, binary }) {
   mkdirSync(dir, { recursive: true });
   const archive = join(dir, asset.name);
   if (!(existsSync(archive) && sha256(readFileSync(archive)) === asset.sha256)) {
@@ -145,12 +174,12 @@ export async function ensureGitleaks({ dir, asset, download, extract }) {
   }
   const fresh = mkdtempSync(join(dir, 'extract-'));
   try {
-    extract(archive, fresh);
-    renameSync(join(fresh, 'gitleaks'), join(dir, 'gitleaks'));
+    extract(archive, fresh, binary);
+    renameSync(join(fresh, binary), join(dir, binary));
   } finally {
     rmSync(fresh, { recursive: true, force: true });
   }
-  return join(dir, 'gitleaks');
+  return join(dir, binary);
 }
 
 /** Pure: gitleaks' arguments for a mode; `target` is the --push range or the --tree commit. */
@@ -167,10 +196,17 @@ export function findingLines(findings, mode) {
   return findings.map((f) => `  ${f.RuleID} ${f.File}:${f.StartLine}${mode === 'push' || mode === 'history' ? ` ${String(f.Commit).slice(0, 12)}` : ''}`);
 }
 
-function run(command, args, { cwd, env, input, allow = [0] } = {}) {
-  const r = spawnSync(command, args, { cwd, env: { ...process.env, ...env }, input, encoding: 'utf8', maxBuffer: 1 << 30, timeout: 600000 });
+/**
+ * A command, its exit code checked against `allow`. `env` adds to this process's environment,
+ * or with `inherit: false` is the whole of it. `quiet` keeps the command's stderr out of the
+ * error, for a command whose stderr can quote the client-name pattern. `spawn` is spawnSync's
+ * shape, for the tests.
+ */
+export function run(command, args, { cwd, env, input, allow = [0], quiet = false, inherit = true, spawn = spawnSync } = {}) {
+  const r = spawn(command, args, { cwd, env: inherit ? { ...process.env, ...env } : env, input, encoding: 'utf8', maxBuffer: 1 << 30, timeout: 600000 });
   if (r.error || !allow.includes(r.status)) {
-    throw new Error(`${command} ${args[0] ?? ''} ${args[1] ?? ''} failed (exit ${r.status ?? r.error?.code}): ${(r.stderr ?? '').trim().split('\n').slice(-3).join(' / ')}`);
+    const why = quiet ? 'its message is not shown' : (r.stderr ?? '').trim().split('\n').slice(-3).join(' / ');
+    throw new Error(`${command} ${args[0] ?? ''} ${args[1] ?? ''} failed (exit ${r.status ?? r.error?.code}): ${why}`);
   }
   return r;
 }
@@ -183,7 +219,8 @@ function pushRange(root) {
   return has ? ['origin/main..HEAD'] : ['HEAD', '--not', '--remotes'];
 }
 
-function repoName(root) {
+/** docs/docs-map.json's `repo`, committed at HEAD or else in the working tree; null (public) when neither reads. */
+export function repoName(root) {
   for (const read of [() => git(root, ['show', 'HEAD:docs/docs-map.json']).stdout, () => readFileSync(join(root, 'docs/docs-map.json'), 'utf8')]) {
     try {
       return JSON.parse(read()).repo ?? null;
@@ -203,11 +240,19 @@ export function trackedPaths(root, mode) {
 
 /** Paths (--tree, --staged), `<commit> <path>` (--push) or commit ids (--history) the pattern matches. */
 export function nameFindings(root, mode, pattern) {
+  // git's stderr quotes a pattern it cannot compile: it is dropped, and the error is fixed text.
+  const search = (args, opts) => {
+    try {
+      return git(root, args, { ...opts, quiet: true }).stdout;
+    } catch {
+      throw new Error(`git ${args[0]}: ${PATTERN_ERROR}`);
+    }
+  };
   if (mode === 'tree') {
-    const r = git(root, ['grep', '-I', '-i', '-l', '-E', '-f', '-', 'HEAD', '--'], { input: `${pattern}\n`, allow: [0, 1] });
-    return lines(r.stdout).map((path) => path.replace(/^HEAD:/u, ''));
+    const found = search(['grep', '-I', '-i', '-l', '-E', '-f', '-', 'HEAD', '--'], { input: `${pattern}\n`, allow: [0, 1] });
+    return lines(found).map((path) => path.replace(/^HEAD:/u, ''));
   }
-  if (mode === 'history') return lines(git(root, ['log', '--all', '-i', `-G${pattern}`, '--format=%H']).stdout);
+  if (mode === 'history') return lines(search(['log', '--all', '-i', `-G${pattern}`, '--format=%H']));
   const regex = ereToRegExp(pattern);
   const diff = mode === 'staged'
     ? git(root, ['diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--no-textconv']).stdout
@@ -216,22 +261,30 @@ export function nameFindings(root, mode, pattern) {
   return [...new Set(hits.map((hit) => (hit.commit ? `${hit.commit.slice(0, 12)} ${hit.path}` : hit.path)))];
 }
 
-async function download(url) {
+export async function download(url) {
   const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(120000) });
   if (!response.ok) throw new Error(`download ${url}: HTTP ${response.status}`);
   return Buffer.from(await response.arrayBuffer());
 }
-const extract = (archive, into) => run('tar', ['-xzf', archive, '-C', into, 'gitleaks']);
+/** One member of a .tar.gz, by its path inside the archive (zizmor's and gitleaks' sit at the top). */
+export const extractMember = (archive, into, member) => run('tar', ['-xzf', archive, '-C', into, member]);
 
-/** The pinned gitleaks for this machine: cached, checksum-verified, fetched once. The scan and its test share it. */
-export async function gitleaksBinary(env = process.env, home = homedir()) {
-  const asset = gitleaksAsset(process.platform, process.arch);
-  if (!asset) throw new Error(`gitleaks ${GITLEAKS_VERSION} is not pinned for ${process.platform}_${process.arch}`);
-  return ensureGitleaks({ dir: gitleaksCache(env, home), asset, download, extract });
+/**
+ * The pinned gitleaks for this machine: cached, checksum-verified, fetched once. The scan and its
+ * test share it; the tests inject the download, the platform and the CPU.
+ */
+export async function gitleaksBinary(env = process.env, home = homedir(), { fetchBytes = download, extract = extractMember, platform = process.platform, arch = process.arch } = {}) {
+  const asset = gitleaksAsset(platform, arch);
+  if (!asset) throw new Error(`gitleaks ${GITLEAKS_VERSION} is not pinned for ${platform}_${arch}`);
+  return ensureBinary({ dir: gitleaksCache(env, home), asset, download: fetchBytes, extract, binary: 'gitleaks' });
 }
 
-async function gitleaks(root, mode, publicRepo) {
-  const bin = await gitleaksBinary();
+/**
+ * gitleaks' findings for a mode: the public config in a public repository, else the private one.
+ * `binary()` resolves to its path and `spawn` runs it (spawnSync's shape) — the tests inject both.
+ */
+export async function gitleaks(root, mode, publicRepo, { binary = gitleaksBinary, spawn = spawnSync } = {}) {
+  const bin = await binary();
   let target = '';
   if (mode === 'push') target = pushRange(root).join(' ');
   if (mode === 'tree') {
@@ -241,12 +294,13 @@ async function gitleaks(root, mode, publicRepo) {
   // From the kit's own repository root, which the public config's `[extend] path` is read from.
   const config = join(KIT, publicRepo ? 'private-data-public.toml' : 'private-data.toml');
   const args = gitleaksArgs(mode, { config, report: '-', target, source: root });
-  const r = run(bin, args, { cwd: resolve(KIT, '../..'), allow: [0, LEAKS_EXIT] });
+  const r = run(bin, args, { cwd: resolve(KIT, '../..'), allow: [0, LEAKS_EXIT], spawn });
   const start = r.stdout.indexOf('[');
   return start < 0 ? [] : JSON.parse(r.stdout.slice(start));
 }
 
-export async function main(argv, { cwd = process.cwd(), env = process.env, out = console.log } = {}) {
+/** The scan; `home`, `binary` and `spawn` are the tests' (gitleaks' path and its runner). Resolves to the exit code. */
+export async function main(argv, { cwd = process.cwd(), env = process.env, out = console.log, home = homedir(), binary = () => gitleaksBinary(env, home), spawn = spawnSync } = {}) {
   const mode = parseMode(argv);
   if (!mode) {
     out('usage: node scripts/kit/private-data-scan.mjs <--staged|--push|--tree|--history>');
@@ -279,7 +333,7 @@ export async function main(argv, { cwd = process.cwd(), env = process.env, out =
   say(`--${mode} in ${repo ?? 'an unnamed repository'} (${publicRepo ? 'public' : 'private'})`);
   await part('paths', () => pathFindings(trackedPaths(root, mode), publicRepo));
   await part('client names', () => {
-    const source = patternSource({ env, home: homedir(), readFile: (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null), publicRepo });
+    const source = patternSource({ env, home, readFile: (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null), publicRepo });
     if (source.fail) throw new Error(source.fail);
     if (source.skip) {
       out(source.skip);
@@ -287,7 +341,7 @@ export async function main(argv, { cwd = process.cwd(), env = process.env, out =
     }
     return nameFindings(root, mode, source.pattern);
   });
-  await part('gitleaks', async () => findingLines(await gitleaks(root, mode, publicRepo), mode));
+  await part('gitleaks', async () => findingLines(await gitleaks(root, mode, publicRepo, { binary, spawn }), mode));
   say(status === 0 ? 'PASS' : status === 1 ? 'FAIL — remove what is listed (values are never printed)' : 'ERROR — the scan could not finish');
   return status;
 }

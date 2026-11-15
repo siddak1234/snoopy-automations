@@ -3,9 +3,11 @@
 # private-data.toml's secrets, plus personal data — "no pii in public repos ever" (the owner,
 # 2026-11-15). Tests and docs use reserved values only: example.com/.org/.net and the .example,
 # .test and .invalid names, 555-0100 to 555-0199, 192.0.2.0/24, 198.51.100.0/24 and
-# 203.0.113.0/24, made-up names. The placeholder domains allowed below were measured on the
-# public repositories' trees (2026-11-15). `path` is read from the repository root, where the
-# scan runs gitleaks.
+# 203.0.113.0/24, made-up names. A domain anyone can register (company.com, acme.co, x.com) is
+# no placeholder: the few addresses at one that the public repositories' tests and designs
+# already write, and the flows' service accounts, are allowed one by one, exactly as measured on
+# their trees (2026-11-15); a new one uses a reserved name instead. `path` is read from the
+# repository root, where the scan runs gitleaks.
 title = "autom8x private data: secrets and personal data (public repositories)"
 
 [extend]
@@ -17,16 +19,18 @@ description = "An email address outside the reserved, company and placeholder do
 regex = '''[A-Za-z0-9._%+\-]+@(?:[A-Za-z0-9\-]+\.)+[A-Za-z]{2,}'''
 keywords = ["@"]
 [[rules.allowlists]]
-description = "Reserved, company, generated and placeholder domains. Personal mail (gmail.com, googlemail.com, yahoo, outlook.com, hotmail, live.com, icloud.com, me.com, mac.com, aol.com, proton.me, protonmail.com, gmx) is never here."
+description = "Reserved, company and generated domains, and the exact placeholders measured. Personal mail (gmail.com, googlemail.com, yahoo, outlook.com, hotmail, live.com, icloud.com, me.com, mac.com, aol.com, proton.me, protonmail.com, gmx) is never here."
 regexes = [
   '''(?i)@(?:[a-z0-9-]+\.)*example\.(?:com|org|net|co\.uk)$''',
   # A reserved name, and test text that glues a capitalised word straight after one.
   '''@(?:[A-Za-z0-9-]+\.)+(?:example|test|invalid|localhost)(?:[A-Z][A-Za-z]*)?$''',
   '''(?i)@users\.noreply\.github\.com$''',
   '''(?i)@(?:[a-z0-9-]+\.)*autom8x\.ai$''',
-  '''(?i)\.iam\.gserviceaccount\.com$''',
   '''(?i)^noreply@anthropic\.com$''',
-  '''(?i)@(?:company\.com|acme\.co|[a-z]\.(?:com|co|org|net))$''',
+  # The placeholders at registerable domains the public repositories already write, one by one.
+  '''(?i)^(?:a@b\.co|alex@acme\.co|ap@acme\.co|b@c\.com|d@e\.com|support@acme\.co|x@y\.com|you@company\.com)$''',
+  # The flows' service accounts, which name the company's own cloud project, one by one.
+  '''(?i)^(?:candidate-reviewer-v3@autom8x\.iam\.gserviceaccount\.com|candidate-reviewer-v5@autom8x\.iam\.gserviceaccount\.com|example-automation@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v3@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v4@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v5@autom8x\.iam\.gserviceaccount\.com|invoice-check@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v8@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v9@autom8x\.iam\.gserviceaccount\.com)$''',
   # An SSH remote and an image's density suffix, which only look like addresses.
   '''^git@''',
   '''(?i)@\d+x\.(?:png|jpe?g|gif|webp)$''',

@@ -15,8 +15,9 @@ import { test } from 'node:test';
  * digest after both scans and before the tag, and holding the attestation permissions
  * alone; every matrix List's, never typed by hand; every action pinned by SHA;
  * all-green seeing every job; every job but a call held to a time limit; and the nightly, its own
- * workflow calling ci.yml whole, a red night reported by a job that can write issues alone (Round
- * 21 hardening, NIGHT-8). The text is read block by block, with no YAML library.
+ * workflow calling ci.yml whole in the self-repository form (`$/`), a red night reported by a job
+ * that can write issues alone (Round 21 hardening, NIGHT-8). The workflow lint's own rules:
+ * test/workflow-lint.test.ts. The text is read block by block, with no YAML library.
  */
 
 const workflowsRoot = resolve(import.meta.dirname, '..', '.github', 'workflows');
@@ -233,7 +234,7 @@ test('id-token, attestations and packages write are Publish’s alone, and the n
       // GitHub refuses a call whose called jobs ask for more than the caller grants, so the
       // nightly's call to ci.yml grants Publish's; the call runs nothing of its own.
       const call = file === 'nightly.yml' && id === 'ci';
-      if (call) assert.match(block, /^ {4}uses: \.\/\.github\/workflows\/ci\.yml$/mu);
+      if (call) assert.match(block, /^ {4}uses: \$\/\.github\/workflows\/ci\.yml$/mu);
       for (const permission of ['id-token', 'attestations', 'packages']) {
         const writes = new RegExp(`^\\s+${permission}: write$`, 'mu').test(block);
         assert.equal(
@@ -282,8 +283,9 @@ test('every action is pinned by a full commit SHA', () => {
     for (const line of read(file).split('\n')) {
       const uses = /^\s*-?\s*uses:\s*(.*)$/u.exec(line);
       if (!uses) continue;
-      // The nightly's call to ci.yml is this repository's own file at the same commit.
-      if (file === 'nightly.yml' && uses[1] === './.github/workflows/ci.yml') continue;
+      // The nightly's call to ci.yml is this repository's own file at the same commit (`$/`);
+      // a workspace-relative `./` is not pinned, and fails below.
+      if (file === 'nightly.yml' && uses[1] === '$/.github/workflows/ci.yml') continue;
       count += 1;
       assert.match(
         uses[1]!,
@@ -358,7 +360,7 @@ test("the nightly is its own workflow: a schedule calling ci.yml whole, and ci.y
   assert.doesNotMatch(triggers(ci), /^ {2}schedule:/mu);
   assert.deepEqual([...nightlyJobs.keys()], ['ci', 'report']);
   const call = nightlyJobs.get('ci')!;
-  assert.match(call, /^ {4}uses: \.\/\.github\/workflows\/ci\.yml$/mu);
+  assert.match(call, /^ {4}uses: \$\/\.github\/workflows\/ci\.yml$/mu);
   assert.doesNotMatch(call, /^ {4}(with|steps|runs-on):/mu, 'ci.yml whole, as it is');
   // The one secret ci.yml requires, by name: never `secrets: inherit`.
   assert.match(

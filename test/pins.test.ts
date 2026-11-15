@@ -140,11 +140,51 @@ test('Dependabot’s docker entry covers every Dockerfile’s folder, in one gro
   );
 });
 
+// The root package.json and its lock's root entry pin .nvmrc's major as `<major>.x`, as the website's
+// and the app's do. The flows' own package files, the two packages' and the template's keep `>=<major>`:
+// each flow's Dockerfile copies them, so changing them alone would redeploy every flow for a label
+// (scripts/changed-images.mjs, `dockerfileInputs`). They take `<major>.x` with the next real change.
+test("the root package.json declares .nvmrc's major as `<major>.x` and its lock's root entry says the same; every other package names the same major", () => {
+  const major = read('.nvmrc').trim().split('.')[0];
+  const { engines } = JSON.parse(read('package.json')) as { engines: { node: string } };
+  assert.equal(engines.node, `${major}.x`, 'package.json engines');
+  const root = (
+    JSON.parse(read('package-lock.json')) as {
+      packages: Record<string, { engines?: { node?: string } }>;
+    }
+  ).packages[''];
+  assert.equal(root?.engines?.node, `${major}.x`, "package-lock.json's root entry engines");
+  const folders = [
+    'templates/automation',
+    ...['packages', 'automations'].flatMap((parent) =>
+      readdirSync(join(repositoryRoot, parent), { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            existsSync(join(repositoryRoot, parent, entry.name, 'package.json')),
+        )
+        .map((entry) => `${parent}/${entry.name}`),
+    ),
+  ];
+  let declared = 0;
+  for (const folder of folders) {
+    const pkg = JSON.parse(read(`${folder}/package.json`)) as { engines?: { node?: string } };
+    if (pkg.engines?.node === undefined) continue;
+    declared += 1;
+    assert.match(
+      pkg.engines.node,
+      new RegExp(`^(>=)?${major}(\\.x)?$`, 'u'),
+      `${folder}/package.json engines`,
+    );
+  }
+  assert.ok(declared >= 6, `${declared} package.json files declare engines: this test is blind`);
+});
+
 test('.nvmrc names the exact Node release the images ship, every setup-node installs it from the file, and no brief types it', () => {
   const exact = read('.nvmrc').trim();
   assert.match(exact, /^\d+\.\d+\.\d+$/u, `.nvmrc names ${exact}, not one exact release`);
   const { engines } = JSON.parse(read('package.json')) as { engines: { node: string } };
-  assert.equal(engines.node, `>=${exact.split('.')[0]}`, 'its major is the one engines declares');
+  assert.equal(engines.node, `${exact.split('.')[0]}.x`, 'its major is the one engines declares');
   // Moved by hand with the image: a bump of the FROM is red here until `.nvmrc` moves with it.
   const shipped = bases(dockerfiles.map((path) => ({ path, text: read(path) }))).map(
     ([, image]) => /^node:(\d+\.\d+\.\d+)-/u.exec(image)?.[1],

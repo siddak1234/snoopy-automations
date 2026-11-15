@@ -60,7 +60,8 @@ test/architecture.test.ts    the boundary, enforced; every package shipping its 
 test/isolation.test.ts       the engine rule: no automation shares code, files or an image with another
 test/conformance.test.ts     every automation held to the manifests it serves
 tools/n8n/                   n8n on the owner's Mac, to design a flow: never deployed, never in an image
-.githooks/                   pre-commit and pre-push: the kit's private-data scan (npm run hooks:install)
+.githooks/                   pre-commit and pre-push: the kit's private-data scan, then before a push its workflow lint (npm run hooks:install)
+SECURITY.md, LICENSE         a vulnerability is reported privately by email, never in a public issue; no license is granted
 docs/MAP.md                  generated (npm run map): automations, packages, scripts, tests, agents, hooks, records
 ```
 
@@ -912,7 +913,7 @@ customers only as a code flow: export it, and give the export to `/create-flow` 
 
 ```bash
 npm ci --ignore-scripts
-npm run hooks:install # once per clone: the private-data scan on every commit and push
+npm run hooks:install # once per clone: the private-data scan on every commit and push, the workflow lint on every push
 npm run verify        # the whole gate, its steps listed once in CLAUDE.md ("Gates and push");
                       # its last step re-emits docs/repo-facts/snoopy-automations.json with the gate's claim
 npm run facts         # re-emits the facts file without the claim, after adding or removing files
@@ -936,6 +937,16 @@ nightly passes it. A finding, a scan that cannot run or a missing scan refuses t
 or the run. This is the one full statement of when it runs; CLAUDE.md rule 10, ci.yml and the two
 hooks link here.
 
+**The workflow lint.** `node scripts/kit/workflow-lint.mjs` runs zizmor 1.32.0, pinned by sha256,
+offline and with no token, over `.github/workflows/`: before every push (`.githooks/pre-push`, after
+the scan) and in CI's Verify (its "Workflow lint" step, after "No private data"). A finding, a lint
+that cannot run or a missing lint refuses the push or the run; a finding is fixed by its rule, or
+ignored with its reason in zizmor's config file beside the workflows (none yet). The workflows hold
+to it: no `${{ }}` expression is written inside a `run:` script, each value reaching it through the
+step's `env` (template-injection; `test/workflow-lint.test.ts`, with the Verify step), and the
+nightly calls ci.yml as `$/.github/workflows/ci.yml`, GitHub's self-repository form: this
+repository at the running commit (self-repository; `test/workflow-policy.test.ts`).
+
 **The nightly.** `.github/workflows/nightly.yml` runs CI whole on main every night (its `cron`)
 — Verify, and every flow's image built, smoke-tested and scanned
 with that night's advisories — and publishes and deploys nothing: `all-green` accepts Publish's and
@@ -957,6 +968,8 @@ group (`.github/dependabot.yml`) moves them all in one pull request, which needs
 other repositories do; no bot reads it, so when a bump moves the release, that pull request is red
 until `.nvmrc` moves with it.
 
-Node: the release `.nvmrc` names (`nvm use`). Agent sessions read `CLAUDE.md` first. The committed facts file
+Node: the release `.nvmrc` names (`nvm use`); the root `package.json` declares its major as `22.x`, and
+the flows' own, the packages' and the template's keep `>=22` until a real change, since each flow's image copies
+them (`test/pins.test.ts`). Agent sessions read `CLAUDE.md` first. The committed facts file
 is held to the tree by `test/repo-facts.test.ts`: when its counts go stale, run
 `npm run facts`, then `npm run verify`, and commit the file.

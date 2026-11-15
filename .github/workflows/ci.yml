@@ -29,7 +29,9 @@ on:
 # every tracked file: Verify's "No private data" step alone reads it, and
 # it reaches nothing — it is a search pattern, not a credential. A fork's pull
 # request gets no secret, and the kit's scan then fails rather than skip the names
-# (it skips them only for Dependabot). test/workflow-policy.test.ts holds these rules.
+# (it skips them only for Dependabot). test/workflow-policy.test.ts holds these rules. No
+# `${{ }}` expression is written inside a run: script: each value reaches it through the step's
+# env (zizmor's template-injection; test/workflow-lint.test.ts).
 permissions:
   contents: read
 
@@ -122,6 +124,13 @@ jobs:
           CLIENT_DENY_PATTERN: ${{ secrets.CLIENT_DENY_PATTERN }}
         run: node scripts/kit/private-data-scan.mjs --tree
 
+      # The kit's workflow lint (the prevention plan's "zizmor in CI: every workflow declares its
+      # permissions"): zizmor 1.32.0, pinned by sha256, offline and with no token, over
+      # .github/workflows/; exit 1 on a finding, 2 on an error. The pre-push hook runs the same
+      # command. Node built-ins alone, as the scan.
+      - name: Workflow lint
+        run: node scripts/kit/workflow-lint.mjs
+
       # --ignore-scripts: a dependency's install script is arbitrary code running
       # with the build's privileges. Nothing here has a postinstall to lose.
       - name: Install dependencies
@@ -199,10 +208,13 @@ jobs:
           persist-credentials: false
 
       - name: Build ${{ matrix.automation }}, amd64
+        env:
+          AUTOMATION: ${{ matrix.automation }}
+          SHA: ${{ github.sha }}
         run: >-
           docker build --platform linux/amd64
-          --file automations/${{ matrix.automation }}/Dockerfile
-          --tag autom8x-${{ matrix.automation }}:${{ github.sha }} .
+          --file "automations/$AUTOMATION/Dockerfile"
+          --tag "autom8x-$AUTOMATION:$SHA" .
 
       # Starts the final stage, which proves the standalone lock installed a real
       # SDK package rather than leaving a workspace link behind in the image, and
@@ -210,12 +222,13 @@ jobs:
       - name: Smoke-test the packaged service
         env:
           AUTOMATION: ${{ matrix.automation }}
+          SHA: ${{ github.sha }}
         run: |
           container="$AUTOMATION-smoke"
           trap 'docker logs "$container" || true; docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
           docker run --detach --name "$container" \
             --publish 127.0.0.1:18080:8080 \
-            "autom8x-$AUTOMATION:${{ github.sha }}" >/dev/null
+            "autom8x-$AUTOMATION:$SHA" >/dev/null
           for attempt in {1..20}; do
             response="$(curl --fail --silent --show-error http://127.0.0.1:18080/health/live)" && break
             sleep 1
@@ -421,6 +434,7 @@ jobs:
           REFERENCE: ${{ steps.pushed.outputs.reference }}
           DIGEST: ${{ steps.publish.outputs.digest }}
           TAG: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          AUTOMATION: ${{ matrix.automation }}
         run: |
           docker buildx imagetools create --tag "$TAG" "$REFERENCE"
           tagged="$(docker buildx imagetools inspect "$TAG" --format '{{println .Manifest.Digest}}' | head -1)"
@@ -429,7 +443,7 @@ jobs:
             exit 1
           fi
           {
-            echo "### Image published: ${{ matrix.automation }}"
+            echo "### Image published: $AUTOMATION"
             echo
             echo "- \`$REFERENCE\`"
             echo "- \`$TAG\` resolves to the same index digest"

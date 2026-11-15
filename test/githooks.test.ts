@@ -16,10 +16,10 @@ import { test } from 'node:test';
 /**
  * The committed git hooks (CLAUDE.md rule 10): `npm run hooks:install` points git at `.githooks/`,
  * whose pre-commit hook runs the kit's private-data scan on the staged content and whose pre-push
- * hook runs it on the commits since origin/main, to any remote, with git's ref lines on its stdin. A
- * finding, a scan that cannot run or a missing scan refuses either one. Driven as git drives them,
- * in a throwaway repository whose scan is a stub that notes its arguments and stdin and exits
- * FAKE_SCAN (0, clean, by default).
+ * hook runs it on the commits since origin/main, to any remote, with git's ref lines on its stdin,
+ * then the kit's workflow lint. A finding, a scan or lint that cannot run or a missing one refuses
+ * either hook. Driven as git drives them, in a throwaway repository whose scan and lint are stubs
+ * that note their arguments and stdin and exit FAKE_SCAN and FAKE_LINT (0, clean, by default).
  */
 
 const root = resolve(import.meta.dirname, '..');
@@ -44,11 +44,16 @@ function fixture() {
   const base = mkdtempSync(join(tmpdir(), 'githooks-'));
   const repo = join(base, 'repo');
   const log = join(base, 'scan.log');
+  const lintLog = join(base, 'lint.log');
   mkdirSync(repo);
   git(repo, 'init', '-q');
   write(
     join(repo, 'scripts/kit/private-data-scan.mjs'),
     `import { appendFileSync, readFileSync } from 'node:fs';\nconst input = readFileSync(0, 'utf8');\nappendFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2), input }) + '\\n');\nprocess.exit(Number(process.env.FAKE_SCAN ?? 0));\n`,
+  );
+  write(
+    join(repo, 'scripts/kit/workflow-lint.mjs'),
+    `import { appendFileSync, readFileSync } from 'node:fs';\nconst input = readFileSync(0, 'utf8');\nappendFileSync(${JSON.stringify(lintLog)}, JSON.stringify({ args: process.argv.slice(2), input }) + '\\n');\nprocess.exit(Number(process.env.FAKE_LINT ?? 0));\n`,
   );
   write(join(repo, 'README.md'), '# one\n');
   git(repo, 'add', '.');
@@ -63,13 +68,24 @@ function fixture() {
             .filter(Boolean)
             .map((line) => JSON.parse(line))
         : [],
-    reset: () => rmSync(log, { force: true }),
+    lints: (): { args: string[]; input: string }[] =>
+      existsSync(lintLog)
+        ? readFileSync(lintLog, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
+        : [],
+    reset: () => {
+      rmSync(log, { force: true });
+      rmSync(lintLog, { force: true });
+    },
   };
 }
 
 function cleanEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.FAKE_SCAN;
+  delete env.FAKE_LINT;
   return { ...env, ...extra };
 }
 
@@ -173,4 +189,44 @@ test("the pre-push hook scans the commits since origin/main, given git's ref lin
   const missing = push(repo, 'https://github.com/other/elsewhere.git', refLine);
   assert.equal(missing.exit, 1, 'a missing scan refuses the push');
   assert.match(missing.stderr, /private-data scan is missing/u);
+});
+
+test('the pre-push hook runs the workflow lint after a clean scan, on a push to any remote, and refuses on a finding, a failure or a missing lint', (t) => {
+  const { base, repo, scans, lints, reset } = fixture();
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const sha = git(repo, 'rev-parse', 'HEAD');
+  const refLine = `refs/heads/main ${sha} refs/heads/main ${ZERO}\n`;
+
+  for (const url of [
+    'https://github.com/siddak1234/snoopy-automations.git',
+    'https://github.com/other/elsewhere.git',
+  ]) {
+    const clean = push(repo, url, refLine);
+    assert.equal(clean.exit, 0, clean.stderr);
+    assert.deepEqual(lints(), [{ args: [], input: '' }], `the lint runs once on a push to ${url}`);
+    reset();
+
+    const found = push(repo, url, refLine, { FAKE_LINT: '1' });
+    assert.equal(found.exit, 1, `a finding refuses a push to ${url}`);
+    assert.match(found.stderr, /the workflow lint found a finding/u);
+    reset();
+  }
+  const broken = push(repo, 'https://github.com/other/elsewhere.git', refLine, { FAKE_LINT: '2' });
+  assert.equal(broken.exit, 1, 'a lint that cannot run never fails open');
+  assert.match(broken.stderr, /workflow lint could not run \(exit 2\)/u);
+  reset();
+
+  const scanned = push(repo, 'https://github.com/other/elsewhere.git', refLine, { FAKE_SCAN: '1' });
+  assert.equal(scanned.exit, 1);
+  assert.equal(scans().length, 1);
+  assert.deepEqual(
+    lints(),
+    [],
+    'the scan runs first, and a finding stops the hook before the lint',
+  );
+
+  rmSync(join(repo, 'scripts/kit/workflow-lint.mjs'));
+  const missing = push(repo, 'https://github.com/other/elsewhere.git', refLine);
+  assert.equal(missing.exit, 1, 'a missing lint refuses the push');
+  assert.match(missing.stderr, /workflow lint is missing/u);
 });
