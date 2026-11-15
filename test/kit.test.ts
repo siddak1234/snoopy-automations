@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -56,6 +64,68 @@ test('.claude/settings.json runs the three kit hooks', () => {
   assert.deepEqual(entries('SessionStart'), [hook('session-start.mjs', 10)]);
   assert.deepEqual(entries('Stop'), [hook('stop-check.mjs', 10)]);
   assert.deepEqual(entries('SubagentStop'), [hook('stop-check.mjs', 10)]);
+});
+
+/**
+ * `/create-flow` stage 4 runs the kit's `build-round` (carried byte for byte) with the arguments
+ * its SKILL.md names, and they are the ones the carried script takes: `session`, which replaced
+ * `runDir` (BUILD-PLAN 30.17.2; briefs, summaries and verdicts travel inline). The script runs as
+ * the Workflow tool runs it, an async function body, with stand-in agents; the design finds the
+ * task is not a build, so no lane runs and the hygiene stage reads that session. No file of the
+ * skill, nor the research workflows, names a run folder.
+ */
+test('/create-flow calls build-round with { session, task, lanes }, the arguments it takes', async () => {
+  const skillRoot = join(repositoryRoot, '.claude/skills/create-flow');
+  const skill = readFileSync(join(skillRoot, 'SKILL.md'), 'utf8');
+  const call = /`build-round` workflow[\s\S]*?with `(\{[^`]*\})`/u.exec(skill)?.[1] ?? '';
+  const keys = [...call.replace(/\[[^\]]*\]/gu, '').matchAll(/(\w+)\s*(?=[,:}])/gu)].map(
+    (m) => m[1]!,
+  );
+  assert.deepEqual(keys, ['session', 'task', 'lanes'], `SKILL.md's call: ${call}`);
+  const session = '/scratch/project/session';
+  const given: Record<string, unknown> = {
+    session,
+    task: 'a flow',
+    lanes: [{ repo: 'snoopy-automations', clone: '/scratch/clones/snoopy-automations' }],
+    runDir: '/scratch/run',
+  };
+  const prompts: string[] = [];
+  const agent = async (prompt: string, opts: { label: string }) => {
+    prompts.push(prompt);
+    return opts.label === 'design' ? { build: false, plan: 'not a build', briefs: [] } : 'clean';
+  };
+  const source = readFileSync(join(repositoryRoot, '.claude/workflows/build-round.js'), 'utf8');
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  const body = new AsyncFunction(
+    'args',
+    'agent',
+    'pipeline',
+    'phase',
+    'log',
+    source.replace('export const meta', 'const meta'),
+  );
+  const runWith = (args: unknown) =>
+    body(
+      args,
+      agent,
+      async () => [],
+      () => {},
+      () => {},
+    );
+  const result = await runWith(Object.fromEntries(keys.map((key) => [key, given[key]])));
+  assert.deepEqual(result.gaps, [
+    'design: NOT-A-BUILD (not a build); the task is not a build, so no lane ran',
+  ]);
+  assert.ok(prompts.at(-1)!.includes(`looseFiles('${session}')`), 'hygiene reads the session');
+  await assert.rejects(runWith({ ...given, session: undefined }), /replaced runDir/u);
+  const files = [
+    ...readdirSync(skillRoot, { recursive: true, encoding: 'utf8' }).map((f) => join(skillRoot, f)),
+    ...['flow-research.js', 'flow-research-tables.js', 'flow-research-integrations.js'].map((f) =>
+      join(repositoryRoot, '.claude/workflows', f),
+    ),
+  ].filter((f) => statSync(f).isFile());
+  for (const file of files)
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /<runDir>|\$\{runDir\}|\{ runDir\b/u, file);
 });
 
 /**

@@ -1,20 +1,22 @@
 # Brief — snoopy-automations lane: <the flow> (Round <n>)
 
 The fixed parts of a lane's brief (`/create-flow` v4: one builder and one review a pull request);
-the `build-round` workflow's design stage fills the angle brackets and writes the Build section, and
-the workflow hands the brief to its lane and its reviewer by path, at
-`<runDir>/brief-snoopy-automations.md`. A new vendor's provider
+the `build-round` workflow's design stage fills the angle brackets, writes the Build section and
+returns the brief in its answer, and the workflow puts it inline in its lane's prompt and its
+reviewer's: no brief, plan or summary file (the owner, 2026-11-14; BUILD-PLAN 30.17.2). A new vendor's provider
 file is the session's own `snoopy-backend` lane before it (order.md, step 1): one
 `providers/<id>.json`, its test and the records, no schema and no client change. An SDK change is
 its own lane and pull request from this brief, naming only `packages/automation-sdk/`, built and
 merged before the flow's lane starts (order.md, step 2).
 
-Clone: `<scratch>/clones/snoopy-automations`, branch `round-<n>/<topic>` from `origin/main` at
+Clone: `<scratch>/clones/snoopy-automations`, the clone `/create-flow` wrote the spec in, and every
+file the lane writes goes inside it; branch `round-<n>/<topic>` from `origin/main` at
 `<sha>`. Node: the release `.nvmrc` names, in every shell, after `cd` into the clone (`export PATH=$HOME/.nvm/versions/node/v$(cat .nvmrc)/bin:$PATH`; outside the clone `.nvmrc` is not found).
 
 Read first: CLAUDE.md, docs/MAP.md, the `new-automation-version` skill; then the spec,
 `automations/<name>/README.md`, the words list and the research brief beside it
-(`automations/<name>/research.md`), and the sections of `<runDir>/plan.md` this lane builds. Grep a file over 100 KB; never read it whole.
+(`automations/<name>/research.md`); what this lane builds of the design's plan is in the Build
+section below, never in a file. Grep a file over 100 KB; never read it whole.
 
 ## The contract
 
@@ -35,7 +37,7 @@ Write `manifests/<name>.v1.json` from the spec's sections 1–3 and 5–7, then 
 (each risky call through `settle`, each failure through `failed` in section 8's words), the prompts
 and the tests; `automations/<id>/test/drill.test.ts` gets what a good run reads (README.md, "A new flow's standards").
 
-<What to build, from the spec, the words list and the plan; the files it may open; anything the
+<What to build, from the spec, the words list and the plan's parts for this lane, written out here; the files it may open; anything the
 plan leaves open is chosen by the nearest precedent in this repository and named in the summary —
 a precedent of code, never a domain fact: a domain fact not in the spec or research.md is a
 finding, never chosen.>
@@ -83,6 +85,6 @@ always release. On the committed tree: `npm ci --ignore-scripts`, `npm run verif
 `npm audit --omit=dev --audit-level=high` (the provider file's lane: `npm ci`, `npm run verify`).
 
 Commit messages end with the attribution line the `builder` agent names. Do not push: the session or
-the workflow's land stage does. Stop every process you started. Summary (2 KB or less) at
-`<runDir>/lane-snoopy-automations.summary.md`: commits, files, tests with their bite proofs, gate
-counts, findings against the contract or the spec, leftovers.
+the workflow's land stage does. Stop every process you started. Return the summary (2 KB or less)
+in the reply, never in a file: commits, files, tests with their bite proofs, gate counts, findings
+against the contract or the spec, leftovers.

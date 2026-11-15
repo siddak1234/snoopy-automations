@@ -2,7 +2,8 @@
 // SessionStart hook (STANDARD (h)): 15 lines or fewer on stdout, added to the
 // session's context. Git state from local refs only (no fetch): repo, branch,
 // ahead/behind origin/main, dirty count, worktrees, stashes; then the quick
-// hygiene facts (lib/quick-hygiene.mjs). Facts only, no thresholds; every probe
+// hygiene facts (lib/quick-hygiene.mjs), with the count of loose files in this
+// project's session scratchpads (BUILD-PLAN 30.17). Facts only, no thresholds; every probe
 // has a 1 s timeout; any error of its own exits 0 with what it has.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -36,7 +37,7 @@ export function gitLines(cwd) {
   ];
 }
 
-export function sessionLines(cwd, summary = quickSummary) {
+export function sessionLines(cwd, summary = (dir) => quickSummary({ cwd: dir })) {
   let lines;
   try {
     lines = gitLines(cwd);
@@ -44,7 +45,7 @@ export function sessionLines(cwd, summary = quickSummary) {
     lines = [];
   }
   try {
-    lines.push(...summary());
+    lines.push(...summary(cwd));
   } catch {
     // a probe failed; report what there is
   }

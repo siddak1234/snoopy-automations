@@ -74,7 +74,8 @@
 - [scripts/audit-doc-references.mjs](../scripts/audit-doc-references.mjs): Every file path this repository's documents name, and whether it exists: no
 - [scripts/changed-images.mjs](../scripts/changed-images.mjs): The flows whose image a pull request builds (Round 21, R5): CI's List job runs
 - [scripts/kit/check-docs.mjs](../scripts/kit/check-docs.mjs): D, docs always updated (STANDARD (e)): `npm run check:docs` reads
-- [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
+- [scripts/kit/guard-cases.test.mjs](../scripts/kit/guard-cases.test.mjs): The guard's tests (STANDARD (h) rows 1–10), imported by kit.test.mjs, so every repository's
+- [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). The guard's cases run from
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
 - [scripts/live-eval.ts](../scripts/live-eval.ts): `npm run live-eval -- templateId [--record]` (Round 21, Stage 2, the owner's Q4): the command the
 - [scripts/live-eval/client.ts](../scripts/live-eval/client.ts): The live platform as `npm run live-eval` reaches it (Round 21, Stage 2, the owner's Q4): the
@@ -93,10 +94,10 @@
 
 - skill `create-flow`: Use when the owner or a developer brings an idea for a new flow, in any form. One command from the idea to a live flow, reading only this repository - the idea… ([.claude/skills/create-flow/SKILL.md](../.claude/skills/create-flow/SKILL.md))
 - skill `new-automation-version`: Use when adding a new automation, or a new manifest version of an existing one, in snoopy-automations. Walks the template or the existing folder, the manifest,… ([.claude/skills/new-automation-version/SKILL.md](../.claude/skills/new-automation-version/SKILL.md))
-- agent `builder`: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns a leftovers list and the path of a summary… ([.claude/agents/builder.md](../.claude/agents/builder.md))
+- agent `builder`: Builds one lane from its brief in a scratch clone, heavy steps under the gate lock, docs in the same commit. Returns its summary (2 KB or less) and leftovers l… ([.claude/agents/builder.md](../.claude/agents/builder.md))
 - agent `explorer`: Read-only search. Use to find where something lives or is described before reading or editing; returns path:line findings and what was not found. Never edits. ([.claude/agents/explorer.md](../.claude/agents/explorer.md))
 - agent `researcher`: Researches one lens of a flow idea on the web and in the given clones, read-only. Every finding is a URL, an exact quote and a source tier; "not found" is a va… ([.claude/agents/researcher.md](../.claude/agents/researcher.md))
-- agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS, FAIL or UNKNOWN verdict with 10 findin… ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))
+- agent `reviewer`: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); returns a PASS, FAIL or UNKNOWN verdict with 10 findi… ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md))
 - hook `PreToolUse` (`Bash|Write|Edit|NotebookEdit|Artifact`): `guard.mjs`
 - hook `SessionStart`: `session-start.mjs`
 - hook `Stop`: `stop-check.mjs`

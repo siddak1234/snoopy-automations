@@ -1,26 +1,29 @@
 // autom8x-kit v1 — canonical: snoopy-backend/.claude/hooks/guard.mjs
-// PreToolUse guard (STANDARD (h), rows 1–9). Blocks, with exit 2 and a one-line
+// PreToolUse guard (STANDARD (h), rows 1–10). Blocks, with exit 2 and a one-line
 // reason naming the allowed alternative, only the exact patterns its table names;
 // row 9 never blocks: it asks the owner (stdout `permissionDecision: "ask"`, exit 0)
 // before a write outside the scratch root and a project's memory, a Bash write into
 // ~/Downloads, ~/Desktop, ~/Documents or iCloud Drive, or an Artifact publish or delete.
-// Rows 1–5 decide first: a block wins over an ask, in the same part of a command or another.
-// Anything it cannot read, including its own errors, exits 0 (fail open).
-// `decide(input, env)` is the whole policy and runs nothing: the only process it
-// may start is `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target.
+// Row 10 blocks a write inside the scratch root that lands in no repository copy and no
+// session's docker-config (lib/repo-copy.mjs; the owner, 2026-11-14).
+// The blocks (rows 1–5 and 10) decide first: a block wins over an ask, in the same part of a
+// command or another. Anything it cannot read, including its own errors, exits 0 (fail open).
+// `decide(input, env)` is the whole policy and runs nothing: the only processes it may start
+// are `git rev-parse --show-toplevel` (1 s) for an `rm -rf` target and row 10's git reads.
 // Shell text is tokenised (lib/shell-words.mjs) with quotes respected, split on
 // && || ; | & and newlines, heredoc bodies skipped, `cd` tracked per part and wrappers
 // (`perl -e '… exec @ARGV'`, caffeinate, timeout, env, sudo, bash -c) unwrapped. A variable
 // the same text sets (`NAME=value`, `export NAME=value`) is read in its later words, HOME too;
-// a path still naming an unknown one is never resolved against the cwd: row 9 does not ask on
-// it, and row 2 still refuses an `rm -rf` of it.
-// Cases: cases.json, run by scripts/kit/kit.test.mjs.
+// a path still naming an unknown one is never resolved against the cwd: rows 9 and 10 do not
+// act on it, and row 2 still refuses an `rm -rf` of it.
+// Cases: cases.json, run by scripts/kit/guard-cases.test.mjs.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scratchRoot } from './lib/quick-hygiene.mjs';
+import { makeRowTen, variants } from './lib/repo-copy.mjs';
 import { tokenize } from './lib/shell-words.mjs';
 
 const ALLOW = Object.freeze({ exit: 0, reason: '' });
@@ -28,8 +31,9 @@ const REASONS = {
   1: 'git push --no-verify (or core.hooksPath) skips the pre-push gate — make the gate green and push without it',
   2: 'rm -rf outside this repo, /tmp and the scratch root (or on /, ~, $HOME, an unexpanded $VAR) — name a path inside one of them',
   3: 'install/build/test under ~/Desktop or iCloud Drive — run it in a scratch clone under /private/tmp',
-  4: 'writing into iCloud Drive (~/Library/Mobile Documents) — write into the repo or the scratch folder',
+  4: 'writing into iCloud Drive (~/Library/Mobile Documents) — write inside a repository copy in the scratch folder',
   5: 'npm run hygiene --execute changes production hosts — the owner runs it; --clean prints the commands',
+  10: 'a new file in the scratch root outside a repository copy, unasked (the owner, 2026-11-14: "No random files unless explicitly asked for") — answer in the reply; write only inside a repository copy (a clone with an origin) or Docker\'s settings in <session scratchpad>/docker-config',
 };
 const block = (row, detail) => ({ exit: 2, row, reason: `guard #${row}: ${REASONS[row]}${detail ? ` (${detail})` : ''}` });
 // Row 9, the owner's rule of 2026-11-06, in the words the owner sees in the prompt.
@@ -39,8 +43,6 @@ const ask = (detail) => ({ exit: 0, ask: true, row: 9, reason: `${OUTSIDE} guard
 const base = (word) => String(word ?? '').split('/').pop();
 const strictlyUnder = (path, root) => !!root && path.startsWith(`${root.replace(/\/+$/u, '')}/`);
 const within = (path, root) => path === root || strictlyUnder(path, root);
-// macOS: /tmp, /var and /etc are links into /private.
-const variants = (p) => (/^\/(?:tmp|var|etc)(?:\/|$)/u.test(p) ? [p, `/private${p}`] : [p]);
 
 // A shell assignment, `NAME=value`, alone or after export/declare/local/readonly/typeset: the
 // later words of the same command text read its value (2026-11-08: row 9 had asked the owner 27
@@ -232,7 +234,14 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
       .find((p) => p && ctx.owned.some((zone) => inZone(p, zone)));
     return owned ? ask(`Bash writes ${owned}`) : nested;
   };
-  if (!cmd) return asking();
+  // Row 10, after rows 1–5: row 9's targets but rm's and mv's sources (a removal stays allowed)
+  // inside the scratch root land in a repository copy or a docker-config; an unknown one fails open.
+  const tenth = () => {
+    const made = ['rm', 'mv'].includes(b) ? writes.filter((t) => typeof t === 'string' && t && t !== '-') : rowNineWrites(b, args, writes);
+    const refused = made.filter((t) => !/[$`]/u.test(t)).map((t) => ctx.abs(t, cwd)).find((p) => p && !ctx.rowTen.allowed(p));
+    return refused ? block(10, refused) : asking();
+  };
+  if (!cmd) return tenth();
   if (b === 'git' && pushBypass(args)) return block(1);
   if (b === 'rm') {
     let recursive = false;
@@ -269,7 +278,7 @@ function judgeCommand(words, redirects, cwd, ctx, depth) {
   const execute = args.some((a) => /^--execute(?:=|$)/u.test(a));
   if (execute && b === 'npm' && ['run', 'run-script'].includes(subcommand(args, NPM_VALUED).sub) && args.includes('hygiene')) return block(5);
   if (execute && b === 'node' && args.some((a) => /(?:^|\/)hygiene\.mjs$/u.test(a))) return block(5);
-  return asking();
+  return tenth();
 }
 
 /** Every simple command in `src`, in order, with the cwd `cd` leaves it in: a block, else the first ask. */
@@ -325,9 +334,11 @@ export function decide(input, env = process.env) {
   try {
     if (!input || typeof input !== 'object') return ALLOW;
     const home = (env.HOME || homedir()).replace(/\/+$/u, '');
+    const scratch = env.SCRATCH || scratchRoot();
     const ctx = {
       home,
-      scratch: env.SCRATCH || scratchRoot(),
+      scratch,
+      rowTen: makeRowTen({ scratch }),
       desktop: `${home}/Desktop`,
       icloud: `${home}/Library/Mobile Documents`,
       owned: ['Downloads', 'Desktop', 'Documents', 'Library/Mobile Documents'].map((d) => `${home}/${d}`),
@@ -350,10 +361,11 @@ export function decide(input, env = process.env) {
       if (!p) return ALLOW;
       const forms = variants(p.toLowerCase());
       if (forms.some((v) => within(v, ctx.icloud.toLowerCase()))) return block(4);
-      // Row 9: files go in the scratch root (sessions' scratchpads and their clones) or a project's memory.
+      if (!ctx.rowTen.allowed(p)) return block(10, p);
+      // Row 9: files go in the scratch root (by row 10, its repository copies and docker-config folders) or a project's memory.
       const escaped = home.toLowerCase().replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
       const memory = new RegExp(`^${escaped}/\\.claude/projects/[^/]+/memory/`, 'u');
-      return forms.some((v) => strictlyUnder(v, ctx.scratch.toLowerCase()) || memory.test(v)) ? ALLOW : ask(`${tool} ${p}`);
+      return ctx.rowTen.inside(p) || forms.some((v) => memory.test(v)) ? ALLOW : ask(`${tool} ${p}`);
     }
     // Row 9: an Artifact call publishes when it names no action.
     if (tool === 'Artifact') {

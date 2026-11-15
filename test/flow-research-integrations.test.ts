@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 import {
   type Any,
+  at,
   finding,
   lensOut,
   BRIEF,
@@ -75,7 +75,7 @@ test('a community report: kept for a practice line, never for a price, a limit o
 test('first to build: kept on confirmed ids, else "a person decides" and a gap', async () => {
   const ok = await run(normal);
   assert.deepEqual(ok.data.brief.firstToBuild, BRIEF().firstToBuild);
-  const { data, runDir, result } = await run(
+  const { data, clone, result } = await run(
     normalWith((prompt) => {
       const out = skepticSays()(prompt);
       for (const v of out.verdicts) if (v.id === 'integration-1-1') v.verdict = 'not_on_page';
@@ -88,8 +88,8 @@ test('first to build: kept on confirmed ids, else "a person decides" and a gap',
       'firstToBuild: "QuickBooks, because most firms use it" — a cite was not confirmed (integration-1-1); dropped',
     ),
   );
-  assert.equal(render(runDir, result).code, 0);
-  const md = readFileSync(join(runDir, 'research.md'), 'utf8');
+  assert.equal(render(clone, result).code, 0);
+  const md = readFileSync(at(clone).md, 'utf8');
   assert.ok(md.includes('\nFirst to build: a person decides\n'), 'shown to the owner');
 });
 
@@ -106,7 +106,7 @@ test("the synthesis's integration columns are the rendered table's, in order", a
 
 test("research.json keeps adoption's ranking; a row only on a confirmed adoption line", async () => {
   // Every integration-2 line fails: its one finding is not on its page.
-  const { data, runDir, result } = await run((label, attempt, prompt, dir) => {
+  const { data, clone, result } = await run((label, attempt, prompt, dir) => {
     if (label === 'synthesis') {
       const brief = BRIEF();
       brief.integrations.push(
@@ -127,8 +127,8 @@ test("research.json keeps adoption's ranking; a row only on a confirmed adoption
   });
   assert.deepEqual(data.integrations, RANKED);
   assert.ok(!data.brief.integrations.some((l: Any) => l.integration === 'integration-2'));
-  assert.equal(render(runDir, result).code, 0);
-  const md = readFileSync(join(runDir, 'research.md'), 'utf8');
+  assert.equal(render(clone, result).code, 0);
+  const md = readFileSync(at(clone).md, 'utf8');
   assert.match(md, /\n\| QuickBooks \| most firms use it \[adoption-1\] \| .* \| quickbooks \|\n/u);
   assert.ok(!md.includes('| Xero'), 'no confirmed adoption line: no row');
   assert.ok(md.split('## Gaps')[1]!.includes('\n- Xero: ranked by adoption, not confirmed\n'));
@@ -179,7 +179,7 @@ test('the community-report rule is in the researcher and the skeptic prompts', a
 });
 
 test("the synthesis keys each line by adoption's ranked ids: another name is a gap, never a row", async () => {
-  const { data, calls, runDir, result } = await run((label, attempt, prompt, dir) => {
+  const { data, calls, clone, result } = await run((label, attempt, prompt, dir) => {
     if (label !== 'synthesis') return normal(label, attempt, prompt, dir);
     const brief = BRIEF();
     brief.integrations.push({
@@ -198,8 +198,8 @@ test("the synthesis keys each line by adoption's ranked ids: another name is a g
     data.gaps.includes('integrations: "Epic Systems, api: FHIR R4" — not a ranked id; dropped'),
   );
   assert.ok(!data.brief.integrations.some((l: Any) => l.integration === 'Epic Systems'));
-  assert.equal(render(runDir, result).code, 0);
-  const md = readFileSync(join(runDir, 'research.md'), 'utf8');
+  assert.equal(render(clone, result).code, 0);
+  const md = readFileSync(at(clone).md, 'utf8');
   const table = md.split('## Integrations')[1]!.split('\n\nFirst to build')[0]!;
   assert.deepEqual(
     table
@@ -244,7 +244,7 @@ for (const child of ['flow-research-integrations.js', 'flow-research-tables.js']
     ]);
     assert.match(r.result.stopped, /^a step threw \(unreadable scriptPath /u);
     assert.ok(r.result.gaps.some((g: string) => g.startsWith('the run: a step threw (unreadable')));
-    assert.equal(r.result.research, join(r.runDir, 'research.json'), 'what it has is written');
+    assert.equal(r.result.research, at(r.clone).json, 'what it has is written');
     assert.deepEqual(r.data.gaps, r.result.gaps);
-    assert.equal(render(r.runDir, r.result).code, 0);
+    assert.equal(render(r.clone, r.result).code, 0);
   });

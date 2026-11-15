@@ -1,6 +1,6 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/kit.test.mjs
-// The kit's own tests (node:test, Node built-ins only). Every cases.json row runs
-// through decide() and through the spawned guard CLI (under 1 s each);
+// The kit's own tests (node:test, Node built-ins only). The guard's cases run from
+// guard-cases.test.mjs, imported here, so every runner of this file runs them too;
 // quick-hygiene runs against fake readers; stop-check always exits 0; check-docs
 // meets every fail and pass case of STANDARD (e) and the --map-only line limits;
 // map --check goes stale. Temp git repos live under mkdtemp(<os tmpdir>/autom8x-kit-)
@@ -9,48 +9,31 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { decide } from '../../.claude/hooks/guard.mjs';
-import { makeProbes, scratchRoot } from '../../.claude/hooks/lib/quick-hygiene.mjs';
+import { makeProbes } from '../../.claude/hooks/lib/quick-hygiene.mjs';
 import { sessionLines } from '../../.claude/hooks/session-start.mjs';
-import { stopCheck } from '../../.claude/hooks/stop-check.mjs';
+import { stopCheck, userMessage } from '../../.claude/hooks/stop-check.mjs';
 import { matches } from './check-docs.mjs';
+import { GIT, GIT_REPO, outsideGitRepo, quietEnv, withEnv } from './guard-cases.test.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const at = (path) => join(ROOT, path);
 export const KIT_FILES = [
-  '.claude/hooks/guard.mjs', '.claude/hooks/session-start.mjs', '.claude/hooks/stop-check.mjs', '.claude/hooks/lib/quick-hygiene.mjs', '.claude/hooks/lib/shell-words.mjs', '.claude/hooks/cases.json',
+  '.claude/hooks/guard.mjs', '.claude/hooks/session-start.mjs', '.claude/hooks/stop-check.mjs', '.claude/hooks/lib/quick-hygiene.mjs', '.claude/hooks/lib/shell-words.mjs',
+  '.claude/hooks/lib/repo-copy.mjs', '.claude/hooks/cases.json',
   '.claude/agents/explorer.md', '.claude/agents/reviewer.md', '.claude/agents/builder.md', '.claude/agents/researcher.md',
-  'scripts/kit/check-docs.mjs', 'scripts/kit/map.mjs', 'scripts/kit/kit.test.mjs',
+  'scripts/kit/check-docs.mjs', 'scripts/kit/map.mjs', 'scripts/kit/kit.test.mjs', 'scripts/kit/guard-cases.test.mjs',
 ];
 
 let TMP;
 before(() => (TMP = mkdtempSync(join(tmpdir(), 'autom8x-kit-'))));
 after(() => rmSync(TMP, { recursive: true, force: true }));
 
-// git's own list of its repository variables, which git exports to a hook: under a linked worktree's pre-push they sent the
-// scratch repos' git into the pushed repository (snoopy-backend SYSTEM-MANIFEST §12.1 #342), so no other child here is given them.
-const GIT_REPO = execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' }).trim().split('\n');
-// A child's environment without the hook variables of whatever session runs the tests, nor git's repository variables.
-const quietEnv = (extra = {}) => {
-  const env = { ...process.env, ...extra };
-  for (const key of ['CLAUDE_PROJECT_DIR', ...GIT_REPO]) delete env[key];
-  return env;
-};
-// `run` with process.env changed by `vars` (undefined deletes one), then put back. Kit code run in this process (the
-// guard's decide(), session-start's sessionLines) spawns git with this process's own environment, so it runs outsideGitRepo.
-function withEnv(vars, run) {
-  const was = Object.fromEntries(Object.keys(vars).map((key) => [key, process.env[key]]));
-  const put = (pairs) => Object.entries(pairs).forEach(([key, value]) => (value === undefined ? delete process.env[key] : (process.env[key] = value)));
-  put(vars); try { return run(); } finally { put(was); }
-}
-const outsideGitRepo = (run) => withEnv(Object.fromEntries(GIT_REPO.map((key) => [key, undefined])), run);
 const node = (script, args, opts = {}) =>
   spawnSync(process.execPath, [at(script), ...args], { encoding: 'utf8', timeout: 30000, cwd: TMP, env: quietEnv(), ...opts });
-const GIT = ['-c', 'user.name=kit', '-c', 'user.email=kit@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
 const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv() }).trim();
 function write(dir, files) {
   for (const [path, text] of Object.entries(files)) {
@@ -75,68 +58,6 @@ function commit(dir, files, message = 'change', author) {
 }
 const DEPENDABOT = 'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>';
 const linesOf = (n) => `${Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n')}\n`;
-
-describe('guard (STANDARD (h) rows 1–9)', () => {
-  const cases = JSON.parse(readFileSync(at('.claude/hooks/cases.json'), 'utf8')).filter((row) => typeof row === 'object');
-  const values = { HOME: homedir(), SCRATCH: scratchRoot(), TMP_SCRATCH: scratchRoot().replace(/^\/private(?=\/tmp\/)/u, ''), REPO: '' };
-  const fill = (v) =>
-    typeof v === 'string'
-      ? v.replace(/\$\{(HOME|SCRATCH|TMP_SCRATCH|REPO)\}/gu, (_, k) => values[k])
-      : Array.isArray(v)
-        ? v.map(fill)
-        : v && typeof v === 'object'
-          ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]))
-          : v;
-  before(() => (values.REPO = repo({ 'a.txt': 'a\n' })));
-
-  test('decide() fails open on an error of its own', () => {
-    const input = { tool_name: 'Bash', tool_input: { command: 'rm -rf /etc/autom8x-x' }, cwd: '/' };
-    const boom = () => { throw new Error('boom'); };
-    assert.equal(decide(input, { HOME: values.HOME, toplevel: () => null }).exit, 2);
-    assert.equal(decide(input, { HOME: values.HOME, toplevel: boom }).exit, 0);
-  });
-
-  // The repository root as an allowed place, judged the same on every OS: a temp repo
-  // would sit under /tmp on Linux, which is allowed on its own.
-  test('rm -rf inside the git toplevel passes; leaving it, or a sibling sharing its prefix, is blocked', () => {
-    const rm = (command) => decide({ tool_name: 'Bash', tool_input: { command }, cwd: '/srv/autom8x-repo/app' }, { HOME: values.HOME, toplevel: () => '/srv/autom8x-repo' }).exit;
-    assert.deepEqual(['rm -rf node_modules', 'rm -rf ../dist', 'rm -rf ../../', 'rm -rf /srv/autom8x-repo-other'].map(rm), [0, 0, 2, 2]);
-  });
-
-  // Row 3 reads the package.json script an `npm run` names, where it runs, only in the zone.
-  test('an npm script whose own text runs eas build is a build on the Desktop; another script is not', () => {
-    const home = join(TMP, 'home');
-    const app = join(home, 'Desktop/app');
-    write(app, { 'package.json': JSON.stringify({ scripts: { ship: 'npx eas-cli@27.2.0 build --platform ios', lint: 'expo lint' } }) });
-    const run = (command) => decide({ tool_name: 'Bash', tool_input: { command }, cwd: app }, { HOME: home }).exit;
-    assert.deepEqual(['npm run ship', 'npm run lint', 'npm run missing'].map(run), [2, 0, 0]);
-  });
-
-  test('cases.json holds 3 or more rows for each row of the table', () => {
-    for (let row = 1; row <= 9; row++) {
-      assert.ok(cases.filter((c) => c.name.startsWith(`${row}:`)).length >= 3, `row ${row}`);
-    }
-  });
-
-  for (const c of cases) {
-    test(`${c.name} → exit ${c.exit}${c.ask ? ', asks the owner' : ''}, through decide() and the CLI`, () => {
-      const input = fill(c.input);
-      let parsed;
-      try { parsed = typeof input === 'string' ? JSON.parse(input) : input; } catch { parsed = undefined; }
-      const verdict = outsideGitRepo(() => decide(parsed, { HOME: values.HOME }));
-      assert.deepEqual([verdict.exit, verdict.ask === true], [c.exit, c.ask === true], 'decide(): exit, ask');
-      if (c.exit === 2 || c.ask) assert.equal(verdict.row, Number(c.name[0]), 'decided by its own row');
-      if (c.ask) assert.match(verdict.reason, /^Outside the repositories and the scratchpad only on the owner's explicit ask \(the owner, 2026-11-06\)\. guard #9: \S/u);
-      const started = Date.now();
-      const stdin = typeof input === 'string' ? input : JSON.stringify(input);
-      const r = node('.claude/hooks/guard.mjs', [], { input: stdin, env: quietEnv({ HOME: values.HOME }) });
-      assert.ok(Date.now() - started < 1000, 'the CLI took over 1 s');
-      assert.equal(r.status, c.exit, `CLI: ${r.stderr}`);
-      assert.match(r.stderr, c.exit === 2 ? /^guard #\d: .+ — .+\n$/u : /^$/u);
-      assert.deepEqual(r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null, c.ask ? { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: verdict.reason } : null, 'CLI stdout: only an ask prints');
-    });
-  }
-});
 
 describe('quick-hygiene, session-start and stop-check', () => {
   test('quick-hygiene reports facts through the readers it is given', () => {
@@ -173,6 +94,60 @@ describe('quick-hygiene, session-start and stop-check', () => {
     assert.match(summary, /hygiene warnings \(latest\):\n {2}w2\n {2}w3\n {2}w4$/u);
   });
 
+  test('quick-hygiene lists a session scratchpad’s loose files: a link once and unfollowed, a copy and docker-config unread, N+ past the cap', () => {
+    const root = '/private/tmp/claude-4242';
+    const pad = `${root}/-proj/s1/scratchpad`;
+    const dirs = {
+      [`${root}/-proj`]: ['s1', 's2'],
+      [pad]: ['report.md', 'home', 'docker-config', 'clone', 'wt', 'notes', 'research'],
+      [`${pad}/research`]: ['a.json', 'deep'],
+      [`${pad}/research/deep`]: ['b.txt'],
+      [`${pad}/docker-config`]: ['config.json'],
+    };
+    const kinds = {
+      [`${pad}/report.md`]: 'file', [`${pad}/home`]: 'link', [`${pad}/clone`]: 'dir', [`${pad}/clone/.git`]: 'dir', [`${pad}/wt`]: 'dir', [`${pad}/wt/.git`]: 'file',
+      [`${pad}/notes`]: 'dir', [`${pad}/notes/.git`]: 'dir', [`${pad}/research`]: 'dir', [`${pad}/research/a.json`]: 'file', [`${pad}/research/deep`]: 'dir', [`${pad}/research/deep/b.txt`]: 'file',
+      [`${pad}/docker-config`]: 'dir', [`${pad}/docker-config/config.json`]: 'file',
+    };
+    const configs = { [`${pad}/clone/.git/config`]: '[core]\n[remote "origin"]\n\turl = https://x.invalid/c.git\n', [`${pad}/notes/.git/config`]: '[core]\n' };
+    const read = [];
+    const p = makeProbes({
+      uid: () => 4242,
+      readdir: (dir) => (read.push(dir), dirs[dir] ?? []),
+      lstat: (path) => (kinds[path] ? { dir: kinds[path] === 'dir', link: kinds[path] === 'link' } : null),
+      stat: (path) => (path.startsWith(`${root}/-proj/s`) ? { mtimeMs: 0, dir: true } : null),
+      readFile: (path) => configs[path] ?? null,
+      ps: () => '',
+    });
+    const loose = ['report.md', 'home', 'notes', 'research/a.json', 'research/deep/b.txt'].map((x) => `${pad}/${x}`);
+    assert.deepEqual(p.looseFiles(`${root}/-proj/s1`), { count: 5, capped: false, paths: loose });
+    for (const unread of ['home', 'clone', 'wt', 'notes', 'docker-config']) assert.ok(!read.includes(`${pad}/${unread}`), unread);
+    const capped = p.looseFiles(`${root}/-proj/s1`, 3);
+    assert.deepEqual([capped.paths, p.counted(capped)], [loose.slice(0, 2), '2+']);
+    assert.match(p.quickSummary({ cwd: '/proj' })[0], / · loose files in this project's scratchpads 5$/u);
+    assert.doesNotMatch(p.quickSummary()[0], /loose files/u);
+  });
+
+  test('stop-check warns and logs the loose files of its own session’s scratchpad, five named', () => {
+    const logged = [];
+    const names = 'abcdefg'.split('').map((x) => `/s/messy/scratchpad/${x}.md`);
+    const probes = {
+      sessionDir: (_cwd, id) => (id === 'gone' ? '/s' : `/s/${id}`),
+      processesUnder: () => [],
+      warningsLog: () => '/s/hygiene-warnings.log',
+      looseFiles: (dir) => (dir === '/s/messy' ? { count: 7, capped: false, paths: names } : assert.fail(`walked ${dir}`)),
+    };
+    const warning = stopCheck({ cwd: '/x', session_id: 'messy' }, probes, (path, line) => logged.push(line));
+    assert.match(warning, /^stop-check: 7 loose file\(s\) in this session's scratchpad outside a repository copy: \/s\/messy\/scratchpad\/a\.md, .*\/e\.md — answers go in the reply/u);
+    assert.doesNotMatch(warning, /f\.md/u);
+    assert.match(logged.join(''), /^\d{4}-\d\d-\d\dT.* stop-check: 7 loose file\(s\) in this session's scratchpad/u);
+    assert.equal(stopCheck({ cwd: '/x', session_id: 'gone' }, probes, () => assert.fail('logged')), null, 'no session folder: no scratchpad to walk');
+    // The owner sees the loose files at the end of the turn (hook JSON systemMessage), not the processes.
+    assert.equal(JSON.parse(userMessage(`stop-check: 1 process(es) still running under /s/x — stop it\n${warning}`)).systemMessage, warning);
+    assert.equal(userMessage('stop-check: 1 process(es) still running under /s/x — stop it'), '');
+    assert.equal(userMessage(null), '');
+  });
+
   test('stop-check warns and logs what is left under the session folder, and always exits 0', () => {
     const logged = [];
     const probes = {
@@ -187,7 +162,9 @@ describe('quick-hygiene, session-start and stop-check', () => {
     assert.match(logged[0][1], /^\d{4}-\d\d-\d\dT.* stop-check: 1 process\(es\) still running under \/s\/busy: pid 7/u);
     assert.equal(stopCheck({ cwd: '/x', session_id: 'idle' }, probes, () => assert.fail('logged with nothing left')), null);
     for (const input of ['{not json', '', JSON.stringify({ cwd: TMP, session_id: 'autom8x-kit-none' })]) {
-      assert.equal(node('.claude/hooks/stop-check.mjs', [], { input }).status, 0, `stdin ${JSON.stringify(input)}`);
+      const r = node('.claude/hooks/stop-check.mjs', [], { input });
+      assert.equal(r.status, 0, `stdin ${JSON.stringify(input)}`);
+      assert.equal(r.stdout, '', 'nothing to show: stdout stays empty (only JSON may go there)');
     }
   });
 
@@ -199,7 +176,7 @@ describe('quick-hygiene, session-start and stop-check', () => {
     const out = r.stdout.trimEnd().split('\n');
     assert.ok(out.length <= 15, `${out.length} lines`);
     assert.match(out[0], /^r\d+ · branch main · no local origin\/main · dirty 1 · worktrees 1 · stashes 0$/u);
-    assert.match(out[1], /^hygiene: scratch processes \d+/u);
+    assert.match(out[1], /^hygiene: scratch processes \d+.* · loose files in this project's scratchpads 0$/u);
     assert.equal(outsideGitRepo(() => sessionLines(dir, () => Array(30).fill('x'))).length, 15);
     assert.equal(node('.claude/hooks/session-start.mjs', [], { input: '{not json' }).status, 0);
   });

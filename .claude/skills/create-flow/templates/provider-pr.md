@@ -1,10 +1,11 @@
 # <Flow name>: the backend pull request (step 1)
 
-Filled at `/create-flow` stage 3 when the flow needs a vendor the menu
-(`contract/schemas/platform-menu.json`) lacks, or a menu provider without one operation the spec's
-section 3 calls. It is the spec of one `snoopy-backend` pull request, built by a backend session on
-the owner's word; this repository's session never edits that repository. It merges first, then
-the flow's pull request here, which re-pins `contract/` to its merge.
+Filled at `/create-flow` stage 3, in the session's reply and the round's records, when the flow
+needs a vendor the menu (`contract/schemas/platform-menu.json`) lacks, or a menu provider without
+one operation the spec's section 3 calls. It is the spec of one `snoopy-backend` pull request,
+built by a backend session on the owner's word; this repository's session never edits that
+repository. It merges first, then the flow's pull request here, which re-pins `contract/` to its
+merge.
 
 ## The file
 

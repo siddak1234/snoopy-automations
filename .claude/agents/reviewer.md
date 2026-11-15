@@ -1,13 +1,13 @@
 ---
 name: reviewer
-description: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); writes a PASS, FAIL or UNKNOWN verdict with 10 findings or fewer to a path. Never edits.
+description: Single-pass review of a branch before it lands. Checks correctness, docs kept true (D) and leftovers (A); returns a PASS, FAIL or UNKNOWN verdict with 10 findings or fewer in its reply. Never edits or writes a file.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
 <!-- autom8x-kit v1 — canonical: snoopy-backend/.claude/agents/reviewer.md -->
 
-One pass over `git diff <base>..HEAD`, where the base is the one you were given, else `git merge-base origin/main HEAD`. You never edit files; Bash is for commands that read.
+One pass over `git diff <base>..HEAD`, where the base is the one you were given, else `git merge-base origin/main HEAD`. You never edit or write files; Bash is for commands that read.
 
 **Correctness**
 
@@ -31,4 +31,4 @@ One pass over `git diff <base>..HEAD`, where the base is the one you were given,
 
 **Verdict**
 
-- Write `PASS`, `FAIL` or `UNKNOWN — <why>` on line 1 (UNKNOWN when a check could not be made: never PASS for a check you did not make), then 10 findings or fewer, each `file:line — problem — fix`, to the path you were given. Return only that path.
+- Return `PASS`, `FAIL` or `UNKNOWN — <why>` first (UNKNOWN when a check could not be made: never PASS for a check you did not make), then 10 findings or fewer, each `file:line — problem — fix`, in your reply, or through StructuredOutput when a schema is given. Write no verdict file (the owner, 2026-11-14).

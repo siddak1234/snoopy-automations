@@ -31,7 +31,7 @@ every pull request, and says go for each step that publishes or touches producti
 ## Stages
 
 1. **Intake** (the session alone). In a fresh scratch clone of this repository (`git clone` into
-   the session scratchpad; never under `~/Desktop` or iCloud Drive) read [templates/spec.md](templates/spec.md);
+   the session scratchpad; never under `~/Desktop` or iCloud Drive), where every file this command writes but the session's memory lands (the owner, 2026-11-14: files only inside a repository copy), read [templates/spec.md](templates/spec.md);
    `contract/README.md`, "What the platform refuses beyond the schema"; **the menu**,
    `contract/schemas/platform-menu.json` — the blocks, the page parts, the question forms, the
    setup, run-input and item-field controls, the triggers, the capabilities, each provider with its
@@ -49,7 +49,7 @@ every pull request, and says go for each step that publishes or touches producti
    **1b. Research** (the session alone; its brief is approved at stage 2), in
    [research-stage.md](research-stage.md): the `flow-research` workflow (four `researcher` lenses,
    one researcher per integration adoption ranks, one synthesis, one skeptic), its checksum checked
-   by `research-render.mjs`. No spec from a stopped run; nothing registered from an unapproved brief.
+   by `research-render.mjs`, which renders research.md from research.json (where each lands: research-stage.md, "The run" and "The steps"). No spec from a stopped run; nothing registered from an unapproved brief.
 
 2. **The spec and the words list** (the session; the owner approves). Copy the spec template to
    `snoopy-automations/automations/<name>/README.md` and [templates/words.md](templates/words.md)
@@ -72,10 +72,10 @@ every pull request, and says go for each step that publishes or touches producti
    re-pins `contract/` to its merge. No provider file: no stage 3.
 4. **The build** (one lane agent): this repository's `build-round` workflow
    ([.claude/workflows/build-round.js](../../workflows/build-round.js), by `scriptPath`, the
-   platform's byte for byte) with `{ runDir, task, lanes: [{ repo: 'snoopy-automations', clone }] }`
-   — no `backend` clone, and without `~/.claude/autom8x/gate-lock.mjs` one heavy step at a time. The
-   task names the spec, the words list, [templates/lane-brief.md](templates/lane-brief.md) and
-   [templates/review.md](templates/review.md); the reviewer reads only the brief and the diff. The
+   platform's byte for byte) with `{ session, task, lanes: [{ repo: 'snoopy-automations', clone }] }`,
+   `session` the folder holding the session's scratchpad, `/private/tmp/claude-<uid>/<project>/<session>` (hygiene's `--session`) — no `backend` clone, and without `~/.claude/autom8x/gate-lock.mjs` one heavy step at a time. The
+   task, inline text, names the spec, the words list, [templates/lane-brief.md](templates/lane-brief.md) (the design returns it filled) and
+   [templates/review.md](templates/review.md); the brief, the lane's summary and the verdict travel inline, never in a file; the reviewer reads only the brief and the diff. The
    lane writes the manifest from sections 1–3, 5–7, runs `npm run scaffold -- <name>` (the
    repository README, "Build a flow"), then the steps on `defineFlow`, the prompts (section 4), the
    blocks through `boundedBlocks` (section 7) and the tests (section 9). It never edits another
@@ -110,7 +110,7 @@ every pull request, and says go for each step that publishes or touches producti
 ## Output
 
 - The approved spec, its words list and its research brief (`research.md`) at `snoopy-automations/automations/<name>/`; the flow's pull
-  request, the provider file's and the SDK's when there are (the former's spec from provider-pr.md); the order (written out at stage 1, filled in through stage 6); the round's
+  request, the provider file's and the SDK's when there are (the former's spec from provider-pr.md, in the reply and the round's records); the order (written out in the reply at stage 1, filled in through stage 6, and kept in the round's records); the round's
   records; this skill corrected (stage 8).
 
 ## Docs
