@@ -1,13 +1,14 @@
 // autom8x-kit v1 — canonical: snoopy-backend/.claude/hooks/lib/quick-hygiene.mjs
 // Quick, read-only facts about what Claude sessions on this machine left behind:
 // processes under the scratch root, autom8x-* temp folders, scratch sessions, the
-// gate lock and the tail of the hygiene warnings log (STANDARD (h)). Facts only, no
+// gate lock, the tail of the hygiene warnings log and the loose files in sessions'
+// scratchpads, outside a repository copy (STANDARD (h); BUILD-PLAN 30.17). Facts only, no
 // thresholds: those live in the backend's hygiene config (STANDARD (j)). Every probe
 // has a 1 s timeout and reports nothing rather than throwing. `makeProbes(deps)`
 // takes fake readers for tests (scripts/kit/kit.test.mjs); the named exports use
 // the real ones. Home and uid are read at runtime, never written down.
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,6 +27,15 @@ const REAL = {
     try {
       const s = statSync(path);
       return { mtimeMs: s.mtimeMs, dir: s.isDirectory() };
+    } catch {
+      return null;
+    }
+  },
+  /** Like stat, but a symbolic link is itself, never followed. */
+  lstat(path) {
+    try {
+      const s = lstatSync(path);
+      return { dir: s.isDirectory(), link: s.isSymbolicLink() };
     } catch {
       return null;
     }
@@ -112,7 +122,43 @@ export function makeProbes(deps = {}) {
     const text = d.readFile(warningsLog()) ?? '';
     return text.split('\n').filter((line) => line.trim() !== '').slice(-n);
   }
-  function quickSummary() {
+  /**
+   * The files in a session's scratchpad (`<session>/scratchpad`) outside a repository copy and its
+   * `docker-config` (BUILD-PLAN 30.17). A link is one entry, never followed; a folder holding `.git`
+   * is a copy and is not walked, unless that `.git` is a folder whose config names no origin (then
+   * it is one entry). At most `max` entries are read; past that, `capped` is set.
+   */
+  function looseFiles(session, max = 200) {
+    const paths = [];
+    let read = 0;
+    let capped = false;
+    const walk = (dir, top) => {
+      for (const name of d.readdir(dir)) {
+        if (++read > max) return void (capped = true);
+        if (top && name === 'docker-config') continue;
+        const path = join(dir, name);
+        const s = d.lstat(path);
+        if (!s) continue;
+        const git = s.dir ? d.lstat(join(path, '.git')) : null;
+        if (s.link || !s.dir) paths.push(path);
+        else if (!git) walk(path, false);
+        else if (git.dir && !/^\[remote "origin"\]/mu.test(d.readFile(join(path, '.git', 'config')) ?? '')) paths.push(path);
+        if (capped) return;
+      }
+    };
+    walk(join(session, 'scratchpad'), true);
+    return { count: paths.length, capped, paths };
+  }
+  /** `N`, or `N+` when a walk stopped at its cap. */
+  const counted = ({ count, capped }) => `${count}${capped ? '+' : ''}`;
+  /** The loose files of every session of the project `cwd` names (a new session's own is empty). */
+  function projectLoose(cwd) {
+    const project = join(scratchRoot(), slug(cwd));
+    const each = d.readdir(project).filter((s) => d.stat(join(project, s))?.dir).map((s) => looseFiles(join(project, s)));
+    return { count: each.reduce((n, l) => n + l.count, 0), capped: each.some((l) => l.capped) };
+  }
+  /** The summary; with `cwd`, its first line also counts the loose files of that project's sessions. */
+  function quickSummary({ cwd } = {}) {
     const procs = processesUnder(scratchRoot());
     const temps = tempDirs();
     const sessions = scratchSessions();
@@ -121,7 +167,8 @@ export function makeProbes(deps = {}) {
       `hygiene: scratch processes ${procs.length} · autom8x temp dirs ${temps.length} · ` +
         `scratch sessions ${sessions.length}` +
         (sessions.length ? ` (oldest ${age(sessions[0].ageMs)})` : '') +
-        ` · gate lock ${lock ? `held by ${lock.holder} for ${age(lock.ageMs)}` : 'free'}`,
+        ` · gate lock ${lock ? `held by ${lock.holder} for ${age(lock.ageMs)}` : 'free'}` +
+        (cwd ? ` · loose files in this project's scratchpads ${counted(projectLoose(cwd))}` : ''),
     ];
     for (const p of procs.slice(0, 3)) {
       lines.push(`  pid ${p.pid} ${p.etime} ${p.command.slice(0, 100)}`);
@@ -139,6 +186,8 @@ export function makeProbes(deps = {}) {
     gateLock,
     warningsLog,
     warningsTail,
+    looseFiles,
+    counted,
     quickSummary,
   };
 }
@@ -153,5 +202,7 @@ export const {
   gateLock,
   warningsLog,
   warningsTail,
+  looseFiles,
+  counted,
   quickSummary,
 } = probes;

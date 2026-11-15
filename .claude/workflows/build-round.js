@@ -3,9 +3,9 @@ export const meta = {
   description:
     'Build one round across up to three repository clones: design, lanes, one review pass, land, and hygiene always last (ENGINEERING-STANDARD (i)).',
   whenToUse:
-    "A round of work with a task and one to three lanes, each a repository clone; pass args { runDir, task, lanes: [{ repo, clone, mechanical }], backend?, gateLock? }. Without backend (a flow developer with only snoopy-automations) hygiene reports the kit's quick-hygiene facts.",
+    "A round of work with a task and one to three lanes, each a repository clone; pass args { session, task, lanes: [{ repo, clone, mechanical }], backend?, gateLock? }, session the session's scratch folder. Briefs, summaries and verdicts travel inline; nothing is written outside the clones. Without backend (a flow developer with only snoopy-automations) hygiene reports the kit's quick-hygiene facts.",
   phases: [
-    { title: 'Design', detail: 'the plan and one brief per lane' },
+    { title: 'Design', detail: 'the plan and one brief per lane, returned' },
     { title: 'Lanes', detail: 'at most three builders; one heavy gate at a time' },
     { title: 'Review', detail: 'one reviewer pass per lane' },
     { title: 'Land', detail: 'push, the PR, the required check' },
@@ -17,57 +17,59 @@ export const meta = {
 };
 
 // ENGINEERING-STANDARD (i). At most MAX_AGENTS agents at once, one heavy gate at a time (the
-// gate lock). Lanes get their briefs by path; every stage writes 2 KB or less to
-// <runDir>/<stage>.summary.md and returns only that path. No message is ever sent to a
-// running agent. The hygiene stage runs last whatever happened before it (A4). The summaries
-// stay in <runDir>, read by path; the session gets the top-level return value (below).
+// gate lock). Files only inside repository copies (the owner, 2026-11-14; BUILD-PLAN 30.17): the
+// design returns the plan and one brief per lane through a schema, each lane gets its brief in its
+// prompt, every stage returns its summary or verdict (2 KB or less) in its reply, and review, fix
+// and hygiene get what they need inline; nothing goes to a run folder. No message is ever sent to a
+// running agent. The hygiene stage runs last whatever happened before it (A4). The session gets
+// the top-level return value (below).
 //
-// Failures (BUILD-PLAN 29.3.3). API retries are the harness's: agent() is null only after "a
-// terminal API error after retries" (the workflow-authoring reference), so this script adds
-// none — our rule: do not stack retries on a layer that already retries (Anthropic's SDK
-// retries transient failures "twice by default", platform.claude.com/docs/en/api/errors). An
-// agent that throws or comes back null or empty is run once more with the failure named, then
-// recorded as a named gap, never filled by a guess ("letting the agent know when a tool is
-// failing and letting it adapt works surprisingly well", anthropic.com/engineering/
-// multi-agent-research-system; "Set limits on agent retries", OpenAI's practical guide to
-// building agents). agent() can fail after its agent has already acted, so a step that is not
-// safe to repeat is never retried blindly: its retry first reads the step's own effect and
-// resumes from it. The lane (its commits) resumes from `git log origin/main..HEAD` and `git
-// status`; land (push, PR, ready) from `git status -sb` and `gh pr list --head`, one PR per
-// branch. Design (it rewrites its own files), review (its verdict file) and hygiene (it cleans
-// again) are safe to repeat and retry plainly. A reviewer that could not make a check says UNKNOWN ("give the LLM a way
-// out", anthropic.com/engineering/demystifying-evals-for-ai-agents); UNKNOWN never lands, and
-// nor does a FAIL after the one return to the lane: both are gaps. Every gap is log()ged, as
-// `gap: …` lines, before the closing `build-round:` line, and returned with it; the session shows
-// them to the owner as a stop. A throw outside an agent call is a gap too, never thrown again:
-// the return still carries every finished lane, every gap and the error, so nothing is lost. Each
-// lane's verdict and land result are recorded by lane index the moment its stage finishes, not
-// through pipeline()'s resolved array (a rejected batch drops that whole); a lane with no record is
-// a gap worded "not known: no stage reported", with what to read before any rerun, never a guess.
+// Failures (BUILD-PLAN 29.3.3; the rule and its sources: ENGINEERING-STANDARD (i), "Failures, in
+// both"): no API retry of our own; an agent that throws or comes back null or empty runs once
+// more with the failure named, then is a named gap, never filled by a guess. A step not safe to
+// repeat resumes from its own effect: the lane (its commits) from `git log origin/main..HEAD` and
+// `git status`; land (push, PR, ready) from `git status -sb` and `gh pr list --head`, one PR per
+// branch. Design and review (they write nothing) and hygiene (it cleans again) retry plainly. A
+// reviewer's UNKNOWN, and a FAIL after the one return to the lane, never land: both are gaps. Every
+// gap is a `gap: …` log line before the closing `build-round:` line, and is returned; a throw
+// outside an agent call is a gap too, never thrown again. Each lane's verdict and land result are
+// recorded by lane index as its stage finishes, not through pipeline()'s resolved array (a rejected
+// batch drops that whole); a lane with no record is "not known: no stage reported", with what to
+// read before any rerun.
 //
 // Round 21 (j), change-aware since the change-aware gates (ENGINEERING-STANDARD's gate rule):
 // land runs the repository's change-aware local gate (LAND_GATES) under the gate lock before any
 // push and records its counts — the platform's classifier picks ci.yml's light steps for a
 // records change and `CI=true npm run verify` for anything else; a design that finds the task is not a build returns
-// `NOT-A-BUILD <path>` and writes no design.done, so no lane runs, the gap is recorded and
-// hygiene still runs.
+// `build: false` with its reason, so no lane runs, the gap (`design: NOT-A-BUILD …`) is recorded and
+// hygiene still runs. A lane the design wrote no brief for does not run either: a gap.
 //
 // No backend checkout (Round 21, a flow developer with only snoopy-automations): `backend` and
 // `gateLock` are optional. Without `backend` the hygiene stage reports the kit's quick-hygiene
-// facts from the first lane's clone and removes only what this run started; the machine-wide
+// facts, the session's loose files among them, from the first lane's clone and removes only what
+// this run started, the leftovers the lanes reported (given inline); the machine-wide
 // `hygiene --strict` stays the owner's, at round close. Without `gateLock` the lanes use the
 // installed gate lock when ~/.claude/autom8x/gate-lock.mjs exists and, when it does not, run one
 // heavy step at a time in the lane (a flow is one lane, and lane, review and land run in order).
 const MAX_AGENTS = 3;
 const input = args ?? {};
-const { runDir, backend, task } = input;
+const { session, backend, task } = input;
 const lanes = Array.isArray(input.lanes) ? input.lanes : [];
-if (!runDir || !task || lanes.length === 0) {
-  throw new Error('build-round needs args { runDir, task, lanes: [{ repo, clone }], backend? }');
+if (!session || !task || lanes.length === 0) {
+  throw new Error(
+    'build-round needs args { session, task, lanes: [{ repo, clone }], backend? }: session, the ' +
+      "session's scratch folder (hygiene's --session), replaced runDir; briefs, summaries and " +
+      'verdicts travel inline (BUILD-PLAN 30.17)',
+  );
 }
 const INSTALLED_LOCK = '~/.claude/autom8x/gate-lock.mjs';
-const summary = (stage) =>
-  `Write 2 KB or less to ${runDir}/${stage}.summary.md and return only that path.`;
+/** Every stage's result, in its reply; nothing is written outside a repository copy (guard #10). */
+const summary =
+  'Return in your reply a summary of 2 KB or less: what you did, the gates with their counts, ' +
+  'and the leftovers list (what you started and stopped, and anything left). Write no summary, ' +
+  'note or log file anywhere: files only inside a repository copy (the owner, 2026-11-14).';
+/** A short one-line form of an agent's text, for a gap or a log line. */
+const clip = (text) => `${text ?? ''}`.replace(/\s+/gu, ' ').slice(0, 200);
 const between = (gate) =>
   `run only between \`${gate} acquire <label>\` and \`${gate} release <label>\`; always release`;
 // The backend's local-ci takes the machine's gate lock itself, so it is never listed among the
@@ -100,16 +102,31 @@ const LAND_GATES = {
   'snoopy-automations': '`npm run verify`',
 };
 const landGate = (repo) => LAND_GATES[repo] ?? '`npm run verify`';
-/** A design that finds no build to do returns this, a path after it, and writes no design.done. */
-const NOT_A_BUILD = 'NOT-A-BUILD';
+/** A design's answer: whether the task is a build, the plan (or why not), one brief per lane. */
+const DESIGN = {
+  type: 'object',
+  properties: {
+    build: { type: 'boolean' },
+    plan: { type: 'string' },
+    briefs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { repo: { type: 'string' }, brief: { type: 'string' } },
+        required: ['repo', 'brief'],
+      },
+    },
+  },
+  required: ['build', 'plan', 'briefs'],
+};
 const VERDICT = {
   type: 'object',
   properties: {
     verdict: { type: 'string', enum: ['PASS', 'FAIL', 'UNKNOWN'] },
-    path: { type: 'string' },
+    findings: { type: 'string' },
     fixes: { type: 'number' },
   },
-  required: ['verdict', 'path', 'fixes'],
+  required: ['verdict', 'findings', 'fixes'],
 };
 
 const gaps = [];
@@ -156,19 +173,23 @@ async function inBatches(items, ...stages) {
   }
 }
 
-const brief = (lane) => `${runDir}/brief-${lane.repo}.md`;
+/** The brief the design returned for a lane, or null. */
+const briefOf = (lane) =>
+  designed?.briefs?.find(
+    (b) => b?.repo === lane.repo && typeof b.brief === 'string' && b.brief.trim() !== '',
+  )?.brief ?? null;
 const build = (lane, extra = '') =>
   once(
     `lane ${lane.repo}`,
     (retry) =>
       agent(
-        `${retry}You are the lane for ${lane.repo} in ${lane.clone}. Read only ${brief(lane)}, docs/MAP.md ` +
-          `and the files it names. ${heavy} Run only what your change touches — its tests, ` +
-          `format and types — never the full gate (verify, browser suites, local-ci): it runs once ` +
-          `per pull request, at the land step (the owner's 2026-10-26 speed-up 1). ` +
-          `Commit with the docs in the same commit; do not push. ` +
+        `${retry}You are the lane for ${lane.repo} in ${lane.clone}. Your brief:\n${briefOf(lane)}\n` +
+          `Read only docs/MAP.md and the files the brief names. ${heavy} Run only what your change ` +
+          `touches — its tests, format and types — never the full gate (verify, browser suites, ` +
+          `local-ci): it runs once per pull request, at the land step (the owner's 2026-10-26 ` +
+          `speed-up 1). Commit with the docs in the same commit; do not push. ` +
           `${extra}List every process, container, worktree and temp folder you started and stop ` +
-          `or remove each. ${summary(`lane-${lane.repo}`)}`,
+          `or remove each. ${summary}`,
         {
           label: `lane ${lane.repo}`,
           phase: 'Lanes',
@@ -183,13 +204,12 @@ const build = (lane, extra = '') =>
 const review = (lane) =>
   once(`review ${lane.repo}`, (retry) =>
     agent(
-      `${retry}Review ${lane.clone} in one pass: \`git diff origin/main..HEAD\` against ${brief(lane)}. ` +
-        `Run \`npm run check:docs\`; check the lane's leftovers in ` +
-        `${runDir}/lane-${lane.repo}.summary.md against ps, docker ps and git worktree list. ` +
-        `Write PASS, FAIL, or UNKNOWN — <why> for a check you could not make (never PASS for ` +
-        `a check not made), with 10 findings or fewer (file:line) to ` +
-        `${runDir}/review-${lane.repo}.verdict.md. Return the verdict, that path, and how many ` +
-        `fixes it needs.`,
+      `${retry}Review ${lane.clone} in one pass: \`git diff origin/main..HEAD\` against its brief:\n` +
+        `${briefOf(lane)}\nRun \`npm run check:docs\`; check the leftovers in the lane's report ` +
+        `against ps, docker ps and git worktree list. The lane's report:\n` +
+        `${reports[lanes.indexOf(lane)] ?? '(none)'}\nReturn PASS, FAIL, or UNKNOWN — <why> for a ` +
+        `check you could not make (never PASS for a check not made), with 10 findings or fewer ` +
+        `(file:line — problem — fix) as the findings, and how many fixes it needs. Write no file.`,
       {
         label: `review ${lane.repo}`,
         phase: 'Review',
@@ -203,6 +223,8 @@ const review = (lane) =>
 
 let designed = null;
 let notABuild = false;
+/** By lane index: the lane's own report (its summary and leftovers), as it returned it. */
+const reports = [];
 /** By lane index: { verdict } once the review stage finishes, plus `landed` once land does. */
 const record = [];
 let hygiene = null;
@@ -213,22 +235,40 @@ try {
     agent(
       `${retry}Design this round: ${task}. Lanes: ${lanes.map((l) => `${l.repo} at ${l.clone}`).join('; ')}. ` +
         `First decide whether the task is a build (a change to make). If it is not — a question, ` +
-        `a list, a status read — write no plan, no brief and no design.done: write 2 KB or less ` +
-        `saying why to ${runDir}/design.summary.md and return only \`${NOT_A_BUILD} <that path>\`. ` +
-        `Otherwise write the plan to ${runDir}/plan.md and one brief per lane to ${runDir}/brief-<repo>.md ` +
-        `(the files it may open, the tests that must bite, the gate), then ${runDir}/design.done. ` +
-        `${summary('design')}`,
-      { label: 'design', phase: 'Design', agentType: 'builder', model: 'opus', effort: 'high' },
+        `a list, a status read — return build false, the reason (2 KB or less) as the plan, and ` +
+        `no briefs. Otherwise return build true, the plan (2 KB or less), and one brief per lane ` +
+        `with its repo (the files it may open, the tests that must bite, the gate). Write no file: ` +
+        `the plan and the briefs travel in your answer (the owner, 2026-11-14).`,
+      {
+        label: 'design',
+        phase: 'Design',
+        agentType: 'builder',
+        model: 'opus',
+        effort: 'high',
+        schema: DESIGN,
+      },
     ),
   );
   // A task that is not a build runs no lane; the gap says so and hygiene still runs (Round 21, j).
-  notABuild = typeof designed === 'string' && designed.trim().startsWith(NOT_A_BUILD);
+  notABuild = designed?.build === false;
   if (notABuild) {
-    gaps.push(`design: ${designed.trim()}; the task is not a build, so no lane ran`);
+    gaps.push(
+      `design: NOT-A-BUILD (${clip(designed.plan)}); the task is not a build, so no lane ran`,
+    );
   } else if (designed) {
+    // A lane with no brief is not guessed at: it does not run, and is a gap.
+    const briefed = lanes.filter((lane) => briefOf(lane) !== null);
+    for (const lane of lanes.filter((l) => !briefed.includes(l))) {
+      record[lanes.indexOf(lane)] = { verdict: null };
+      gaps.push(`design: no brief for ${lane.repo}; that lane did not run`);
+    }
     await inBatches(
-      lanes,
-      async (lane) => ({ lane, built: await build(lane) }),
+      briefed,
+      async (lane) => {
+        const built = await build(lane);
+        reports[lanes.indexOf(lane)] = built;
+        return { lane, built };
+      },
       async ({ lane, built }) => {
         if (!built) {
           record[lanes.indexOf(lane)] = { verdict: null };
@@ -237,15 +277,23 @@ try {
         let verdict = await review(lane);
         // Six fixes or fewer are made by hand; more go back to the lane once.
         if (verdict?.verdict === 'FAIL') {
-          const extra = `Apply every finding in ${verdict.path}${verdict.fixes > 6 ? ' (one return to the lane)' : ', by hand, nothing else'}. `;
-          if (await build(lane, extra)) verdict = await review(lane);
+          const extra =
+            `Apply every finding of the review${verdict.fixes > 6 ? ' (one return to the lane)' : ', by hand, nothing else'}:\n` +
+            `${verdict.findings}\n`;
+          const fixed = await build(lane, extra);
+          if (fixed) {
+            reports[lanes.indexOf(lane)] = fixed;
+            verdict = await review(lane);
+          }
         }
         if (verdict?.verdict === 'UNKNOWN')
           gaps.push(
-            `review ${lane.repo}: UNKNOWN, a check could not be made (${verdict.path}); not landed`,
+            `review ${lane.repo}: UNKNOWN, a check could not be made (${clip(verdict.findings)}); not landed`,
           );
         if (verdict?.verdict === 'FAIL')
-          gaps.push(`review ${lane.repo}: FAIL after the one return (${verdict.path}); not landed`);
+          gaps.push(
+            `review ${lane.repo}: FAIL after the one return (${clip(verdict.findings)}); not landed`,
+          );
         record[lanes.indexOf(lane)] = { verdict };
         return { lane, verdict };
       },
@@ -257,12 +305,12 @@ try {
             agent(
               `${retry}Land ${lane.clone}: BEFORE any push, the repository's change-aware local ` +
                 `gate once, ` +
-                `on the committed tree: ${landGate(lane.repo)}. ${heavy} Write the HEAD sha and ` +
+                `on the committed tree: ${landGate(lane.repo)}. ${heavy} Put the HEAD sha and ` +
                 `the gate's pass, fail and skipped counts in the summary, and push only when it is ` +
                 `green for that same HEAD (a moved HEAD runs it again). Then ` +
                 `a normal push (never --no-verify), one PR whose body ends with ` +
                 `"🤖 Generated with [Claude Code](https://claude.com/claude-code)", then the required ` +
-                `check. Mark it ready only when it is green on the head. ${summary(`land-${lane.repo}`)}`,
+                `check. Mark it ready only when it is green on the head. ${summary}`,
               {
                 label: `land ${lane.repo}`,
                 phase: 'Land',
@@ -287,18 +335,22 @@ try {
   gaps.push(`run: a step threw (${message(error)})`);
 } finally {
   phase('Hygiene');
+  const leftovers = lanes
+    .map((lane, i) => `${lane.repo}: ${reports[i] ?? '(the lane reported nothing)'}`)
+    .join('\n');
   const sweep = backend
-    ? `In ${backend}, run \`npm run hygiene -- --clean --session ${runDir}\`, then ` +
+    ? `In ${backend}, run \`npm run hygiene -- --clean --session ${session}\`, then ` +
       `\`npm run hygiene -- --strict\`, and report both last lines verbatim with every owner: ` +
       `line. Never run --execute.`
     : `There is no backend checkout. In ${lanes[0].clone}, run \`node --input-type=module -e ` +
       `"const m = await import('./.claude/hooks/lib/quick-hygiene.mjs'); ` +
-      `console.log(m.quickSummary().join('\\n'))"\` and report its hygiene: line verbatim. Stop or ` +
-      `remove only what this run started (each leftover the lanes list in ` +
-      `${runDir}/lane-*.summary.md), never the run's summaries and never anything else; the ` +
-      `machine-wide hygiene --strict is the owner's, at round close.`;
+      `const l = m.looseFiles('${session}'); ` +
+      `console.log([...m.quickSummary(), 'loose files ' + m.counted(l), ...l.paths].join('\\n'))"\` ` +
+      `and report its hygiene: and loose files lines verbatim. Stop or remove only what this run ` +
+      `started — each leftover the lanes reported, below — and never anything else; the ` +
+      `machine-wide hygiene --strict is the owner's, at round close. The lanes' reports:\n${leftovers}\n`;
   hygiene = await once('hygiene', (retry) =>
-    agent(`${retry}${sweep} ${summary('hygiene')}`, {
+    agent(`${retry}${sweep} ${summary}`, {
       label: 'hygiene',
       phase: 'Hygiene',
       agentType: 'builder',
@@ -308,12 +360,12 @@ try {
   );
 }
 
-// The session reads the top-level return value, not these log lines (ENGINEERING-STANDARD (i));
-// they stay for the run's own record. A top-level return is why test/workflows.test.ts compiles
-// this file as the harness runs it, an async function body, not with `node --check`. Every lane
-// gets a line and an entry from `record`, so none is dropped silently; a lane whose stage never
-// reported is not known, so its gap says what to read, not what happened.
-log(`design ${designed ?? 'did not finish'}; hygiene ${hygiene ?? 'did not finish'}`);
+// The session reads the top-level return value, not these log lines (ENGINEERING-STANDARD (i)),
+// which is why test/workflows.test.ts compiles this file as an async function body. Every lane
+// gets a line and an entry; one whose stage never reported is not known: its gap says what to read.
+log(
+  `design ${designed ? clip(designed.plan) : 'did not finish'}; hygiene ${hygiene ? clip(hygiene) : 'did not finish'}`,
+);
 lanes.forEach((lane, i) => {
   const item = record[i];
   const read =
@@ -323,7 +375,9 @@ lanes.forEach((lane, i) => {
     gaps.push(`${lane.repo}: not known: no stage reported; ${read}`);
   else if (item?.verdict?.verdict === 'PASS' && item.landed === undefined)
     gaps.push(`${lane.repo}: land not known: no stage reported after its PASS; ${read}`);
-  log(`${lane.repo}: ${item?.verdict?.verdict ?? 'no verdict'}, landed ${item?.landed ?? 'no'}`);
+  log(
+    `${lane.repo}: ${item?.verdict?.verdict ?? 'no verdict'}, landed ${item?.landed ? clip(item.landed) : 'no'}`,
+  );
 });
 for (const g of gaps) log(`gap: ${g}`);
 const closing = `build-round: ${gaps.length ? `stopped with ${gaps.length} gap(s), each logged above` : 'done, no gaps'}`;
@@ -333,11 +387,12 @@ return {
   closing,
   gaps,
   error: thrown ? message(thrown) : null,
-  design: designed,
+  design: designed?.plan ?? null,
   lanes: lanes.map((lane, i) => ({
     repo: lane.repo,
+    report: reports[i] ?? null,
     verdict: record[i]?.verdict?.verdict ?? null,
-    verdictPath: record[i]?.verdict?.path ?? null,
+    findings: record[i]?.verdict?.findings ?? null,
     landed: record[i]?.landed ?? null,
   })),
   hygiene,
