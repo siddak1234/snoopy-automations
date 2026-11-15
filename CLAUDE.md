@@ -66,7 +66,7 @@ Required check: `all-green`. The engineering standard this file follows: `snoopy
 
 ```bash
 npm ci --ignore-scripts                       # install exactly what CI audited
-npm run hooks:install                         # once per clone: the private-data scan on every commit and push (rule 10)
+npm run hooks:install                         # once per clone: the private-data scan on every commit and push (rule 10), the workflow lint on every push
 npm run verify                                # format:check → check:docs → map --check → reference audit → build → typecheck → test (none skipped or todo) → repo facts
 npm audit --omit=dev --audit-level=high       # CI's blocking audit, which verify skips
 npm run facts                                 # after adding or removing files

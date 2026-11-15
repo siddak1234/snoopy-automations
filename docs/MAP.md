@@ -78,9 +78,12 @@
 - [scripts/kit/kit.test.mjs](../scripts/kit/kit.test.mjs): The kit's own tests (node:test, Node built-ins only). The guard's cases run from
 - [scripts/kit/map.mjs](../scripts/kit/map.mjs): `npm run map` (STANDARD (c)): builds docs/MAP.md from the `map` and `rules`
 - [scripts/kit/private-data-public.toml](../scripts/kit/private-data-public.toml): The private-data scan's rules for a PUBLIC repository (scripts/kit/private-data-scan.mjs):
+- [scripts/kit/private-data-scan-run.test.mjs](../scripts/kit/private-data-scan-run.test.mjs): The private-data scan run whole (BUILD-PLAN 30.19.8, 30.19.9, 30.19.11), imported by kit.test.mjs: main(),
 - [scripts/kit/private-data-scan.mjs](../scripts/kit/private-data-scan.mjs): The private-data scan (the owner's security review, 2026-11-15: "no pii in public repos
 - [scripts/kit/private-data-scan.test.mjs](../scripts/kit/private-data-scan.test.mjs): The private-data scan's tests, imported by kit.test.mjs, so every repository's runner runs them.
 - [scripts/kit/private-data.toml](../scripts/kit/private-data.toml): The private-data scan's secrets (scripts/kit/private-data-scan.mjs): gitleaks' own rules, for
+- [scripts/kit/workflow-lint.mjs](../scripts/kit/workflow-lint.mjs): The workflows' lint (the owner's security review, 2026-11-15: "scanner, safe, not bulky";
+- [scripts/kit/workflow-lint.test.mjs](../scripts/kit/workflow-lint.test.mjs): The workflow lint's tests, imported by kit.test.mjs. The pure parts; main() in scratch git repos with zizmor's
 - [scripts/live-eval.ts](../scripts/live-eval.ts): `npm run live-eval -- templateId [--record]` (Round 21, Stage 2, the owner's Q4): the command the
 - [scripts/live-eval/client.ts](../scripts/live-eval/client.ts): The live platform as `npm run live-eval` reaches it (Round 21, Stage 2, the owner's Q4): the
 - [scripts/live-eval/profiles.ts](../scripts/live-eval/profiles.ts): What `npm run live-eval` runs for each flow (the owner's Q4): its 25 invented samples, the version

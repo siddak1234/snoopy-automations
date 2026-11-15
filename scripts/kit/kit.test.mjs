@@ -1,6 +1,7 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/kit.test.mjs
 // The kit's own tests (node:test, Node built-ins only). The guard's cases run from
-// guard-cases.test.mjs and the private-data scan's from private-data-scan.test.mjs, both imported
+// guard-cases.test.mjs, the private-data scan's from private-data-scan.test.mjs and
+// private-data-scan-run.test.mjs, and the workflow lint's from workflow-lint.test.mjs, all imported
 // here, so every runner of this file runs them too;
 // quick-hygiene runs against fake readers; stop-check always exits 0; check-docs
 // meets every fail and pass case of STANDARD (e) and the --map-only line limits;
@@ -20,6 +21,8 @@ import { stopCheck, userMessage } from '../../.claude/hooks/stop-check.mjs';
 import { matches } from './check-docs.mjs';
 import { GIT, GIT_REPO, outsideGitRepo, quietEnv, withEnv } from './guard-cases.test.mjs';
 import './private-data-scan.test.mjs';
+import './private-data-scan-run.test.mjs';
+import './workflow-lint.test.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const at = (path) => join(ROOT, path);
@@ -28,7 +31,8 @@ export const KIT_FILES = [
   '.claude/hooks/lib/repo-copy.mjs', '.claude/hooks/cases.json',
   '.claude/agents/explorer.md', '.claude/agents/reviewer.md', '.claude/agents/builder.md', '.claude/agents/researcher.md',
   'scripts/kit/check-docs.mjs', 'scripts/kit/map.mjs', 'scripts/kit/kit.test.mjs', 'scripts/kit/guard-cases.test.mjs',
-  'scripts/kit/private-data-scan.mjs', 'scripts/kit/private-data-scan.test.mjs', 'scripts/kit/private-data.toml', 'scripts/kit/private-data-public.toml',
+  'scripts/kit/private-data-scan.mjs', 'scripts/kit/private-data-scan.test.mjs', 'scripts/kit/private-data-scan-run.test.mjs', 'scripts/kit/private-data.toml',
+  'scripts/kit/private-data-public.toml', 'scripts/kit/workflow-lint.mjs', 'scripts/kit/workflow-lint.test.mjs',
 ];
 
 let TMP;

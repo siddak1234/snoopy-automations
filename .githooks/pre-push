@@ -3,7 +3,8 @@
 # public as this repository), runs the kit's private-data scan of the commits
 # since origin/main (CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan
 # that cannot run (any other non-zero exit) or a missing scan. Where else the
-# scan runs: README, "No private data, ever".
+# scan runs: README, "No private data, ever". Then the kit's workflow lint
+# (zizmor, offline, over .github/workflows/, a few seconds), refused the same way.
 # Installed via `npm run hooks:install` (git config core.hooksPath .githooks).
 #
 # git calls this with: $1=remote name, $2=remote url, and stdin lines of
@@ -22,6 +23,20 @@ if [ "$status" -eq 1 ]; then
   exit 1
 elif [ "$status" -ne 0 ]; then
   echo "pre-push: the private-data scan could not run (exit $status) — refused." >&2
+  exit 1
+fi
+
+if [ ! -f scripts/kit/workflow-lint.mjs ]; then
+  echo "pre-push: the kit's workflow lint is missing from this clone — refused." >&2
+  exit 1
+fi
+node scripts/kit/workflow-lint.mjs </dev/null >&2
+status=$?
+if [ "$status" -eq 1 ]; then
+  echo "pre-push: the workflow lint found a finding (its rule is above) — refused. Fix it, or ignore it in .github/zizmor.yml with its reason." >&2
+  exit 1
+elif [ "$status" -ne 0 ]; then
+  echo "pre-push: the workflow lint could not run (exit $status) — refused." >&2
   exit 1
 fi
 exit 0

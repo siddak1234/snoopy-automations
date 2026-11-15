@@ -15,7 +15,7 @@ import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { GIT, outsideGitRepo, quietEnv } from './guard-cases.test.mjs';
 import {
-  addedLines, ensureGitleaks, ereToRegExp, findingLines, gitleaksArgs, gitleaksAsset, gitleaksBinary, gitleaksCache, GITLEAKS_VERSION,
+  addedLines, ensureBinary, ereToRegExp, findingLines, gitleaksArgs, gitleaksAsset, gitleaksBinary, gitleaksCache, GITLEAKS_VERSION,
   isPublic, LEAKS_EXIT, nameFindings, parseMode, PATTERN_FILE, pathFindings, patternSource, sha256,
 } from './private-data-scan.mjs';
 
@@ -106,7 +106,7 @@ describe('private-data scan: the pure parts', () => {
     const bytes = Buffer.from('not the release');
     let extracted = 0;
     const asset = { name: 'g.tar.gz', sha256: '0'.repeat(64), url: 'https://example.invalid/g.tar.gz' };
-    await assert.rejects(ensureGitleaks({ dir, asset, download: async () => bytes, extract: () => extracted++ }), /refused g\.tar\.gz: sha256 [0-9a-f]{64} is not the pinned 0{64}/u);
+    await assert.rejects(ensureBinary({ dir, asset, download: async () => bytes, extract: () => extracted++, binary: 'gitleaks' }), /refused g\.tar\.gz: sha256 [0-9a-f]{64} is not the pinned 0{64}/u);
     assert.equal(extracted, 0);
     assert.equal(existsSync(join(dir, 'g.tar.gz')), false);
   });
@@ -116,11 +116,11 @@ describe('private-data scan: the pure parts', () => {
     const bytes = Buffer.from('a pinned release');
     const asset = { name: 'g.tar.gz', sha256: sha256(bytes), url: 'https://example.invalid/g.tar.gz' };
     let downloads = 0;
-    const extract = (archive, into) => writeFileSync(join(into, 'gitleaks'), readFileSync(archive));
+    const extract = (archive, into, binary) => writeFileSync(join(into, binary), readFileSync(archive));
     const get = async () => (downloads++, bytes);
-    assert.equal(await ensureGitleaks({ dir, asset, download: get, extract }), join(dir, 'gitleaks'));
+    assert.equal(await ensureBinary({ dir, asset, download: get, extract, binary: 'gitleaks' }), join(dir, 'gitleaks'));
     writeFileSync(join(dir, 'gitleaks'), 'changed');
-    await ensureGitleaks({ dir, asset, download: get, extract });
+    await ensureBinary({ dir, asset, download: get, extract, binary: 'gitleaks' });
     assert.equal(downloads, 1);
     assert.equal(readFileSync(join(dir, 'gitleaks'), 'utf8'), 'a pinned release');
   });
@@ -217,13 +217,21 @@ describe('private-data scan: the configs', () => {
   const publicToml = readToml(readFileSync(join(KIT, 'private-data-public.toml'), 'utf8'));
   const rules = publicToml.rules;
   const email = (local, domain) => `${local}${AT}${domain}`;
+  // The allowlist's one-by-one entries, read from the config so this file never holds them.
+  const exactLists = rules.find((r) => r.id === 'autom8x-email').allowlists.flatMap((a) => a.regexes ?? []).filter((r) => r.startsWith('(?i)^(?:'));
+  const exactAllowed = exactLists.flatMap((r) => r.slice('(?i)^(?:'.length, -')$'.length).split('|')).map((r) => r.replaceAll('\\', ''));
   // Each line is one fixture and the rules it must trip — [] for a value the rules must let be.
   const cases = [
     ...['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.de']
       .map((d) => [`to: ${email('jane.roe', d)}`, ['autom8x-email']]),
     [`to: ${email('a', 'harbourline-dental.com')}`, ['autom8x-email']],
-    ...['example.com', 'mail.example.org', 'example.net', 'shop.example.co.uk', 'acme.example', 'outlook.test', 'x.invalid', 'users.noreply.github.com', 'autom8x.ai', 'p.iam.gserviceaccount.com', 'company.com', 'acme.co', 'b.co', 'e.com', 'y.com']
+    ...['example.com', 'mail.example.org', 'example.net', 'shop.example.co.uk', 'acme.example', 'outlook.test', 'x.invalid', 'users.noreply.github.com', 'autom8x.ai']
       .map((d) => [`to: ${email('jane', d)}`, []]),
+    // Registerable domains are no placeholder (30.19.10): only the exact addresses measured pass (below).
+    ...['company.com', 'acme.co', 'b.co', 'e.com', 'x.com', 'p.iam.gserviceaccount.com']
+      .map((d) => [`to: ${email('jane', d)}`, ['autom8x-email']]),
+    // Each exact placeholder and service account the config allows passes; one letter more does not.
+    ...exactAllowed.flatMap((address) => [[`to: ${address}`, []], [`to: q${address}`, ['autom8x-email']]]),
     [`"${email('owner', 'example.test')}Owner"`, []],
     [`git clone git${AT}github.com:o/r.git and icon${AT}2x.png and ${email('noreply', 'anthropic.com')}`, []],
     [`call (212) 555-${'1234'}`, ['autom8x-phone']],
@@ -246,6 +254,15 @@ describe('private-data scan: the configs', () => {
     assert.deepEqual(privateToml.extend, { useDefault: true });
     assert.deepEqual(publicToml.extend, { path: 'scripts/kit/private-data.toml' });
     assert.equal((privateToml.rules ?? []).every((rule) => rule.regex === undefined), true, 'private-data.toml only adds allowlists to gitleaks’ rules');
+  });
+
+  test('a registerable domain is allowed only by exact addresses, anchored, with no wildcard (30.19.10)', () => {
+    assert.equal(exactLists.length, 2, 'the measured placeholders and the flows’ service accounts');
+    assert.ok(exactAllowed.length >= 2 && exactAllowed.every((a) => /^[a-z0-9._-]+@[a-z0-9.-]+$/u.test(a)), 'each entry is one literal address');
+    const allow = rules.find((r) => r.id === 'autom8x-email').allowlists.flatMap((a) => a.regexes ?? []);
+    for (const domain of ['company\\.com', 'acme\\.co', 'gserviceaccount\\.com']) {
+      assert.ok(allow.filter((r) => r.includes(domain)).every((r) => exactLists.includes(r)), `${domain} is allowed only one address at a time`);
+    }
   });
 
   test('no personal-mail provider is ever on the email allowlist', () => {
