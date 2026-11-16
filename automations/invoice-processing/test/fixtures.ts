@@ -69,7 +69,7 @@ export const manifests = servedManifests(readManifests(manifestsRoot, TEMPLATE_I
  * The commit whose `manifests/` last held v1 to v8: the base of the change that removed their
  * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). Git keeps them.
  */
-export const RETIRED_AT = '30d6798df2817e0b97ad4a7a26b70b018273eef7';
+export const RETIRED_AT = '41ee3b778111c8b2e0055a5ad1f2937c61821c3b';
 
 /** A retired version's manifest file, as committed, read from git at `RETIRED_AT`. */
 export function retiredFile(version: number): string {
