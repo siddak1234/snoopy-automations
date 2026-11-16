@@ -8,12 +8,21 @@
 //     ~/.config/autom8x/client-deny-pattern (line 1 full names, every repository; line 2
 //     short forms, public repositories only). --tree greps HEAD's files, --staged and --push
 //     the added lines of their diffs, --history `git log -G`. Prints paths or commit ids,
-//     never the text or the pattern — nor an error's text, which would quote it. No pattern:
+//     never the text or the pattern — nor an error's text, which would quote it: a pattern git
+//     refuses (the same search with a plain pattern works) is said in fixed words, any other
+//     git failure by its exit code alone. No pattern:
 //     CI fails (a fork's pull request is told it cannot be scanned; Dependabot, which gets no
 //     secrets, is skipped with a notice); a machine warns once and skips (CI enforces);
 //   3 gitleaks 8.30.1, pinned by sha256 and checked before extraction, with
 //     private-data.toml (secrets) or private-data-public.toml (secrets and personal data).
 //     The fetch and cache are shared: workflow-lint.mjs pins zizmor the same way.
+//     Reviewed exceptions: the scanned repository's own .gitleaksignore (IGNORE_FILE), handed
+//     to gitleaks by path (`--gitleaks-ignore-path`, so no other folder's file counts), one
+//     exact fingerprint per line, `<commit>:<file>:<rule>:<line>` as a finding's Fingerprint
+//     reads, with `#` comments: each silences that one finding of that one commit, so it
+//     serves --history (an old commit's reviewed finding); a finding in the tree is fixed,
+//     never listed. A line without its commit would silence that place in every commit, the
+//     tree's included: any line not exact is refused (exit 2).
 // Modes: --staged the index (pre-commit), --push origin/main..HEAD (pre-push), --tree the
 // tracked files at HEAD (CI, local CI), --history every commit. Exit 0 clean, 1 findings,
 // 2 usage or tool error. Public or private: docs/docs-map.json `repo`; only snoopy-backend
@@ -182,9 +191,21 @@ export async function ensureBinary({ dir, asset, download, extract, binary }) {
   return join(dir, binary);
 }
 
-/** Pure: gitleaks' arguments for a mode; `target` is the --push range or the --tree commit. */
-export function gitleaksArgs(mode, { config, report, target, source }) {
-  const common = ['--redact', '--no-banner', '--config', config, '--report-format', 'json', '--report-path', report, '--exit-code', String(LEAKS_EXIT), '--log-level', 'error'];
+/** The reviewed exceptions' file, at the scanned repository's root (the header, 3). */
+export const IGNORE_FILE = '.gitleaksignore';
+const EXACT_FINGERPRINT = /^[0-9a-f]{40}:.+:[\w.-]+:\d+$/u;
+
+/** Pure: the numbers of a .gitleaksignore's lines that are not one exact fingerprint (blank and `#` lines are fine). */
+export function inexactIgnores(text) {
+  return text.split('\n').flatMap((line, index) => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith('#') && !EXACT_FINGERPRINT.test(trimmed) ? [index + 1] : [];
+  });
+}
+
+/** Pure: gitleaks' arguments for a mode; `target` is the --push range or the --tree commit, `ignore` the exceptions' path. */
+export function gitleaksArgs(mode, { config, report, target, source, ignore }) {
+  const common = ['--redact', '--no-banner', '--config', config, '--gitleaks-ignore-path', ignore, '--report-format', 'json', '--report-path', report, '--exit-code', String(LEAKS_EXIT), '--log-level', 'error'];
   if (mode === 'staged') return ['git', '--pre-commit', '--staged', ...common, source];
   if (mode === 'push' || mode === 'tree') return ['git', `--log-opts=${target}`, ...common, source];
   if (mode === 'history') return ['git', ...common, source];
@@ -199,14 +220,18 @@ export function findingLines(findings, mode) {
 /**
  * A command, its exit code checked against `allow`. `env` adds to this process's environment,
  * or with `inherit: false` is the whole of it. `quiet` keeps the command's stderr out of the
- * error, for a command whose stderr can quote the client-name pattern. `spawn` is spawnSync's
+ * error, for a command whose stderr can quote the client-name pattern. The error's `status` is
+ * the exit code (or the spawn error's code, ETIMEDOUT for a timeout). `spawn` is spawnSync's
  * shape, for the tests.
  */
 export function run(command, args, { cwd, env, input, allow = [0], quiet = false, inherit = true, spawn = spawnSync } = {}) {
   const r = spawn(command, args, { cwd, env: inherit ? { ...process.env, ...env } : env, input, encoding: 'utf8', maxBuffer: 1 << 30, timeout: 600000 });
   if (r.error || !allow.includes(r.status)) {
-    const why = quiet ? 'its message is not shown' : (r.stderr ?? '').trim().split('\n').slice(-3).join(' / ');
-    throw new Error(`${command} ${args[0] ?? ''} ${args[1] ?? ''} failed (exit ${r.status ?? r.error?.code}): ${why}`);
+    const status = r.status ?? r.error?.code;
+    // Its first two lines (what failed: zizmor names the workflow it could not load there) and its last.
+    const said = (r.stderr ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+    const why = quiet ? 'its message is not shown' : (said.length > 3 ? [...said.slice(0, 2), '…', said.at(-1)] : said).join(' / ');
+    throw Object.assign(new Error(`${command} ${args[0] ?? ''} ${args[1] ?? ''} failed (exit ${status}): ${why}`), { status });
   }
   return r;
 }
@@ -238,21 +263,37 @@ export function trackedPaths(root, mode) {
   return lines(git(root, ['ls-tree', '-r', '--name-only', 'HEAD']).stdout);
 }
 
+/** A pattern git always compiles: the probe that tells a refused pattern from git failing. */
+const PLAIN_PATTERN = 'autom8x';
+
 /** Paths (--tree, --staged), `<commit> <path>` (--push) or commit ids (--history) the pattern matches. */
 export function nameFindings(root, mode, pattern) {
-  // git's stderr quotes a pattern it cannot compile: it is dropped, and the error is fixed text.
+  // git's stderr can quote the pattern, so it is never shown. A failure is the pattern's when the
+  // same search with a plain pattern works (the fixed PATTERN_ERROR); otherwise git failed (no
+  // commit, a timeout, a broken repository), said by its exit code alone (30.19.13).
   const search = (args, opts) => {
+    const attempt = (p) => git(root, args(p), { ...opts(p), quiet: true }).stdout;
     try {
-      return git(root, args, { ...opts, quiet: true }).stdout;
-    } catch {
-      throw new Error(`git ${args[0]}: ${PATTERN_ERROR}`);
+      return attempt(pattern);
+    } catch (error) {
+      const verb = args(pattern)[0];
+      let refused = false;
+      if (error.status !== 'ETIMEDOUT') {
+        try {
+          attempt(PLAIN_PATTERN);
+          refused = true;
+        } catch {
+          // git fails with any pattern: not the pattern's fault
+        }
+      }
+      throw new Error(refused ? `git ${verb}: ${PATTERN_ERROR}` : `git ${verb} failed (exit ${error.status}); its message is not shown because it can quote the pattern`);
     }
   };
   if (mode === 'tree') {
-    const found = search(['grep', '-I', '-i', '-l', '-E', '-f', '-', 'HEAD', '--'], { input: `${pattern}\n`, allow: [0, 1] });
+    const found = search(() => ['grep', '-I', '-i', '-l', '-E', '-f', '-', 'HEAD', '--'], (p) => ({ input: `${p}\n`, allow: [0, 1] }));
     return lines(found).map((path) => path.replace(/^HEAD:/u, ''));
   }
-  if (mode === 'history') return lines(search(['log', '--all', '-i', `-G${pattern}`, '--format=%H']));
+  if (mode === 'history') return lines(search((p) => ['log', '--all', '-i', `-G${p}`, '--format=%H'], () => ({})));
   const regex = ereToRegExp(pattern);
   const diff = mode === 'staged'
     ? git(root, ['diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--no-textconv']).stdout
@@ -293,7 +334,12 @@ export async function gitleaks(root, mode, publicRepo, { binary = gitleaksBinary
   }
   // From the kit's own repository root, which the public config's `[extend] path` is read from.
   const config = join(KIT, publicRepo ? 'private-data-public.toml' : 'private-data.toml');
-  const args = gitleaksArgs(mode, { config, report: '-', target, source: root });
+  const ignore = join(root, IGNORE_FILE);
+  const inexact = existsSync(ignore) ? inexactIgnores(readFileSync(ignore, 'utf8')) : [];
+  if (inexact.length) {
+    throw new Error(`${IGNORE_FILE} line ${inexact.join(', ')}: not one exact <commit>:<file>:<rule>:<line> fingerprint (without its commit it would silence that place in every commit)`);
+  }
+  const args = gitleaksArgs(mode, { config, report: '-', target, source: root, ignore });
   const r = run(bin, args, { cwd: resolve(KIT, '../..'), allow: [0, LEAKS_EXIT], spawn });
   const start = r.stdout.indexOf('[');
   return start < 0 ? [] : JSON.parse(r.stdout.slice(start));

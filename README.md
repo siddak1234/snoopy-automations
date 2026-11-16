@@ -938,8 +938,11 @@ or the run. This is the one full statement of when it runs; CLAUDE.md rule 10, c
 hooks link here.
 
 **The workflow lint.** `node scripts/kit/workflow-lint.mjs` runs zizmor 1.32.0, pinned by sha256,
-offline and with no token, over `.github/workflows/`: before every push (`.githooks/pre-push`, after
-the scan) and in CI's Verify (its "Workflow lint" step, after "No private data"). A finding, a lint
+offline and with no token, over `.github/workflows/`, and fails closed (`--strict-collection`: a
+workflow zizmor cannot load is a failure): before every push (`.githooks/pre-push`, after the scan,
+as `--pre-push` with git's ref lines: the `.github/` of each commit the push names, each ref's tip,
+never the working tree)
+and in CI's Verify (its "Workflow lint" step, after "No private data"). A finding, a lint
 that cannot run or a missing lint refuses the push or the run; a finding is fixed by its rule, or
 ignored with its reason in zizmor's config file beside the workflows (none yet). The workflows hold
 to it: no `${{ }}` expression is written inside a `run:` script, each value reaching it through the

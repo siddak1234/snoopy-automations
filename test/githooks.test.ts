@@ -203,7 +203,11 @@ test('the pre-push hook runs the workflow lint after a clean scan, on a push to 
   ]) {
     const clean = push(repo, url, refLine);
     assert.equal(clean.exit, 0, clean.stderr);
-    assert.deepEqual(lints(), [{ args: [], input: '' }], `the lint runs once on a push to ${url}`);
+    assert.deepEqual(
+      lints(),
+      [{ args: ['--pre-push'], input: refLine }],
+      `the lint runs once, with --pre-push and git's ref lines (each pushed commit's own .github/, never the working tree: BUILD-PLAN 30.19.15), on a push to ${url}`,
+    );
     reset();
 
     const found = push(repo, url, refLine, { FAKE_LINT: '1' });
