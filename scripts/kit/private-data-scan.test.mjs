@@ -1,11 +1,12 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/private-data-scan.test.mjs
 // The private-data scan's tests, imported by kit.test.mjs, so every repository's runner runs them.
 // Pure functions first; then the client-name search in scratch git repos (no download); then the
+// reviewed exceptions of a .gitleaksignore, --history run whole on the real gitleaks; then the
 // public config's personal-data rules, read from the TOML and run in JS on fixtures built at run
 // time by concatenation, so this file never holds a value its own rules would find. The last
-// check runs the real gitleaks on those fixtures: the pinned, checksum-verified binary the scan
-// itself uses (cached; fetched once, as CI's scan step fetches it), never skipped — a gate that
-// refuses skipped tests counts it like every other.
+// check runs the real gitleaks on those fixtures. The real gitleaks is the pinned, checksum-verified
+// binary the scan itself uses (cached; fetched once, as CI's scan step fetches it), never skipped — a
+// gate that refuses skipped tests counts it like every other.
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,10 +14,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { GIT, outsideGitRepo, quietEnv } from './guard-cases.test.mjs';
+import { GIT, GIT_REPO, outsideGitRepo, quietEnv } from './guard-cases.test.mjs';
 import {
   addedLines, ensureBinary, ereToRegExp, findingLines, gitleaksArgs, gitleaksAsset, gitleaksBinary, gitleaksCache, GITLEAKS_VERSION,
-  isPublic, LEAKS_EXIT, nameFindings, parseMode, PATTERN_FILE, pathFindings, patternSource, sha256,
+  IGNORE_FILE, inexactIgnores, isPublic, LEAKS_EXIT, main, nameFindings, parseMode, PATTERN_FILE, pathFindings, patternSource, sha256,
 } from './private-data-scan.mjs';
 
 const KIT = dirname(fileURLToPath(import.meta.url));
@@ -85,14 +86,21 @@ describe('private-data scan: the pure parts', () => {
     assert.equal(gitleaksCache({}, '/h'), `/h/.cache/autom8x/gitleaks/${GITLEAKS_VERSION}`);
   });
 
-  test('each mode maps to its gitleaks command, redacted, bannerless, with the kit config', () => {
-    const o = { config: '/k/c.toml', report: '-', target: 'T', source: '/r' };
-    const common = ['--redact', '--no-banner', '--config', '/k/c.toml', '--report-format', 'json', '--report-path', '-', '--exit-code', String(LEAKS_EXIT), '--log-level', 'error', '/r'];
+  test('each mode maps to its gitleaks command, redacted, bannerless, with the kit config and the repository’s exceptions by path', () => {
+    const o = { config: '/k/c.toml', report: '-', target: 'T', source: '/r', ignore: '/r/.gitleaksignore' };
+    const common = ['--redact', '--no-banner', '--config', '/k/c.toml', '--gitleaks-ignore-path', '/r/.gitleaksignore', '--report-format', 'json', '--report-path', '-', '--exit-code', String(LEAKS_EXIT), '--log-level', 'error', '/r'];
     assert.deepEqual(gitleaksArgs('staged', o), ['git', '--pre-commit', '--staged', ...common]);
     assert.deepEqual(gitleaksArgs('push', o), ['git', '--log-opts=T', ...common]);
     assert.deepEqual(gitleaksArgs('tree', o), ['git', '--log-opts=T', ...common]);
     assert.deepEqual(gitleaksArgs('history', o), ['git', ...common]);
     assert.throws(() => gitleaksArgs('all', o), /no gitleaks command/u);
+  });
+
+  test('a reviewed exception is one exact commit:file:rule:line; a line without its commit is refused (30.19.16)', () => {
+    const commit = 'a'.repeat(40);
+    assert.deepEqual(inexactIgnores(['# reviewed 2026-11-16', '', `${commit}:docs/a b.md:autom8x-email:12`, `${commit}:x:y.md:generic-api-key:3`].join('\n')), []);
+    const bad = ['docs/a.md:autom8x-email:12', `${commit.slice(1)}:a.md:r:1`, `${commit}:a.md:r`, `${commit}:a.md:r:one`, 'anything'];
+    assert.deepEqual(inexactIgnores(['# ok', ...bad].join('\n')), [2, 3, 4, 5, 6]);
   });
 
   test('a finding prints its rule, path and line (and commit), never its value', () => {
@@ -151,6 +159,57 @@ describe('private-data scan: client names in git', () => {
     assert.deepEqual(found('tree'), ['new.md']);
     assert.deepEqual(found('history').sort(), [first, second].sort());
     for (const mode of ['tree', 'staged', 'push', 'history']) assert.equal(JSON.stringify(found(mode)).toLowerCase().includes('wrenmoor'), false, mode);
+  });
+});
+
+describe('private-data scan: the reviewed exceptions in .gitleaksignore (30.19.16)', () => {
+  const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv() }).trim();
+  /** main() on the real gitleaks, with git's repository variables out of this process (main() spawns git with it). */
+  async function scan(dir) {
+    const was = Object.fromEntries(GIT_REPO.map((key) => [key, process.env[key]]));
+    for (const key of GIT_REPO) delete process.env[key];
+    const lines = [];
+    try {
+      const code = await main(['--history'], { cwd: dir, env: { CLIENT_DENY_PATTERN: 'wrenmoor' }, out: (line) => lines.push(line), home: TMP, binary: () => gitleaksBinary() });
+      return { code, text: lines.join('\n') };
+    } finally {
+      for (const [key, value] of Object.entries(was)) if (value !== undefined) process.env[key] = value;
+    }
+  }
+  test('--history: a listed fingerprint silences exactly that finding of that commit; an unlisted one still fails; a line without its commit is refused', async () => {
+    const dir = join(TMP, 'exceptions');
+    mkdirSync(join(dir, 'docs'), { recursive: true });
+    git(dir, 'init', '-q', '-b', 'main');
+    writeFileSync(join(dir, 'docs/docs-map.json'), JSON.stringify({ repo: 'snoopy' }));
+    // Two personal addresses the public config finds, built here so this file holds neither.
+    writeFileSync(join(dir, 'a.md'), ['one', `to: jane.roe${AT}gmail.com`, 'two', `to: john.roe${AT}gmail.com`, ''].join('\n'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'old');
+    const old = git(dir, 'rev-parse', 'HEAD');
+    const both = await scan(dir);
+    assert.equal(both.code, 1, both.text);
+    assert.match(both.text, new RegExp(`gitleaks: 2 finding\\(s\\)\\n {2}autom8x-email a\\.md:2 ${old.slice(0, 12)}\\n {2}autom8x-email a\\.md:4 ${old.slice(0, 12)}`, 'u'));
+
+    // The reviewed line 2 of that commit, committed as the repositories commit theirs.
+    writeFileSync(join(dir, IGNORE_FILE), `# reviewed: a made-up address\n${old}:a.md:autom8x-email:2\n`);
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'exceptions');
+    const one = await scan(dir);
+    assert.equal(one.code, 1, one.text);
+    assert.match(one.text, new RegExp(`gitleaks: 1 finding\\(s\\)\\n {2}autom8x-email a\\.md:4 ${old.slice(0, 12)}\\n`, 'u'));
+    assert.doesNotMatch(one.text, /a\.md:2 /u);
+
+    writeFileSync(join(dir, IGNORE_FILE), `${old}:a.md:autom8x-email:2\n${old}:a.md:autom8x-email:4\n`);
+    const none = await scan(dir);
+    assert.equal(none.code, 0, none.text);
+    assert.match(none.text, /gitleaks: clean/u);
+
+    // Without its commit a line would silence a.md:4 in every commit, the tree's too: refused.
+    writeFileSync(join(dir, IGNORE_FILE), `${old}:a.md:autom8x-email:2\na.md:autom8x-email:4\n`);
+    const global = await scan(dir);
+    assert.equal(global.code, 2, global.text);
+    assert.match(global.text, /gitleaks: error — \.gitleaksignore line 2: not one exact <commit>:<file>:<rule>:<line> fingerprint/u);
+    assert.doesNotMatch(global.text, /gmail/u);
   });
 });
 

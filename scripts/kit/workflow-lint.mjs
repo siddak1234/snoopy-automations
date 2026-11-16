@@ -1,21 +1,31 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/workflow-lint.mjs
 // The workflows' lint (the owner's security review, 2026-11-15: "scanner, safe, not bulky";
 // the prevention plan's "zizmor in CI: every workflow declares its permissions").
-// `node scripts/kit/workflow-lint.mjs` runs zizmor 1.32.0 over .github/workflows/:
+// `node scripts/kit/workflow-lint.mjs` runs zizmor 1.32.0 over the working tree's
+// .github/workflows/; `--commit <sha>` over that commit's, and `--pre-push` over each commit a
+// push names (pre-push's stdin: one `<local ref> <local sha> <remote ref> <remote sha>` line per
+// ref; each local sha once, a deletion's zeros skipped) — so a hook judges what is pushed, never
+// the working tree, which a dirty change could make pass a bad commit or fail a good one
+// (BUILD-PLAN 30.19.15). A commit's .github/ is read from git's objects (`ls-tree`, `cat-file`;
+// no attribute can leave a file out) into a temporary folder, removed after, and its own
+// .github/zizmor.yml is the config.
 //   - the binary is pinned by sha256 per platform, fetched and cached exactly as the
 //     private-data scan's gitleaks (`ensureBinary`: the archive checked before it is written or
 //     extracted), in ~/.cache/autom8x/zizmor/1.32.0/ or $RUNNER_TEMP under Actions;
 //   - it runs OFFLINE: --offline, and GH_TOKEN, GITHUB_TOKEN and ZIZMOR_GITHUB_TOKEN taken out
 //     of its environment, so no audit reaches GitHub and no token reaches the tool;
+//   - it fails closed: --strict-collection, so a workflow zizmor cannot load (a syntax or schema
+//     error) fails the lint (exit 2) instead of being skipped with a warning while it says PASS
+//     (BUILD-PLAN 30.19.14);
 //   - the repository's own .github/zizmor.yml (CONFIG) is its config when there is one (each ignore
 //     there carries its reason), else zizmor's defaults; an inline `# zizmor: ignore[rule]`
 //     with its reason works too.
 // Prints one line per finding (rule, severity, path:line) and the count by rule. Exit 0 clean,
 // 1 findings, 2 usage or tool error.
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, relative } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { download, ensureBinary, extractMember, run, toolCache } from './private-data-scan.mjs';
 
@@ -50,9 +60,60 @@ export function offlineEnv(env) {
   return Object.fromEntries(Object.entries(env).filter(([key]) => !TOKEN_VARIABLES.includes(key) && !key.startsWith('ZIZMOR_')));
 }
 
-/** Pure: zizmor's arguments: offline, JSON, quiet, the config when the repository has one. */
+/** Pure: zizmor's arguments: offline, JSON, quiet, an input it cannot load an error, the config when the repository has one. */
 export function zizmorArgs({ config }) {
-  return ['--offline', '--format', 'json', '--no-progress', '--quiet', ...(config ? ['--config', config] : ['--no-config']), WORKFLOWS];
+  return ['--offline', '--format', 'json', '--no-progress', '--quiet', '--strict-collection', ...(config ? ['--config', config] : ['--no-config']), WORKFLOWS];
+}
+
+export const USAGE = 'usage: node scripts/kit/workflow-lint.mjs [--commit <sha> | --pre-push]';
+const HEX = /^[0-9a-f]{7,64}$/u;
+const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
+
+/** Pure: what to lint — `{ tree: true }`, `{ commit }` or `{ prePush: true }` — or null (usage). */
+export function parseArguments(argv) {
+  if (argv.length === 0) return { tree: true };
+  if (argv.length === 1 && argv[0] === '--pre-push') return { prePush: true };
+  if (argv.length === 2 && argv[0] === '--commit' && HEX.test(argv[1])) return { commit: argv[1] };
+  return null;
+}
+
+/** Pure: the commits pre-push's stdin names — each line's local sha, once; a deletion (all zeros) skipped. */
+export function pushedCommits(stdin) {
+  const commits = [];
+  for (const line of stdin.split('\n').map((each) => each.trim()).filter(Boolean)) {
+    const words = line.split(/\s+/u);
+    if (words.length !== 4 || !OBJECT_ID.test(words[1])) throw new Error('pre-push: a line that is not "<local ref> <local sha> <remote ref> <remote sha>"');
+    if (!/^0+$/u.test(words[1]) && !commits.includes(words[1])) commits.push(words[1]);
+  }
+  return commits;
+}
+
+/**
+ * A commit's .github/, read from git's objects into a new temporary folder (the caller removes it):
+ * every regular file, its bytes as committed. Throws when the commit has no .github/workflows.
+ */
+export function commitGithub(root, commit) {
+  let sha;
+  try {
+    sha = run('git', ['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], { cwd: root }).stdout.trim();
+  } catch {
+    throw new Error(`${commit} is not a commit in this repository`);
+  }
+  const entries = run('git', ['ls-tree', '-r', '-z', '--full-tree', sha, '--', '.github'], { cwd: root }).stdout.split('\0').filter(Boolean)
+    .map((entry) => ({ meta: entry.slice(0, entry.indexOf('\t')).split(' '), path: entry.slice(entry.indexOf('\t') + 1) }));
+  if (!entries.some(({ path }) => path.startsWith(`${WORKFLOWS}/`))) throw new Error(`no ${WORKFLOWS} at ${sha.slice(0, 12)}`);
+  const dir = mkdtempSync(join(tmpdir(), 'autom8x-workflow-lint-'));
+  try {
+    for (const { meta: [mode, , object], path } of entries) {
+      if (mode !== '100644' && mode !== '100755') continue;
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), run('git', ['cat-file', 'blob', object], { cwd: root }).stdout);
+    }
+    return { dir, sha };
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 /**
@@ -91,32 +152,56 @@ export async function zizmorBinary(env = process.env, home = homedir(), { fetchB
   return ensureBinary({ dir: zizmorCache(env, home), asset, download: fetchBytes, extract, binary: 'zizmor' });
 }
 
-/** The lint; `home`, `binary` and `spawn` are the tests' (zizmor's path and its runner). Resolves to the exit code. */
-export async function main(argv, { cwd = process.cwd(), env = process.env, out = console.log, home = homedir(), binary = () => zizmorBinary(env, home), spawn = spawnSync } = {}) {
+/** zizmor over `dir`'s .github/workflows/, `where` naming it in the output. Returns 0 clean or 1 findings; throws on a tool error. */
+function lintDir(dir, where, { bin, env, spawn, out, say }) {
+  const config = existsSync(join(dir, CONFIG)) ? CONFIG : null;
+  const r = run(bin, zizmorArgs({ config }), { cwd: dir, env: offlineEnv(env), inherit: false, allow: [0, ...FINDINGS_EXITS], spawn });
+  const findings = readFindings(r.stdout.trim() || '[]');
+  say(`zizmor ${ZIZMOR_VERSION}, offline, over ${WORKFLOWS}/ ${where} (${config ? `config ${CONFIG}` : 'no config'})`);
+  if (!findings.length) {
+    say('PASS');
+    return 0;
+  }
+  say(`${findings.length} finding(s)`);
+  for (const line of summary(findings)) out(line);
+  say('FAIL — fix each by its rule (https://docs.zizmor.sh/audits/), or ignore it in .github/zizmor.yml with its reason');
+  return 1;
+}
+
+/**
+ * The lint; `home`, `binary` and `spawn` are the tests' (zizmor's path and its runner), `stdin` the
+ * pre-push ref lines' reader. Resolves to the exit code: the worst of the commits linted.
+ */
+export async function main(argv, { cwd = process.cwd(), env = process.env, out = console.log, home = homedir(), binary = () => zizmorBinary(env, home), spawn = spawnSync, stdin = () => readFileSync(0, 'utf8') } = {}) {
   const say = (line) => out(`workflow-lint: ${line}`);
-  if (argv.length) {
-    out('usage: node scripts/kit/workflow-lint.mjs');
+  const target = parseArguments(argv);
+  if (!target) {
+    out(USAGE);
     return 2;
   }
+  const made = [];
   try {
     const root = run('git', ['rev-parse', '--show-toplevel'], { cwd }).stdout.trim();
-    if (!existsSync(join(root, WORKFLOWS))) throw new Error(`no ${WORKFLOWS} in ${relative(cwd, root) || '.'}`);
-    const config = existsSync(join(root, CONFIG)) ? CONFIG : null;
-    const bin = await binary();
-    const r = run(bin, zizmorArgs({ config }), { cwd: root, env: offlineEnv(env), inherit: false, allow: [0, ...FINDINGS_EXITS], spawn });
-    const findings = readFindings(r.stdout.trim() || '[]');
-    say(`zizmor ${ZIZMOR_VERSION}, offline, over ${WORKFLOWS}/ (${config ? `config ${CONFIG}` : 'no config'})`);
-    if (!findings.length) {
-      say('PASS');
+    const commits = target.tree ? [] : target.commit ? [target.commit] : pushedCommits(stdin());
+    if (target.tree && !existsSync(join(root, WORKFLOWS))) throw new Error(`no ${WORKFLOWS} in ${relative(cwd, root) || '.'}`);
+    if (target.prePush && commits.length === 0) {
+      say('PASS — the push names no commit');
       return 0;
     }
-    say(`${findings.length} finding(s)`);
-    for (const line of summary(findings)) out(line);
-    say('FAIL — fix each by its rule (https://docs.zizmor.sh/audits/), or ignore it in .github/zizmor.yml with its reason');
-    return 1;
+    const places = target.tree ? [{ dir: root, where: 'in the working tree' }] : commits.map((commit) => {
+      const { dir, sha } = commitGithub(root, commit);
+      made.push(dir);
+      return { dir, where: `at ${sha.slice(0, 12)}` };
+    });
+    const bin = await binary();
+    let status = 0;
+    for (const { dir, where } of places) status = Math.max(status, lintDir(dir, where, { bin, env, spawn, out, say }));
+    return status;
   } catch (error) {
     say(`ERROR — ${error.message}`);
     return 2;
+  } finally {
+    for (const dir of made) rmSync(dir, { recursive: true, force: true });
   }
 }
 

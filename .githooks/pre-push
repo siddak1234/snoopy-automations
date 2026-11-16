@@ -4,19 +4,24 @@
 # since origin/main (CLAUDE.md rule 10) and is refused on a finding (exit 1), a scan
 # that cannot run (any other non-zero exit) or a missing scan. Where else the
 # scan runs: README, "No private data, ever". Then the kit's workflow lint
-# (zizmor, offline, over .github/workflows/, a few seconds), refused the same way.
+# (zizmor, offline, over the .github/workflows/ of each commit the push names,
+# each ref's tip, never the working tree; BUILD-PLAN 30.19.15, snoopy-backend),
+# refused the same way.
 # Installed via `npm run hooks:install` (git config core.hooksPath .githooks).
 #
 # git calls this with: $1=remote name, $2=remote url, and stdin lines of
-# "<local_ref> <local_sha> <remote_ref> <remote_sha>", handed on to the scan's
-# stdin; it reads the commits since origin/main itself.
+# "<local_ref> <local_sha> <remote_ref> <remote_sha>", read once and handed to
+# the scan (it reads the commits since origin/main itself) and to the workflow
+# lint (`--pre-push`: the .github/ of each ref's tip).
+
+refs=$(cat)
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 if [ ! -f scripts/kit/private-data-scan.mjs ]; then
   echo "pre-push: the kit's private-data scan is missing from this clone — refused." >&2
   exit 1
 fi
-node scripts/kit/private-data-scan.mjs --push >&2
+printf '%s\n' "$refs" | node scripts/kit/private-data-scan.mjs --push >&2
 status=$?
 if [ "$status" -eq 1 ]; then
   echo "pre-push: the private-data scan found private data in the commits since origin/main — refused. Rewrite them with reserved values (CLAUDE.md rule 10)." >&2
@@ -30,7 +35,7 @@ if [ ! -f scripts/kit/workflow-lint.mjs ]; then
   echo "pre-push: the kit's workflow lint is missing from this clone — refused." >&2
   exit 1
 fi
-node scripts/kit/workflow-lint.mjs </dev/null >&2
+printf '%s\n' "$refs" | node scripts/kit/workflow-lint.mjs --pre-push >&2
 status=$?
 if [ "$status" -eq 1 ]; then
   echo "pre-push: the workflow lint found a finding (its rule is above) — refused. Fix it, or ignore it in .github/zizmor.yml with its reason." >&2

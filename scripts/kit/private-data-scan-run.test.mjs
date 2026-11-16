@@ -1,8 +1,9 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/private-data-scan-run.test.mjs
-// The private-data scan run whole (BUILD-PLAN 30.19.8, 30.19.9, 30.19.11), imported by kit.test.mjs: main(),
-// repoName() and gitleaks() in scratch git repos, with gitleaks' binary and runner injected (no download, no
-// real gitleaks — private-data-scan.test.mjs runs the real one): the exit codes 0, 1 and 2, the config each
-// repository gets, a malformed client-name pattern that no output ever quotes, and the fork's message.
+// The private-data scan run whole (BUILD-PLAN 30.19.8, 30.19.9, 30.19.11, 30.19.13), imported by kit.test.mjs:
+// main(), repoName() and gitleaks() in scratch git repos, with gitleaks' binary and runner injected (no download,
+// no real gitleaks — private-data-scan.test.mjs runs the real one): the exit codes 0, 1 and 2, the config each
+// repository gets, a malformed client-name pattern that no output ever quotes, a git failure named as one, and
+// the fork's message.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { GIT, GIT_REPO, quietEnv } from './guard-cases.test.mjs';
-import { ereToRegExp, gitleaks, gitleaksBinary, LEAKS_EXIT, main, PATTERN_ERROR, patternSource, repoName, run } from './private-data-scan.mjs';
+import { ereToRegExp, gitleaks, gitleaksBinary, LEAKS_EXIT, main, nameFindings, PATTERN_ERROR, patternSource, repoName, run } from './private-data-scan.mjs';
 
 let TMP;
 before(() => (TMP = mkdtempSync(join(tmpdir(), 'autom8x-kit-scan-run-'))));
@@ -157,7 +158,31 @@ describe('private-data scan: a malformed pattern is never echoed (30.19.8)', () 
   test('a quiet command’s error leaves out what it wrote to stderr', () => {
     const spawn = () => ({ status: 128, stdout: '', stderr: `fatal: command line, '${bad}': Unmatched (` });
     assert.throws(() => run('git', ['grep'], { spawn }), (error) => error.message.includes(bad));
-    assert.throws(() => run('git', ['grep'], { spawn, quiet: true }), (error) => !error.message.includes('zqvx') && /exit 128/u.test(error.message));
+    assert.throws(() => run('git', ['grep'], { spawn, quiet: true }), (error) => !error.message.includes('zqvx') && /exit 128/u.test(error.message) && error.status === 128);
+  });
+});
+
+describe('private-data scan: a git failure is named as one, never as the pattern (30.19.13)', () => {
+  const failed = (verb) => new RegExp(`git ${verb} failed \\(exit 128\\); its message is not shown because it can quote the pattern`, 'u');
+  test('--tree in a repository with no commit: git grep failed, with its exit code; not "the pattern could not be used"', async () => {
+    const dir = join(TMP, `empty${++made}`);
+    mkdirSync(dir);
+    git(dir, 'init', '-q', '-b', 'main');
+    const { code, text } = await scan(dir, ['--tree']);
+    assert.equal(code, 2, text);
+    assert.match(text, new RegExp(`client names: error — ${failed('grep').source}`, 'u'));
+    assert.equal(text.includes(PATTERN_ERROR), false, text);
+  });
+
+  test('git log outside a repository failed by itself; a valid pattern is never blamed, a malformed one still is', async () => {
+    const loose = join(TMP, `loose${++made}`);
+    mkdirSync(loose);
+    await outside(() => {
+      assert.throws(() => nameFindings(loose, 'history', 'wrenmoor'), (error) => failed('log').test(error.message) && !error.message.includes(PATTERN_ERROR));
+      const dir = repo(mapOf('snoopy'));
+      assert.throws(() => nameFindings(dir, 'history', ['zqvx(hold', 'ings'].join('')), (error) => error.message === `git log: ${PATTERN_ERROR}`);
+      assert.throws(() => nameFindings(dir, 'tree', ['zqvx(hold', 'ings'].join('')), (error) => error.message === `git grep: ${PATTERN_ERROR}`);
+    });
   });
 });
 
