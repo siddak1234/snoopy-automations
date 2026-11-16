@@ -58,7 +58,7 @@ export function base(root: string): string {
  * that removed them (BUILD-PLAN 30.15.2). Git keeps them; a suite that still runs a retired
  * version's code reads its file from here (`retiredFile`).
  */
-export const RETIRED_AT = '30d6798df2817e0b97ad4a7a26b70b018273eef7';
+export const RETIRED_AT = '41ee3b778111c8b2e0055a5ad1f2937c61821c3b';
 
 /** A retired version's manifest file, as committed, read from git at `RETIRED_AT`. */
 export function retiredFile(root: string, name: string): string {
