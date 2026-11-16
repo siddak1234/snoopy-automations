@@ -1,0 +1,32 @@
+# The private-data scan's reviewed history findings (BUILD-PLAN 30.19.3 and 30.19.16, 2026-11-16):
+# each line is one finding's exact gitleaks fingerprint (commit:file:rule:line) in a commit
+# before the 2026-11-16 history rewrite, never its value. These 27 are the company's own Google service-account addresses on old flow versions:
+# no client, test-user or outside person's data (the owner, 2026-11-15: "what is not fine is
+# external users or test user or client info"). Any finding not listed here still fails.
+16b94c5eab3479b0ce825f25e3080ba46c0f29e8:manifests/invoice-check.v2.json:autom8x-email:72
+16b94c5eab3479b0ce825f25e3080ba46c0f29e8:manifests/invoice-check.v3.json:autom8x-email:65
+16b94c5eab3479b0ce825f25e3080ba46c0f29e8:manifests/invoice-check.v4.json:autom8x-email:95
+16b94c5eab3479b0ce825f25e3080ba46c0f29e8:manifests/invoice-intake.v3.json:autom8x-email:59
+30250cc08b2e70c31b47ca3676eb108e2e28efc7:automations/invoice-processing/test/manifest.test.ts:autom8x-email:311
+30250cc08b2e70c31b47ca3676eb108e2e28efc7:manifests/invoice-processing.v5.json:autom8x-email:257
+49636792fd3cafd10fa727e67a9ad4aadf690ba6:automations/candidate-reviewer/test/manifest.test.ts:autom8x-email:183
+49636792fd3cafd10fa727e67a9ad4aadf690ba6:manifests/candidate-reviewer.v1.json:autom8x-email:280
+6a37a010fb58d67920cc98684b3f90830cb46d8b:manifests/icd10-code-check.v2.json:autom8x-email:3673
+7bbba6263f9a8aa735e13a80b47e7a8c381fc127:manifests/invoice-intake.v2.json:autom8x-email:59
+86825361d2f9fc32f692ee5301e91c6e37d07bfb:automations/invoice-processing/test/manifest.test.ts:autom8x-email:206
+86825361d2f9fc32f692ee5301e91c6e37d07bfb:manifests/invoice-processing.v3.json:autom8x-email:243
+8edf7a1df91b1017b93d7cffd2f1246fae448341:automations/invoice-processing/test/manifest.test.ts:autom8x-email:317
+8edf7a1df91b1017b93d7cffd2f1246fae448341:manifests/invoice-processing.v6.json:autom8x-email:257
+991668e9844692c0a002fcc4916dd5c1340935b7:manifests/invoice-processing.v1.json:autom8x-email:93
+b97f4fee525451d3ef9e3a92d9e914b785488155:automations/candidate-reviewer/test/manifest.test.ts:autom8x-email:222
+b97f4fee525451d3ef9e3a92d9e914b785488155:manifests/candidate-reviewer.v4.json:autom8x-email:285
+bedb418d245e6d1997291b69b550079a8debca63:manifests/invoice-intake.v1.json:autom8x-email:66
+c9ed65a8f037567fbc260d00dd3822e9d2f11696:automations/invoice-processing/test/manifest.test.ts:autom8x-email:231
+c9ed65a8f037567fbc260d00dd3822e9d2f11696:manifests/invoice-processing.v2.json:autom8x-email:268
+cc5ee6a2545f5157765cf82ccf46d078c6f8736e:automations/candidate-reviewer/test/manifest.test.ts:autom8x-email:214
+cc5ee6a2545f5157765cf82ccf46d078c6f8736e:manifests/candidate-reviewer.v2.json:autom8x-email:285
+d38610bae29e1bee5f88d47142dde7e54ec08bb5:manifests/icd10-code-check.v1.json:autom8x-email:134
+fa5e2099bfe90796aea5a928b64b8884fbf42508:automations/invoice-processing/test/manifest.test.ts:autom8x-email:309
+fa5e2099bfe90796aea5a928b64b8884fbf42508:manifests/invoice-processing.v4.json:autom8x-email:257
+fcd1d93db6b13344eb1601802cb01bb287c04b89:automations/invoice-processing/test/manifest.test.ts:autom8x-email:323
+fcd1d93db6b13344eb1601802cb01bb287c04b89:manifests/invoice-processing.v7.json:autom8x-email:261
