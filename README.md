@@ -941,7 +941,7 @@ hooks link here.
 offline and with no token, over `.github/workflows/`, and fails closed (`--strict-collection`: a
 workflow zizmor cannot load is a failure): before every push (`.githooks/pre-push`, after the scan,
 as `--pre-push` with git's ref lines: the `.github/` of each commit the push names, each ref's tip,
-never the working tree; a tip with no `.github/workflows` is clean, a symlink or submodule there is named, not linted, and a `.github/workflows` of only those fails)
+never the working tree; a tip with no `.github/workflows` is clean, a symlink or submodule there is named, not linted, and a `.github/workflows` that is one, or holds only those, fails)
 and in CI's Verify (its "Workflow lint" step, after "No private data"). A finding, a lint
 that cannot run or a missing lint refuses the push or the run; a finding is fixed by its rule, or
 ignored with its reason in zizmor's config file beside the workflows (none yet). The workflows hold

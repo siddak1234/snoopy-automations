@@ -6,7 +6,7 @@
 // CI's lint step fetches it), never skipped — a gate that refuses skipped tests counts it.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -28,7 +28,11 @@ const WORKFLOW = {
   unloadable: ['name: t', 'on: push', 'permissions:', '  contents: read', 'jobs:', '  a:', '    runs-on: ubuntu-24.04', '    stepz:', '      - run: echo hi', ''].join('\n'),
 };
 const ZEROS = '0'.repeat(40);
-const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv() }).trim();
+/** git in `cwd`; a last argument `{ input }` is its stdin. */
+const git = (cwd, ...args) => {
+  const options = typeof args.at(-1) === 'object' ? args.pop() : {};
+  return execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv(), ...options }).trim();
+};
 /** Everything in `dir` committed; the new commit's id. */
 function commit(dir, message) {
   git(dir, 'add', '-A');
@@ -209,6 +213,28 @@ describe('workflow lint: main(), zizmor injected', () => {
       assert.equal(code, 2, text);
       assert.match(text, new RegExp(`ERROR — \\.github/workflows at ${linkOnly.slice(0, 12)} holds no file to lint: \\.github/workflows/b\\.yml \\(a symlink\\)`, 'u'));
       assert.equal(calls.length, 0, 'zizmor is not run');
+    }
+    // Beside a good tip, the link-only tip still refuses the push, and no temporary folder is left.
+    const before = readdirSync(tmpdir()).filter((name) => name.startsWith('autom8x-workflow-lint-')).length;
+    const both = await lint(dir, { argv: ['--pre-push'], stdin: `${pushOf(sha)}refs/heads/y ${linkOnly} refs/heads/y ${ZEROS}\n` });
+    assert.equal(both.code, 2, both.text);
+    assert.equal(both.calls.length, 0, 'zizmor is not run when a tip cannot be linted');
+    assert.equal(readdirSync(tmpdir()).filter((name) => name.startsWith('autom8x-workflow-lint-')).length, before, 'no folder left');
+
+    // .github/workflows itself a symlink, or a submodule: nothing in it can be read, so it fails closed too.
+    for (const [mode, kind] of [['120000', 'a symlink'], ['160000', 'a submodule']]) {
+      const odd = repo({ 'ci/a.yml': WORKFLOW.good });
+      const object = mode === '120000' ? git(odd, 'hash-object', '-w', '--stdin', { input: '../ci' }) : 'a'.repeat(40);
+      git(odd, 'add', '-A');
+      git(odd, 'update-index', '--add', '--cacheinfo', `${mode},${object},.github/workflows`);
+      git(odd, 'commit', '-q', '-m', kind);
+      const tip = git(odd, 'rev-parse', 'HEAD');
+      for (const argv of [['--commit', tip], ['--pre-push']]) {
+        const { code, text, calls } = await lint(odd, { argv, stdin: pushOf(tip) });
+        assert.equal(code, 2, `${kind} ${argv[0]}: ${text}`);
+        assert.match(text, new RegExp(`holds no file to lint: \\.github/workflows \\(${kind}\\)`, 'u'));
+        assert.equal(calls.length, 0);
+      }
     }
   });
 

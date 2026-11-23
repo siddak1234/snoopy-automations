@@ -12,8 +12,8 @@
 // symlink or a submodule there is named in the output, not linted (git holds a link's target, or a
 // submodule's commit, not a file). A commit with no .github/workflows entry is exit 2 under
 // `--commit`; under `--pre-push` such a tip (an orphan branch, a tag on an old commit) has nothing to
-// lint and counts clean. A .github/workflows with entries but no file among them (only symlinks or
-// submodules) is exit 2 either way, naming them: it fails closed (BUILD-PLAN 30.19.20).
+// lint and counts clean. A .github/workflows that is itself a symlink or a submodule, or holds no
+// file (only those), is exit 2 either way, naming them: it fails closed (BUILD-PLAN 30.19.20).
 //   - the binary is pinned by sha256 per platform, fetched and cached exactly as the
 //     private-data scan's gitleaks (`ensureBinary`: the archive checked before it is written or
 //     extracted), in ~/.cache/autom8x/zizmor/1.32.0/ or $RUNNER_TEMP under Actions;
@@ -108,7 +108,8 @@ function blobBytes(root, object) {
  * A commit's .github/, read from git's objects into a new temporary folder (the caller removes it):
  * every regular file, its bytes as committed. `skipped` names each entry that is not a file
  * (`<path> (a symlink)`). `dir` is null, and no folder made, when .github/workflows has no entry;
- * throws when it has entries and none is a file, since nothing there could be linted.
+ * throws when it is itself a symlink or submodule, or holds entries and no file, since nothing there
+ * could be linted.
  */
 export function commitGithub(root, commit) {
   let sha;
@@ -120,10 +121,12 @@ export function commitGithub(root, commit) {
   const entries = run('git', ['ls-tree', '-r', '-z', '--full-tree', sha, '--', '.github'], { cwd: root }).stdout.split('\0').filter(Boolean)
     .map((entry) => ({ meta: entry.slice(0, entry.indexOf('\t')).split(' '), path: entry.slice(entry.indexOf('\t') + 1) }));
   const files = entries.filter(({ meta: [mode] }) => REGULAR.includes(mode));
-  const skipped = entries.filter(({ meta: [mode] }) => !REGULAR.includes(mode)).map(({ meta: [mode], path }) => `${path} (${SKIPPED_MODES[mode] ?? `mode ${mode}`})`);
-  const inWorkflows = ({ path }) => path.startsWith(`${WORKFLOWS}/`);
+  const named = ({ meta: [mode], path }) => `${path} (${SKIPPED_MODES[mode] ?? `mode ${mode}`})`;
+  const skipped = entries.filter(({ meta: [mode] }) => !REGULAR.includes(mode)).map(named);
+  // The folder itself (a symlink or a submodule at .github/workflows) is in it too.
+  const inWorkflows = ({ path }) => path === WORKFLOWS || path.startsWith(`${WORKFLOWS}/`);
   if (!entries.some(inWorkflows)) return { dir: null, sha, skipped };
-  if (!files.some(inWorkflows)) throw new Error(`${WORKFLOWS} at ${sha.slice(0, 12)} holds no file to lint: ${skipped.filter((entry) => entry.startsWith(`${WORKFLOWS}/`)).join(', ')}`);
+  if (!files.some(inWorkflows)) throw new Error(`${WORKFLOWS} at ${sha.slice(0, 12)} holds no file to lint: ${entries.filter(inWorkflows).map(named).join(', ')}`);
   const dir = mkdtempSync(join(tmpdir(), 'autom8x-workflow-lint-'));
   try {
     for (const { meta: [, , object], path } of files) {
