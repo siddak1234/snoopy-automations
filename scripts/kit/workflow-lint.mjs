@@ -8,7 +8,12 @@
 // the working tree, which a dirty change could make pass a bad commit or fail a good one
 // (BUILD-PLAN 30.19.15). A commit's .github/ is read from git's objects (`ls-tree`, `cat-file`;
 // no attribute can leave a file out) into a temporary folder, removed after, and its own
-// .github/zizmor.yml is the config.
+// .github/zizmor.yml is the config: each regular file's bytes as committed, never re-encoded; a
+// symlink or a submodule there is named in the output, not linted (git holds a link's target, or a
+// submodule's commit, not a file). A commit with no .github/workflows entry is exit 2 under
+// `--commit`; under `--pre-push` such a tip (an orphan branch, a tag on an old commit) has nothing to
+// lint and counts clean. A .github/workflows that is itself a symlink or a submodule, or holds no
+// file (only those), is exit 2 either way, naming them: it fails closed (BUILD-PLAN 30.19.20).
 //   - the binary is pinned by sha256 per platform, fetched and cached exactly as the
 //     private-data scan's gitleaks (`ensureBinary`: the archive checked before it is written or
 //     extracted), in ~/.cache/autom8x/zizmor/1.32.0/ or $RUNNER_TEMP under Actions;
@@ -88,9 +93,23 @@ export function pushedCommits(stdin) {
   return commits;
 }
 
+/** The tree entries under .github/ that are not files, by git's mode: named in the output, never linted. */
+export const SKIPPED_MODES = { 120000: 'a symlink', 160000: 'a submodule' };
+const REGULAR = ['100644', '100755'];
+
+/** A blob's bytes as committed: no encoding, so a byte that is not UTF-8 is never rewritten. */
+function blobBytes(root, object) {
+  const r = spawnSync('git', ['cat-file', 'blob', object], { cwd: root, maxBuffer: 1 << 30 });
+  if (r.error || r.status !== 0) throw new Error(`git cat-file blob ${object} failed (exit ${r.status ?? r.error?.code})`);
+  return r.stdout;
+}
+
 /**
  * A commit's .github/, read from git's objects into a new temporary folder (the caller removes it):
- * every regular file, its bytes as committed. Throws when the commit has no .github/workflows.
+ * every regular file, its bytes as committed. `skipped` names each entry that is not a file
+ * (`<path> (a symlink)`). `dir` is null, and no folder made, when .github/workflows has no entry;
+ * throws when it is itself a symlink or submodule, or holds entries and no file, since nothing there
+ * could be linted.
  */
 export function commitGithub(root, commit) {
   let sha;
@@ -101,15 +120,20 @@ export function commitGithub(root, commit) {
   }
   const entries = run('git', ['ls-tree', '-r', '-z', '--full-tree', sha, '--', '.github'], { cwd: root }).stdout.split('\0').filter(Boolean)
     .map((entry) => ({ meta: entry.slice(0, entry.indexOf('\t')).split(' '), path: entry.slice(entry.indexOf('\t') + 1) }));
-  if (!entries.some(({ path }) => path.startsWith(`${WORKFLOWS}/`))) throw new Error(`no ${WORKFLOWS} at ${sha.slice(0, 12)}`);
+  const files = entries.filter(({ meta: [mode] }) => REGULAR.includes(mode));
+  const named = ({ meta: [mode], path }) => `${path} (${SKIPPED_MODES[mode] ?? `mode ${mode}`})`;
+  const skipped = entries.filter(({ meta: [mode] }) => !REGULAR.includes(mode)).map(named);
+  // The folder itself (a symlink or a submodule at .github/workflows) is in it too.
+  const inWorkflows = ({ path }) => path === WORKFLOWS || path.startsWith(`${WORKFLOWS}/`);
+  if (!entries.some(inWorkflows)) return { dir: null, sha, skipped };
+  if (!files.some(inWorkflows)) throw new Error(`${WORKFLOWS} at ${sha.slice(0, 12)} holds no file to lint: ${entries.filter(inWorkflows).map(named).join(', ')}`);
   const dir = mkdtempSync(join(tmpdir(), 'autom8x-workflow-lint-'));
   try {
-    for (const { meta: [mode, , object], path } of entries) {
-      if (mode !== '100644' && mode !== '100755') continue;
+    for (const { meta: [, , object], path } of files) {
       mkdirSync(dirname(join(dir, path)), { recursive: true });
-      writeFileSync(join(dir, path), run('git', ['cat-file', 'blob', object], { cwd: root }).stdout);
+      writeFileSync(join(dir, path), blobBytes(root, object));
     }
-    return { dir, sha };
+    return { dir, sha, skipped };
   } catch (error) {
     rmSync(dir, { recursive: true, force: true });
     throw error;
@@ -188,11 +212,19 @@ export async function main(argv, { cwd = process.cwd(), env = process.env, out =
       say('PASS — the push names no commit');
       return 0;
     }
-    const places = target.tree ? [{ dir: root, where: 'in the working tree' }] : commits.map((commit) => {
-      const { dir, sha } = commitGithub(root, commit);
+    const places = target.tree ? [{ dir: root, where: 'in the working tree' }] : commits.flatMap((commit) => {
+      const { dir, sha, skipped } = commitGithub(root, commit);
+      const at = `at ${sha.slice(0, 12)}`;
+      for (const entry of skipped) say(`${at}: not linted, ${entry}`);
+      if (!dir) {
+        if (target.commit) throw new Error(`no ${WORKFLOWS} at ${sha.slice(0, 12)}`);
+        say(`${at}: no ${WORKFLOWS} file, nothing to lint — clean`);
+        return [];
+      }
       made.push(dir);
-      return { dir, where: `at ${sha.slice(0, 12)}` };
+      return [{ dir, where: at }];
     });
+    if (places.length === 0) return 0;
     const bin = await binary();
     let status = 0;
     for (const { dir, where } of places) status = Math.max(status, lintDir(dir, where, { bin, env, spawn, out, say }));

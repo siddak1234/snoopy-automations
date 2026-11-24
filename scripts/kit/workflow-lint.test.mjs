@@ -1,12 +1,12 @@
 // autom8x-kit v1 — canonical: snoopy-backend/scripts/kit/workflow-lint.test.mjs
 // The workflow lint's tests, imported by kit.test.mjs. The pure parts; main() in scratch git repos with zizmor's
 // binary and runner injected (the offline flag and environment, the config, exit 0, 1 and 2, a commit's own
-// .github/); then the real zizmor 1.32.0 on fixture workflows (a workflow it cannot load, a pushed commit beside a
+// .github/ byte for byte, a pushed tip with none, a symlink or submodule named); then the real zizmor 1.32.0 on fixture workflows (a workflow it cannot load, a pushed commit beside a
 // different working tree): the pinned, checksum-verified binary the lint itself uses (cached; fetched once, as
 // CI's lint step fetches it), never skipped — a gate that refuses skipped tests counts it.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -28,7 +28,11 @@ const WORKFLOW = {
   unloadable: ['name: t', 'on: push', 'permissions:', '  contents: read', 'jobs:', '  a:', '    runs-on: ubuntu-24.04', '    stepz:', '      - run: echo hi', ''].join('\n'),
 };
 const ZEROS = '0'.repeat(40);
-const git = (cwd, ...args) => execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv() }).trim();
+/** git in `cwd`; a last argument `{ input }` is its stdin. */
+const git = (cwd, ...args) => {
+  const options = typeof args.at(-1) === 'object' ? args.pop() : {};
+  return execFileSync('git', [...GIT, ...args], { cwd, encoding: 'utf8', env: quietEnv(), ...options }).trim();
+};
 /** Everything in `dir` committed; the new commit's id. */
 function commit(dir, message) {
   git(dir, 'add', '-A');
@@ -63,10 +67,11 @@ const finding = (ident, row, kind = 'Primary', ignored = false) => ({
   locations: [{ symbolic: { kind: 'Related', key: { Local: { verbatim_path: 'other.yml' } } }, concrete: { location: { start_point: { row: 0 } } } },
     { symbolic: { kind, key: { Local: { verbatim_path: '.github/workflows/a.yml' } } }, concrete: { location: { start_point: { row } }, feature: 'secret-looking yaml' } }],
 });
-async function lint(dir, { env = {}, status = 0, stdout = '[]', binary = async () => '/fake/zizmor', argv = [], stdin = '' } = {}) {
+async function lint(dir, { env = {}, status = 0, stdout = '[]', binary = async () => '/fake/zizmor', argv = [], stdin = '', peek = () => {} } = {}) {
   const calls = [];
   const lines = [];
-  const spawn = (command, args, options) => (calls.push({ command, args, env: options.env, cwd: options.cwd }), { status, stdout, stderr: 'zizmor said no' });
+  // `peek` sees zizmor's folder while it still exists (the lint removes it after).
+  const spawn = (command, args, options) => (peek(options.cwd), calls.push({ command, args, env: options.env, cwd: options.cwd }), { status, stdout, stderr: 'zizmor said no' });
   const code = await outside(() => main(argv, { cwd: dir, env, out: (line) => lines.push(line), home: TMP, binary, spawn, stdin: () => stdin }));
   return { code, text: lines.join('\n'), calls };
 }
@@ -150,6 +155,87 @@ describe('workflow lint: main(), zizmor injected', () => {
     const nothing = await lint(empty, { argv: ['--pre-push'], stdin: `(delete) ${ZEROS} refs/heads/old ${'f'.repeat(40)}\n` });
     assert.equal(nothing.code, 0, nothing.text);
     assert.equal(nothing.calls.length, 0);
+  });
+
+  test('--pre-push counts a tip with no .github/workflows clean (an orphan branch, a tag on an old commit) and still lints the others; --commit on it stays exit 2 (30.19.20)', async () => {
+    const dir = repo({ 'a.md': 'a\n' });
+    const old = commit(dir, 'before any workflow');
+    mkdirSync(join(dir, '.github/workflows'), { recursive: true });
+    writeFileSync(join(dir, '.github/workflows/a.yml'), WORKFLOW.good);
+    const tip = commit(dir, 'a workflow');
+    const tag = `refs/tags/v0 ${old} refs/tags/v0 ${ZEROS}\n`;
+    const alone = await lint(dir, { argv: ['--pre-push'], stdin: tag });
+    assert.equal(alone.code, 0, alone.text);
+    assert.match(alone.text, new RegExp(`at ${old.slice(0, 12)}: no \\.github/workflows file, nothing to lint — clean`, 'u'));
+    assert.equal(alone.calls.length, 0, 'zizmor is not run when nothing is left to lint');
+    const both = await lint(dir, { argv: ['--pre-push'], stdin: `${tag}${pushOf(tip)}` });
+    assert.equal(both.code, 0, both.text);
+    assert.equal(both.calls.length, 1, 'the tip with a workflow is linted');
+    const bad = await lint(dir, { argv: ['--pre-push'], stdin: `${tag}${pushOf(tip)}`, status: 13, stdout: JSON.stringify([finding('artipacked', 6)]) });
+    assert.equal(bad.code, 1, 'a clean tip with no workflows never hides a pushed tip with findings');
+    const single = await lint(dir, { argv: ['--commit', old] });
+    assert.equal(single.code, 2, single.text);
+    assert.match(single.text, /ERROR — no \.github\/workflows at [0-9a-f]{12}/u);
+  });
+
+  test('a commit’s files are written byte for byte, a symlink or a submodule under .github/ is named, not skipped in silence, and workflows that are only links fail closed (30.19.20)', async () => {
+    // A workflow whose last line is not UTF-8 (0xE9 alone): read as text, it would be rewritten.
+    const bytes = Buffer.concat([Buffer.from(WORKFLOW.good), Buffer.from([0x23, 0x20, 0xe9, 0x0a])]);
+    const dir = repo({ 'ci/b.yml': WORKFLOW.good });
+    mkdirSync(join(dir, '.github/workflows'), { recursive: true });
+    writeFileSync(join(dir, '.github/workflows/a.yml'), bytes);
+    symlinkSync('../../ci/b.yml', join(dir, '.github/workflows/b.yml'));
+    git(dir, 'add', '-A');
+    git(dir, 'update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},.github/vendored`);
+    git(dir, 'commit', '-q', '-m', 'one');
+    const sha = git(dir, 'rev-parse', 'HEAD');
+    let written;
+    let linked;
+    const peek = (cwd) => {
+      written = readFileSync(join(cwd, '.github/workflows/a.yml'));
+      linked = existsSync(join(cwd, '.github/workflows/b.yml'));
+    };
+    for (const argv of [['--commit', sha], ['--pre-push']]) {
+      const { code, text } = await lint(dir, { argv, stdin: pushOf(sha), peek });
+      assert.equal(code, 0, text);
+      assert.ok(written.equals(bytes), `${argv[0]}: the committed bytes, unchanged`);
+      assert.equal(linked, false, 'git holds the link’s target, not a file');
+      assert.match(text, new RegExp(`at ${sha.slice(0, 12)}: not linted, \\.github/vendored \\(a submodule\\)`, 'u'));
+      assert.match(text, new RegExp(`at ${sha.slice(0, 12)}: not linted, \\.github/workflows/b\\.yml \\(a symlink\\)`, 'u'));
+    }
+
+    // A .github/workflows whose only entry is a symlink: nothing there can be linted, so it fails closed.
+    git(dir, 'rm', '-q', '--cached', '.github/workflows/a.yml');
+    git(dir, 'commit', '-q', '-m', 'only the link');
+    const linkOnly = git(dir, 'rev-parse', 'HEAD');
+    for (const argv of [['--commit', linkOnly], ['--pre-push']]) {
+      const { code, text, calls } = await lint(dir, { argv, stdin: pushOf(linkOnly) });
+      assert.equal(code, 2, text);
+      assert.match(text, new RegExp(`ERROR — \\.github/workflows at ${linkOnly.slice(0, 12)} holds no file to lint: \\.github/workflows/b\\.yml \\(a symlink\\)`, 'u'));
+      assert.equal(calls.length, 0, 'zizmor is not run');
+    }
+    // Beside a good tip, the link-only tip still refuses the push, and no temporary folder is left.
+    const before = readdirSync(tmpdir()).filter((name) => name.startsWith('autom8x-workflow-lint-')).length;
+    const both = await lint(dir, { argv: ['--pre-push'], stdin: `${pushOf(sha)}refs/heads/y ${linkOnly} refs/heads/y ${ZEROS}\n` });
+    assert.equal(both.code, 2, both.text);
+    assert.equal(both.calls.length, 0, 'zizmor is not run when a tip cannot be linted');
+    assert.equal(readdirSync(tmpdir()).filter((name) => name.startsWith('autom8x-workflow-lint-')).length, before, 'no folder left');
+
+    // .github/workflows itself a symlink, or a submodule: nothing in it can be read, so it fails closed too.
+    for (const [mode, kind] of [['120000', 'a symlink'], ['160000', 'a submodule']]) {
+      const odd = repo({ 'ci/a.yml': WORKFLOW.good });
+      const object = mode === '120000' ? git(odd, 'hash-object', '-w', '--stdin', { input: '../ci' }) : 'a'.repeat(40);
+      git(odd, 'add', '-A');
+      git(odd, 'update-index', '--add', '--cacheinfo', `${mode},${object},.github/workflows`);
+      git(odd, 'commit', '-q', '-m', kind);
+      const tip = git(odd, 'rev-parse', 'HEAD');
+      for (const argv of [['--commit', tip], ['--pre-push']]) {
+        const { code, text, calls } = await lint(odd, { argv, stdin: pushOf(tip) });
+        assert.equal(code, 2, `${kind} ${argv[0]}: ${text}`);
+        assert.match(text, new RegExp(`holds no file to lint: \\.github/workflows \\(${kind}\\)`, 'u'));
+        assert.equal(calls.length, 0);
+      }
+    }
   });
 
   test('exit 2 on usage, no workflows, a tool error, output that is not JSON, or a refused download', async () => {
