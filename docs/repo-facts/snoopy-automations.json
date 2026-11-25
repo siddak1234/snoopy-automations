@@ -1,9 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "snoopy-automations",
-  "head": "1becac8",
+  "head": "1acad1c",
   "readAt": "2026-11-25",
-  "gate": "verify",
   "counts": {
     "typescriptFiles": {
       "value": 446,
@@ -18,7 +17,7 @@
       "command": "ls -d packages/*/ | wc -l"
     },
     "manifests": {
-      "value": 4,
+      "value": 3,
       "command": "git ls-files --cached --others --exclude-standard -- ':(glob)manifests/*.json' | wc -l"
     },
     "promptTemplates": {

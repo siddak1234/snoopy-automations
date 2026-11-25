@@ -30,8 +30,9 @@ export const flow = resolve(import.meta.dirname, '..');
 
 /**
  * The commit whose `manifests/` last held v1 to v4: the base of the change that removed their
- * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). Git keeps them, so
- * the suite still runs the code each served on its manifest as it was.
+ * files once each was retired (BUILD-PLAN 30.15.2; the README's "Versions"). It holds v5's too,
+ * byte for byte as main held it until its retirement (D4). Git keeps them, so the suite still
+ * runs the code each served on its manifest as it was.
  */
 export const RETIRED_AT = '41ee3b778111c8b2e0055a5ad1f2937c61821c3b';
 
@@ -44,9 +45,9 @@ export function retiredFile(version: number): string {
 /** A retired version's manifest, parsed. */
 export const retiredManifest = (version: number) => JSON.parse(retiredFile(version)) as Manifest;
 
-/** Every version: v1 to v4 from git, and the newest from `manifests/`. */
+/** Every version: v1 to v5 from git, and the newest from `manifests/`. */
 export const manifests = [
-  ...[1, 2, 3, 4].map(retiredManifest),
+  ...[1, 2, 3, 4, 5].map(retiredManifest),
   ...readManifests(join(flow, '..', '..', 'manifests'), TEMPLATE_ID),
 ];
 

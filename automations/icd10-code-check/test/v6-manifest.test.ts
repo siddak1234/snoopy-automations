@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { SERVED_VERSIONS } from '../src/automation.js';
 import { EHR, EHR_FIELD } from '../src/v6/paths.js';
 import { WORDS_V6 } from '../src/v6/words.js';
-import { flow } from './fixtures.js';
+import { flow, manifests, retiredFile } from './fixtures.js';
 
 /**
  * v6's manifest (README, "v6"; BUILD-PLAN 30.6.1 and 30.21.5): v5's, word for word, but its
@@ -14,15 +14,15 @@ import { flow } from './fixtures.js';
  * the EHR's `patient-view` hook — the EHR connection, optional, with the operations the code calls
  * and only their scopes, the setup's Connections section and its "Integrations" renamed
  * "Continuous improvement" (30.10.4), the two steps of the EHR, and the output's `diagnosisCodes`
- * and `chartNote`. This image serves v6 alone; v5's file stays, served by its own container until
- * v6 is live.
+ * and `chartNote`. This image serves v6 alone; v5 was retired once v6 was live, and its file is
+ * read from git (`retiredFile`).
  */
 
 type Json = Record<string, any>;
 const manifestsDir = join(flow, '..', '..', 'manifests');
 const read = (version: number): Json =>
   JSON.parse(readFileSync(join(manifestsDir, `icd10-code-check.v${version}.json`), 'utf8')) as Json;
-const v5 = read(5);
+const v5 = JSON.parse(retiredFile(5)) as Json; // retired 2026-11-25; git keeps its file
 const v6 = read(6);
 const menu = JSON.parse(
   readFileSync(join(flow, '..', '..', 'contract', 'schemas', 'platform-menu.json'), 'utf8'),
@@ -159,8 +159,16 @@ test("its output adds the card's codes and the visit's chart note outcome; v5's 
   assert.deepEqual(v6.outputSchema.required, v5.outputSchema.required);
 });
 
-test('this image serves v6 alone', () => {
+test('this image serves v6 alone, its one file in manifests/; v1 to v5 were retired and git keeps theirs', () => {
   assert.deepEqual(SERVED_VERSIONS, [6]);
   const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
   assert.match(dockerfile, /^COPY --chown=node:node manifests\/icd10-code-check\.v6\.json /mu);
+  assert.deepEqual(
+    readdirSync(manifestsDir).filter((file) => file.startsWith('icd10-code-check.')),
+    ['icd10-code-check.v6.json'],
+  );
+  assert.deepEqual(
+    manifests.map((each) => each.version),
+    [1, 2, 3, 4, 5, 6],
+  );
 });

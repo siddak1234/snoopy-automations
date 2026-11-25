@@ -54,9 +54,10 @@ export function base(root: string): string {
 }
 
 /**
- * The commit whose `manifests/` last held every retired version's file: the base of the change
- * that removed them (BUILD-PLAN 30.15.2). Git keeps them; a suite that still runs a retired
- * version's code reads its file from here (`retiredFile`).
+ * The commit whose `manifests/` holds every retired version's file: the base of the change that
+ * removed those retired by then (BUILD-PLAN 30.15.2), and ICD-10 Code Check v5's, retired since,
+ * byte for byte as main held it (D4). Git keeps them; a suite that still runs a retired version's
+ * code reads its file from here (`retiredFile`).
  */
 export const RETIRED_AT = '41ee3b778111c8b2e0055a5ad1f2937c61821c3b';
 
