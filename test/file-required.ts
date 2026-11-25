@@ -8,6 +8,7 @@
  * Resume Screening v4, before its file left (D5), said `required: false`, as the platform then
  * required.
  */
+import { manualWay } from './manifest-triggers.js';
 
 export type Json = Record<string, unknown>;
 
@@ -50,22 +51,23 @@ export function reasonFor(spec: string, key: string): string | undefined {
 
 /**
  * What the rule refuses in a flow's newest manifest, given its spec's text (undefined when the
- * flow has no spec): each optional file field with no reason, as `manifests/<file>: …`.
+ * flow has no spec): each optional file field of its manual way (its one `trigger`, or the
+ * `manual` entry of its `triggers`, the platform's ADR-0053) with no reason, as `manifests/<file>: …`.
  */
 export function optionalFileProblems(
   file: string,
   manifest: Json,
   spec: string | undefined,
 ): string[] {
-  const trigger = (manifest.trigger ?? {}) as Json;
-  if (trigger.kind !== 'manual' || !Array.isArray(trigger.input)) return [];
-  return (trigger.input as Json[]).flatMap((field, index) =>
+  const manual = manualWay(manifest);
+  if (manual === undefined || !Array.isArray(manual.way.input)) return [];
+  return (manual.way.input as Json[]).flatMap((field, index) =>
     field.control !== 'artifact' ||
     field.required === true ||
     reasonFor(spec ?? '', String(field.key)) !== undefined
       ? []
       : [
-          `manifests/${file}: trigger.input[${index}] (${String(field.key)}) is a file field ` +
+          `manifests/${file}: ${manual.path}.input[${index}] (${String(field.key)}) is a file field ` +
             `not required, with no reason: make it required, or write "no: <the reason>" in ` +
             `the Required cell of its row in automations/${String(manifest.templateId)}/README.md`,
         ],

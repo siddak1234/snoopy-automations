@@ -30,7 +30,7 @@ regexes = [
   # The placeholders at registerable domains the public repositories already write, one by one.
   '''(?i)^(?:a@b\.co|alex@acme\.co|ap@acme\.co|b@c\.com|d@e\.com|support@acme\.co|x@y\.com|you@company\.com)$''',
   # The flows' service accounts, which name the company's own cloud project, one by one.
-  '''(?i)^(?:candidate-reviewer-v3@autom8x\.iam\.gserviceaccount\.com|candidate-reviewer-v5@autom8x\.iam\.gserviceaccount\.com|example-automation@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v3@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v4@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v5@autom8x\.iam\.gserviceaccount\.com|invoice-check@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v8@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v9@autom8x\.iam\.gserviceaccount\.com)$''',
+  '''(?i)^(?:candidate-reviewer-v3@autom8x\.iam\.gserviceaccount\.com|candidate-reviewer-v5@autom8x\.iam\.gserviceaccount\.com|example-automation@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v3@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v4@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v5@autom8x\.iam\.gserviceaccount\.com|icd10-code-check-v6@autom8x\.iam\.gserviceaccount\.com|invoice-check@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v8@autom8x\.iam\.gserviceaccount\.com|invoice-processing-v9@autom8x\.iam\.gserviceaccount\.com)$''',
   # An SSH remote and an image's density suffix, which only look like addresses.
   '''^git@''',
   '''(?i)@\d+x\.(?:png|jpe?g|gif|webp)$''',

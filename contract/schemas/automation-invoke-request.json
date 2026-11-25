@@ -25,6 +25,14 @@
     "input": {
       "type": "object"
     },
+    "startedBy": {
+      "enum": [
+        "schedule",
+        "webhook",
+        "manual",
+        "provider-event"
+      ]
+    },
     "continuation": {
       "type": "object",
       "additionalProperties": false,

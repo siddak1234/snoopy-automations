@@ -87,3 +87,19 @@ test('an optional file field is refused unless its row says "no: <reason>"', () 
     [],
   );
 });
+
+test("a flow's manual way among its triggers is held to the rule too (ADR-0053): ICD-10 Code Check v6's", () => {
+  const v6 = read('icd10-code-check.v6.json') as unknown as Json & { triggers: Json[] };
+  const [manual, hook] = v6.triggers as [Json, Json];
+  const [notes] = manual.input as [Json];
+  assert.deepEqual(optionalFileProblems('icd10-code-check.v6.json', v6, undefined), []);
+  const optional = {
+    ...v6,
+    triggers: [hook, { ...manual, input: [{ ...notes, required: false }] }],
+  };
+  assert.deepEqual(optionalFileProblems('icd10-code-check.v6.json', optional, undefined), [
+    'manifests/icd10-code-check.v6.json: triggers[1].input[0] (visitNotes) is a file field not ' +
+      'required, with no reason: make it required, or write "no: <the reason>" in the Required ' +
+      'cell of its row in automations/icd10-code-check/README.md',
+  ]);
+});

@@ -249,3 +249,71 @@ test("the rules refuse what the platform refuses of a step that is a setting, th
     );
   }
 });
+
+test("the ways to start refuse what the platform refuses (ADR-0053), on ICD-10 Code Check v6's", () => {
+  const v6 = read('icd10-code-check.v6.json');
+  const [manual, hook] = v6.triggers as [Json, Json];
+  const ehr = (v6.requiredConnections as Json[]).find((each) => each.providerId === 'ehr-fhir')!;
+  const others = (v6.requiredConnections as Json[]).filter((each) => each !== ehr);
+  const cases: [string, Json, string][] = [
+    [
+      'the hook alone on an optional connection',
+      { ...v6, triggers: [hook] },
+      'triggers[0].connection: must name a required, not optional, connection',
+    ],
+    [
+      'a hook on a connection not declared',
+      { ...v6, requiredConnections: others, setup: v6.setup.filter((f) => f.key !== 'ehr') },
+      'triggers[1].connection: must name a provider listed in requiredConnections; the platform will not subscribe to an undeclared provider',
+    ],
+    [
+      'a hook on a provider that sends no events',
+      { ...v6, triggers: [manual, { ...hook, connection: 'nppes' }] },
+      'triggers[1].connection: must name a provider whose events the platform receives: ehr-fhir',
+    ],
+    [
+      'a hook with no event',
+      { ...v6, triggers: [manual, { kind: 'provider-event', connection: 'ehr-fhir' }] },
+      "triggers[1].event: is required when kind is 'provider-event' and must be one of ehr-fhir's events: patient-view, order-select, order-sign",
+    ],
+    [
+      'the same hook twice',
+      { ...v6, triggers: [manual, hook, hook] },
+      'triggers[2].kind: names the connection and event of another entry',
+    ],
+    [
+      'two manual ways',
+      { ...v6, triggers: [manual, hook, { kind: 'manual' }] },
+      'triggers[2].kind: is the kind of another entry: at most one of each kind',
+    ],
+    [
+      'an event on the manual way',
+      { ...v6, triggers: [{ ...manual, event: 'patient-view' }, hook] },
+      "triggers[0].event: is only meaningful when kind is 'provider-event'",
+    ],
+    [
+      'a run form on the hook',
+      { ...v6, triggers: [manual, { ...hook, input: manual.input }] },
+      "triggers[1].input: is only meaningful when kind is 'manual'",
+    ],
+    [
+      "a default on the manual way's file",
+      {
+        ...v6,
+        triggers: [
+          { ...manual, input: [{ ...(manual.input as Json[])[0], defaultValue: 'x' }] },
+          hook,
+        ],
+      },
+      'triggers[0].input[0].defaultValue: is not meaningful for an artifact control',
+    ],
+  ];
+  assert.deepEqual(manifestProblems(v6), []);
+  assert.deepEqual(manifestProblems({ ...v6, triggers: [hook, manual] }), [], 'any order');
+  for (const [what, manifest, refusal] of cases) {
+    assert.ok(
+      manifestProblems(manifest).includes(refusal),
+      `${what}: ${manifestProblems(manifest).join('; ')}`,
+    );
+  }
+});

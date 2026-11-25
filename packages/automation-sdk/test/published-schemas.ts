@@ -8,7 +8,11 @@ import addFormats from 'ajv-formats';
 /** The platform's PUBLISHED schemas, vendored at `contract/schemas`. */
 export const schemas = resolve(import.meta.dirname, '../../../contract/schemas');
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
+// Strict, but for `strictRequired`: the platform's manifest schema says "exactly one of `trigger`
+// and `triggers`" as a top-level `oneOf` of two `required` lists (its ADR-0053, at snoopy-backend
+// 6cc381f), each naming a property the top level defines — valid JSON Schema, which Ajv's
+// strictRequired refuses only because the `oneOf` branch does not define it again.
+const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
 addFormats.default(ajv);
 
 // Compiled once each: Ajv refuses a second schema under the same `$id`.

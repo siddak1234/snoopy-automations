@@ -70,8 +70,16 @@
   "triggers": [
     "schedule",
     "webhook",
-    "manual"
+    "manual",
+    "provider-event"
   ],
+  "providerEvents": {
+    "ehr-fhir": [
+      "patient-view",
+      "order-select",
+      "order-sign"
+    ]
+  },
   "capabilities": [
     "document-extraction",
     "classification",
@@ -90,25 +98,31 @@
     "oauth2",
     "api-key",
     "none",
-    "smart-backend"
+    "smart-backend",
+    "smart-launch"
   ],
   "providers": [
     {
       "id": "ehr-fhir",
       "displayName": "EHR",
-      "auth": "smart-backend",
+      "auth": "smart-launch",
       "scopes": [
-        "system/DocumentReference.read",
-        "system/Binary.read",
-        "system/Encounter.read",
-        "system/Condition.read"
+        "openid",
+        "fhirUser",
+        "offline_access",
+        "user/Patient.read",
+        "user/Encounter.read",
+        "user/DocumentReference.read",
+        "user/DocumentReference.write",
+        "user/Binary.read",
+        "user/Condition.read"
       ],
       "operations": [
         {
           "name": "binary.read",
           "method": "GET",
           "scopes": [
-            "system/Binary.read"
+            "user/Binary.read"
           ]
         },
         {
@@ -120,28 +134,56 @@
           "name": "conditions.search",
           "method": "GET",
           "scopes": [
-            "system/Condition.read"
+            "user/Condition.read"
+          ]
+        },
+        {
+          "name": "diagnoses.search",
+          "method": "GET",
+          "scopes": [
+            "user/Condition.read"
           ]
         },
         {
           "name": "encounter.read",
           "method": "GET",
           "scopes": [
-            "system/Encounter.read"
+            "user/Encounter.read"
+          ]
+        },
+        {
+          "name": "encounters.search",
+          "method": "GET",
+          "scopes": [
+            "user/Encounter.read"
+          ]
+        },
+        {
+          "name": "notes.create",
+          "method": "POST",
+          "scopes": [
+            "user/DocumentReference.write"
           ]
         },
         {
           "name": "notes.read",
           "method": "GET",
           "scopes": [
-            "system/DocumentReference.read"
+            "user/DocumentReference.read"
           ]
         },
         {
           "name": "notes.search",
           "method": "GET",
           "scopes": [
-            "system/DocumentReference.read"
+            "user/DocumentReference.read"
+          ]
+        },
+        {
+          "name": "patients.search",
+          "method": "GET",
+          "scopes": [
+            "user/Patient.read"
           ]
         }
       ]
@@ -299,6 +341,7 @@
     "manifest": {
       "idLength": 64,
       "textLength": 200,
+      "triggers": 4,
       "connections": 16,
       "capabilities": 8,
       "setupFields": 40,

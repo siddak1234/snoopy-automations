@@ -339,7 +339,8 @@ test('every automation lockfile pins each local package it uses, and its image p
 
 test('every manifest validates against the vendored schema and names an automation here', () => {
   if (!existsSync(manifestsRoot)) return;
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  // Strict but for `strictRequired`: why, packages/automation-sdk/test/published-schemas.ts.
+  const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
   addFormats.default(ajv);
   const schema = JSON.parse(
     readFileSync(join(schemasRoot, 'automation-manifest.json'), 'utf8'),

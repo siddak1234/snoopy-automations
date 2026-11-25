@@ -1,7 +1,11 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at snoopy-backend 926321f (#283), the platform's `main` after its #283
+(`snoopy-backend`, private) at snoopy-backend 6cc381f, the head of its branch `round-22/triggers`
+(#306, Round 22's ways to start, ADR-0053, on its `main` ed61fe2, #305, ADR-0054), not yet merged,
+so not live; all eleven files `cmp`-equal to it (2026-11-25, "Refreshed 2026-11-25, ways to start"
+below). When #306 squash-merges, this copy is re-pinned to its merge commit, its bytes unchanged
+unless the review changed them. Before it, `926321f` (#283), the platform's `main` after its #283
 squash-merged Round 22's limits before breadth (its BUILD-PLAN 30.2: ADR-0051 decision 2,
 ADR-0049 Amendment 3), merged and deployed 2026-11-14; all eleven files `cmp`-equal to it
 (2026-11-14, "Refreshed 2026-11-14, a connection's operations" below). Before it, `50a24f7`, the
@@ -542,6 +546,33 @@ build-43 pull request (#285, merged as `ee72d96`; its BUILD-PLAN 30.13.1, a file
 required) changes no schema file: all eleven are `cmp`-equal to `ee72d96`'s too; its words are in
 "`trigger`", below.
 
+Refreshed 2026-11-25, ways to start, from the head of the platform's branch `round-22/triggers`,
+`6cc381f` (#306; its ADR-0053, on its `main` ed61fe2, #305, its ADR-0054; not yet merged, so not
+live). Three files moved; all eleven are `cmp`-equal to `6cc381f` (each copied from its clone at
+that commit, and checked with `git show 6cc381f:schemas/<file>`):
+
+- `automation-manifest.json`: `triggers`, 1 to 4 ways to start, each the trigger object, the
+  manifest declaring exactly one of `trigger` and `triggers` (a top-level `oneOf`); a way's
+  `event`, one of `patient-view`, `order-select`, `order-sign` (its words in "`trigger`, or
+  `triggers`", below).
+- `automation-invoke-request.json`: `startedBy`, one of `schedule`, `webhook`, `manual`,
+  `provider-event`: which way started the run (absent on a run made before).
+- `platform-menu.json`: `limits.triggers` (4); `providerEvents` (`ehr-fhir`: the three hooks); the
+  trigger `provider-event`; the provider auth type `smart-launch`; and `ehr-fhir` as a clinic user's
+  sign-in (ADR-0054): `smart-launch`, SMART v1 `user/` scopes in place of `system/` ones with
+  `openid`, `fhirUser` and `offline_access`, and the operations `diagnoses.search`,
+  `encounters.search`, `patients.search` and the one write, `notes.create`.
+
+The other eight files are byte-identical to `926321f`'s. ICD-10 Code Check v6 declares `triggers`
+and calls the EHR (its README's "v6"); the SDK's `InvokeRequest` does not type `startedBy` yet, and
+the flow reads it from the request whole (`automations/icd10-code-check/src/v6/paths.ts`). Ajv's
+`strictRequired` refuses the manifest schema's `oneOf` (each branch's `required` names a property
+only the top level defines), so this repository's three validators of it turn that one rule off
+(`packages/automation-sdk/test/published-schemas.ts` says why). Production serves `15b1865`'s
+`snoopy-backend/docs/openapi/automations.yaml` and `ed61fe2`'s
+`snoopy-backend/docs/openapi/connections.yaml` until #306 deploys,
+so a check that reads the deployed contract stays red until then, by design; v6 merges only after.
+
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template
 directory's example manifest the same way.
@@ -559,9 +590,9 @@ decision's `group`, the `memory` capability) at `10b5fae`, "Size, before the val
 `d9297bc`, and amendment 5's words (`setup[]`'s `example` and `setupSections`, the `links` block, a
 decision's `options` and an `other` answer) at `7ae5d92`, and `dataProtection`'s at `50a24f7`
 (its registration rule from `snoopy-backend/packages/contracts/src/data-protection.ts`), a connection's
-`operations` and the `ehr-fhir` new-version rule at `926321f`, and the required `artifact` field at
-`ee72d96` (#285, the platform's build-43 pull request), its file paths written from
-`snoopy-backend/`.
+`operations` and the `ehr-fhir` new-version rule at `926321f`, the required `artifact` field at
+`ee72d96` (#285, the platform's build-43 pull request), and "`trigger`, or `triggers`" at
+`6cc381f` (#306, ADR-0053), its file paths written from `snoopy-backend/`.
 
 **Size, before the validator** — a deploy's `flow-up` takes at most `limits.manifest.bytes`
 of the committed file, counted as committed (pretty-printed JSON, its
@@ -642,11 +673,22 @@ setting"; every field then "needs a sectionId when setupSections are declared" a
 `sectionId` "must name a declared section". Undeclared, a field's `sectionId` "is only
 meaningful when setupSections are declared", and the fields keep today's four sections.
 
-**`trigger`** — `connection` "is only meaningful when kind is 'provider-event'";
+**`trigger`, or `triggers`** (ADR-0053, at `6cc381f`) — a manifest declares one of the two:
+`triggers` "is declared with trigger: a manifest declares one or the other", and "must declare at
+least 1 way to start", at most `limits.triggers` (4); each entry takes `trigger`'s keys and no
+other ("is not a trigger property"), and an entry "is the kind of another entry: at most one of
+each kind" but a `provider-event` one, which "names the connection and event of another entry"
+only when both repeat. Each way: `connection` "is only meaningful when kind is 'provider-event'";
 `everySeconds` "is only meaningful when kind is 'schedule'" and must lie within the
-platform's schedule bounds; a `provider-event` trigger cannot name a connection the
-manifest does not declare; a trigger kind the platform does not implement is refused at
-registration. `input` (ADR-0030) "is only meaningful when kind is 'manual'"; each field takes the
+platform's schedule bounds; a `provider-event` way cannot name a connection the manifest does
+not declare, "must name a provider whose events the platform receives" (the menu's
+`providerEvents`), and its `event` "is required when kind is 'provider-event' and must be one of"
+its provider's events, an `event` elsewhere "is only meaningful when kind is 'provider-event'"; it
+"must name a required, not optional, connection" only when the optional connection's events are
+the flow's only ways to start (beside another way, it is on only for a flow whose setup chose the
+connection); a trigger kind the platform does not implement is refused at registration. A
+subscription's `triggerKind` is its FIRST way's kind, and the run's `startedBy` says which way
+started it. `input` (ADR-0030) "is only meaningful when kind is 'manual'" — the manual way's; each field takes the
 setup field's properties except `section` and `notifies` — anything else "is not a run input
 property" — and its `control` is `text`, `money`, `toggle`, `email` or `artifact` (never `select`); an `email`
 value "must be an email address for an email control"; an `artifact` field may be `required`
@@ -661,8 +703,9 @@ any other control "is only meaningful on an 'artifact' control"; its `maxFiles` 
 **`batch`** (ADR-0048 amendment 4) — optional; its manual run is a batch run, which runs
 `batch.pipeline` and may answer `units` (1 to 500, each a one-line label of 1 to 120, 1 to 50 of
 the run's files with an optional PDF page range, data of at most 8 KiB), each queued as a waiting
-child run of `pipeline`, invoked with `unit`. `batch` "needs trigger.kind 'manual': a person starts
-a batch run", "needs an artifacts block: a unit names the run's files" and "is not declared with
+child run of `pipeline`, invoked with `unit`. `batch` "needs a trigger of kind 'manual': a person
+starts a batch run" (a `manual` way among the ways, at `6cc381f`; a run another way starts is one
+plain run), "needs an artifacts block: a unit names the run's files" and "is not declared with
 items: a first run is an item run or a batch run"; `batch.pipeline` "must declare at least 1 step"
 (at most 8), each step its own ("is a pipeline step id: a batch run reports its own steps");
 `unitWords` `{singular, plural}`, 1 to 40 each. The run page then holds the `batch` part ("must

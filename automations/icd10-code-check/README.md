@@ -1,6 +1,6 @@
 # ICD-10 Code Check (`icd10-code-check`): spec
 
-**Approved:** 2026-10-28 ~21:43Z, the owner: "approved." (the words as shown on the screens, and section 3's client words) · **Version:** v5 · **Words:** `words.md`
+**Approved:** 2026-10-28 ~21:43Z, the owner: "approved." (the words as shown on the screens, and section 3's client words) · **Version:** v6 · **Words:** `words.md`
 beside this spec, every word both clients show · **Research:** `research.md` beside this spec
 (2026-10-28, four passes: 1–3 approved ~17:19Z "Approve, write the spec (Recommended)", 4 approved
 ~21:24Z "Approve (Recommended)"), its gaps in section 11 · **Built in:** <PR link, once built>
@@ -11,13 +11,14 @@ beside this spec, every word both clients show · **Research:** `research.md` be
 still be served. A retired version's file leaves with its row here (the repository README, "The
 definition-file standard"; `test/definition-files.ts`, D5); git keeps it.
 
-| Version | State                                                                                                             |
-| ------- | ----------------------------------------------------------------------------------------------------------------- |
-| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:49Z)                 |
-| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14                    |
-| v3      | retired 2026-11-04: never registered, v4 took its place (snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block) |
-| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5)            |
-| v5      | served: `manifests/icd10-code-check.v5.json`, this image's (`SERVED_VERSIONS`)                                    |
+| Version | State                                                                                                              |
+| ------- | ------------------------------------------------------------------------------------------------------------------ |
+| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:49Z)                  |
+| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14                     |
+| v3      | retired 2026-11-04: never registered, v4 took its place (snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block)  |
+| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5)             |
+| v5      | served: `manifests/icd10-code-check.v5.json`, on its own container and pinned image until v6 is live ("v6", below) |
+| v6      | served: `manifests/icd10-code-check.v6.json`, this image's (`SERVED_VERSIONS`)                                     |
 
 **Waits for the platform (section 10):** a setup dropdown that picks several choices, and an approval
 that accepts or denies each change. `/create-flow` stage 1 answer: a platform round first, then this
@@ -628,3 +629,66 @@ retirements freed; BUILD-PLAN 30.6.1's later hook version becomes v6.
 | 1   | The manifest is v4's, byte for byte, but its version, its own origin and service account (`-v5`), and `visitNotes` `"required": true`: the platform refuses a run without a file before it starts. It keeps `"dataProtection": "hipaa"` | the manifest; `v5-manifest.test.ts`       |
 | 2   | Its calls name no models, as v4's (`HEALTH_VERSIONS` in `src/models.ts` names v4 and v5)                                                                                                                                                | `modelsFor`; `v4-manifest.test.ts`        |
 | 3   | A batch run that still names no file stops "Add the visit note as a PDF or photo." (`chunk`, `FAILURES.noFile`), before any read or call                                                                                                | `v5-manifest.test.ts`, `v2-batch.test.ts` |
+
+## v6 (2026-11-25)
+
+**Status:** built on the branch `round-22/icd10-v6`; this image serves v6 alone (`SERVED_VERSIONS`).
+v5's file is unchanged and v5 stays served on its own container and pinned image until v6 is live;
+then the release's retire pass retires it ("Versions", at the top). **Words:** new, the session's,
+awaiting the owner (`words.md`, section 6). **Rests on:** the platform's ADR-0053 (a flow lists its
+ways to start; `startedBy`) and ADR-0054 (the EHR connection a clinic user's sign-in), and the card
+of its ADR-0051 Amendment 2, vendored in `contract/` at snoopy-backend 6cc381f, the head of its #306
+(`contract/README.md`, "Refreshed 2026-11-25"). **Merges only after** #306 is merged and deployed:
+until then Flow CD's validator refuses `triggers`. The Epic and FHIR facts it relies on are
+`research.md`'s "v6" ids.
+
+**What moved it** — the owner, word for word. 2026-11-24: "the whole point is connections can be
+selected inside a flow but a connection can work across flows if connected once in an org or
+personal. we have a glossary of connections, in a flow you can select one or multiple
+connections." 2026-11-25: "yes to all 4. 2. user should be able to do either or in the same flow.
+upload or trigger. 3. yes thats the whole point. reuse existing for one ehr system. we should have
+the option eventually to connect other ehr systems as well as needed. based on the clinics needs 4.
+see if it can update the icd 10, or the required schema. otherwise complete as needed. complete",
+approving among others the session's plan line "The Epic hook start works with the Epic connection
+optional. It's on only for orgs that picked Epic in that flow." What an upload writes with Epic
+picked is the session's reading of item 4 (BUILD-PLAN U44): Epic's only visit-diagnosis write is a
+hook's, so an upload writes a clinical note, only to a visit matched exactly, after a person's
+approval. **Every detail below beyond those words is the session's.**
+
+| #   | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Built                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| 1   | The manifest is v5's, word for word, but its version, its own origin and service account (`-v6`), and what rows 2 to 5 add. Its ways to start, `triggers`: v5's manual one unchanged, then `{kind: 'provider-event', connection: 'ehr-fhir', event: 'patient-view'}`, the chart's opening. It keeps `"dataProtection": "hipaa"`; its calls name no models (`HEALTH_VERSIONS` names v4 to v6)                                                                                                                                                                                                                                                                                                                                                     | the manifest; `v6-manifest.test.ts`                           |
+| 2   | The EHR connection, `ehr-fhir`, `optional: true`, with the operations the code calls — `notes.search`, `binary.read`, `patients.search`, `encounters.search`, `notes.create` — and only their five `user/` scopes; its choice a `connection` field, `ehr`, in a new section "Connections"; the section "Integrations", only the learn toggle, renamed "Continuous improvement" (BUILD-PLAN 30.10.4). The sections are a list (R22-D3, the session's default): v5's order, Connections added third, as build 39's item 9 lists them                                                                                                                                                                                                               | the manifest; `v6-manifest.test.ts`                           |
+| 3   | **The hook path** (`startedBy: 'provider-event'`, `src/v6/paths.ts`): `read-chart` reads the visit's notes — `notes.search` by `context.patientId` and `context.encounterId`, each `current` note's first `text/plain` attachment, else its first `text/html` with its tags stripped, inline or by `binary.read` of its `Binary/{id}`; any other type, status or refusal skipped with its reason (`output.measures.notes`); at most 8 notes of 30,000 characters each — and v5's code finding reads each text with `read-note` v3, v2's prompt but its first sentence. No review, no save, no hold (a held hook run shows no card: the clinician's tick on it is the approval), and no mail from the flow. Its result is `output.diagnosisCodes` | `src/v6/`; `v6-hook.test.ts`, `drill.test.ts`                 |
+| 4   | **The upload path with the EHR picked**: v5's run unchanged, then `write-chart`, only on a run that continues the person's answers to `review-visit`: the patient by the note's record number (`identifier=<value>`, no system), exactly one; that patient's visit on the note's date, exactly one; then `notes.create`, one DocumentReference listing each approved code with its name and the line on why. Each choice is in `src/v6/chart-note.ts`. A visit with no review, no record number or date, or no exact match is not written; each visit's outcome, `output.chartNote`, says why, never a patient detail. The EHR not picked: no EHR call                                                                                           | `src/v6/chart-write.ts`; `v6-upload.test.ts`, `drill.test.ts` |
+| 5   | The output schema adds `diagnosisCodes` (at most 12 `{code, system, display, reason}`) and `chartNote` (`{outcome, reason?}`); v5's fields and its `required` unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | the manifest; `v6-manifest.test.ts`                           |
+
+**No new requirements** (the repository README, "The definition-file standard"): v6 asks nothing
+new of a flow on v5 — its one new connection is optional and no setting is required — so the rule
+needs no row; the row gives the reason all the same:
+
+| Key        | What v6 asks                                                                                                                            | Why                                                                                                                                                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ehr-fhir` | optional; `user/DocumentReference.read`, `user/Binary.read`, `user/Patient.read`, `user/Encounter.read`, `user/DocumentReference.write` | new in v6: the owner's "user should be able to do either or in the same flow. upload or trigger." and "yes to all 4" (Epic optional, on only for an org that picked it); its scopes read a visit's notes and write one note to it |
+
+**The card's codes** (row 3, `src/v6/codes.ts`, the session's): the visit's final codes with every
+change accepted (`finalCodes`), in the chart's order, at most 12, leaving out every code the checks
+leave to the doctor (an Ask); each `display` its code table title, each `reason` the review's own
+why (`whyDetail`). No note read, or no code found: the run succeeds with `diagnosisCodes: []`, so
+the platform's hook reads `no_codes`.
+
+**The session's choices, for the owner to hear:** the hook run reads only `current` notes, whatever
+their `docStatus`, and only the search's first page; it saves nothing to the clinic's memory (the
+clinician's tick is never reported to the flow); a visit whose code table this build lacks stops
+rather than holds; with nothing to review, an upload's visit writes no chart note (no approval was
+asked); the chart note lists the approved codes but none left to the doctor; the record number is
+taken only as letters, digits, dots and hyphens, at most 64 — no FHIR search character; the card's
+description and the flow's name are unchanged ("Test charts only for now.").
+
+**Open:** Epic's own required DocumentReference fields, its note attachment types, and whether its
+search takes `patient` and `encounter` without `category` (`research.md`, "v6", Gaps; the sandbox
+test, BUILD-PLAN 30.21.4); an organisation's MRN system (searched by value alone; only one match is
+written to); whether Epic's writes need `application/fhir+json` (BUILD-PLAN U9); and — a finding for
+the platform — its completion email: the flow sends none on a hook run (a chart opening must not
+email), but the platform's notification sweep emails every succeeded run (`succeededRunFacts`,
+`snoopy-backend/apps/runs/src/postgres-notifications.ts`), a hook run's too.
