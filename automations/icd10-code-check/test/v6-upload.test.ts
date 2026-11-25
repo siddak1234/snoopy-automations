@@ -20,14 +20,14 @@ import {
 /**
  * v6's upload with the EHR picked (README, "v6", row 4; BUILD-PLAN 30.21.5, U44, the session's
  * safety default): v5's run unchanged, then — only after the person's review — one chart note per
- * visit, only to one patient matched by the note's record number and one of that patient's visits
- * on the note's date. Never before the review, never to a match that is not exact, never with the
- * EHR not picked. Every patient, record number and id here is made up.
+ * visit, only to one patient matched by the note's record number and born on its birth date, and
+ * one of that patient's visits on the note's date. Never before the review, never to a match that
+ * is not exact, never with the EHR not picked. Every patient, record number and id here is made up.
  */
 
 const PATIENT = {
   name: 'Jane Doe',
-  birthDate: null,
+  birthDate: '03/14/1958',
   sex: null,
   recordNumber: '000123',
   provider: null,
@@ -43,7 +43,12 @@ const visitNote = (patient: JsonObject = PATIENT, visitDate: string | null = '20
   );
 const picks = { CKD: { code: 'N18.31' } };
 
-const patient = (id: string) => ({ resourceType: 'Patient', id });
+/** A patient the EHR finds, born on the note's day unless told; `null`, no birth date. */
+const patient = (id: string, birthDate: string | null = '1958-03-14'): JsonObject => ({
+  resourceType: 'Patient',
+  id,
+  ...(birthDate === null ? {} : { birthDate }),
+});
 const encounter = (id: string, of = 'p1') => ({
   resourceType: 'Encounter',
   id,
@@ -121,7 +126,10 @@ test('an exact match: one note written after the review, the approved codes with
     ],
   );
   assert.ok(text.includes('From the note: "CKD stage 3a, eGFR 52 today"'));
-  assert.ok(!text.includes('Jane Doe') && !text.includes('000123'), 'no patient detail of ours');
+  assert.ok(
+    !text.includes('Jane Doe') && !text.includes('000123') && !text.includes('1958'),
+    'no patient detail of ours',
+  );
   assert.deepEqual(output(done.result).chartNote, { outcome: 'written' });
   assert.deepEqual(output(done.result).finalCodes, ['I12.9', 'N18.31'], "v5's codes, unchanged");
 });
@@ -189,7 +197,7 @@ test('the EHR not picked: v5 unchanged, no EHR call, no chart outcome', async ()
   assert.ok(!done.platform.steps.some((step) => step.stepId === 'write-chart'));
 });
 
-test('no write before the review: a visit with nothing to change is not written', async () => {
+test('no write before the review: a visit with nothing to change is not written, and says so', async () => {
   const kept = reading(['N18.31'], [{ statement: 'CKD stage 3a', categories: ['N18'] }], {
     patient: PATIENT,
   });
@@ -198,14 +206,50 @@ test('no write before the review: a visit with nothing to change is not written'
   assert.deepEqual(ehrCalls(ran.platform), []);
   assert.deepEqual(output(ran.result).chartNote, {
     outcome: 'not written',
-    reason: 'not approved',
+    reason: 'nothing to review',
   });
+  assert.equal(
+    ran.platform.steps.at(-1)!.summary,
+    'Not added to your EHR: nothing to review',
+    'never "not approved": no approval was asked',
+  );
 });
 
-test('no record number, or no visit date, on the note: not written, no EHR call', async () => {
+for (const [what, found, reason] of [
+  [
+    'the one patient the record number finds born on another day (another identifier of the same characters)',
+    patient('p9', '1971-06-02'),
+    'birth date did not match',
+  ],
+  ['the one patient found with no birth date', patient('p1', null), 'birth date did not match'],
+  ['the one patient found born in 1958 only', patient('p1', '1958'), 'birth date did not match'],
+] as const) {
+  test(`${what}: not written, no visit searched`, async () => {
+    const { done } = await reviewedVisit(ehr([found]));
+    assert.equal(done.result.outcome, 'success', 'the codes are saved all the same');
+    assert.deepEqual(
+      ehrCalls(done.platform).map((call) => call.operation),
+      ['patients.search'],
+    );
+    assert.deepEqual(output(done.result).chartNote, { outcome: 'not written', reason });
+    assert.equal(done.platform.steps.at(-1)!.summary, `Not added to your EHR: ${reason}`);
+  });
+}
+
+test('the birth date printed another way still matches the one patient', async () => {
+  for (const printed of ['1958-03-14', '3/14/1958', 'March 14, 1958', '14 Mar 1958']) {
+    const { done } = await reviewedVisit(ehr(), visitNote({ ...PATIENT, birthDate: printed }));
+    assert.deepEqual(output(done.result).chartNote, { outcome: 'written' }, printed);
+  }
+});
+
+test('no record number, birth date or visit date on the note: not written, no EHR call', async () => {
   for (const [note, reason] of [
     [visitNote({ ...PATIENT, recordNumber: null }), 'no record number'],
     [visitNote({ ...PATIENT, recordNumber: '0001|23' }), 'record number not usable'],
+    [visitNote({ ...PATIENT, birthDate: null }), 'no birth date on the note'],
+    [visitNote({ ...PATIENT, birthDate: '03/14/58' }), 'birth date not usable'],
+    [visitNote({ ...PATIENT, birthDate: '02/30/1958' }), 'birth date not usable'],
     [visitNote(PATIENT, null), 'no visit date'],
   ] as const) {
     const { done } = await reviewedVisit(ehr(), note);

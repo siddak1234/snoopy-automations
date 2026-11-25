@@ -9,12 +9,13 @@ import {
   type StepResult,
 } from '@autom8x/automation-sdk';
 
+import { DECIDED } from '../decisions.js';
 import { readingOf } from '../reading.js';
 import { realDate } from '../tables.js';
 import { viewOf } from '../view.js';
 import { otherTitles } from '../v2/review.js';
 import { visitAnswers, visitOthers } from '../v2/review-steps.js';
-import { RECORD_NUMBER, chartNote, patientSearch, visitSearch } from './chart-note.js';
+import { RECORD_NUMBER, birthDateOf, chartNote, patientSearch, visitSearch } from './chart-note.js';
 import { visitCodes } from './codes.js';
 import { onlyMatch } from './fhir.js';
 import { EHR, EHR_FIELD, SKIPPED, byPath } from './paths.js';
@@ -24,12 +25,13 @@ import { NOT_WRITTEN, WORDS_V6 } from './words.js';
  * Note added to your EHR (README, "v6", row 4; BUILD-PLAN 30.21.5, U44, the session's safety
  * default): on an upload's visit run with the EHR picked, and only once the person answered the
  * review (`review-visit`'s approval), one chart note listing the approved codes, each with its
- * name and the line on why (`visitCodes`). Only to one patient found by the note's record number
- * and one of that patient's visits on the note's date, each found exactly; otherwise nothing is
- * written, and the visit's outcome says why — never a patient detail: a call the EHR refused or
- * did not answer ends the step, the run going on with its codes saved (`settle`; the EHR not
- * connected, `optionalConnection`'s line). A hook run, or the EHR not picked, skips the step: no
- * EHR call.
+ * name and the line on why (`visitCodes`); a visit `review-visit` held nothing of is not written,
+ * no approval asked. Only to one patient found by the note's record number and born on its birth
+ * date (`patientSearch` says why both), and one of that patient's visits on the note's date, each
+ * found exactly; otherwise nothing is written, and the visit's outcome says why — never a patient
+ * detail: a call the EHR refused or did not answer ends the step, the run going on with its codes
+ * saved (`settle`; the EHR not connected, `optionalConnection`'s line). A hook run, or the EHR not
+ * picked, skips the step: no EHR call.
  */
 
 /** A visit's chart note outcome, the run's `output.chartNote`. */
@@ -66,8 +68,11 @@ export const writeChart: Step = byPath(async (context) => {
   const { request, state } = context;
   const ehr = optionalConnection(context, EHR_FIELD, EHR);
   if (!ehr.chosen) return { outcome: 'skipped' };
-  if (!reviewed(request)) return not(state, NOT_WRITTEN.notApproved);
   const view = viewOf(state);
+  if (!reviewed(request)) {
+    const held = view.rows.some((row) => DECIDED.has(row.verdict));
+    return not(state, held ? NOT_WRITTEN.notApproved : NOT_WRITTEN.nothingToReview);
+  }
   const titles = { ...otherTitles(state), ...view.titles };
   const codes = visitCodes(
     view.rows,
@@ -78,9 +83,13 @@ export const writeChart: Step = byPath(async (context) => {
     Number.POSITIVE_INFINITY,
   );
   if (codes.length === 0) return not(state, NOT_WRITTEN.noCodes);
-  const recordNumber = readingOf(state.reading).patient.recordNumber?.trim() ?? '';
+  const { patient: printed } = readingOf(state.reading);
+  const recordNumber = printed.recordNumber?.trim() ?? '';
   if (recordNumber === '') return not(state, NOT_WRITTEN.noRecordNumber);
   if (!RECORD_NUMBER.test(recordNumber)) return not(state, NOT_WRITTEN.recordNumberUnusable);
+  if (printed.birthDate === null) return not(state, NOT_WRITTEN.noBirthDate);
+  const birthDate = birthDateOf(printed.birthDate);
+  if (birthDate === undefined) return not(state, NOT_WRITTEN.birthDateUnusable);
   const visitDate = realDate(state.visitDate);
   if (visitDate === undefined) return not(state, NOT_WRITTEN.noVisitDate);
 
@@ -108,6 +117,7 @@ export const writeChart: Step = byPath(async (context) => {
   if ('end' in patients) return patients.end;
   const patient = onlyMatch(patients.body, 'Patient');
   if (patient === undefined) return not(state, NOT_WRITTEN.patientNotMatched);
+  if (patient.birthDate !== birthDate) return not(state, NOT_WRITTEN.birthDateNotMatched);
   const patientId = patient.id as string;
 
   const visits = await ask('encounters.search', visitSearch(patientId, visitDate), 'visit');

@@ -81,7 +81,7 @@ test('§9 the failure drill on v6: a hook run reading the EHR, and an upload wri
   const ehrNote = reading(['N18.30'], [{ statement: 'CKD stage 3a', categories: ['N18'] }], {
     patient: {
       name: 'Jane Doe',
-      birthDate: null,
+      birthDate: '03/14/1958',
       sex: null,
       recordNumber: '000123',
       provider: null,
@@ -93,7 +93,7 @@ test('§9 the failure drill on v6: a hook run reading the EHR, and an upload wri
     'binary.read': binaries({ b1: binary('text/plain', 'CKD stage 3a, eGFR 52 today.') }),
     'patients.search': () => ({
       status: 200,
-      body: bundle([{ resourceType: 'Patient', id: 'p1' }]),
+      body: bundle([{ resourceType: 'Patient', id: 'p1', birthDate: '1958-03-14' }]),
     }),
     'encounters.search': () => ({
       status: 200,

@@ -1,14 +1,14 @@
 # The wire contract, vendored
 
 `schemas/` is a byte-for-byte copy of the platform repository's `schemas/` directory
-(`snoopy-backend`, private) at snoopy-backend 6cc381f, the head of its branch `round-22/triggers`
-(#306, Round 22's ways to start, ADR-0053, on its `main` ed61fe2, #305, ADR-0054), not yet merged,
-so not live; all eleven files `cmp`-equal to it (2026-11-25, "Refreshed 2026-11-25, ways to start"
-below). When #306 squash-merges, this copy is re-pinned to its merge commit, its bytes unchanged
-unless the review changed them. Before it, `926321f` (#283), the platform's `main` after its #283
-squash-merged Round 22's limits before breadth (its BUILD-PLAN 30.2: ADR-0051 decision 2,
-ADR-0049 Amendment 3), merged and deployed 2026-11-14; all eleven files `cmp`-equal to it
-(2026-11-14, "Refreshed 2026-11-14, a connection's operations" below). Before it, `50a24f7`, the
+(`snoopy-backend`, private) at snoopy-backend 3b14d58 (#306), the platform's `main` after its #306
+squash-merged Round 22's ways to start (ADR-0053, on its `main` ed61fe2, #305, ADR-0054), merged
+2026-11-25 11:36:43Z and deployed (its cd.yml run 45606053366, a success); first copied at its
+branch head `6cc381f`, whose tree 3b14d58's is; all eleven files `cmp`-equal to both (2026-11-25,
+"Refreshed 2026-11-25, ways to start" below). Before it, `926321f` (#283), the platform's `main`
+after its #283 squash-merged Round 22's limits before breadth (its BUILD-PLAN 30.2: ADR-0051
+decision 2, ADR-0049 Amendment 3), merged and deployed 2026-11-14; all eleven files `cmp`-equal to
+it (2026-11-14, "Refreshed 2026-11-14, a connection's operations" below). Before it, `50a24f7`, the
 head of its branch `round-21/stage-2-platform` (#266, Round 21's Stage 2 contract, ADR-0049 and
 ADR-0050; merged as `7793134`; all eleven files `cmp`-equal to `50a24f7`, `7793134` and the
 platform's `64770b8`, #282; 2026-11-04, "Refreshed 2026-11-04, Stage 2" below). Before it, `0973082` (snoopy-backend 0973082 (#265),
@@ -547,9 +547,11 @@ required) changes no schema file: all eleven are `cmp`-equal to `ee72d96`'s too;
 "`trigger`", below.
 
 Refreshed 2026-11-25, ways to start, from the head of the platform's branch `round-22/triggers`,
-`6cc381f` (#306; its ADR-0053, on its `main` ed61fe2, #305, its ADR-0054; not yet merged, so not
-live). Three files moved; all eleven are `cmp`-equal to `6cc381f` (each copied from its clone at
-that commit, and checked with `git show 6cc381f:schemas/<file>`):
+`6cc381f` (#306; its ADR-0053, on its `main` ed61fe2, #305, its ADR-0054), squash-merged the same
+day as `3b14d58`, whose tree is `6cc381f`'s, and deployed. Three files moved; all eleven are
+`cmp`-equal to `6cc381f` (each copied from its clone at that commit, and checked with
+`git show 6cc381f:schemas/<file>`) and to `3b14d58` (each read from GitHub at that commit, after
+the merge):
 
 - `automation-manifest.json`: `triggers`, 1 to 4 ways to start, each the trigger object, the
   manifest declaring exactly one of `trigger` and `triggers` (a top-level `oneOf`); a way's
@@ -568,10 +570,11 @@ and calls the EHR (its README's "v6"); the SDK's `InvokeRequest` does not type `
 the flow reads it from the request whole (`automations/icd10-code-check/src/v6/paths.ts`). Ajv's
 `strictRequired` refuses the manifest schema's `oneOf` (each branch's `required` names a property
 only the top level defines), so this repository's three validators of it turn that one rule off
-(`packages/automation-sdk/test/published-schemas.ts` says why). Production serves `15b1865`'s
-`snoopy-backend/docs/openapi/automations.yaml` and `ed61fe2`'s
-`snoopy-backend/docs/openapi/connections.yaml` until #306 deploys,
-so a check that reads the deployed contract stays red until then, by design; v6 merges only after.
+(`packages/automation-sdk/test/published-schemas.ts` says why). Production has served `3b14d58`
+since its deploy (`/health/live` names the commit, and its three contract hashes are those of
+`3b14d58`'s `snoopy-backend/docs/openapi.yaml`, `snoopy-backend/docs/openapi/automations.yaml` and
+`snoopy-backend/docs/openapi/connections.yaml`, read 2026-11-25), so a check that reads the
+deployed contract passes; v6 merges after it, as it had to.
 
 `test/architecture.test.ts` validates every file in `manifests/` against
 `automation-manifest.json` verbatim; `test/conformance.test.ts` validates the template

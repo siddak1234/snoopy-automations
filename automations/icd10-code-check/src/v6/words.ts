@@ -42,12 +42,20 @@ export const WORDS_V6 = {
  * ever. The session's words.
  */
 export const NOT_WRITTEN = {
+  /** Held for the review, and the run not continued by its approval. */
   notApproved: 'not approved',
+  /** No change to review (`review-visit` held nothing), so no approval was asked. */
+  nothingToReview: 'nothing to review',
   noCodes: 'no codes approved',
   noRecordNumber: 'no record number',
   recordNumberUnusable: 'record number not usable',
+  noBirthDate: 'no birth date on the note',
+  /** A birth date printed that is no real date in a form `birthDateOf` reads. */
+  birthDateUnusable: 'birth date not usable',
   noVisitDate: 'no visit date',
   patientNotMatched: 'patient not matched',
+  /** The one patient matched by the record number, born on another day than the note says. */
+  birthDateNotMatched: 'birth date did not match',
   visitNotMatched: 'visit not matched',
   notConnected: 'your EHR is not connected',
   refused: 'your EHR refused it',

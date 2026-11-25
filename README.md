@@ -713,9 +713,9 @@ Both are live on `defineAutomation`; their after-pilot versions stay on it, with
   its own container; the image built here serves v6 alone (v4 carrying health data,
   `dataProtection: 'hipaa'`, its calls naming no models, the folder README's "v4"; v5 the same with
   its file required, its "v5"; v6 started by an upload or by the EHR's hook, its EHR connection
-  optional, its "v6"), on the contract at snoopy-backend 6cc381f (`contract/README.md`). The kit's
-  private-data allowlist names v6's service account
-  (`scripts/kit/private-data-public.toml`, canonical in snoopy-backend, which needs the same line).
+  optional, its "v6"), on the contract `contract/README.md` pins. The kit's private-data allowlist
+  names v6's service account (`scripts/kit/private-data-public.toml`, a kit file kept byte for byte
+  as snoopy-backend's canonical copy).
 
 ## The kit
 

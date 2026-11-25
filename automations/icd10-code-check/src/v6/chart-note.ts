@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import type { JsonObject } from '@autom8x/automation-sdk';
 
+import { realDate } from '../tables.js';
 import type { DiagnosisCode } from './codes.js';
 import { WORDS_V6 } from './words.js';
 
@@ -21,8 +22,59 @@ import { WORDS_V6 } from './words.js';
  * organisation's MRN system is not known — Epic's sandbox's is
  * `urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14`, and "this system value will differ in each
  * customer environment" (https://fhir.epic.com/Documentation?docId=testpatients). Open question.
+ * A value alone can match a patient whose OTHER identifier has the same characters, so the one
+ * match is written to only when its `birthDate` is the note's too (`birthDateOf`).
  */
 export const patientSearch = (recordNumber: string): JsonObject => ({ identifier: recordNumber });
+
+const MONTHS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
+
+/** A month's number, 1 to 12, from its name or its first three letters or more; else 0. */
+const monthOf = (word: string): number =>
+  word.length >= 3 ? MONTHS.findIndex((month) => month.startsWith(word)) + 1 : 0;
+
+/**
+ * The birth date the note prints (`read-note`'s `patient.birthDate`, "exactly as printed"), as a
+ * FHIR `date`, `YYYY-MM-DD`, to compare with the one patient's `birthDate`: year first
+ * (`1958-03-14`, `1958/3/14`), the month first as a US note prints it (`03/14/1958`, `3-14-1958`),
+ * or the month's name (`March 14, 1958`, `14 Mar 1958`) — the year always of four digits, the
+ * date a real one. Anything else is undefined: no date is guessed.
+ */
+export function birthDateOf(printed: string): string | undefined {
+  const words = printed
+    .trim()
+    .toLowerCase()
+    .split(/[\s,./-]+/u)
+    .filter((word) => word !== '');
+  if (words.length !== 3) return undefined;
+  const named = words.findIndex((word) => /^\p{L}+$/u.test(word));
+  let year: string, month: string, day: string;
+  if (named >= 0) {
+    const [first, second] = words.filter((_, index) => index !== named) as [string, string];
+    const number = monthOf(words[named]!);
+    if (number === 0) return undefined;
+    month = String(number);
+    [year, day] = /^\d{4}$/u.test(first) ? [first, second] : [second, first];
+  } else if (/^\d{4}$/u.test(words[0]!)) [year, month, day] = words as [string, string, string];
+  else [month, day, year] = words as [string, string, string];
+  if (!/^\d{4}$/u.test(year) || !/^\d{1,2}$/u.test(month) || !/^\d{1,2}$/u.test(day)) {
+    return undefined;
+  }
+  return realDate(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+}
 
 /** The visit: the patient's encounters on the visit's date (`date=YYYY-MM-DD`, FHIR's day). */
 export const visitSearch = (patientId: string, visitDate: string): JsonObject => ({
