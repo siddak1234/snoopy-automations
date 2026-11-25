@@ -195,3 +195,29 @@ test('two new files of one flow, the older removed, are refused by D8 before any
     ['D8', 'D8'],
   );
 });
+
+test('ICD-10 Code Check v5 to v6: its EHR connection is new and optional, and its README row says why', () => {
+  const at = (version: number) =>
+    JSON.parse(
+      readFileSync(join(root, 'manifests', `icd10-code-check.v${version}.json`), 'utf8'),
+    ) as Json;
+  const [v5, v6] = [at(5), at(6)];
+  const spec = specOf('icd10-code-check')!;
+  assert.deepEqual(requirementProblems(v6, v5, spec, PUBLIC), []);
+  assert.ok(newReasonFor(spec, 'ehr-fhir', 6), 'the row: `ehr-fhir` … new in v6: <the reason>');
+  // Optional, it asks nothing new on its own; required, only the row would let it through.
+  assert.deepEqual(requirementProblems(v6, v5, undefined, PUBLIC), []);
+  const required = {
+    ...v6,
+    requiredConnections: (v6.requiredConnections as Json[]).map(
+      ({ optional: _o, ...each }) => each,
+    ),
+  };
+  assert.equal(requirementProblems(required, v5, undefined, PUBLIC).length, 1);
+  assert.deepEqual(requirementProblems(required, v5, spec, PUBLIC), []);
+  assert.ok(
+    (v6.setup as Json[]).every(
+      (field) => field.required !== true || field.defaultValue !== undefined,
+    ),
+  );
+});

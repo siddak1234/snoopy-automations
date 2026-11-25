@@ -43,7 +43,7 @@
 ### Automations
 
 - `automations/candidate-reviewer/` (`@autom8x/candidate-reviewer`): Resume Screening (v5; Candidate Reviewer at v1): reads a job description once into the job's reading, then reads each candidate's resume — … · manifests v5
-- `automations/icd10-code-check/` (`@autom8x/icd10-code-check`): Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now. · manifests v5
+- `automations/icd10-code-check/` (`@autom8x/icd10-code-check`): Checks a visit's diagnosis codes against the note. You accept or deny each change. Test charts only for now. · manifests v5, v6
 - `automations/invoice-processing/` (`@autom8x/invoice-processing`): Invoice Processing (v9): reads every bill, invoice, receipt, credit note, statement and other financial document in a PDF or photo — each i… · manifests v9
 
 ### Packages

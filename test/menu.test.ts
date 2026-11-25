@@ -34,9 +34,14 @@ test('every flow and the kit use only what the menu offers', () => {
     .flatMap((file) => operationLiterals(readFileSafe(file)).map((found) => found.operation));
   assert.deepEqual([...new Set(literals)].sort(), [
     'bill.create',
+    'binary.read',
     'companyInfo.get',
+    'encounters.search',
     'journalEntry.create',
+    'notes.create',
+    'notes.search',
     'npi.lookup',
+    'patients.search',
     'preferences.get',
     'purchase.create',
     'query.run',

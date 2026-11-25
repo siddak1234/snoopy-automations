@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { SERVED_VERSIONS, define } from '../src/automation.js';
+import { define } from '../src/automation.js';
 import { FAILURES } from '../src/words.js';
 import { flow, manifests, retiredFile } from './fixtures.js';
 import { batchPlatform, batchRequest } from './v2-fixtures.js';
@@ -12,7 +12,8 @@ import { batchPlatform, batchRequest } from './v2-fixtures.js';
  * v5's manifest (README, "v5"; the owner's item 1 on build 43 and "Yes to all 3", 2026-11-14):
  * v4's, byte for byte, but its version, its own origin and service account, and its file field
  * `visitNotes` required — the platform refuses a run without a file before it starts. It keeps
- * `dataProtection: 'hipaa'`; this image serves v5 alone. v4 was retired 2026-11-14.
+ * `dataProtection: 'hipaa'`. v4 was retired 2026-11-14; this image serves v6 since
+ * (`v6-manifest.test.ts`), v5 on its own container and pinned image until v6 is live.
  */
 
 type Json = Record<string, any>;
@@ -44,12 +45,6 @@ test("v5 is v4's manifest but its version, its own origin and service account, a
   assert.equal(v5.dataProtection, 'hipaa');
   assert.equal(v5.service.origin, 'http://icd10-code-check-v5.autom8x.internal:8080');
   assert.equal(v5.service.serviceAccount, 'icd10-code-check-v5@autom8x.iam.gserviceaccount.com');
-});
-
-test('this image serves v5 alone', () => {
-  assert.deepEqual(SERVED_VERSIONS, [5]);
-  const dockerfile = readFileSync(join(flow, 'Dockerfile'), 'utf8');
-  assert.match(dockerfile, /^COPY --chown=node:node manifests\/icd10-code-check\.v5\.json /mu);
 });
 
 test('a v5 batch run that still names no file stops in its own words, before any read or call', async () => {

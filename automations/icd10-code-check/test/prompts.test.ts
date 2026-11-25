@@ -11,16 +11,17 @@ import { readingOf } from '../src/reading.js';
  */
 
 type Id = 'read-note' | 'match-codes' | 'categorize-pages';
-/** Each prompt and version the steps send: v1's two, and v2's three. */
-const ALL: [Id, 1 | 2][] = [
+/** Each prompt and version the steps send: v1's two, v2's three, and a v6 hook run's read. */
+const ALL: [Id, 1 | 2 | 3][] = [
   ['read-note', 1],
   ['match-codes', 1],
   ['read-note', 2],
   ['match-codes', 2],
   ['categorize-pages', 2],
+  ['read-note', 3],
 ];
 
-const examples = (id: Id, version: 1 | 2 = 1) =>
+const examples = (id: Id, version: 1 | 2 | 3 = 1) =>
   [...prompt(id, version).template.matchAll(/^Answer: (\{.*\})$/gmu)].map(
     (m) => JSON.parse(m[1]!) as Record<string, unknown>,
   );
@@ -67,7 +68,7 @@ test('each prompt carries 3 to 5 worked examples, each answer on its schema', ()
 });
 
 test("I4: v2's prompts are byte-stable — no value of a run in their words, every value in the input after them", () => {
-  for (const [id, version] of ALL.filter(([, v]) => v === 2)) {
+  for (const [id, version] of ALL.filter(([, v]) => v >= 2)) {
     assert.doesNotMatch(prompt(id, version).template, /\{\{/u, `${id} v2`);
     // Its fixed instructions first, then its worked examples, nothing after the last answer.
     const template = prompt(id, version).template;
@@ -149,4 +150,14 @@ test('categorize-pages: every attached page once, numbered as in the file; its s
     'separator',
     'other',
   ]);
+});
+
+test("read-note v3, a v6 hook run's: v2's word for word but its first sentence — the note's text in the input, no file", () => {
+  const [v2, v3] = [prompt('read-note', 2), prompt('read-note', 3)];
+  const rest = (template: string) => template.slice(template.indexOf(' The input names'));
+  assert.equal(rest(v3.template), rest(v2.template));
+  assert.deepEqual(v3.outputSchema, v2.outputSchema);
+  assert.equal(v3.capability, v2.capability);
+  assert.match(v3.template, /^You read one visit note: its text, in the input as noteText/u);
+  assert.doesNotMatch(v3.template.split('. ')[0]!, /PDF|photo/u);
 });

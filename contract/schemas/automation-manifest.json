@@ -178,6 +178,13 @@
           "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
           "maxLength": 64
         },
+        "event": {
+          "enum": [
+            "patient-view",
+            "order-select",
+            "order-sign"
+          ]
+        },
         "input": {
           "type": "array",
           "maxItems": 16,
@@ -227,6 +234,98 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "schedule",
+              "webhook",
+              "manual",
+              "provider-event"
+            ]
+          },
+          "everySeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 31622400
+          },
+          "connection": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$",
+            "maxLength": 64
+          },
+          "event": {
+            "enum": [
+              "patient-view",
+              "order-select",
+              "order-sign"
+            ]
+          },
+          "input": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "title",
+                "description",
+                "control",
+                "required"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$",
+                  "maxLength": 64
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "control": {
+                  "enum": [
+                    "toggle",
+                    "money",
+                    "text",
+                    "email",
+                    "artifact"
+                  ]
+                },
+                "defaultValue": {},
+                "required": {
+                  "type": "boolean"
+                },
+                "multiple": {
+                  "type": "boolean"
+                },
+                "maxFiles": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                }
               }
             }
           }
@@ -953,7 +1052,6 @@
     "version",
     "display",
     "pricing",
-    "trigger",
     "requiredConnections",
     "requiredCapabilities",
     "setup",
@@ -961,5 +1059,17 @@
     "service",
     "outputSchema"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": [
+        "trigger"
+      ]
+    },
+    {
+      "required": [
+        "triggers"
+      ]
+    }
+  ]
 }

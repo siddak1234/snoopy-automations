@@ -267,7 +267,8 @@ test('the template automation conforms to its example manifest, which validates 
 
   // Validated here because test/architecture.test.ts validates `manifests/` only,
   // and a template manifest that would be refused at registration teaches wrong.
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  // Strict but for `strictRequired`: why, packages/automation-sdk/test/published-schemas.ts.
+  const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
   addFormats.default(ajv);
   const validate = ajv.compile(
     JSON.parse(readFileSync(join(schemasRoot, 'automation-manifest.json'), 'utf8')) as object,

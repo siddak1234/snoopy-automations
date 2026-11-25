@@ -3,16 +3,18 @@
  * ADR-0037 (spec §1.2 and §1.4 of the Invoice Processing update), its ADR-0040 (Build 21, C4:
  * one connection per step), its ADR-0041 (Build 22: a step that is a setting, the platform's
  * email step, a step's title by the flow's connection), its ADR-0030 (a run's file field) and its
- * ADR-0046 (Round 19: a flow's items, `manifest-items.ts`): an optional connection and the
- * connection setup fields that choose it, a setup field's step group, the visible step groups, a
- * file the run asks for, and the items — ported from its
+ * ADR-0046 (Round 19: a flow's items, `manifest-items.ts`) and its ADR-0053 (Round 22: a flow's
+ * ways to start, `manifest-triggers.ts`): an optional connection and the connection setup fields
+ * that choose it, a setup field's step group, the visible step groups, a file the run asks for,
+ * the items and the ways to start — ported from its
  * `snoopy-backend/packages/contracts/src/manifest-validation.ts` (PR #210's `9516c0e`, then the Build 21 branch
  * `round-17/b21-platform`; Build 22's rules as merged in its `32b33ae`, #215; ADR-0030's and
- * ADR-0046's at `2d93d99`), each refusal as `<path>: <message>`, so a manifest that would be
+ * ADR-0046's at `2d93d99`; ADR-0053's at `6cc381f`), each refusal as `<path>: <message>`, so a manifest that would be
  * refused at registration fails this repository first. Every manifest in `manifests/` is held to
  * them.
  */
 import { itemsProblems } from './manifest-items.js';
+import { manualWay, triggerProblems } from './manifest-triggers.js';
 
 export type Json = Record<string, unknown>;
 const list = (value: unknown): Json[] => (Array.isArray(value) ? (value as Json[]) : []);
@@ -31,10 +33,9 @@ export function manifestProblems(manifest: Json): string[] {
     }
     if (connection.optional === true) optional.add(connection.providerId);
   }
-  const trigger = (manifest.trigger ?? {}) as Json;
-  if (trigger.kind === 'provider-event' && optional.has(trigger.connection)) {
-    add('trigger.connection', 'must name a required, not optional, connection');
-  }
+  // ADR-0053 — a flow's ways to start (`test/manifest-triggers.ts`).
+  const providers = new Set(connections.map((connection) => connection.providerId));
+  triggerProblems(manifest, providers, optional, add);
   // ADR-0040 — one connection field per step that uses one, each naming its providers.
   const fields: { path: string; providers: string[] | undefined }[] = [];
   for (const [index, field] of list(manifest.setup).entries()) {
@@ -121,9 +122,10 @@ export function manifestProblems(manifest: Json): string[] {
   // ADR-0030 — a run's file is uploaded, never a default (its `validateRunInput`); it may be
   // required since its amendment of 2026-11-14 (snoopy-backend 30.13.1): the run start refuses a
   // run without it.
-  for (const [index, field] of list(trigger.input).entries()) {
+  const manual = manualWay(manifest);
+  for (const [index, field] of list(manual?.way.input).entries()) {
     if (field.control !== 'artifact') continue;
-    const path = `trigger.input[${index}]`;
+    const path = `${manual!.path}.input[${index}]`;
     if (field.defaultValue !== undefined) {
       add(`${path}.defaultValue`, 'is not meaningful for an artifact control');
     }

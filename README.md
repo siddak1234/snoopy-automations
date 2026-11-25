@@ -708,11 +708,14 @@ Both are live on `defineAutomation`; their after-pilot versions stay on it, with
 `reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; v2, a batch of visit notes for doctors
-  and coders; v3, never registered; v4; v5; v2 to v5 on `defineFlow`; v1 to v4 retired, their files
-  gone): its folder's README is its spec and how the code does it. Each served version runs on its
-  own container; the image built here serves v5 alone (v4 carrying health data,
+  and coders; v3, never registered; v4; v5; v6; v2 to v6 on `defineFlow`; v1 to v4 retired, their
+  files gone): its folder's README is its spec and how the code does it. Each served version runs on
+  its own container; the image built here serves v6 alone (v4 carrying health data,
   `dataProtection: 'hipaa'`, its calls naming no models, the folder README's "v4"; v5 the same with
-  its file required, its "v5"), on the Stage 2 contract (`contract/`, "Stage 2" above).
+  its file required, its "v5"; v6 started by an upload or by the EHR's hook, its EHR connection
+  optional, its "v6"), on the contract `contract/README.md` pins. The kit's private-data allowlist
+  names v6's service account (`scripts/kit/private-data-public.toml`, a kit file kept byte for byte
+  as snoopy-backend's canonical copy).
 
 ## The kit
 
