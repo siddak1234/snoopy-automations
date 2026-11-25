@@ -197,11 +197,11 @@ test('two new files of one flow, the older removed, are refused by D8 before any
 });
 
 test('ICD-10 Code Check v5 to v6: its EHR connection is new and optional, and its README row says why', () => {
-  const at = (version: number) =>
-    JSON.parse(
-      readFileSync(join(root, 'manifests', `icd10-code-check.v${version}.json`), 'utf8'),
-    ) as Json;
-  const [v5, v6] = [at(5), at(6)];
+  // v5 was retired 2026-11-25 and its file left `manifests/`: git keeps it (`retiredFile`).
+  const v5 = JSON.parse(retiredFile(root, 'icd10-code-check.v5.json')) as Json;
+  const v6 = JSON.parse(
+    readFileSync(join(root, 'manifests', 'icd10-code-check.v6.json'), 'utf8'),
+  ) as Json;
   const spec = specOf('icd10-code-check')!;
   assert.deepEqual(requirementProblems(v6, v5, spec, PUBLIC), []);
   assert.ok(newReasonFor(spec, 'ehr-fhir', 6), 'the row: `ehr-fhir` … new in v6: <the reason>');

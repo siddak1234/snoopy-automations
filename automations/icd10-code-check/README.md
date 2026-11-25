@@ -11,14 +11,14 @@ beside this spec, every word both clients show · **Research:** `research.md` be
 still be served. A retired version's file leaves with its row here (the repository README, "The
 definition-file standard"; `test/definition-files.ts`, D5); git keeps it.
 
-| Version | State                                                                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------------------ |
-| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:49Z)                  |
-| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14                     |
-| v3      | retired 2026-11-04: never registered, v4 took its place (snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block)  |
-| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5)             |
-| v5      | served: `manifests/icd10-code-check.v5.json`, on its own container and pinned image until v6 is live ("v6", below) |
-| v6      | served: `manifests/icd10-code-check.v6.json`, this image's (`SERVED_VERSIONS`)                                     |
+| Version | State                                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| v1      | retired 2026-11-04: snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block (withdrawn 18:36:49Z)                         |
+| v2      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the first hand retirement of 2026-11-14                            |
+| v3      | retired 2026-11-04: never registered, v4 took its place (snoopy-backend SYSTEM-MANIFEST §6, its 2026-11-04 block)         |
+| v4      | retired 2026-11-14: snoopy-backend SYSTEM-MANIFEST §6, the second hand retirement (BUILD-PLAN 30.13.5)                    |
+| v5      | retired 2026-11-25: snoopy-backend Flow CD run 45640685495 (flow-cd.yml, `FLOW CD OK` 15:06:13Z; withdrawn 15:05:37.809Z) |
+| v6      | served: `manifests/icd10-code-check.v6.json`, this image's (`SERVED_VERSIONS`)                                            |
 
 **Waits for the platform (section 10):** a setup dropdown that picks several choices, and an approval
 that accepts or denies each change. `/create-flow` stage 1 answer: a platform round first, then this
@@ -611,8 +611,9 @@ departments that require this lets consider another vendor, while the rest go to
 
 ## v5 (2026-11-14)
 
-**Status:** built on the branch `round-22/build-43-items`; this image serves v5 alone
-(`SERVED_VERSIONS`). v4 stayed served on its own container and pinned image until it was retired on 2026-11-14 ("Versions", at the top)
+**Status:** built on the branch `round-22/build-43-items`; this image served v5 alone until v6
+(`SERVED_VERSIONS`), and v5 stayed served on its own container and pinned image until it was retired
+on 2026-11-25 ("Versions", at the top). v4 stayed served on its own container and pinned image until it was retired on 2026-11-14 ("Versions", at the top)
 (the `retire-version` skill). **Words:** none new: section 8's "Add the visit note as a PDF or photo."
 already tells no file apart from a note that could not be read. **Merges only after** the platform's
 build-43 pull request (its BUILD-PLAN 30.13.1, ADR-0030's amendment of 2026-11-14: a file field may be
@@ -633,8 +634,9 @@ retirements freed; BUILD-PLAN 30.6.1's later hook version becomes v6.
 ## v6 (2026-11-25)
 
 **Status:** built on the branch `round-22/icd10-v6`; this image serves v6 alone (`SERVED_VERSIONS`).
-v5's file is unchanged and v5 stays served on its own container and pinned image until v6 is live;
-then the release's retire pass retires it ("Versions", at the top). **Words:** new, the session's,
+v5's file was unchanged and v5 stayed served on its own container and pinned image until v6 was live;
+then the release's retire pass retired it, and its file left `manifests/` ("Versions", at the top;
+git keeps it, and the suite reads it from there, `retiredFile`). **Words:** new, the session's,
 awaiting the owner (`words.md`, section 6). **Rests on:** the platform's ADR-0053 (a flow lists its
 ways to start; `startedBy`) and ADR-0054 (the EHR connection a clinic user's sign-in), and the card
 of its ADR-0051 Amendment 2, vendored in `contract/` from the platform's #306 (`contract/README.md`,

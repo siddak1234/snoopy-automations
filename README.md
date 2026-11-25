@@ -708,7 +708,7 @@ Both are live on `defineAutomation`; their after-pilot versions stay on it, with
 `reaskingOnce` ([A new flow's standards](#a-new-flows-standards-defineflow), above, lists them).
 
 - **ICD-10 Code Check**, `icd10-code-check` (v1, the pilot; v2, a batch of visit notes for doctors
-  and coders; v3, never registered; v4; v5; v6; v2 to v6 on `defineFlow`; v1 to v4 retired, their
+  and coders; v3, never registered; v4; v5; v6; v2 to v6 on `defineFlow`; v1 to v5 retired, their
   files gone): its folder's README is its spec and how the code does it. Each served version runs on
   its own container; the image built here serves v6 alone (v4 carrying health data,
   `dataProtection: 'hipaa'`, its calls naming no models, the folder README's "v4"; v5 the same with
