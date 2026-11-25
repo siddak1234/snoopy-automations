@@ -47,13 +47,14 @@ import { hookResult, withChartNote } from './v6/result.js';
 export const TEMPLATE_ID = 'icd10-code-check';
 
 /**
- * The one version this image serves; its Dockerfile copies only its manifest. v1 to v5 are
- * retired (README, "Versions"), and their code here is unchanged, v6's runs reusing it: v3 is v2's
- * chain with its setup in sections and a change's "Other code" (README, "v3"); v4 is v3 carrying
- * health data, its calls naming no models (README, "v4"; `modelsFor`); v5 is v4 with its file
- * field required, so the platform refuses a run without a file before it starts (README, "v5");
- * v6 is v5 started by an upload or by the EHR's hook, its EHR connection optional (README, "v6";
- * `v6/`).
+ * The one version this image serves; its Dockerfile copies only its manifest. v1 to v3 stay
+ * served by their own containers on their pinned images (the platform's D2) until the owner
+ * retires them, and their code here is unchanged: v3 is v2's chain with its setup in sections and
+ * a change's "Other code" (README, "v3"); v4 is v3 carrying health data, its calls naming no
+ * models (README, "v4"; `modelsFor`); v5 is v4 with its file field required, so the platform
+ * refuses a run without a file before it starts (README, "v5"); v6 is v5 started by an upload or
+ * by the EHR's hook, its EHR connection optional (README, "v6"; `v6/`). v5's container keeps its
+ * pinned image until v6 is live and v5 is retired.
  */
 export const SERVED_VERSIONS: readonly number[] = [6];
 
