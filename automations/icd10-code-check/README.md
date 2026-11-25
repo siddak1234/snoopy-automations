@@ -692,8 +692,9 @@ test, BUILD-PLAN 30.21.4); an organisation's MRN system (searched by value alone
 born on the note's birth date, is written to); and whether Epic's writes need
 `application/fhir+json` (BUILD-PLAN U9).
 
-**Next, in the platform** (the session's, its next snoopy-backend pull request): the flow sends no
-mail on a hook run (a chart opening must not email), but the platform's notification sweep emails
-every succeeded run (`succeededRunFacts`, `snoopy-backend/apps/runs/src/postgres-notifications.ts`),
-a hook run's too; that pull request leaves a run started by the EHR's hook out of the sweep. Nothing
-in this flow changes for it.
+**The platform's email on a hook run:** the flow sends no mail of its own on a hook run, and the
+platform's notification sweep emails every succeeded run (`succeededRunFacts`,
+`snoopy-backend/apps/runs/src/postgres-notifications.ts`), a hook run's too, redacted to "Result
+ready." (the platform's BUILD-PLAN 30.4.3, ADR-0049 decision 4). Asked on 2026-11-25 whether a run
+a chart opening started should stay silent, the owner chose "Keep emailing": nothing changes, in the
+platform or in this flow.
